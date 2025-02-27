@@ -1,0 +1,11 @@
+ IDE Folders
+.vs/
+.idea/
+
+# Build Folders
+bin/
+obj/
+
+# OS Files
+.DS_Store
+Thumbs.db
