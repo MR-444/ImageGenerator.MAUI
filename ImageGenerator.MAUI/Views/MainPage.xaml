@@ -3,85 +3,194 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:ImageGenerator.MAUI.ViewModels"
              x:Class="ImageGenerator.MAUI.Views.MainPage">
-
     <ContentPage.BindingContext>
         <viewmodels:GeneratorViewModel />
     </ContentPage.BindingContext>
 
     <ScrollView>
-        <VerticalStackLayout Padding="20" Spacing="20">
-            <Label Text="Image Generator" FontSize="22" HorizontalOptions="Center" />
+        <VerticalStackLayout Padding="20"
+                             Spacing="20"
+                             HorizontalOptions="FillAndExpand"
+                             VerticalOptions="FillAndExpand">
 
-            <Entry Text="{Binding Parameters.ApiToken}" 
-                   Placeholder="Enter your Replicate API Token" 
-                   IsPassword="True" />
-           
-            <Picker Title="Model" 
-                    ItemsSource="{Binding AllModels}" 
-                    SelectedItem="{Binding Parameters.Model}" />
-            
-            <Editor Text="{Binding Parameters.Prompt}" 
-                    Placeholder="Describe the image you want to generate" />
-            
-            <Entry Text="{Binding Parameters.Seed}"
-                   Keyboard="Numeric" 
-                   Placeholder="Seed" />
+            <!-- Title -->
+            <Label Text="Image Generator"
+                   FontSize="22"
+                   HorizontalOptions="Center" />
 
-            <CheckBox IsChecked="{Binding Parameters.RandomizeSeed}" />
-            <Label Text="Randomize Seed" />
+            <!-- Authentication/Profile Settings Border -->
+            <Border Stroke="LightGray"
+                    StrokeThickness="1"
+                    Padding="12"
+                    HorizontalOptions="FillAndExpand">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="6" />
+                </Border.StrokeShape>
+                
+                <VerticalStackLayout Spacing="12">
+                    <Entry Text="{Binding Parameters.ApiToken}" 
+                           Placeholder="Enter your Replicate API Token" 
+                           IsPassword="True"
+                           HorizontalOptions="FillAndExpand" />
+                </VerticalStackLayout>
+            </Border>
 
-            <Slider Minimum="1" Maximum="50"
-                    Value="{Binding Parameters.Steps}" />
-            <Label Text="Steps" />
+            <!-- Model & Prompt Border -->
+            <Border Stroke="LightGray"
+                    StrokeThickness="1"
+                    Padding="12"
+                    HorizontalOptions="FillAndExpand">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="6" />
+                </Border.StrokeShape>
 
-            <Slider Minimum="2" Maximum="5" 
-                    Value="{Binding Parameters.Guidance}" />
-            <Label Text="Guidance" />
+                <VerticalStackLayout Spacing="12">
+                    <Picker Title="Model"
+                            ItemsSource="{Binding AllModels}"
+                            SelectedItem="{Binding Parameters.Model}"
+                            HorizontalOptions="FillAndExpand" />
 
-            <Picker Title="Aspect Ratio"
-                    ItemsSource="{Binding AspectRatioOptions}"
-                    SelectedItem="{Binding Parameters.AspectRatio}" />
+                    <Editor Text="{Binding Parameters.Prompt}"
+                            Placeholder="Describe the image you want to generate"
+                            AutoSize="Disabled"
+                            HorizontalOptions="FillAndExpand" />
+                </VerticalStackLayout>
+            </Border>
 
-            <!-- Example: only show Width/Height if AspectRatio == "custom" -->
-            <HorizontalStackLayout 
-                    IsVisible="{Binding IsCustomAspectRatio}">
-                <Label Text="Width:" />
-                <Entry Text="{Binding Parameters.Width}" Keyboard="Numeric"/>
-                <Label Text="Height:" />
-                <Entry Text="{Binding Parameters.Height}" Keyboard="Numeric"/>
-            </HorizontalStackLayout>
+            <!-- Seed & Sliders Border -->
+            <Border Stroke="LightGray"
+                    StrokeThickness="1"
+                    Padding="12"
+                    HorizontalOptions="FillAndExpand">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="6" />
+                </Border.StrokeShape>
+                
+                <VerticalStackLayout Spacing="12">
+                    <!-- Seed Row -->
+                    <Entry Text="{Binding Parameters.Seed}"
+                           Keyboard="Numeric" 
+                           Placeholder="Seed"
+                           HorizontalOptions="FillAndExpand" />
 
-            <Slider Minimum="1" Maximum="6" 
-                    Value="{Binding Parameters.SafetyTolerance}" />
-            <Label Text="Safety Tolerance" />
+                    <HorizontalStackLayout Spacing="10">
+                        <CheckBox IsChecked="{Binding Parameters.RandomizeSeed}" />
+                        <Label Text="Randomize Seed" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
 
-            <Slider Minimum="1" Maximum="4" 
-                    Value="{Binding Parameters.Interval}" />
-            <Label Text="Interval" />
+                    <!-- Steps Slider -->
+                    <Slider Minimum="1" Maximum="50"
+                            Value="{Binding Parameters.Steps}"
+                            HorizontalOptions="FillAndExpand" />
+                    <Label Text="{Binding Parameters.Steps, StringFormat='Steps: {0:F0}'}" />
 
-            <CheckBox IsChecked="{Binding Parameters.Raw}" />
-            <Label Text="Raw" />
+                    <!-- Guidance Slider -->
+                    <Slider Minimum="2" Maximum="5" 
+                            Value="{Binding Parameters.Guidance}"
+                            HorizontalOptions="FillAndExpand" />
+                    <Label Text="{Binding Parameters.Guidance, StringFormat='Guidance: {0:F0}'}" />
+                </VerticalStackLayout>
+            </Border>
 
-            <Picker Title="Output Format" 
-                    ItemsSource="{Binding OutputFormats}"
-                    SelectedItem="{Binding Parameters.OutputFormat}" />
+            <!-- Aspect Ratio Border -->
+            <Border Stroke="LightGray"
+                    StrokeThickness="1"
+                    Padding="12"
+                    HorizontalOptions="FillAndExpand">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="6" />
+                </Border.StrokeShape>
+                
+                <VerticalStackLayout Spacing="12">
+                    <Picker Title="Aspect Ratio"
+                            ItemsSource="{Binding AspectRatioOptions}"
+                            SelectedItem="{Binding Parameters.AspectRatio}"
+                            HorizontalOptions="FillAndExpand" />
 
-            <Slider Minimum="0" Maximum="100" 
-                    Value="{Binding Parameters.OutputQuality}" />
-            <Label Text="Output Quality" />
+                    <HorizontalStackLayout 
+                            IsVisible="{Binding IsCustomAspectRatio}"
+                            Spacing="10">
+                        <Label Text="Width:" VerticalOptions="Center" />
+                        <Entry Text="{Binding Parameters.Width}" 
+                               Keyboard="Numeric"
+                               HorizontalOptions="FillAndExpand" />
+                        <Label Text="Height:" VerticalOptions="Center" />
+                        <Entry Text="{Binding Parameters.Height}" 
+                               Keyboard="Numeric"
+                               HorizontalOptions="FillAndExpand" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
 
-            <CheckBox IsChecked="{Binding Parameters.PromptUpsampling}" />
-            <Label Text="Prompt Upsampling" />
+            <!-- Additional Sliders Border -->
+            <Border Stroke="LightGray"
+                    StrokeThickness="1"
+                    Padding="12"
+                    HorizontalOptions="FillAndExpand">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="6" />
+                </Border.StrokeShape>
+                
+                <VerticalStackLayout Spacing="12">
+                    <Slider Minimum="1" Maximum="6" 
+                            Value="{Binding Parameters.SafetyTolerance}"
+                            HorizontalOptions="FillAndExpand" />
+                    <Label Text="{Binding Parameters.SafetyTolerance, StringFormat='Safety Tolerance: {0:F0}'}" />
 
-            <Button Text="Generate Image" 
-                    Command="{Binding GenerateImageCommand}" />
+                    <Slider Minimum="1" Maximum="4" 
+                            Value="{Binding Parameters.Interval}"
+                            HorizontalOptions="FillAndExpand" />
+                    <Label Text="{Binding Parameters.Interval, StringFormat='Interval: {0:F0}'}" />
+                </VerticalStackLayout>
+            </Border>
 
-            <Label Text="{Binding StatusMessage}" TextColor="Black" />
+            <!-- Output Settings Border -->
+            <Border Stroke="LightGray"
+                    StrokeThickness="1"
+                    Padding="12"
+                    HorizontalOptions="FillAndExpand">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="6" />
+                </Border.StrokeShape>
+                
+                <VerticalStackLayout Spacing="12">
+                    <HorizontalStackLayout Spacing="10">
+                        <CheckBox IsChecked="{Binding Parameters.Raw}" />
+                        <Label Text="Raw" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
 
-            <!-- If the image path is non-empty, show the image -->
+                    <Picker Title="Output Format"
+                            ItemsSource="{Binding OutputFormats}"
+                            SelectedItem="{Binding Parameters.OutputFormat}"
+                            HorizontalOptions="FillAndExpand" />
+
+                    <Slider Minimum="0" Maximum="100"
+                            Value="{Binding Parameters.OutputQuality}"
+                            HorizontalOptions="FillAndExpand" />
+                    <Label Text="{Binding Parameters.OutputQuality, StringFormat='Output Quality: {0:F0}%'}" />
+
+                    <HorizontalStackLayout Spacing="10">
+                        <CheckBox IsChecked="{Binding Parameters.PromptUpsampling}" />
+                        <Label Text="Prompt Upsampling" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Generate & Status -->
+            <Button Text="Generate Image"
+                    Command="{Binding GenerateImageCommand}"
+                    HorizontalOptions="FillAndExpand" />
+
+            <Label Text="{Binding StatusMessage}"
+                   TextColor="Black"
+                   HorizontalOptions="FillAndExpand" />
+
+            <!-- Generated Image Preview -->
             <Image Source="{Binding GeneratedImagePath}" 
                    Aspect="AspectFit"
-                   HeightRequest="300" />
+                   HeightRequest="300"
+                   HorizontalOptions="Center" />
+
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>
