@@ -1,21 +1,55 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+
 namespace ImageGenerator.MAUI.Models;
 
-public class ImageGenerationParameters
+// Make it partial so that [ObservableProperty] can generate the backing fields
+public partial class ImageGenerationParameters : ObservableObject
 {
-    public string ApiToken { get; set; } = string.Empty;
-    public string Model { get; set; } = "black-forest-labs/flux-1.1-pro";
-    public string Prompt { get; set; } = string.Empty;
-    public long Seed { get; set; }
-    public bool RandomizeSeed { get; set; } = true;
-    public int Steps { get; set; } = 25;
-    public double Guidance { get; set; } = 3.0;
-    public string AspectRatio { get; set; } = "1:1";
-    public int Width { get; set; } = 1024;
-    public int Height { get; set; } = 1024;
-    public int SafetyTolerance { get; set; } = 6;
-    public double Interval { get; set; } = 2.0;
-    public bool Raw { get; set; }
-    public string OutputFormat { get; set; } = "png";
-    public int OutputQuality { get; set; } = 100;
-    public bool PromptUpsampling { get; set; }
+    [ObservableProperty]
+    private string _apiToken = string.Empty;
+
+    [ObservableProperty]
+    private string _model = "black-forest-labs/flux-1.1-pro";
+
+    [ObservableProperty]
+    private string _prompt = string.Empty;
+
+    [ObservableProperty]
+    private long _seed;
+
+    [ObservableProperty]
+    private bool _randomizeSeed = true;
+
+    [ObservableProperty]
+    private int _steps = 25;
+
+    [ObservableProperty]
+    private double _guidance = 3.0;
+
+    [ObservableProperty]
+    private string _aspectRatio = "1:1";
+
+    [ObservableProperty]
+    private int _width = 1024;
+
+    [ObservableProperty]
+    private int _height = 1024;
+
+    [ObservableProperty]
+    private int _safetyTolerance = 6;
+
+    [ObservableProperty]
+    private double _interval = 2.0;
+
+    [ObservableProperty]
+    private bool _raw;
+
+    [ObservableProperty]
+    private string _outputFormat = "png";
+
+    [ObservableProperty]
+    private int _outputQuality = 100;
+
+    [ObservableProperty]
+    private bool _promptUpsampling;
 }

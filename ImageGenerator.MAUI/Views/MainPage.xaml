@@ -80,13 +80,13 @@
 
                     <!-- Steps Slider -->
                     <Slider Minimum="1" Maximum="50"
-                            Value="{Binding Parameters.Steps}"
+                            Value="{Binding Parameters.Steps, Mode=TwoWay}"
                             HorizontalOptions="FillAndExpand" />
                     <Label Text="{Binding Parameters.Steps, StringFormat='Steps: {0:F0}'}" />
 
                     <!-- Guidance Slider -->
                     <Slider Minimum="2" Maximum="5" 
-                            Value="{Binding Parameters.Guidance}"
+                            Value="{Binding Parameters.Guidance, Mode=TwoWay}"
                             HorizontalOptions="FillAndExpand" />
                     <Label Text="{Binding Parameters.Guidance, StringFormat='Guidance: {0:F0}'}" />
                 </VerticalStackLayout>
@@ -133,12 +133,12 @@
                 
                 <VerticalStackLayout Spacing="12">
                     <Slider Minimum="1" Maximum="6" 
-                            Value="{Binding Parameters.SafetyTolerance}"
+                            Value="{Binding Parameters.SafetyTolerance, Mode=TwoWay}"
                             HorizontalOptions="FillAndExpand" />
                     <Label Text="{Binding Parameters.SafetyTolerance, StringFormat='Safety Tolerance: {0:F0}'}" />
 
                     <Slider Minimum="1" Maximum="4" 
-                            Value="{Binding Parameters.Interval}"
+                            Value="{Binding Parameters.Interval, Mode=TwoWay}"
                             HorizontalOptions="FillAndExpand" />
                     <Label Text="{Binding Parameters.Interval, StringFormat='Interval: {0:F0}'}" />
                 </VerticalStackLayout>
@@ -165,7 +165,7 @@
                             HorizontalOptions="FillAndExpand" />
 
                     <Slider Minimum="0" Maximum="100"
-                            Value="{Binding Parameters.OutputQuality}"
+                            Value="{Binding Parameters.OutputQuality, Mode=TwoWay}"
                             HorizontalOptions="FillAndExpand" />
                     <Label Text="{Binding Parameters.OutputQuality, StringFormat='Output Quality: {0:F0}%'}" />
 
