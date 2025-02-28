@@ -50,6 +50,10 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private bool _isCustomAspectRatio;
     
+    [ObservableProperty]
+    private double _guidance;
+
+    
     public ICommand? GenerateImageCommand { get; }
   
     
