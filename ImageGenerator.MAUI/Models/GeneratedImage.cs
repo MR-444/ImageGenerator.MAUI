@@ -2,6 +2,8 @@ namespace ImageGenerator.MAUI.Models;
 
 public class GeneratedImage
 {
-    public ImageSource Image { get; set; }
-    public string Metadata { get; set; }
+    public string? Message { get; set; }
+    public string? FilePath { get; set; }
+    public long UpdatedSeed { get; set; }
+
 }

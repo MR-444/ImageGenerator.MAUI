@@ -1,0 +1,87 @@
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:ImageGenerator.MAUI.ViewModels"
+             x:Class="ImageGenerator.MAUI.Views.MainPage">
+
+    <ContentPage.BindingContext>
+        <viewmodels:GeneratorViewModel />
+    </ContentPage.BindingContext>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="20">
+            <Label Text="Image Generator" FontSize="22" HorizontalOptions="Center" />
+
+            <Entry Text="{Binding Parameters.ApiToken}" 
+                   Placeholder="Enter your Replicate API Token" 
+                   IsPassword="True" />
+           
+            <Picker Title="Model" 
+                    ItemsSource="{Binding AllModels}" 
+                    SelectedItem="{Binding Parameters.Model}" />
+            
+            <Editor Text="{Binding Parameters.Prompt}" 
+                    Placeholder="Describe the image you want to generate" />
+            
+            <Entry Text="{Binding Parameters.Seed}"
+                   Keyboard="Numeric" 
+                   Placeholder="Seed" />
+
+            <CheckBox IsChecked="{Binding Parameters.RandomizeSeed}" />
+            <Label Text="Randomize Seed" />
+
+            <Slider Minimum="1" Maximum="50"
+                    Value="{Binding Parameters.Steps}" />
+            <Label Text="Steps" />
+
+            <Slider Minimum="2" Maximum="5" 
+                    Value="{Binding Parameters.Guidance}" />
+            <Label Text="Guidance" />
+
+            <Picker Title="Aspect Ratio"
+                    ItemsSource="{Binding AspectRatioOptions}"
+                    SelectedItem="{Binding Parameters.AspectRatio}" />
+
+            <!-- Example: only show Width/Height if AspectRatio == "custom" -->
+            <HorizontalStackLayout 
+                    IsVisible="{Binding IsCustomAspectRatio}">
+                <Label Text="Width:" />
+                <Entry Text="{Binding Parameters.Width}" Keyboard="Numeric"/>
+                <Label Text="Height:" />
+                <Entry Text="{Binding Parameters.Height}" Keyboard="Numeric"/>
+            </HorizontalStackLayout>
+
+            <Slider Minimum="1" Maximum="6" 
+                    Value="{Binding Parameters.SafetyTolerance}" />
+            <Label Text="Safety Tolerance" />
+
+            <Slider Minimum="1" Maximum="4" 
+                    Value="{Binding Parameters.Interval}" />
+            <Label Text="Interval" />
+
+            <CheckBox IsChecked="{Binding Parameters.Raw}" />
+            <Label Text="Raw" />
+
+            <Picker Title="Output Format" 
+                    ItemsSource="{Binding OutputFormats}"
+                    SelectedItem="{Binding Parameters.OutputFormat}" />
+
+            <Slider Minimum="0" Maximum="100" 
+                    Value="{Binding Parameters.OutputQuality}" />
+            <Label Text="Output Quality" />
+
+            <CheckBox IsChecked="{Binding Parameters.PromptUpsampling}" />
+            <Label Text="Prompt Upsampling" />
+
+            <Button Text="Generate Image" 
+                    Command="{Binding GenerateImageCommand}" />
+
+            <Label Text="{Binding StatusMessage}" TextColor="Black" />
+
+            <!-- If the image path is non-empty, show the image -->
+            <Image Source="{Binding GeneratedImagePath}" 
+                   Aspect="AspectFit"
+                   HeightRequest="300" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

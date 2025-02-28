@@ -1,48 +1,105 @@
-using System.Text;
-using System.Text.Json;
+using System;
+using System.IO;
+using System.Net.Http;
+using System.Threading.Tasks;
 using ImageGenerator.MAUI.Models;
 
-namespace ImageGenerator.MAUI.Services;
-
-public class ReplicateImageGenerationService : IImageGenerationService
+namespace ImageGenerator.MAUI.Services
 {
-    private readonly HttpClient _httpClient;
-    public ReplicateImageGenerationService(HttpClient httpClient)
+    public class ReplicateImageGenerationService : IImageGenerationService
     {
-        _httpClient = httpClient;
-    }
+        // You might store these in a config or constants class
+        private const long seedMaxValue = 4294967295;
 
-    public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters, string apiToken)
-    {
-        // Build the request JSON from parameters.
-        // (Example: create a request body, set headers, etc.)
-        var requestBody = new
+        public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters)
         {
-            prompt = parameters.Prompt,
-            steps = parameters.Steps,
-            guidance = parameters.Guidance,
-            aspect_ratio = parameters.AspectRatio,
-            seed = parameters.Seed
-        };
+            try
+            {
+                // Validate
+                var validationError = ValidateParameters(parameters);
+                if (validationError != null)
+                {
+                    return new GeneratedImage
+                    {
+                        Message = $"Validation Error: {validationError}",
+                        FilePath = null,
+                        UpdatedSeed = parameters.Seed
+                    };
+                }
 
-        var requestJson = JsonSerializer.Serialize(requestBody);
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.replicate.com/v1/predictions");
-        request.Headers.Add("Authorization", $"Token {apiToken}");
-        request.Content = new StringContent(requestJson, Encoding.UTF8, "application/json");
+                // Potentially randomize the seed
+                if (parameters.RandomizeSeed)
+                {
+                    parameters.Seed = new Random().NextInt64(0, seedMaxValue);
+                }
 
-        var response = await _httpClient.SendAsync(request);
-        response.EnsureSuccessStatusCode();
+                // Here you would set API token environment variable, if needed
+                // Environment.SetEnvironmentVariable("REPLICATE_API_TOKEN", parameters.ApiToken);
 
-        // Deserialize the API response into your GeneratedImage model.
-        // This step may involve extracting a URL and loading the image.
-        var responseContent = await response.Content.ReadAsStringAsync();
-        // (Assume you parse it into a GeneratedImage instance.)
-        var generatedImage = new GeneratedImage
+                // Make the call to your generation model
+                var imageUrl = await CallReplicateModelAsync(parameters);
+
+                // Download the resulting image
+                var filePath = await DownloadImageAsync(imageUrl, parameters.OutputFormat, parameters.OutputQuality);
+
+                // Optionally embed metadata or do other post-processing
+
+                return new GeneratedImage
+                {
+                    Message = $"Image generated successfully with model {parameters.Model}.",
+                    FilePath = filePath,
+                    UpdatedSeed = parameters.Seed
+                };
+            }
+            catch (Exception ex)
+            {
+                return new GeneratedImage
+                {
+                    Message = $"An error occurred: {ex.Message}",
+                    FilePath = null,
+                    UpdatedSeed = parameters.Seed
+                };
+            }
+            finally
+            {
+               // Clear the API token from environment if needed
+               Environment.SetEnvironmentVariable("REPLICATE_API_TOKEN", null);
+            }
+        }
+
+        // Validation logic (similar to your Python checks)
+        private string? ValidateParameters(ImageGenerationParameters p)
         {
-            Image = ImageSource.FromUri(new Uri("https://example.com/generated.png")),
-            Metadata = "Used parameters: ..." // Fill in as needed.
-        };
+            if (p.Seed < 0 || p.Seed > seedMaxValue)
+                return $"Seed must be between 0 and {seedMaxValue}.";
+            // Add further checks for steps, width, height, etc.
+            // ...
+            return null; 
+        }
 
-        return generatedImage;
+        // Dummy example of calling replicate’s model
+        private Task<string> CallReplicateModelAsync(ImageGenerationParameters parameters)
+        {
+            // You’d replace this with the actual call to replicate.run or your chosen API endpoint
+            // return the image URL
+            return Task.FromResult("https://some-url-to-generated-image");
+        }
+
+        // Download the image from the returned URL
+        private static async Task<string> DownloadImageAsync(string imageUrl, string format, int quality)
+        {
+            var httpClient = new HttpClient();
+            var response = await httpClient.GetAsync(imageUrl);
+            response.EnsureSuccessStatusCode();
+
+            // Save the image to local storage
+            var imageBytes = await response.Content.ReadAsByteArrayAsync();
+            var fileName = $"image_{DateTime.Now:yyyyMMdd_HHmmss}.{format}";
+            var savePath = Path.Combine(FileSystem.Current.AppDataDirectory, fileName);
+
+            await File.WriteAllBytesAsync(savePath, imageBytes);
+
+            return savePath;
+        }
     }
 }

@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using ImageGenerator.MAUI.Services;
+using ImageGenerator.MAUI.ViewModels;
+using Microsoft.Extensions.Logging;
 
 namespace ImageGenerator.MAUI;
 
@@ -18,6 +20,9 @@ public static class MauiProgram
 #if DEBUG
 		builder.Logging.AddDebug();
 #endif
+		// Register your services and VM
+		builder.Services.AddSingleton<IImageGenerationService, ReplicateImageGenerationService>();
+		builder.Services.AddTransient<GeneratorViewModel>();
 
 		return builder.Build();
 	}

@@ -4,5 +4,5 @@ namespace ImageGenerator.MAUI.Services;
 
 public interface IImageGenerationService
 {
-    Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters, string apiToken);
+    Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters);
 }
