@@ -61,9 +61,21 @@ namespace ImageGenerator.MAUI.Services
             }
         }
 
-        // Validation logic (similar to your Python checks)
+        // Validation logic
         private static string? ValidateParameters(ImageGenerationParameters p)
         {
+            // Prompt (required, cannot be empty)
+            if (string.IsNullOrWhiteSpace(p.Prompt))
+                return "Prompt cannot be empty.";
+            
+            // Aspect Ratio (required, cannot be empty, optionally check for valid values)
+            if (string.IsNullOrWhiteSpace(p.AspectRatio))
+                return "Aspect Ratio cannot be empty.";
+            
+            // Image Prompt (required, cannot be empty)
+            if (string.IsNullOrWhiteSpace(p.ImagePrompt) && string.IsNullOrWhiteSpace(p.Prompt) )
+                return "Image Prompt cannot be empty, if no prompt is provided.";
+
             // Seed
             if (p.Seed < 0 || p.Seed > ValidationConstants.SeedMaxValue)
                 return $"Seed must be between 0 and {ValidationConstants.SeedMaxValue}.";
