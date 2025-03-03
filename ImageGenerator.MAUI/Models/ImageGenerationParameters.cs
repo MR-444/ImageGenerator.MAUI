@@ -27,10 +27,10 @@ public partial class ImageGenerationParameters : ObservableObject
     private double _guidance = 3.0;
 
     [ObservableProperty]
-    private string _aspectRatio = "1:1";
+    private string _aspectRatio = "16:9";
     
     [ObservableProperty]
-    private string _imagePrompt = string.Empty;
+    private string _imagePrompt;
 
     [ObservableProperty]
     private int _width = 1024;

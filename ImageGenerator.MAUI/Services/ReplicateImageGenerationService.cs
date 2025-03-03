@@ -9,7 +9,7 @@ namespace ImageGenerator.MAUI.Services
         {
             try
             {
-                // Validate
+                // Validate all input parameters
                 var validationError = ValidateParameters(parameters);
                 if (validationError != null)
                 {
@@ -27,16 +27,15 @@ namespace ImageGenerator.MAUI.Services
                     parameters.Seed = new Random().NextInt64(0, ValidationConstants.SeedMaxValue);
                 }
 
-                // Here you would set API token environment variable, if needed
-                // Environment.SetEnvironmentVariable("REPLICATE_API_TOKEN", parameters.ApiToken);
+                // Make the call to the generation model
+                var finalResponse = await CallReplicateModelAsync(parameters);
 
-                // Make the call to your generation model
-                var imageUrl = await CallReplicateModelAsync(parameters);
-
+                var imageUrl = finalResponse.Output;
                 // Download the resulting image
-                var filePath = await DownloadImageAsync(imageUrl, parameters.OutputFormat);
+                var filePath = await DownloadImageAsync(imageUrl!, parameters.OutputFormat);
 
                 // Optionally embed metadata or do other post-processing
+                // @todo: Embed the metadata to the png file.
 
                 return new GeneratedImage
                 {
@@ -54,16 +53,14 @@ namespace ImageGenerator.MAUI.Services
                     UpdatedSeed = parameters.Seed
                 };
             }
-            finally
-            {
-               // Clear the API token from environment if needed
-               Environment.SetEnvironmentVariable("REPLICATE_API_TOKEN", null);
-            }
         }
 
         // Validation logic
         private static string? ValidateParameters(ImageGenerationParameters p)
         {
+            if (string.IsNullOrWhiteSpace(p.ApiToken))
+                return "ApiToken cannot be empty.";
+                
             // Prompt (required, cannot be empty)
             if (string.IsNullOrWhiteSpace(p.Prompt))
                 return "Prompt cannot be empty.";
@@ -117,7 +114,7 @@ namespace ImageGenerator.MAUI.Services
         }
 
         
-        private async Task<string> CallReplicateModelAsync(ImageGenerationParameters parameters)
+        private async Task<ReplicatePredictionResponse> CallReplicateModelAsync(ImageGenerationParameters parameters)
         {
             // Build the request payload
             var replicateRequest = new ReplicatePredictionRequest
@@ -147,16 +144,16 @@ namespace ImageGenerator.MAUI.Services
                 parameters.Model,
                 replicateRequest
             );
-
-
-            // Check if we have a valid single URL in “Output”
-            if (string.IsNullOrWhiteSpace(response.Output))
-            {
-                throw new Exception("No valid output URL found in the Replicate response.");
-            }
+            
+            // Poll for final output, using the returned prediction ID
+            var finalResponse = await ReplicateHelper.PollForOutputAsync(
+                replicateApi,
+                bearerToken,
+                response.Id ?? string.Empty
+            );
 
             // Return the single URL string
-            return response.Output;
+            return finalResponse;
         }
         
         
