@@ -174,26 +174,9 @@
 
             <!-- Generate & Status -->
             <Button Text="Generate Image"
+                    Style="{StaticResource PressedButtonStyle}"
                     Command="{Binding GenerateImageCommand}"
-                    HorizontalOptions="FillAndExpand">
-                <VisualStateManager.VisualStateGroups>
-                    <VisualStateGroupList>
-                        <VisualStateGroup x:Name="CommonStates">
-                            <VisualState x:Name="Normal">
-                                <VisualState.Setters>
-                                    <Setter Property="BackgroundColor" Value="LightBlue"/>
-                                </VisualState.Setters>
-                            </VisualState>
-                            <VisualState x:Name="Pressed">
-                                <VisualState.Setters>
-                                    <Setter Property="BackgroundColor" Value="Blue"/>
-                                </VisualState.Setters>
-                            </VisualState>
-                        </VisualStateGroup>
-                    </VisualStateGroupList>
-                </VisualStateManager.VisualStateGroups>
-            </Button>
-
+                    HorizontalOptions="FillAndExpand" />
 
             <Label Text="{Binding StatusMessage}"
                    TextColor="Black"
