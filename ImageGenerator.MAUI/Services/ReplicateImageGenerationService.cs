@@ -129,15 +129,15 @@ namespace ImageGenerator.MAUI.Services
                 Input = new ReplicateInput
                 {
                     Prompt = parameters.Prompt,
-                    Prompt_Upsampling = parameters.PromptUpsampling,
+                    PromptUpsampling = parameters.PromptUpsampling,
                     Seed = parameters.Seed,
                     Width = parameters.Width,
                     Height = parameters.Height,
-                    Aspect_Ratio = parameters.AspectRatio,
-                    Image_Prompt = parameters.ImagePrompt,
-                    Safety_Tolerance = parameters.SafetyTolerance,
-                    Output_Format = parameters.OutputFormat,
-                    Output_Quality = parameters.OutputQuality
+                    AspectRatio = parameters.AspectRatio,
+                    ImagePrompt = parameters.ImagePrompt,
+                    SafetyTolerance = parameters.SafetyTolerance,
+                    OutputFormat = parameters.OutputFormat,
+                    OutputQuality = parameters.OutputQuality
                 }
             };
 
