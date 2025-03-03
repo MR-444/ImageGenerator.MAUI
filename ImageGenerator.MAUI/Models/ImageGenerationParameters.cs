@@ -28,6 +28,9 @@ public partial class ImageGenerationParameters : ObservableObject
 
     [ObservableProperty]
     private string _aspectRatio = "1:1";
+    
+    [ObservableProperty]
+    private string _imagePrompt = string.Empty;
 
     [ObservableProperty]
     private int _width = 1024;

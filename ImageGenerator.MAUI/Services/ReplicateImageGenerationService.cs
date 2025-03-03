@@ -1,8 +1,9 @@
-using System;
-using System.IO;
-using System.Net.Http;
-using System.Threading.Tasks;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using ImageGenerator.MAUI.Common;
 using ImageGenerator.MAUI.Models;
+using Refit;
 
 namespace ImageGenerator.MAUI.Services
 {
@@ -10,6 +11,15 @@ namespace ImageGenerator.MAUI.Services
     {
         // You might store these in a config or constants class
         private const long seedMaxValue = 4294967295;
+        
+        // Store the injected Refit interface
+        private readonly IReplicateApi _replicateApi;
+
+        public ReplicateImageGenerationService(IReplicateApi replicateApi)
+        {
+            _replicateApi = replicateApi;
+        }
+
 
         public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters)
         {
@@ -68,22 +78,92 @@ namespace ImageGenerator.MAUI.Services
         }
 
         // Validation logic (similar to your Python checks)
-        private string? ValidateParameters(ImageGenerationParameters p)
+        private static string? ValidateParameters(ImageGenerationParameters p)
         {
-            if (p.Seed < 0 || p.Seed > seedMaxValue)
-                return $"Seed must be between 0 and {seedMaxValue}.";
-            // Add further checks for steps, width, height, etc.
-            // ...
+            // Seed
+            if (p.Seed < 0 || p.Seed > ValidationConstants.SeedMaxValue)
+                return $"Seed must be between 0 and {ValidationConstants.SeedMaxValue}.";
+
+            // Steps
+            if (p.Steps < ValidationConstants.SliderStepsMin || p.Steps > ValidationConstants.SliderStepsMax)
+                return $"Steps must be between {ValidationConstants.SliderStepsMin} and {ValidationConstants.SliderStepsMax}.";
+
+            // Guidance
+            if (p.Guidance < ValidationConstants.SliderGuidanceMin || p.Guidance > ValidationConstants.SliderGuidanceMax)
+                return $"Guidance must be between {ValidationConstants.SliderGuidanceMin} and {ValidationConstants.SliderGuidanceMax}.";
+
+            // Safety Tolerance
+            if (p.SafetyTolerance < ValidationConstants.SliderSafetyMin || p.SafetyTolerance > ValidationConstants.SliderSafetyMax)
+                return $"Safety Tolerance must be between {ValidationConstants.SliderSafetyMin} and {ValidationConstants.SliderSafetyMax}.";
+
+            // Interval
+            if (p.Interval < ValidationConstants.SliderIntervalMin || p.Interval > ValidationConstants.SliderIntervalMax)
+                return $"Interval must be between {ValidationConstants.SliderIntervalMin} and {ValidationConstants.SliderIntervalMax}.";
+
+            // Width
+            if (p.Width < ValidationConstants.ImageWidthMin || p.Width > ValidationConstants.ImageWidthMax)
+                return $"Width must be between {ValidationConstants.ImageWidthMin} and {ValidationConstants.ImageWidthMax}.";
+            if (p.Width % 16 != 0)
+                return "Width must be a multiple of 16.";
+
+            // Height
+            if (p.Height < ValidationConstants.ImageHeightMin || p.Height > ValidationConstants.ImageHeightMax)
+                return $"Height must be between {ValidationConstants.ImageHeightMin} and {ValidationConstants.ImageHeightMax}.";
+            if (p.Height % 16 != 0)
+                return "Height must be a multiple of 16.";
+
+            // Output Quality
+            if (p.OutputQuality < ValidationConstants.SliderOutputQualityMin || p.OutputQuality > ValidationConstants.SliderOutputQualityMax)
+                return $"Output Quality must be between {ValidationConstants.SliderOutputQualityMin} and {ValidationConstants.SliderOutputQualityMax}.";
+
+            // All validations passed
             return null; 
         }
 
-        // Dummy example of calling replicate’s model
-        private Task<string> CallReplicateModelAsync(ImageGenerationParameters parameters)
+        
+        private async Task<string> CallReplicateModelAsync(ImageGenerationParameters parameters)
         {
-            // You’d replace this with the actual call to replicate.run or your chosen API endpoint
-            // return the image URL
-            return Task.FromResult("https://some-url-to-generated-image");
+            // Build the request payload
+            var replicateRequest = new ReplicatePredictionRequest
+            {
+                Input = new ReplicateInput
+                {
+                    Prompt = parameters.Prompt,
+                    Prompt_Upsampling = parameters.PromptUpsampling,
+                    Seed = parameters.Seed,
+                    Width = parameters.Width,
+                    Height = parameters.Height,
+                    Aspect_Ratio = parameters.AspectRatio,
+                    Image_Prompt = parameters.ImagePrompt,
+                    Safety_Tolerance = parameters.SafetyTolerance,
+                    Output_Format = parameters.OutputFormat,
+                    Output_Quality = parameters.OutputQuality
+                }
+            };
+
+            // Construct the bearer token string once
+            var bearerToken = $"Bearer {parameters.ApiToken}";
+
+            
+            // Invoke the endpoint using the injected Refit interface
+            var response = await _replicateApi.CreatePredictionAsync(
+                bearerToken,
+                parameters.Model,
+                replicateRequest
+            );
+
+
+            // Check if we have a valid single URL in “Output”
+            if (string.IsNullOrWhiteSpace(response.Output))
+            {
+                throw new Exception("No valid output URL found in the Replicate response.");
+            }
+
+            // Return the single URL string
+            return response.Output;
         }
+        
+        
 
         // Download the image from the returned URL
         private static async Task<string> DownloadImageAsync(string imageUrl, string format, int quality)

@@ -11,7 +11,7 @@ public partial class GeneratorViewModel : ObservableObject
     private readonly IImageGenerationService? _imageService;
 
     [ObservableProperty]
-    private ImageGenerationParameters _parameters = new ImageGenerationParameters
+    private ImageGenerationParameters _parameters = new()
     {
         // Default values for your sliders, etc.
         ApiToken = "",
@@ -37,15 +37,18 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private List<string> _allModels =
     [
-        "black-forest-labs/flux-dev", "black-forest-labs/flux-pro", "black-forest-labs/flux-1.1-pro",
-        "black-forest-labs/flux-schnell", "black-forest-labs/flux-1.1-pro-ultra"
+        "black-forest-labs/flux-dev", 
+        "black-forest-labs/flux-pro", 
+        "black-forest-labs/flux-1.1-pro",
+        "black-forest-labs/flux-schnell", 
+        "black-forest-labs/flux-1.1-pro-ultra"
     ];
 
     [ObservableProperty]
-    private List<string> _aspectRatioOptions = ["1:1", "16:9", "4:3", "custom"];
+    private List<string> _aspectRatioOptions = ["1:1", "16:9", "9:16","3:2", "2:3", "4:3", "3:4","4:5", "5:4", "custom"];
 
     [ObservableProperty]
-    private List<string> _outputFormats = ["png", "jpg", "bmp"];
+    private List<string> _outputFormats = ["png", "jpg"];
 
     [ObservableProperty]
     private bool _isCustomAspectRatio;
@@ -62,7 +65,6 @@ public partial class GeneratorViewModel : ObservableObject
     {
         // Optionally initialize fields here
     }
-
         
     public GeneratorViewModel(IImageGenerationService imageService)
     {

@@ -1,6 +1,8 @@
-﻿using ImageGenerator.MAUI.Services;
+﻿using ImageGenerator.MAUI.Models;
+using ImageGenerator.MAUI.Services;
 using ImageGenerator.MAUI.ViewModels;
 using Microsoft.Extensions.Logging;
+using Refit;
 
 namespace ImageGenerator.MAUI;
 
@@ -20,6 +22,15 @@ public static class MauiProgram
 #if DEBUG
 		builder.Logging.AddDebug();
 #endif
+		// 1) Add the Refit client
+		builder.Services
+			.AddRefitClient<IReplicateApi>()
+			.ConfigureHttpClient(client =>
+			{
+				// Set the base address for all calls
+				client.BaseAddress = new Uri("https://api.replicate.com");
+			});
+		
 		// Register your services and VM
 		builder.Services.AddSingleton<IImageGenerationService, ReplicateImageGenerationService>();
 		builder.Services.AddTransient<GeneratorViewModel>();
