@@ -1,26 +1,10 @@
-using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
 using ImageGenerator.MAUI.Common;
 using ImageGenerator.MAUI.Models;
-using Refit;
 
 namespace ImageGenerator.MAUI.Services
 {
-    public class ReplicateImageGenerationService : IImageGenerationService
+    public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImageGenerationService
     {
-        // You might store these in a config or constants class
-        private const long seedMaxValue = 4294967295;
-        
-        // Store the injected Refit interface
-        private readonly IReplicateApi _replicateApi;
-
-        public ReplicateImageGenerationService(IReplicateApi replicateApi)
-        {
-            _replicateApi = replicateApi;
-        }
-
-
         public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters)
         {
             try
@@ -40,7 +24,7 @@ namespace ImageGenerator.MAUI.Services
                 // Potentially randomize the seed
                 if (parameters.RandomizeSeed)
                 {
-                    parameters.Seed = new Random().NextInt64(0, seedMaxValue);
+                    parameters.Seed = new Random().NextInt64(0, ValidationConstants.SeedMaxValue);
                 }
 
                 // Here you would set API token environment variable, if needed
@@ -50,7 +34,7 @@ namespace ImageGenerator.MAUI.Services
                 var imageUrl = await CallReplicateModelAsync(parameters);
 
                 // Download the resulting image
-                var filePath = await DownloadImageAsync(imageUrl, parameters.OutputFormat, parameters.OutputQuality);
+                var filePath = await DownloadImageAsync(imageUrl, parameters.OutputFormat);
 
                 // Optionally embed metadata or do other post-processing
 
@@ -146,7 +130,7 @@ namespace ImageGenerator.MAUI.Services
 
             
             // Invoke the endpoint using the injected Refit interface
-            var response = await _replicateApi.CreatePredictionAsync(
+            var response = await replicateApi.CreatePredictionAsync(
                 bearerToken,
                 parameters.Model,
                 replicateRequest
@@ -166,7 +150,7 @@ namespace ImageGenerator.MAUI.Services
         
 
         // Download the image from the returned URL
-        private static async Task<string> DownloadImageAsync(string imageUrl, string format, int quality)
+        private static async Task<string> DownloadImageAsync(string imageUrl, string format)
         {
             var httpClient = new HttpClient();
             var response = await httpClient.GetAsync(imageUrl);

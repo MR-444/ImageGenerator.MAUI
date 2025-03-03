@@ -1,4 +1,5 @@
-﻿using ImageGenerator.MAUI.Models;
+﻿using ImageGenerator.MAUI.Common;
+using ImageGenerator.MAUI.Models;
 using ImageGenerator.MAUI.Services;
 using ImageGenerator.MAUI.Views; 
 using ImageGenerator.MAUI.ViewModels;
@@ -34,6 +35,7 @@ public static class MauiProgram
 		
 		// 2) Register your services and VM
 		builder.Services.AddSingleton<IImageGenerationService, ReplicateImageGenerationService>();
+		
 		builder.Services.AddTransient<GeneratorViewModel>();
 
 		// 3) Register MainPage so it (and its constructor) can be injected

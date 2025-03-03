@@ -1,6 +1,6 @@
 namespace ImageGenerator.MAUI.Common;
 
-public static class ValidationConstants
+public class ValidationConstants
 {
     public const long SeedMaxValue = 4294967295;
     public const int SliderStepsMin = 1;

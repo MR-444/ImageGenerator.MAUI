@@ -181,12 +181,12 @@
                         <VisualStateGroup x:Name="CommonStates">
                             <VisualState x:Name="Normal">
                                 <VisualState.Setters>
-                                    <Setter Property="BackgroundColor" Value="LightGray"/>
+                                    <Setter Property="BackgroundColor" Value="LightBlue"/>
                                 </VisualState.Setters>
                             </VisualState>
                             <VisualState x:Name="Pressed">
                                 <VisualState.Setters>
-                                    <Setter Property="BackgroundColor" Value="DarkGray"/>
+                                    <Setter Property="BackgroundColor" Value="Blue"/>
                                 </VisualState.Setters>
                             </VisualState>
                         </VisualStateGroup>
