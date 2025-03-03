@@ -56,16 +56,8 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private double _guidance;
 
-    
     public ICommand? GenerateImageCommand { get; }
-  
-    
-    // Default constructor
-    public GeneratorViewModel()
-    {
-        // Optionally initialize fields here
-    }
-        
+       
     public GeneratorViewModel(IImageGenerationService imageService)
     {
         _imageService = imageService ?? throw new ArgumentNullException(nameof(imageService));

@@ -1,13 +1,15 @@
-﻿using Microsoft.Maui.Controls;
+﻿using ImageGenerator.MAUI.ViewModels;
 
-namespace ImageGenerator.MAUI.Views
+namespace ImageGenerator.MAUI.Views;
+
+public partial class MainPage : ContentPage
 {
-    public partial class MainPage : ContentPage
+    // Notice we inject GeneratorViewModel from the DI container:
+    public MainPage(GeneratorViewModel viewModel)
     {
-        public MainPage()
-        {
-            InitializeComponent();
-            // If you prefer, you can assign the BindingContext in code or use DI to inject the VM
-        }
+        InitializeComponent();
+            
+        // Assign the BindingContext to the injected viewModel:
+        BindingContext = viewModel;
     }
 }

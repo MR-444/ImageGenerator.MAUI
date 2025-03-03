@@ -8,7 +8,7 @@ public static class ValidationConstants
     public const int SliderGuidanceMin = 1;
     public const int SliderGuidanceMax = 20;
     public const int SliderSafetyMin = 1;
-    public const int SliderSafetyMax = 5;
+    public const int SliderSafetyMax = 6;
     public const int SliderIntervalMin = 1;
     public const int SliderIntervalMax = 20;
     public const int ImageWidthMin = 64;
