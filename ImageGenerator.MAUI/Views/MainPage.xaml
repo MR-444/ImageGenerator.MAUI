@@ -43,7 +43,7 @@
 
                     <Editor Text="{Binding Parameters.Prompt}"
                             Placeholder="Describe the image you want to generate"
-                            AutoSize="Disabled"
+                            AutoSize="TextChanges"
                             HorizontalOptions="FillAndExpand" />
                 </VerticalStackLayout>
             </Border>
