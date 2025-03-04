@@ -9,11 +9,6 @@
                              HorizontalOptions="FillAndExpand"
                              VerticalOptions="FillAndExpand">
 
-            <!-- Title -->
-            <Label Text="Image Generator"
-                   FontSize="22"
-                   HorizontalOptions="Center" />
-
             <!-- Authentication/Profile Settings Border -->
             <Border Stroke="LightGray"
                     StrokeThickness="1"
