@@ -3,6 +3,7 @@ using ImageGenerator.MAUI.Models;
 using ImageGenerator.MAUI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ImageGenerator.MAUI.Common;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
@@ -18,22 +19,7 @@ public partial class GeneratorViewModel : ObservableObject
     private readonly IImageGenerationService? _imageService;
 
     [ObservableProperty]
-    private ImageGenerationParameters _parameters = new()
-    {
-        // Default values for your sliders, etc.
-        ApiToken = "",
-        Model = "black-forest-labs/flux-1.1-pro",
-        Steps = 25,
-        Guidance = 3.0,
-        AspectRatio = "1:1",
-        Width = 1024,
-        Height = 1024,
-        OutputFormat = "png",
-        OutputQuality = 100,
-        Raw = false,
-        PromptUpsampling = false,
-        Seed = 12345
-    };
+    private ImageGenerationParameters _parameters;
 
     [ObservableProperty]
     private string? _statusMessage;
@@ -68,12 +54,38 @@ public partial class GeneratorViewModel : ObservableObject
     public GeneratorViewModel(IImageGenerationService imageService)
     {
         _imageService = imageService ?? throw new ArgumentNullException(nameof(imageService));
+        
+        _parameters = new ImageGenerationParameters
+        {
+            // Default values for your sliders, etc.
+            ApiToken = "",
+            Model = "black-forest-labs/flux-1.1-pro",
+            Steps = 25,
+            Guidance = 3.0,
+            AspectRatio = "1:1",
+            Width = 1024,
+            Height = 1024,
+            OutputFormat = "png",
+            OutputQuality = 100,
+            Raw = false,
+            PromptUpsampling = false,
+            Seed = Random.Shared.NextInt64(),
+            RandomizeSeed = true
+        };
+        
         GenerateImageCommand = new AsyncRelayCommand(GenerateImageAsync);
     }
 
     private async Task GenerateImageAsync()
     {
         StatusMessage = "Generating image...";
+        
+        // Explicitly randomize before calling the service if required
+        if (Parameters.RandomizeSeed)
+        {
+            // Use Random.Shared for better randomness/static instance:
+            Parameters.Seed = Random.Shared.NextInt64(0, ValidationConstants.SeedMaxValue);
+        }
 
         var result = await _imageService!.GenerateImageAsync(Parameters);
         
@@ -98,17 +110,17 @@ public partial class GeneratorViewModel : ObservableObject
             StatusMessage = result.Message;
             GeneratedImagePath = null;
         }
-
-        // Update the seed with the new returned one.
-        Parameters.Seed = result.UpdatedSeed;
     }
     
     // Helper method (clearly organize filenames):
     private static string BuildFileName(ImageGenerationParameters parameters)
     {
         var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        var safePrompt = string.Join("_", parameters.Prompt.Split(Path.GetInvalidFileNameChars()))
-            .Replace(" ", "_");
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var safePrompt = new string(parameters.Prompt.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray())
+            .Replace(" ", "_")
+            .Replace("__", "_"); // Replace double underscores
+        safePrompt = safePrompt.Length > 30 ? safePrompt[..30] : safePrompt;
 
         if (safePrompt.Length > 30)
             safePrompt = safePrompt[..30];

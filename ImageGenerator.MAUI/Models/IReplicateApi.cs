@@ -17,7 +17,7 @@ public interface IReplicateApi
     
     // Get the prediction by its ID
     [Get("/v1/predictions/{predictionId}")]
-    Task<ReplicatePredictionResponse> GetPredictionAsync(
+    Task<ReplicatePredictionResponse?> GetPredictionAsync(
         [Header("Authorization")] string bearerToken,
         [AliasAs("predictionId")] string predictionId
     );

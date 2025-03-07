@@ -2,7 +2,7 @@ namespace ImageGenerator.MAUI.Models;
 
 public class ReplicateHelper
 {
-    public static async Task<ReplicatePredictionResponse> PollForOutputAsync(
+    public static async Task<ReplicatePredictionResponse?> PollForOutputAsync(
         IReplicateApi replicateApi,
         string bearerToken,
         string predictionId

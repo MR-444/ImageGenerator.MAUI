@@ -5,6 +5,8 @@ namespace ImageGenerator.MAUI.Services;
 
 public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImageGenerationService
 {
+    private static readonly HttpClient HttpClient = new();
+
     public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters)
     {
         try
@@ -17,29 +19,23 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
                 {
                     Message = $"Validation Error: {validationError}",
                     FilePath = null,
-                    UpdatedSeed = parameters.Seed
+                    ImageDataBase64 = null
                 };
-            }
-
-            // Potentially randomize the seed
-            if (parameters.RandomizeSeed)
-            {
-                parameters.Seed = new Random().NextInt64(0, ValidationConstants.SeedMaxValue);
             }
 
             // Make the call to the generation model
             var finalResponse = await CallReplicateModelAsync(parameters);
+            if(finalResponse?.Output == null)
+                throw new InvalidOperationException("Model prediction failed or returned no result.");
 
             var imageUrl = finalResponse.Output;
-            // Download the resulting image
             var imageDataBase64 = await DownloadImageAsBase64Async(imageUrl!);
 
             return new GeneratedImage
             {
                 Message = $"Image generated successfully with model {parameters.Model}.",
-                FilePath = null,         // no file yet
+                FilePath = null,
                 ImageDataBase64 = imageDataBase64,
-                UpdatedSeed = parameters.Seed
             };
         }
         catch (Exception ex)
@@ -48,7 +44,7 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
             {
                 Message = $"An error occurred: {ex.Message}",
                 FilePath = null,
-                UpdatedSeed = parameters.Seed
+                ImageDataBase64 = null
             };
         }
     }
@@ -112,7 +108,7 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
     }
 
         
-    private async Task<ReplicatePredictionResponse> CallReplicateModelAsync(ImageGenerationParameters parameters)
+    private async Task<ReplicatePredictionResponse?> CallReplicateModelAsync(ImageGenerationParameters parameters)
     {
         // Build the request payload
         var replicateRequest = new ReplicatePredictionRequest
@@ -156,8 +152,7 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
     // Download the image from the returned URL
     private static async Task<string> DownloadImageAsBase64Async(string imageUrl)
     {
-        var httpClient = new HttpClient();
-        var response = await httpClient.GetAsync(imageUrl);
+        var response = await HttpClient.GetAsync(imageUrl);
         response.EnsureSuccessStatusCode();
         
         var bytes = await response.Content.ReadAsByteArrayAsync();
