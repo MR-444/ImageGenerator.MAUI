@@ -1,6 +1,4 @@
-﻿using ImageGenerator.MAUI.Views;
-
-namespace ImageGenerator.MAUI
+﻿namespace ImageGenerator.MAUI
 {
     public partial class App : Application
     {
