@@ -76,19 +76,21 @@ public partial class GeneratorViewModel : ObservableObject
         StatusMessage = "Generating image...";
 
         var result = await _imageService!.GenerateImageAsync(Parameters);
-
-        if (!string.IsNullOrEmpty(result.FilePath))
+        
+        if (!string.IsNullOrEmpty(result.ImageDataBase64))
         {
-            // Success
-            StatusMessage = result.Message;
-            
-            // load image into memory entirely
-            var imageBytes = await File.ReadAllBytesAsync(result.FilePath);
-            
-            // Now immediately augment EXIF metadata in-memory and save overwriting original
-            await SaveImageWithMetadataAsync(result.FilePath, imageBytes, Parameters);
+            var outputDir = Path.Combine(AppContext.BaseDirectory, "Generated_Pictures");
+            Directory.CreateDirectory(outputDir);
 
-            GeneratedImagePath = result.FilePath;
+            var newImagePath = Path.Combine(outputDir, BuildFileName(Parameters));
+
+            // Decode from Base64 just once here
+            var imageBytes = Convert.FromBase64String(result.ImageDataBase64);
+
+            await SaveImageWithMetadataAsync(newImagePath, imageBytes, Parameters);
+
+            GeneratedImagePath = newImagePath;
+            StatusMessage = result.Message;
         }
         else
         {
@@ -101,8 +103,25 @@ public partial class GeneratorViewModel : ObservableObject
         Parameters.Seed = result.UpdatedSeed;
     }
     
+    // Helper method (clearly organize filenames):
+    private static string BuildFileName(ImageGenerationParameters parameters)
+    {
+        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        var safePrompt = string.Join("_", parameters.Prompt.Split(Path.GetInvalidFileNameChars()))
+            .Replace(" ", "_");
+
+        if (safePrompt.Length > 30)
+            safePrompt = safePrompt[..30];
+
+        var fileExtension = parameters.OutputFormat.Equals("jpeg", StringComparison.InvariantCultureIgnoreCase)
+            ? "jpg" 
+            : parameters.OutputFormat.ToLowerInvariant();
+
+        return $"{timestamp}_{safePrompt}_{parameters.Seed}.{fileExtension}";
+    }
+
     
-    private async Task SaveImageWithMetadataAsync(string imagePath,
+    private static async Task SaveImageWithMetadataAsync(string imagePath,
                                                   byte[] imageBytes,
                                                   ImageGenerationParameters parameters)
     {
