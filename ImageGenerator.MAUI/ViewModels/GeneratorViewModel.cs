@@ -3,6 +3,13 @@ using ImageGenerator.MAUI.Models;
 using ImageGenerator.MAUI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.PixelFormats;
+using Image = SixLabors.ImageSharp.Image;
+
 
 namespace ImageGenerator.MAUI.ViewModels;
 
@@ -67,7 +74,6 @@ public partial class GeneratorViewModel : ObservableObject
     private async Task GenerateImageAsync()
     {
         StatusMessage = "Generating image...";
-        // Optional: you can do more UI toggling here (e.g., busy indicator)
 
         var result = await _imageService!.GenerateImageAsync(Parameters);
 
@@ -75,6 +81,13 @@ public partial class GeneratorViewModel : ObservableObject
         {
             // Success
             StatusMessage = result.Message;
+            
+            // load image into memory entirely
+            var imageBytes = await File.ReadAllBytesAsync(result.FilePath);
+            
+            // Now immediately augment EXIF metadata in-memory and save overwriting original
+            await SaveImageWithMetadataAsync(result.FilePath, imageBytes, Parameters);
+
             GeneratedImagePath = result.FilePath;
         }
         else
@@ -84,7 +97,49 @@ public partial class GeneratorViewModel : ObservableObject
             GeneratedImagePath = null;
         }
 
-        // Update the seed if the service returned a new one
+        // Update the seed with the new returned one.
         Parameters.Seed = result.UpdatedSeed;
+    }
+    
+    
+    private async Task SaveImageWithMetadataAsync(string imagePath,
+                                                  byte[] imageBytes,
+                                                  ImageGenerationParameters parameters)
+    {
+        using var image = await Image.LoadAsync<Rgba32>(new MemoryStream(imageBytes));
+
+        // Construct your metadata string (you can format differently)
+        var metadataText = 
+            $"Prompt: {parameters.Prompt}\n" +
+            $"Model: {parameters.Model}\n" +
+            $"Seed: {parameters.Seed}\n" +
+            $"Steps: {parameters.Steps}\n" +
+            $"Guidance: {parameters.Guidance}\n" +
+            $"AspectRatio: {parameters.AspectRatio}\n" +
+            $"Dimensions: {parameters.Width}x{parameters.Height}\n" +
+            $"Format: {parameters.OutputFormat}\n" +
+            $"Quality: {parameters.OutputQuality}\n" +
+            $"Raw: {parameters.Raw}\n" +
+            $"Upsampling: {parameters.PromptUpsampling}";
+
+        image.Metadata.ExifProfile ??= new ExifProfile();
+        image.Metadata.ExifProfile.SetValue(ExifTag.UserComment, metadataText);
+
+        // Choose the encoder depending on file format
+        switch (parameters.OutputFormat.ToLowerInvariant())
+        {
+            case "jpeg":
+            case "jpg":
+                // JPEG Encoder with specified quality
+                var jpegEncoder = new JpegEncoder { Quality = parameters.OutputQuality };
+                await image.SaveAsync(imagePath, jpegEncoder);
+                break;
+
+            default:
+                // PNG Encoder
+                var pngEncoder = new PngEncoder(); // PNG typically doesn't have quality param
+                await image.SaveAsync(imagePath, pngEncoder);
+                break;
+        }
     }
 }

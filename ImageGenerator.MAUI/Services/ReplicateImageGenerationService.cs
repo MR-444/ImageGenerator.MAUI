@@ -34,9 +34,6 @@ namespace ImageGenerator.MAUI.Services
                 // Download the resulting image
                 var filePath = await DownloadImageAsync(imageUrl!, parameters.OutputFormat);
 
-                // Optionally embed metadata or do other post-processing
-                // @todo: Embed the metadata to the png file.
-
                 return new GeneratedImage
                 {
                     Message = $"Image generated successfully with model {parameters.Model}.",
@@ -137,7 +134,6 @@ namespace ImageGenerator.MAUI.Services
             // Construct the bearer token string once
             var bearerToken = $"Bearer {parameters.ApiToken}";
 
-            
             // Invoke the endpoint using the injected Refit interface
             var response = await replicateApi.CreatePredictionAsync(
                 bearerToken,
