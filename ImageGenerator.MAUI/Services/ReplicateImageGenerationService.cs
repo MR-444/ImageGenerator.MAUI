@@ -71,24 +71,12 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
         if (p.Seed < 0 || p.Seed > ValidationConstants.SeedMaxValue)
             return $"Seed must be between 0 and {ValidationConstants.SeedMaxValue}.";
 
-        // Steps
-        if (p.Steps < ValidationConstants.SliderStepsMin || p.Steps > ValidationConstants.SliderStepsMax)
-            return $"Steps must be between {ValidationConstants.SliderStepsMin} and {ValidationConstants.SliderStepsMax}.";
-
-        // Guidance
-        if (p.Guidance < ValidationConstants.SliderGuidanceMin || p.Guidance > ValidationConstants.SliderGuidanceMax)
-            return $"Guidance must be between {ValidationConstants.SliderGuidanceMin} and {ValidationConstants.SliderGuidanceMax}.";
-
         // Safety Tolerance
-        if (p.SafetyTolerance < ValidationConstants.SliderSafetyMin || p.SafetyTolerance > ValidationConstants.SliderSafetyMax)
+        if (p.SafetyTolerance is < ValidationConstants.SliderSafetyMin or > ValidationConstants.SliderSafetyMax)
             return $"Safety Tolerance must be between {ValidationConstants.SliderSafetyMin} and {ValidationConstants.SliderSafetyMax}.";
 
-        // Interval
-        if (p.Interval < ValidationConstants.SliderIntervalMin || p.Interval > ValidationConstants.SliderIntervalMax)
-            return $"Interval must be between {ValidationConstants.SliderIntervalMin} and {ValidationConstants.SliderIntervalMax}.";
-
         // Width
-        if (p.Width < ValidationConstants.ImageWidthMin || p.Width > ValidationConstants.ImageWidthMax)
+        if (p.Width is < ValidationConstants.ImageWidthMin or > ValidationConstants.ImageWidthMax)
             return $"Width must be between {ValidationConstants.ImageWidthMin} and {ValidationConstants.ImageWidthMax}.";
         if (p.Width % 16 != 0)
             return "Width must be a multiple of 16.";
@@ -100,7 +88,7 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
             return "Height must be a multiple of 16.";
 
         // Output Quality
-        if (p.OutputQuality < ValidationConstants.SliderOutputQualityMin || p.OutputQuality > ValidationConstants.SliderOutputQualityMax)
+        if (p.OutputQuality is < ValidationConstants.SliderOutputQualityMin or > ValidationConstants.SliderOutputQualityMax)
             return $"Output Quality must be between {ValidationConstants.SliderOutputQualityMin} and {ValidationConstants.SliderOutputQualityMax}.";
 
         // All validations passed

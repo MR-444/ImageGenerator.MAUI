@@ -60,14 +60,11 @@ public partial class GeneratorViewModel : ObservableObject
             // Default values for your sliders, etc.
             ApiToken = "",
             Model = "black-forest-labs/flux-1.1-pro",
-            Steps = 25,
-            Guidance = 3.0,
             AspectRatio = "1:1",
             Width = 1024,
             Height = 1024,
             OutputFormat = "png",
             OutputQuality = 100,
-            Raw = false,
             PromptUpsampling = false,
             Seed = Random.Shared.NextInt64(),
             RandomizeSeed = true
@@ -144,13 +141,10 @@ public partial class GeneratorViewModel : ObservableObject
             $"Prompt: {parameters.Prompt}\n" +
             $"Model: {parameters.Model}\n" +
             $"Seed: {parameters.Seed}\n" +
-            $"Steps: {parameters.Steps}\n" +
-            $"Guidance: {parameters.Guidance}\n" +
             $"AspectRatio: {parameters.AspectRatio}\n" +
             $"Dimensions: {parameters.Width}x{parameters.Height}\n" +
             $"Format: {parameters.OutputFormat}\n" +
             $"Quality: {parameters.OutputQuality}\n" +
-            $"Raw: {parameters.Raw}\n" +
             $"Upsampling: {parameters.PromptUpsampling}";
 
         image.Metadata.ExifProfile ??= new ExifProfile();

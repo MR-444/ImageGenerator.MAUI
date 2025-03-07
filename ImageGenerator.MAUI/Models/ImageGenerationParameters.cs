@@ -21,12 +21,6 @@ public partial class ImageGenerationParameters : ObservableObject
     private bool _randomizeSeed = true;
 
     [ObservableProperty]
-    private int _steps = 25;
-
-    [ObservableProperty]
-    private double _guidance = 3.0;
-
-    [ObservableProperty]
     private string _aspectRatio = "16:9";
     
     [ObservableProperty]
@@ -40,12 +34,6 @@ public partial class ImageGenerationParameters : ObservableObject
 
     [ObservableProperty]
     private int _safetyTolerance = 6;
-
-    [ObservableProperty]
-    private double _interval = 2.0;
-
-    [ObservableProperty]
-    private bool _raw;
 
     [ObservableProperty]
     private string _outputFormat = "png";
