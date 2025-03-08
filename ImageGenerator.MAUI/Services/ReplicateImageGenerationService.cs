@@ -1,4 +1,3 @@
-using ImageGenerator.MAUI.Common;
 using ImageGenerator.MAUI.Models;
 
 namespace ImageGenerator.MAUI.Services;
@@ -11,18 +10,6 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
     {
         try
         {
-            // Validate all input parameters
-            var validationError = ValidateParameters(parameters);
-            if (validationError != null)
-            {
-                return new GeneratedImage
-                {
-                    Message = $"Validation Error: {validationError}",
-                    FilePath = null,
-                    ImageDataBase64 = null
-                };
-            }
-
             // Make the call to the generation model
             var finalResponse = await CallReplicateModelAsync(parameters);
             if(finalResponse?.Output == null)
@@ -48,54 +35,7 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
             };
         }
     }
-
-    // Validation logic
-    private static string? ValidateParameters(ImageGenerationParameters p)
-    {
-        if (string.IsNullOrWhiteSpace(p.ApiToken))
-            return "ApiToken cannot be empty.";
-                
-        // Prompt (required, cannot be empty)
-        if (string.IsNullOrWhiteSpace(p.Prompt))
-            return "Prompt cannot be empty.";
-            
-        // Aspect Ratio (required, cannot be empty, optionally check for valid values)
-        if (string.IsNullOrWhiteSpace(p.AspectRatio))
-            return "Aspect Ratio cannot be empty.";
-            
-        // Image Prompt (required, cannot be empty)
-        if (string.IsNullOrWhiteSpace(p.ImagePrompt) && string.IsNullOrWhiteSpace(p.Prompt) )
-            return "Image Prompt cannot be empty, if no prompt is provided.";
-
-        // Seed
-        if (p.Seed < 0 || p.Seed > ValidationConstants.SeedMaxValue)
-            return $"Seed must be between 0 and {ValidationConstants.SeedMaxValue}.";
-
-        // Safety Tolerance
-        if (p.SafetyTolerance is < ValidationConstants.SliderSafetyMin or > ValidationConstants.SliderSafetyMax)
-            return $"Safety Tolerance must be between {ValidationConstants.SliderSafetyMin} and {ValidationConstants.SliderSafetyMax}.";
-
-        // Width
-        if (p.Width is < ValidationConstants.ImageWidthMin or > ValidationConstants.ImageWidthMax)
-            return $"Width must be between {ValidationConstants.ImageWidthMin} and {ValidationConstants.ImageWidthMax}.";
-        if (p.Width % 16 != 0)
-            return "Width must be a multiple of 16.";
-
-        // Height
-        if (p.Height < ValidationConstants.ImageHeightMin || p.Height > ValidationConstants.ImageHeightMax)
-            return $"Height must be between {ValidationConstants.ImageHeightMin} and {ValidationConstants.ImageHeightMax}.";
-        if (p.Height % 16 != 0)
-            return "Height must be a multiple of 16.";
-
-        // Output Quality
-        if (p.OutputQuality is < ValidationConstants.SliderOutputQualityMin or > ValidationConstants.SliderOutputQualityMax)
-            return $"Output Quality must be between {ValidationConstants.SliderOutputQualityMin} and {ValidationConstants.SliderOutputQualityMax}.";
-
-        // All validations passed
-        return null; 
-    }
-
-        
+    
     private async Task<ReplicatePredictionResponse?> CallReplicateModelAsync(ImageGenerationParameters parameters)
     {
         // Build the request payload
