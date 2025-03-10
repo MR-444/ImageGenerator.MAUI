@@ -2,48 +2,9 @@ using System.Text.Json.Serialization;
 
 namespace ImageGenerator.MAUI.Models;
 
-public class ReplicateInput
-{
-    [JsonPropertyName("prompt")]
-    public required string Prompt { get; set; }
-    
-    [JsonPropertyName("prompt_upsampling")]
-    public bool PromptUpsampling { get; set; }
-    
-    [JsonPropertyName("seed")]
-    public required long Seed { get; set; }
-
-    [JsonPropertyName("aspect_ratio")]
-    public required string AspectRatio { get; set; }
-    
-    [JsonPropertyName("image_prompt")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? ImagePrompt
-    {
-        get => _imagePrompt;
-        set => _imagePrompt = string.IsNullOrWhiteSpace(value) ? null : value;
-    }
-    private string? _imagePrompt;
-    
-    [JsonPropertyName("width")]
-    public int Width { get; set; }
-    
-    [JsonPropertyName("height")]
-    public int Height { get; set; }
-    
-    [JsonPropertyName("safety_tolerance")]
-    public int SafetyTolerance { get; set; }
-    
-    [JsonPropertyName("output_format")]
-    public required string OutputFormat { get; set; }
-    
-    [JsonPropertyName("output_quality")]
-    public int OutputQuality { get; set; }
-}
-
 public class ReplicatePredictionRequest
 {
-    public required ReplicateInput Input { get; set; }
+    public required FluxPro11 Input { get; set; }
 }
 
 

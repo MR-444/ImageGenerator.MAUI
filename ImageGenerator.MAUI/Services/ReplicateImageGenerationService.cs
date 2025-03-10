@@ -41,7 +41,8 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
         // Build the request payload
         var replicateRequest = new ReplicatePredictionRequest
         {
-            Input = new ReplicateInput
+            Input = new FluxPro11
+
             {
                 Prompt = parameters.Prompt,
                 PromptUpsampling = parameters.PromptUpsampling,

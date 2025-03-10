@@ -8,6 +8,7 @@ using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.PixelFormats;
 using Image = SixLabors.ImageSharp.Image;
 
@@ -63,7 +64,7 @@ public partial class GeneratorViewModel : ObservableObject
             AspectRatio = "1:1",
             Width = 1024,
             Height = 1024,
-            OutputFormat = "png",
+            OutputFormat = ImageOutputFormat.Png,
             OutputQuality = 100,
             PromptUpsampling = false,
             Seed = Random.Shared.NextInt64(),
@@ -117,14 +118,10 @@ public partial class GeneratorViewModel : ObservableObject
         var safePrompt = new string(parameters.Prompt.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray())
             .Replace(" ", "_")
             .Replace("__", "_"); // Replace double underscores
+ 
         safePrompt = safePrompt.Length > 30 ? safePrompt[..30] : safePrompt;
 
-        if (safePrompt.Length > 30)
-            safePrompt = safePrompt[..30];
-
-        var fileExtension = parameters.OutputFormat.Equals("jpeg", StringComparison.InvariantCultureIgnoreCase)
-            ? "jpg" 
-            : parameters.OutputFormat.ToLowerInvariant();
+        var fileExtension = parameters.OutputFormat.ToString().ToLowerInvariant();
 
         return $"{timestamp}_{safePrompt}_{parameters.Seed}.{fileExtension}";
     }
@@ -151,13 +148,17 @@ public partial class GeneratorViewModel : ObservableObject
         image.Metadata.ExifProfile.SetValue(ExifTag.UserComment, metadataText);
 
         // Choose the encoder depending on file format
-        switch (parameters.OutputFormat.ToLowerInvariant())
+        switch (parameters.OutputFormat)
         {
-            case "jpeg":
-            case "jpg":
+            case ImageOutputFormat.Jpg:
                 // JPEG Encoder with specified quality
                 var jpegEncoder = new JpegEncoder { Quality = parameters.OutputQuality };
                 await image.SaveAsync(imagePath, jpegEncoder);
+                break;
+
+            case ImageOutputFormat.Webp:
+                var webpEncoder = new WebpEncoder { Quality = parameters.OutputQuality };
+                await image.SaveAsync(imagePath, webpEncoder);
                 break;
 
             default:

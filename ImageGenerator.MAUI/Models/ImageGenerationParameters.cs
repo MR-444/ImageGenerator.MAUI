@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using ImageGenerator.MAUI.Common;
 
 namespace ImageGenerator.MAUI.Models;
 
@@ -36,7 +37,7 @@ public partial class ImageGenerationParameters : ObservableObject
     private int _safetyTolerance = 6;
 
     [ObservableProperty]
-    private string _outputFormat = "png";
+    private ImageOutputFormat _outputFormat = ImageOutputFormat.Png;
 
     [ObservableProperty]
     private int _outputQuality = 100;
