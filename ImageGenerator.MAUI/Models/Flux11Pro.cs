@@ -4,6 +4,8 @@ namespace ImageGenerator.MAUI.Models;
 
 public class FluxPro11 : FluxBase
 {
+    public override string Model => "flux-pro-11";
+
     [JsonPropertyName("prompt_upsampling")]
     public bool PromptUpsampling { get; set; }
 

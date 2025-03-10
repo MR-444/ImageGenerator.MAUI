@@ -6,6 +6,9 @@ namespace ImageGenerator.MAUI.Models;
 
 public abstract class FluxBase
 {
+    [JsonIgnore] // Typically we don't serialize the model name into the flux request body
+    public abstract string Model { get; }
+
     [JsonPropertyName("prompt")]
     [Required(ErrorMessage = "Prompt is mandatory for every Flux request.")]
     [StringLength(2000, ErrorMessage = "Prompt cannot exceed 2000 characters.")]

@@ -14,5 +14,7 @@ public class FluxFillPro : FluxBase
 
     public bool PromptUpsampling { get; set; } = false;
 
+    public override string Model { get; }
+    
     public new string OutputFormat { get; set; } = "png";
 }

@@ -22,5 +22,6 @@ public class FluxDev : FluxBase
 
     public new string AspectRatio { get; set; } = "1:1";
 
+    public override string Model { get; }
     public new string OutputFormat { get; set; } = "png";
 }

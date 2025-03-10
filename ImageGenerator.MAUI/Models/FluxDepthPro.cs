@@ -10,5 +10,7 @@ public class FluxDepthPro : FluxBase
 
     public bool PromptUpsampling { get; set; } = false;
 
+    public override string Model { get; }
+    
     public new string OutputFormat { get; set; } = "jpg";
 }
