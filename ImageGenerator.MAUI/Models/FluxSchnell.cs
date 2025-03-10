@@ -1,6 +1,6 @@
 namespace ImageGenerator.MAUI.Models;
 
-public class FluxSchnell : FluxCommonBase
+public class FluxSchnell : FluxBase
 {
     public bool GoFast { get; set; } = true;
 

@@ -1,6 +1,6 @@
 namespace ImageGenerator.MAUI.Models;
 
-public class FluxFillPro : FluxCommonBase
+public class FluxFillPro : FluxBase
 {
     public string Image { get; set; }
 

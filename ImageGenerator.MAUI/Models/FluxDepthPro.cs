@@ -1,6 +1,6 @@
 namespace ImageGenerator.MAUI.Models;
 
-public class FluxDepthPro : FluxCommonBase
+public class FluxDepthPro : FluxBase
 {
     public int Steps { get; set; } = 50;
 
