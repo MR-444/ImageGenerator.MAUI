@@ -19,7 +19,7 @@ public abstract class FluxBase
     public long? Seed { get; set; }
 
     [JsonPropertyName("output_format")]
-    [RegularExpression("jpg|png", ErrorMessage = "Output format must be 'jpg' or 'png'.")]
+    [RegularExpression("jpg|png", ErrorMessage = "Output format must be 'jpg' 'webp' or 'png'.")]
     [Required(ErrorMessage = "Output format is required.")]
     public ImageOutputFormat OutputFormat { get; set; } = ImageOutputFormat.Png;
     
@@ -36,7 +36,17 @@ public abstract class FluxBase
     private string? _imagePrompt;
 
     [JsonPropertyName("safety_tolerance")]
-    [Range(1, 6, ErrorMessage = "Safety tolerance must be between 1 and 6.")]
+    [Range(0, 6, ErrorMessage = "Safety tolerance must be between 0 and 6.")]
     public int SafetyTolerance { get; set; } = 6;
+    
+    [JsonPropertyName("webhook_url")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [StringLength(2083)]
+    [Url(ErrorMessage = "Webhook URL must be a valid URI.")]
+    public string? WebhookUrl { get; set; }
+
+    [JsonPropertyName("webhook_secret")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? WebhookSecret { get; set; }
 }
 

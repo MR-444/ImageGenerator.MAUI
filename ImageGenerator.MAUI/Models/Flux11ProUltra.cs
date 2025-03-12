@@ -11,7 +11,7 @@ public class Flux11ProUltra : FluxBase
     public bool Raw { get; set; } = false;
 
     [JsonPropertyName("image_prompt_strength")]
-    [Range(0, 1, ErrorMessage = "Image Prompt Strength must be between 0 and 1.")]
+    [Range(0.0, 1.0, ErrorMessage = "Image Prompt Strength must be between 0 and 1.")]
     public double ImagePromptStrength { get; set; } = 0.1;
 }
 
