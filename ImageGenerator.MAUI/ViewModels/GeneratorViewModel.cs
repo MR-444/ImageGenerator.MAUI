@@ -49,6 +49,16 @@ public partial class GeneratorViewModel : ObservableObject
     
     [ObservableProperty]
     private double _guidance;
+    
+    [ObservableProperty]
+    private ImageSource? _selectedImagePreview;
+
+    [ObservableProperty]
+    private bool _isImageSelected;
+
+    [ObservableProperty]
+    private string? _imagePromptBase64;
+
 
     public ICommand? GenerateImageCommand { get; }
        
@@ -166,6 +176,40 @@ public partial class GeneratorViewModel : ObservableObject
                 var pngEncoder = new PngEncoder(); // PNG typically doesn't have quality param
                 await image.SaveAsync(imagePath, pngEncoder);
                 break;
+        }
+    }
+    
+    [RelayCommand]
+    private async Task SelectImagePromptAsync()
+    {
+        var result = await FilePicker.PickAsync(new PickOptions
+        {
+            PickerTitle = "Pick an image",
+            FileTypes = FilePickerFileType.Images
+        });
+
+        if (result != null)
+        {
+            await using var stream = await result.OpenReadAsync();
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            var imageBytes = memoryStream.ToArray();
+
+            // Store base64 for API parameter
+            ImagePromptBase64 = Convert.ToBase64String(imageBytes);
+            Parameters.ImagePrompt = ImagePromptBase64;
+
+            // Update image preview
+            SelectedImagePreview = ImageSource.FromStream(() => new MemoryStream(imageBytes));
+            IsImageSelected = true;
+        }
+        else
+        {
+            // If no image is selected
+            ImagePromptBase64 = null;
+            Parameters.ImagePrompt = null;
+            SelectedImagePreview = null;
+            IsImageSelected = false;
         }
     }
 }

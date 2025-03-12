@@ -51,6 +51,30 @@
                                 <CheckBox IsChecked="{Binding Parameters.PromptUpsampling}" />
                                 <Label Text="Prompt Upsampling" VerticalOptions="Center" FontAttributes="Bold"/>
                             </HorizontalStackLayout>
+                            <!-- Image Prompt Section -->
+                            <Border Style="{StaticResource RoundedBorder}" HorizontalOptions="FillAndExpand">
+                                <VerticalStackLayout Spacing="12">
+                                    <Label Text="Image Prompt (Optional)" FontAttributes="Bold"/>
+
+                                    <!-- Button to select Image -->
+                                    <Button Text="Select Image"
+                                            Command="{Binding SelectImagePromptCommand}" 
+                                            Style="{StaticResource PressedButtonStyle}"/>
+
+                                    <!-- Display the selected Image Preview -->
+                                    <Image Source="{Binding SelectedImagePreview}" 
+                                           Aspect="AspectFit"
+                                           HeightRequest="150"
+                                           HorizontalOptions="Center"
+                                           IsVisible="{Binding IsImageSelected}"/>
+        
+                                    <!-- Slider for the image prompt strength-->
+                                    <Slider Minimum="0" Maximum="1"
+                                            Value="{Binding Parameters.ImagePromptStrength, Mode=TwoWay}" />
+
+                                    <Label Text="{Binding Parameters.ImagePromptStrength, StringFormat='Image Prompt Strength: {0:F2}'}"/>
+                                </VerticalStackLayout>
+                            </Border>
                         </VerticalStackLayout>
                     </Border>
 

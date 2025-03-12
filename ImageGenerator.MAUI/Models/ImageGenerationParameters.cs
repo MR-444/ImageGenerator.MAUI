@@ -44,4 +44,8 @@ public partial class ImageGenerationParameters : ObservableObject
 
     [ObservableProperty]
     private bool _promptUpsampling;
+    
+    // Use by FluxPro Ultra
+    [ObservableProperty]
+    private double _imagePromptStrength = 0.1; // default init value
 }
