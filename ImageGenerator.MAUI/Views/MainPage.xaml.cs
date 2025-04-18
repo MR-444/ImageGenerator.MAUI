@@ -2,7 +2,7 @@
 
 namespace ImageGenerator.MAUI.Views;
 
-public partial class MainPage : ContentPage
+public partial class MainPage
 {
     // Notice we inject GeneratorViewModel from the DI container:
     public MainPage(GeneratorViewModel viewModel)

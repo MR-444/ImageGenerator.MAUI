@@ -1,4 +1,6 @@
-﻿namespace ImageGenerator.MAUI
+﻿using Microsoft.Maui.Controls;
+
+namespace ImageGenerator.MAUI
 {
     public partial class AppShell : Shell
     {

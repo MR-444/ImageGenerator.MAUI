@@ -1,9 +1,16 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using ImageGenerator.MAUI.Models;
 using ImageGenerator.MAUI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Common;
+using Microsoft.Maui.Controls;
+using Microsoft.Maui.Storage;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
@@ -39,7 +46,7 @@ public partial class GeneratorViewModel : ObservableObject
     ];
 
     [ObservableProperty]
-    private List<string> _aspectRatioOptions = ["1:1", "16:9", "9:16","3:2", "2:3", "4:3", "3:4","4:5", "5:4", "custom"];
+    private List<string> _aspectRatioOptions = ["1:1", "16:9", "9:16","3:2", "2:3", "4:3", "3:4","4:5", "5:4", "9:21", "21:9", "custom"];
 
     [ObservableProperty]
     private List<string> _outputFormats = ["png", "jpg"];
@@ -71,7 +78,7 @@ public partial class GeneratorViewModel : ObservableObject
             // Default values for your sliders, etc.
             ApiToken = "",
             Model = "black-forest-labs/flux-1.1-pro",
-            AspectRatio = "1:1",
+            AspectRatio = "16:9",
             Width = 1024,
             Height = 1024,
             OutputFormat = ImageOutputFormat.Png,
