@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using ImageGenerator.MAUI.Common;
 
-namespace ImageGenerator.MAUI.Models;
+namespace ImageGenerator.MAUI.Models.Flux;
 
 public abstract class FluxBase
 {

@@ -1,6 +1,8 @@
 using ImageGenerator.MAUI.Models;
+using ImageGenerator.MAUI.Models.Flux;
+using ImageGenerator.MAUI.Models.Replicate;
 
-namespace ImageGenerator.MAUI.Services;
+namespace ImageGenerator.MAUI.Services.Replicate;
 
 public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImageGenerationService
 {

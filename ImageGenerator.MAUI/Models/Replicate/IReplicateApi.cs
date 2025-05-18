@@ -1,6 +1,6 @@
 using Refit;
 
-namespace ImageGenerator.MAUI.Models;
+namespace ImageGenerator.MAUI.Models.Replicate;
 
 public interface IReplicateApi 
 {

@@ -1,6 +1,6 @@
-namespace ImageGenerator.MAUI.Models;
+namespace ImageGenerator.MAUI.Models.Replicate;
 
-public class ReplicateHelper
+public static class ReplicateHelper
 {
     public static async Task<ReplicatePredictionResponse?> PollForOutputAsync(
         IReplicateApi replicateApi,

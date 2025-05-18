@@ -1,4 +1,4 @@
-namespace ImageGenerator.MAUI.Models;
+namespace ImageGenerator.MAUI.Models.Flux;
 
 public class FluxSchnell : FluxBase
 {

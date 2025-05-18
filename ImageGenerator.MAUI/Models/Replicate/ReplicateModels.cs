@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
+using ImageGenerator.MAUI.Models.Flux;
 
-namespace ImageGenerator.MAUI.Models;
+namespace ImageGenerator.MAUI.Models.Replicate;
 
 public class ReplicatePredictionRequest
 {

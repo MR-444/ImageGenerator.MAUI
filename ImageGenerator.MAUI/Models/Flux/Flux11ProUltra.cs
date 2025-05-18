@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
-namespace ImageGenerator.MAUI.Models;
+namespace ImageGenerator.MAUI.Models.Flux;
 
 public class Flux11ProUltra : FluxBase
 {
