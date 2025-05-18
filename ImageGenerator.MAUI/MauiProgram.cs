@@ -1,12 +1,8 @@
-﻿using System;
-using ImageGenerator.MAUI.Models;
+﻿using ImageGenerator.MAUI.Models;
 using ImageGenerator.MAUI.Services;
 using ImageGenerator.MAUI.Views; 
 using ImageGenerator.MAUI.ViewModels;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Maui.Controls.Hosting;
-using Microsoft.Maui.Hosting;
 using Refit;
 
 namespace ImageGenerator.MAUI;

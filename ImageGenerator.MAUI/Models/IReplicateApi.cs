@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using Refit;
 
 namespace ImageGenerator.MAUI.Models;

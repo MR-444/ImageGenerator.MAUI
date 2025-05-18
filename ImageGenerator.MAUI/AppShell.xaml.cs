@@ -1,6 +1,4 @@
-﻿using Microsoft.Maui.Controls;
-
-namespace ImageGenerator.MAUI
+﻿namespace ImageGenerator.MAUI
 {
     public partial class AppShell : Shell
     {
