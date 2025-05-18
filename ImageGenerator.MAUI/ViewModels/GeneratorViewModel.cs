@@ -31,6 +31,7 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private List<string> _allModels =
     [
+        "openAI/gpt-image-1",
         "black-forest-labs/flux-dev", 
         "black-forest-labs/flux-pro", 
         "black-forest-labs/flux-1.1-pro",
@@ -91,7 +92,7 @@ public partial class GeneratorViewModel : ObservableObject
         // Explicitly randomize before calling the service if required
         if (Parameters.RandomizeSeed)
         {
-            // Use Random.Shared for better randomness/static instance:
+            // Use Random.Shared for a better randomness /static instance:
             Parameters.Seed = Random.Shared.NextInt64(0, ValidationConstants.SeedMaxValue);
         }
 
