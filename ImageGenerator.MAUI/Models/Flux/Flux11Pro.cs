@@ -14,11 +14,9 @@ public class Flux11Pro : FluxBase
     [Range(256, 1440, ErrorMessage = "Width must be between 256 and 1440.")]
     public int Width { get; set; } = 1024;
 
-
     [JsonPropertyName("height")]
     [Range(256, 1440, ErrorMessage = "Height must be between 256 and 1440.")]
     public int Height { get; set; } = 768;
-
 
     [JsonPropertyName("output_quality")]
     public int OutputQuality { get; set; }

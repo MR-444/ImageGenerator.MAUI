@@ -2,6 +2,8 @@ namespace ImageGenerator.MAUI.Models.Flux;
 
 public class FluxDev : FluxBase
 {
+    public override required string ModelName { get; set; } = "flux-dev";
+    
     public string Image { get; set; }
 
     public bool GoFast { get; set; } = true;
@@ -21,6 +23,4 @@ public class FluxDev : FluxBase
     public bool DisableSafetyChecker { get; set; } = false;
 
     public new string AspectRatio { get; set; } = "1:1";
-
-    public override required string ModelName { get; set; } = "flux-dev";
 }

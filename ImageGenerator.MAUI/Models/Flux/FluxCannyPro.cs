@@ -2,11 +2,7 @@ namespace ImageGenerator.MAUI.Models.Flux;
 
 public class FluxCannyPro : FluxBase
 {
-    public override required string ModelName
-    {
-        get => "flux-canny-pro";
-        set => throw new NotImplementedException();
-    }
+    public override required string ModelName { get; set; }  = "flux-canny-pro";
 
     public int Steps { get; set; } = 50;
 

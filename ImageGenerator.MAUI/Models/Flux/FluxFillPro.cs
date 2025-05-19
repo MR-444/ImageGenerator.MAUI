@@ -2,6 +2,8 @@ namespace ImageGenerator.MAUI.Models.Flux;
 
 public class FluxFillPro : FluxBase
 {
+    public override required string ModelName { get; set; } = "flux-fill-pro";
+    
     public string Image { get; set; }
 
     public string Mask { get; set; }
@@ -13,6 +15,4 @@ public class FluxFillPro : FluxBase
     public string Outpaint { get; set; } = "None";
 
     public bool PromptUpsampling { get; set; } = false;
-
-    public override required string ModelName { get; set; } = "flux-fill-pro";
 }
