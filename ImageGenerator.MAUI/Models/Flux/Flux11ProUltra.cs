@@ -5,7 +5,7 @@ namespace ImageGenerator.MAUI.Models.Flux;
 
 public class Flux11ProUltra : FluxBase
 {
-    public override required string ModelName { get; set; } = "flux-11-proUltra";
+    public override required string ModelName { get; set; } = "flux-1.1-pro-ultra";
 
     [JsonPropertyName("raw")]
     public bool Raw { get; set; } = false;
