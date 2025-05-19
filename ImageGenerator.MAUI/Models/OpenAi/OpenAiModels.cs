@@ -2,13 +2,13 @@ using System.Text.Json.Serialization;
 
 namespace ImageGenerator.MAUI.Models.OpenAi;
 
-public class OpenAiRequest
+public class OpenAiRequest : ImageModelBase
 {
         /// <summary>
         /// Required. A text description of the desired image(s). Maximum length is 32000 characters for GPT-Image-1.
         /// </summary>
         [JsonPropertyName("prompt")]
-        public required string Prompt { get; set; }
+        public override required string Prompt { get; set; }
 
         /// <summary>
         /// Optional. Sets the transparency for the background. Defaults to "auto". 
@@ -22,7 +22,7 @@ public class OpenAiRequest
         /// Defaults to "dall-e-2" but switches to "gpt-image-1" if parameters specific to it are used.
         /// </summary>
         [JsonPropertyName("model")]
-        public string? Model { get; set; } = "gpt-image-1";
+        public override required string ModelName { get; set; } = "gpt-image-1";
 
         /// <summary>
         /// Optional. Controls the content moderation level. Defaults to "auto".
