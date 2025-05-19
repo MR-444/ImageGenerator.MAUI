@@ -5,7 +5,6 @@ using ImageGenerator.MAUI.Common;
 namespace ImageGenerator.MAUI.Models.Flux;
 
 public abstract class FluxBase : ImageModelBase
-
 {
     [JsonIgnore] // Typically we don't serialize the model name into the flux request body
     public override required string ModelName { get; set; }
@@ -13,7 +12,7 @@ public abstract class FluxBase : ImageModelBase
     [JsonPropertyName("prompt")]
     [Required(ErrorMessage = "Prompt is mandatory for every Flux request.")]
     [StringLength(2000, ErrorMessage = "Prompt cannot exceed 2000 characters.")]
-    public required string Prompt { get; set; }
+    public override required string Prompt { get; set; }
 
     [JsonPropertyName("seed")]
     [Range(0, ValidationConstants.SeedMaxValue, ErrorMessage = "Seed must be between 0 and 4294967295.")]
