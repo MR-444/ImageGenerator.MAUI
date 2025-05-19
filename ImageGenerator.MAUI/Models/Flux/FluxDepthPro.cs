@@ -6,11 +6,9 @@ public class FluxDepthPro : FluxBase
 
     public double Guidance { get; set; } = 15;
 
-    public string ControlImage { get; set; }
+    public string? ControlImage { get; set; }
 
     public bool PromptUpsampling { get; set; } = false;
 
-    public override string Model { get; }
-    
-    public new string OutputFormat { get; set; } = "jpg";
+    public override required string ModelName { get; set; }
 }

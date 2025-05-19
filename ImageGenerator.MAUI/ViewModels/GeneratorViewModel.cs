@@ -147,7 +147,7 @@ public partial class GeneratorViewModel : ObservableObject
         // Construct your metadata string (you can format differently)
         var metadataText = 
             $"Prompt: {parameters.Prompt}\n" +
-            $"Model: {parameters.Model}\n" +
+            $"ModelName: {parameters.Model}\n" +
             $"Seed: {parameters.Seed}\n" +
             $"AspectRatio: {parameters.AspectRatio}\n" +
             $"Dimensions: {parameters.Width}x{parameters.Height}\n" +

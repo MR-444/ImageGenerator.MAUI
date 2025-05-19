@@ -3,9 +3,9 @@ using System.Text.Json.Serialization;
 
 namespace ImageGenerator.MAUI.Models.Flux;
 
-public class FluxPro11 : FluxBase
+public class Flux11Pro : FluxBase
 {
-    public override string Model => "flux-pro-11";
+    public override required string ModelName {get ;set;} = "flux-11-pro";
 
     [JsonPropertyName("prompt_upsampling")]
     public bool PromptUpsampling { get; set; }

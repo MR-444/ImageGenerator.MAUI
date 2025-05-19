@@ -2,7 +2,7 @@ namespace ImageGenerator.MAUI.Models.Flux;
 
 public class FluxSchnell : FluxBase
 {
-    public override string Model { get; }
+    public override required string ModelName { get; set; } = "flux-schnell";
     
     public bool GoFast { get; set; } = true;
 
@@ -16,7 +16,5 @@ public class FluxSchnell : FluxBase
 
     public bool DisableSafetyChecker { get; set; } = false;
 
-    public new string AspectRatio { get; set; } = "1:1";
-    
-    public new string OutputFormat { get; set; } = "png";
+    public override string AspectRatio { get; set; } = "1:1";
 }

@@ -38,9 +38,9 @@
                     <Border Style="{StaticResource RoundedBorder}" HorizontalOptions="FillAndExpand">
                         <VerticalStackLayout Spacing="12">
                             <Picker
-                                Title="Model"
+                                Title="ModelName"
                                 ItemsSource="{Binding AllModels}"
-                                SelectedItem="{Binding Parameters.Model}"
+                                SelectedItem="{Binding Parameters.ModelName}"
                                 HorizontalOptions="FillAndExpand" />
                             <Editor
                                 Text="{Binding Parameters.Prompt}"

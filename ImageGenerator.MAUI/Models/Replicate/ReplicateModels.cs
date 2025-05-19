@@ -5,7 +5,7 @@ namespace ImageGenerator.MAUI.Models.Replicate;
 
 public class ReplicatePredictionRequest
 {
-    public required FluxPro11 Input { get; set; }
+    public required Flux11Pro Input { get; set; }
 }
 
 

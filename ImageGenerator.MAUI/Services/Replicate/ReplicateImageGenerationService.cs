@@ -15,7 +15,7 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
             // Make the call to the generation model
             var finalResponse = await CallReplicateModelAsync(parameters);
             if(finalResponse?.Output == null)
-                throw new InvalidOperationException("Model prediction failed or returned no result.");
+                throw new InvalidOperationException("ModelName prediction failed or returned no result.");
 
             var imageUrl = finalResponse.Output;
             var imageDataBase64 = await DownloadImageAsBase64Async(imageUrl!);
@@ -43,9 +43,9 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
         // Build the request payload
         var replicateRequest = new ReplicatePredictionRequest
         {
-            Input = new FluxPro11
-
+            Input = new Flux11Pro
             {
+                ModelName = parameters.Model,
                 Prompt = parameters.Prompt,
                 PromptUpsampling = parameters.PromptUpsampling,
                 Seed = parameters.Seed,

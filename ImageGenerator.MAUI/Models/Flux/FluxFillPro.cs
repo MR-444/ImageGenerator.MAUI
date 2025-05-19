@@ -14,7 +14,5 @@ public class FluxFillPro : FluxBase
 
     public bool PromptUpsampling { get; set; } = false;
 
-    public override string Model { get; }
-    
-    public new string OutputFormat { get; set; } = "png";
+    public override required string ModelName { get; set; } = "flux-fill-pro";
 }

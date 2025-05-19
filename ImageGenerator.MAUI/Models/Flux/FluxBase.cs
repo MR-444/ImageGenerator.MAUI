@@ -4,10 +4,11 @@ using ImageGenerator.MAUI.Common;
 
 namespace ImageGenerator.MAUI.Models.Flux;
 
-public abstract class FluxBase
+public abstract class FluxBase : ImageModelBase
+
 {
     [JsonIgnore] // Typically we don't serialize the model name into the flux request body
-    public abstract string Model { get; }
+    public override required string ModelName { get; set; }
 
     [JsonPropertyName("prompt")]
     [Required(ErrorMessage = "Prompt is mandatory for every Flux request.")]
@@ -24,7 +25,7 @@ public abstract class FluxBase
     public ImageOutputFormat OutputFormat { get; set; } = ImageOutputFormat.Png;
     
     [JsonPropertyName("aspect_ratio")]
-    public string AspectRatio { get; set; } = "1:1";
+    public virtual string AspectRatio { get; set; } = "1:1";
 
     [JsonPropertyName("image_prompt")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
