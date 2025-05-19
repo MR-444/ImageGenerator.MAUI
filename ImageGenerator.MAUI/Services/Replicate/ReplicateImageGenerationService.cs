@@ -1,5 +1,5 @@
 using ImageGenerator.MAUI.Models;
-using ImageGenerator.MAUI.Models.Flux;
+using ImageGenerator.MAUI.Models.Factories;
 using ImageGenerator.MAUI.Models.Replicate;
 
 namespace ImageGenerator.MAUI.Services.Replicate;
@@ -12,8 +12,11 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
     {
         try
         {
+            // Use the factory to create the appropriate image model instance
+            var imageModel = ImageModelFactory.CreateImageModel(parameters);
+
             // Make the call to the generation model
-            var finalResponse = await CallReplicateModelAsync(parameters);
+            var finalResponse = await CallReplicateModelAsync(parameters,imageModel);
             if(finalResponse?.Output == null)
                 throw new InvalidOperationException("ModelName prediction failed or returned no result.");
 
@@ -38,26 +41,11 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
         }
     }
     
-    private async Task<ReplicatePredictionResponse?> CallReplicateModelAsync(ImageGenerationParameters parameters)
+    private async Task<ReplicatePredictionResponse?> CallReplicateModelAsync(ImageGenerationParameters parameters,
+                                                                             ImageModelBase imageModel)
     {
         // Build the request payload
-        var replicateRequest = new ReplicatePredictionRequest
-        {
-            Input = new Flux11Pro
-            {
-                ModelName = parameters.Model,
-                Prompt = parameters.Prompt,
-                PromptUpsampling = parameters.PromptUpsampling,
-                Seed = parameters.Seed,
-                Width = parameters.Width,
-                Height = parameters.Height,
-                AspectRatio = parameters.AspectRatio,
-                ImagePrompt = parameters.ImagePrompt,
-                SafetyTolerance = parameters.SafetyTolerance,
-                OutputFormat = parameters.OutputFormat,
-                OutputQuality = parameters.OutputQuality
-            }
-        };
+        var replicateRequest = new ReplicatePredictionRequest { Input = imageModel };
 
         // Construct the bearer token string once
         var bearerToken = $"Bearer {parameters.ApiToken}";
