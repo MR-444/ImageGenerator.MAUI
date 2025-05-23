@@ -28,24 +28,27 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories
                 OutputQuality = 90
             };
 
+            var expectedResult = new Flux11Pro
+            {
+                ModelName = parameters.Model,
+                Prompt = parameters.Prompt,
+                PromptUpsampling = parameters.PromptUpsampling,
+                Seed = parameters.Seed,
+                Width = parameters.Width,
+                Height = parameters.Height,
+                AspectRatio = parameters.AspectRatio,
+                ImagePrompt = parameters.ImagePrompt,
+                SafetyTolerance = parameters.SafetyTolerance,
+                OutputFormat = parameters.OutputFormat,
+                OutputQuality = parameters.OutputQuality
+            };
+
             // Act
             var result = ImageModelFactory.CreateImageModel(parameters);
 
             // Assert
             result.Should().BeOfType<Flux11Pro>();
-            var flux11Pro = result as Flux11Pro;
-            flux11Pro.Should().NotBeNull();
-            flux11Pro.ModelName.Should().Be(parameters.Model);
-            flux11Pro.Prompt.Should().Be(parameters.Prompt);
-            flux11Pro.PromptUpsampling.Should().Be(parameters.PromptUpsampling);
-            flux11Pro.Seed.Should().Be(parameters.Seed);
-            flux11Pro.Width.Should().Be(parameters.Width);
-            flux11Pro.Height.Should().Be(parameters.Height);
-            flux11Pro.AspectRatio.Should().Be(parameters.AspectRatio);
-            flux11Pro.ImagePrompt.Should().Be(parameters.ImagePrompt);
-            flux11Pro.SafetyTolerance.Should().Be(parameters.SafetyTolerance);
-            flux11Pro.OutputFormat.Should().Be(parameters.OutputFormat);
-            flux11Pro.OutputQuality.Should().Be(parameters.OutputQuality);
+            result.Should().BeEquivalentTo(expectedResult);
         }
 
         [Fact]
@@ -63,20 +66,23 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories
                 OutputFormat = ImageOutputFormat.Png
             };
 
+            var expectedResult = new Flux11ProUltra
+            {
+                ModelName = parameters.Model,
+                Prompt = parameters.Prompt,
+                Seed = parameters.Seed,
+                AspectRatio = parameters.AspectRatio,
+                ImagePrompt = parameters.ImagePrompt,
+                SafetyTolerance = parameters.SafetyTolerance,
+                OutputFormat = parameters.OutputFormat
+            };
+
             // Act
             var result = ImageModelFactory.CreateImageModel(parameters);
 
             // Assert
             result.Should().BeOfType<Flux11ProUltra>();
-            var flux11ProUltra = result as Flux11ProUltra;
-            flux11ProUltra.Should().NotBeNull();
-            flux11ProUltra.ModelName.Should().Be(parameters.Model);
-            flux11ProUltra.Prompt.Should().Be(parameters.Prompt);
-            flux11ProUltra.Seed.Should().Be(parameters.Seed);
-            flux11ProUltra.AspectRatio.Should().Be(parameters.AspectRatio);
-            flux11ProUltra.ImagePrompt.Should().Be(parameters.ImagePrompt);
-            flux11ProUltra.SafetyTolerance.Should().Be(parameters.SafetyTolerance);
-            flux11ProUltra.OutputFormat.Should().Be(parameters.OutputFormat);
+            result.Should().BeEquivalentTo(expectedResult);
         }
 
         [Fact]
@@ -89,15 +95,18 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories
                 Prompt = "A robot creating art"
             };
 
+            var expectedResult = new OpenAiRequest
+            {
+                ModelName = parameters.Model,
+                Prompt = parameters.Prompt
+            };
+
             // Act
             var result = ImageModelFactory.CreateImageModel(parameters);
 
             // Assert
             result.Should().BeOfType<OpenAiRequest>();
-            var openAiRequest = result as OpenAiRequest;
-            openAiRequest.Should().NotBeNull();
-            openAiRequest.ModelName.Should().Be(parameters.Model);
-            openAiRequest.Prompt.Should().Be(parameters.Prompt);
+            result.Should().BeEquivalentTo(expectedResult);
         }
 
         [Fact]
@@ -111,7 +120,7 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories
             };
 
             // Act
-            Action act = () => ImageModelFactory.CreateImageModel(parameters);
+            var act = () => ImageModelFactory.CreateImageModel(parameters);
 
             // Assert
             act.Should().Throw<ArgumentException>()
