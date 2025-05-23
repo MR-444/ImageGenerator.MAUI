@@ -3,7 +3,7 @@ using ImageGenerator.MAUI.Models.OpenAi;
 
 namespace ImageGenerator.MAUI.Models.Factories;
 
-public class ImageModelFactory
+public static class ImageModelFactory
 {
     public static ImageModelBase CreateImageModel(ImageGenerationParameters parameters)
     {
