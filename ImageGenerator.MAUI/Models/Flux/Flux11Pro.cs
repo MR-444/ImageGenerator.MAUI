@@ -5,7 +5,7 @@ namespace ImageGenerator.MAUI.Models.Flux;
 
 public class Flux11Pro : FluxBase
 {
-    public override required string ModelName {get ;set;} = "flux-11-pro";
+    public override required string ModelName {get ;set;} = "black-forest-labs/flux-1.1-pro";
 
     [JsonPropertyName("prompt_upsampling")]
     public bool PromptUpsampling { get; set; }
