@@ -21,5 +21,3 @@ public class Flux11Pro : FluxBase
     [JsonPropertyName("output_quality")]
     public int OutputQuality { get; set; }
 }
-
-

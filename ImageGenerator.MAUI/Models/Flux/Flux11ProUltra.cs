@@ -14,4 +14,3 @@ public class Flux11ProUltra : FluxBase
     [Range(0.0, 1.0, ErrorMessage = "Image Prompt Strength must be between 0 and 1.")]
     public double ImagePromptStrength { get; set; } = 0.1;
 }
-
