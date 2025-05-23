@@ -1,4 +1,5 @@
 using ImageGenerator.MAUI.Models.Flux;
+using ImageGenerator.MAUI.Models.OpenAi;
 
 namespace ImageGenerator.MAUI.Models.Factories;
 
@@ -32,7 +33,13 @@ public class ImageModelFactory
                 SafetyTolerance = parameters.SafetyTolerance,
                 OutputFormat = parameters.OutputFormat
             },
-            // Add other model types here similarly
+            // OpenAI models
+            "gpt-image-1" => new OpenAiRequest
+            {
+               ModelName = parameters.Model,
+               Prompt = parameters.Prompt
+               // Everything else is optional, let us see if it's working.
+            },
             _ => throw new ArgumentException($"Unknown model type: {parameters.Model}")
         };
     }
