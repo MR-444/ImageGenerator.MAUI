@@ -23,7 +23,28 @@ public static class ImageModelFactory
                 OutputFormat = parameters.OutputFormat,
                 OutputQuality = parameters.OutputQuality
             },
-            "flux-1.1-pro-ultra" => new Flux11ProUltra
+            "black-forest-labs/flux-1.1-pro-ultra" => new Flux11ProUltra
+            {
+                ModelName = parameters.Model,
+                Prompt = parameters.Prompt,
+                Seed = parameters.Seed,
+                AspectRatio = parameters.AspectRatio,
+                ImagePrompt = parameters.ImagePrompt,
+                SafetyTolerance = parameters.SafetyTolerance,
+                OutputFormat = parameters.OutputFormat
+            },
+            "black-forest-labs/flux-dev" => new FluxDev
+            {
+                ModelName = parameters.Model,
+                Prompt = parameters.Prompt,
+                Seed = parameters.Seed,
+                AspectRatio = parameters.AspectRatio,
+                ImagePrompt = parameters.ImagePrompt,
+                SafetyTolerance = parameters.SafetyTolerance,
+                OutputFormat = parameters.OutputFormat,
+                OutputQuality = parameters.OutputQuality
+            },
+            "black-forest-labs/flux-schnell" => new FluxSchnell
             {
                 ModelName = parameters.Model,
                 Prompt = parameters.Prompt,

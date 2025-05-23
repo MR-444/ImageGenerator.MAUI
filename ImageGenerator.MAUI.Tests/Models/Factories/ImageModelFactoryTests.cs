@@ -57,7 +57,7 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories
             // Arrange
             var parameters = new ImageGenerationParameters
             {
-                Model = "flux-1.1-pro-ultra",
+                Model = "black-forest-labs/flux-1.1-pro-ultra",
                 Prompt = "A futuristic cityscape",
                 Seed = 98765,
                 AspectRatio = "21:9",
@@ -85,6 +85,79 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories
             result.Should().BeEquivalentTo(expectedResult);
         }
 
+        [Fact]
+        public void CreateImageModel_ShouldReturnFluxDev_ForFluxDevModelName()
+        {
+            // Arrange
+            var parameters = new ImageGenerationParameters
+            {
+                Model = "black-forest-labs/flux-dev",
+                Prompt = "A surreal painting",
+                PromptUpsampling = true,
+                Seed = 112233,
+                Width = 1280,
+                Height = 720,
+                AspectRatio = "4:3",
+                ImagePrompt = "Dream",
+                SafetyTolerance = 7,
+                OutputFormat = ImageOutputFormat.Jpg,
+                OutputQuality = 80
+            };
+
+            var expectedResult = new FluxDev
+            {
+                ModelName = parameters.Model,
+                Prompt = parameters.Prompt,
+                Seed = parameters.Seed,
+                AspectRatio = parameters.AspectRatio,
+                ImagePrompt = parameters.ImagePrompt,
+                SafetyTolerance = parameters.SafetyTolerance,
+                OutputFormat = parameters.OutputFormat,
+                OutputQuality = parameters.OutputQuality
+            };
+
+            // Act
+            var result = ImageModelFactory.CreateImageModel(parameters);
+
+            // Assert
+            result.Should().BeOfType<FluxDev>();
+            result.Should().BeEquivalentTo(expectedResult);
+        }
+
+        [Fact]
+        public void CreateImageModel_ShouldReturnFluxSchnell_ForFluxSchnellModelName()
+        {
+            // Arrange
+            var parameters = new ImageGenerationParameters
+            {
+                Model = "black-forest-labs/flux-schnell",
+                Prompt = "A fast rendering sketch",
+                Seed = 445566,
+                AspectRatio = "1:1",
+                ImagePrompt = "Quick sketch",
+                SafetyTolerance = 5,
+                OutputFormat = ImageOutputFormat.Png
+            };
+
+            var expectedResult = new FluxSchnell
+            {
+                ModelName = parameters.Model,
+                Prompt = parameters.Prompt,
+                Seed = parameters.Seed,
+                AspectRatio = parameters.AspectRatio,
+                ImagePrompt = parameters.ImagePrompt,
+                SafetyTolerance = parameters.SafetyTolerance,
+                OutputFormat = parameters.OutputFormat
+            };
+
+            // Act
+            var result = ImageModelFactory.CreateImageModel(parameters);
+
+            // Assert
+            result.Should().BeOfType<FluxSchnell>();
+            result.Should().BeEquivalentTo(expectedResult);
+        }
+       
         [Fact]
         public void CreateImageModel_ShouldReturnOpenAiRequest_ForGptImage1ModelName()
         {
