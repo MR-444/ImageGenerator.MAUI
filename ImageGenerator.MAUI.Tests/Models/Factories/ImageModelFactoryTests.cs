@@ -3,6 +3,7 @@ using ImageGenerator.MAUI.Common;
 using ImageGenerator.MAUI.Models;
 using ImageGenerator.MAUI.Models.Factories;
 using ImageGenerator.MAUI.Models.Flux;
+using ImageGenerator.MAUI.Models.Flux;
 using ImageGenerator.MAUI.Models.OpenAi;
 
 namespace ImageGenerator.MAUI.Tests.Models.Factories
@@ -15,7 +16,7 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories
             // Arrange
             var parameters = new ImageGenerationParameters
             {
-                Model = "black-forest-labs/flux-1.1-pro",
+                Model = ModelConstants.Flux.Pro11,
                 Prompt = "A beautiful landscape",
                 PromptUpsampling = true,
                 Seed = 12345,
@@ -57,13 +58,14 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories
             // Arrange
             var parameters = new ImageGenerationParameters
             {
-                Model = "black-forest-labs/flux-1.1-pro-ultra",
+                Model = ModelConstants.Flux.Pro11Ultra,
                 Prompt = "A futuristic cityscape",
                 Seed = 98765,
                 AspectRatio = "21:9",
                 ImagePrompt = "Sci-Fi",
                 SafetyTolerance = 6,
-                OutputFormat = ImageOutputFormat.Png
+                OutputFormat = ImageOutputFormat.Png,
+                ImagePromptStrength = 0.1
             };
 
             var expectedResult = new Flux11ProUltra
@@ -74,7 +76,8 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories
                 AspectRatio = parameters.AspectRatio,
                 ImagePrompt = parameters.ImagePrompt,
                 SafetyTolerance = parameters.SafetyTolerance,
-                OutputFormat = parameters.OutputFormat
+                OutputFormat = parameters.OutputFormat,
+                ImagePromptStrength = parameters.ImagePromptStrength
             };
 
             // Act
@@ -91,7 +94,7 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories
             // Arrange
             var parameters = new ImageGenerationParameters
             {
-                Model = "black-forest-labs/flux-dev",
+                Model = ModelConstants.Flux.Dev,
                 Prompt = "A surreal painting",
                 PromptUpsampling = true,
                 Seed = 112233,
@@ -130,13 +133,14 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories
             // Arrange
             var parameters = new ImageGenerationParameters
             {
-                Model = "black-forest-labs/flux-schnell",
+                Model = ModelConstants.Flux.Schnell,
                 Prompt = "A fast rendering sketch",
                 Seed = 445566,
                 AspectRatio = "1:1",
                 ImagePrompt = "Quick sketch",
                 SafetyTolerance = 5,
-                OutputFormat = ImageOutputFormat.Png
+                OutputFormat = ImageOutputFormat.Png,
+                OutputQuality = 80
             };
 
             var expectedResult = new FluxSchnell
@@ -147,7 +151,8 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories
                 AspectRatio = parameters.AspectRatio,
                 ImagePrompt = parameters.ImagePrompt,
                 SafetyTolerance = parameters.SafetyTolerance,
-                OutputFormat = parameters.OutputFormat
+                OutputFormat = parameters.OutputFormat,
+                OutputQuality = parameters.OutputQuality
             };
 
             // Act
@@ -164,7 +169,7 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories
             // Arrange
             var parameters = new ImageGenerationParameters
             {
-                Model = "gpt-image-1",
+                Model = ModelConstants.OpenAI.GptImage1,
                 Prompt = "A robot creating art"
             };
 

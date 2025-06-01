@@ -1,5 +1,6 @@
 using ImageGenerator.MAUI.Models.Flux;
 using ImageGenerator.MAUI.Models.OpenAi;
+using ImageGenerator.MAUI.Common;
 
 namespace ImageGenerator.MAUI.Models.Factories;
 
@@ -9,7 +10,7 @@ public static class ImageModelFactory
     {
         return parameters.Model switch
         {
-            "black-forest-labs/flux-1.1-pro" => new Flux11Pro
+            ModelConstants.Flux.Pro11 => new Flux11Pro
             {
                 ModelName = parameters.Model,
                 Prompt = parameters.Prompt,
@@ -23,7 +24,7 @@ public static class ImageModelFactory
                 OutputFormat = parameters.OutputFormat,
                 OutputQuality = parameters.OutputQuality
             },
-            "black-forest-labs/flux-1.1-pro-ultra" => new Flux11ProUltra
+            ModelConstants.Flux.Pro11Ultra => new Flux11ProUltra
             {
                 ModelName = parameters.Model,
                 Prompt = parameters.Prompt,
@@ -35,7 +36,7 @@ public static class ImageModelFactory
                 Raw = parameters.Raw,
                 ImagePromptStrength = parameters.ImagePromptStrength
             },
-            "black-forest-labs/flux-dev" => new FluxDev
+            ModelConstants.Flux.Dev => new FluxDev
             {
                 ModelName = parameters.Model,
                 Prompt = parameters.Prompt,
@@ -46,7 +47,7 @@ public static class ImageModelFactory
                 OutputFormat = parameters.OutputFormat,
                 OutputQuality = parameters.OutputQuality
             },
-            "black-forest-labs/flux-schnell" => new FluxSchnell
+            ModelConstants.Flux.Schnell => new FluxSchnell
             {
                 ModelName = parameters.Model,
                 Prompt = parameters.Prompt,
@@ -58,7 +59,7 @@ public static class ImageModelFactory
                 OutputQuality = parameters.OutputQuality
             },
             // OpenAI models
-            "gpt-image-1" => new OpenAiRequest
+            ModelConstants.OpenAI.GptImage1 => new OpenAiRequest
             {
                ModelName = parameters.Model,
                Prompt = parameters.Prompt
