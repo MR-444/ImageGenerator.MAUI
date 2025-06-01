@@ -73,10 +73,10 @@ public partial class GeneratorViewModel : ObservableObject
             ApiToken = "",
             Model = "black-forest-labs/flux-1.1-pro",
             AspectRatio = "16:9",
-            Width = 1024,
-            Height = 1024,
+            Width = 1920,
+            Height = 1080,
             OutputFormat = ImageOutputFormat.Png,
-            OutputQuality = 100,
+            OutputQuality = ValidationConstants.OutputQualityMax,
             PromptUpsampling = false,
             Seed = Random.Shared.NextInt64(),
             RandomizeSeed = true

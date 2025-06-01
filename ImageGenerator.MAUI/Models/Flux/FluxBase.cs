@@ -36,8 +36,8 @@ public abstract class FluxBase : ImageModelBase
     private string? _imagePrompt;
 
     [JsonPropertyName("safety_tolerance")]
-    [Range(0, 6, ErrorMessage = "Safety tolerance must be between 0 and 6.")]
-    public int SafetyTolerance { get; set; } = 6;
+    [Range(ValidationConstants.SafetyMin, ValidationConstants.SafetyMax, ErrorMessage = "Safety tolerance must be between 1 and 6.")]
+    public int SafetyTolerance { get; set; } = ValidationConstants.SafetyMax;
     
     [JsonPropertyName("webhook_url")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

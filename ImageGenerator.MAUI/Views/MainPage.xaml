@@ -2,8 +2,16 @@
 
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:common="clr-namespace:ImageGenerator.MAUI.Common"
+             xmlns:converters="clr-namespace:ImageGenerator.MAUI.Converters"
              x:Class="ImageGenerator.MAUI.Views.MainPage"
              Padding="10">
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:IntToDoubleConverter x:Key="IntToDoubleConverter" />
+            <converters:StringToEnumConverter x:Key="StringToEnumConverter" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
     <ScrollView VerticalOptions="FillAndExpand" 
                 HorizontalOptions="FillAndExpand"
                 HorizontalScrollBarVisibility="Never">
@@ -136,9 +144,18 @@
                     <!-- Additional Sliders Border -->
                     <Border Style="{StaticResource RoundedBorder}" HorizontalOptions="FillAndExpand">
                         <VerticalStackLayout Spacing="6">
-                            <Slider Minimum="1" Maximum="6"
-                                    Value="{Binding Parameters.SafetyTolerance, Mode=TwoWay}"
-                                    HorizontalOptions="FillAndExpand" />
+                            <Label Text="Safety Tolerance" />
+                            <Slider HorizontalOptions="FillAndExpand">
+                                <Slider.Minimum>
+                                    <Binding Source="{x:Static common:ValidationConstants.SafetyMin}" Converter="{StaticResource IntToDoubleConverter}" />
+                                </Slider.Minimum>
+                                <Slider.Maximum>
+                                    <Binding Source="{x:Static common:ValidationConstants.SafetyMax}" Converter="{StaticResource IntToDoubleConverter}" />
+                                </Slider.Maximum>
+                                <Slider.Value>
+                                    <Binding Path="Parameters.SafetyTolerance" Mode="TwoWay" />
+                                </Slider.Value>
+                            </Slider>
                             <Label Text="{Binding Parameters.SafetyTolerance, StringFormat='Safety Tolerance: {0:F0}'}" />
                         </VerticalStackLayout>
                     </Border>
@@ -151,9 +168,18 @@
                                     SelectedItem="{Binding Parameters.OutputFormat, Converter={StaticResource StringToEnumConverter}}"
                                     HorizontalOptions="FillAndExpand" />
 
-                            <Slider Minimum="0" Maximum="100"
-                                    Value="{Binding Parameters.OutputQuality, Mode=TwoWay}"
-                                    HorizontalOptions="FillAndExpand" />
+                            <Label Text="Output Quality" />
+                            <Slider HorizontalOptions="FillAndExpand">
+                                <Slider.Minimum>
+                                    <Binding Source="{x:Static common:ValidationConstants.OutputQualityMin}" Converter="{StaticResource IntToDoubleConverter}" />
+                                </Slider.Minimum>
+                                <Slider.Maximum>
+                                    <Binding Source="{x:Static common:ValidationConstants.OutputQualityMax}" Converter="{StaticResource IntToDoubleConverter}" />
+                                </Slider.Maximum>
+                                <Slider.Value>
+                                    <Binding Path="Parameters.OutputQuality" Mode="TwoWay" />
+                                </Slider.Value>
+                            </Slider>
                             <Label Text="{Binding Parameters.OutputQuality, StringFormat='Output Quality: {0:F0}%'}" />
                         </VerticalStackLayout>
                     </Border>

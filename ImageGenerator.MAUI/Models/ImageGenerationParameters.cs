@@ -28,19 +28,19 @@ public partial class ImageGenerationParameters : ObservableObject
     private string? _imagePrompt;
 
     [ObservableProperty]
-    private int _width = 1024;
+    private int _width = ValidationConstants.ImageWidthMax / 2;
 
     [ObservableProperty]
-    private int _height = 1024;
+    private int _height = ValidationConstants.ImageHeightMax / 2;
 
     [ObservableProperty]
-    private int _safetyTolerance = 6;
+    private int _safetyTolerance = ValidationConstants.SafetyMax;
 
     [ObservableProperty]
     private ImageOutputFormat _outputFormat = ImageOutputFormat.Png;
 
     [ObservableProperty]
-    private int _outputQuality = 100;
+    private int _outputQuality = ValidationConstants.OutputQualityMax;
 
     [ObservableProperty]
     private bool _promptUpsampling;
