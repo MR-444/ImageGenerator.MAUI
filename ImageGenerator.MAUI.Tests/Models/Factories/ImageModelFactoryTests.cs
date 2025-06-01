@@ -3,7 +3,6 @@ using ImageGenerator.MAUI.Common;
 using ImageGenerator.MAUI.Models;
 using ImageGenerator.MAUI.Models.Factories;
 using ImageGenerator.MAUI.Models.Flux;
-using ImageGenerator.MAUI.Models.Flux;
 using ImageGenerator.MAUI.Models.OpenAi;
 
 namespace ImageGenerator.MAUI.Tests.Models.Factories
@@ -203,6 +202,66 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories
             // Assert
             act.Should().Throw<ArgumentException>()
                 .WithMessage("Unknown model type: unknown-model");
+        }
+
+        [Fact]
+        public void CreateImageModel_ShouldReturnFluxKontextMax_ForFluxKontextMaxModelName()
+        {
+            // Arrange
+            var parameters = new ImageGenerationParameters
+            {
+                Model = ModelConstants.Flux.KontextMax,
+                Prompt = "A contextual image",
+                Seed = 54321,
+                AspectRatio = "match_input_image",
+                ImagePrompt = "base64ImageData"
+            };
+
+            var expectedResult = new FluxKontextMax
+            {
+                ModelName = parameters.Model,
+                Prompt = parameters.Prompt,
+                Seed = parameters.Seed,
+                AspectRatio = parameters.AspectRatio,
+                InputImage = parameters.ImagePrompt
+            };
+
+            // Act
+            var result = ImageModelFactory.CreateImageModel(parameters);
+
+            // Assert
+            result.Should().BeOfType<FluxKontextMax>();
+            result.Should().BeEquivalentTo(expectedResult);
+        }
+
+        [Fact]
+        public void CreateImageModel_ShouldReturnFluxKontextPro_ForFluxKontextProModelName()
+        {
+            // Arrange
+            var parameters = new ImageGenerationParameters
+            {
+                Model = ModelConstants.Flux.KontextPro,
+                Prompt = "A professional contextual image",
+                Seed = 98765,
+                AspectRatio = "match_input_image",
+                ImagePrompt = "base64ImageData"
+            };
+
+            var expectedResult = new FluxKontextPro
+            {
+                ModelName = parameters.Model,
+                Prompt = parameters.Prompt,
+                Seed = parameters.Seed,
+                AspectRatio = parameters.AspectRatio,
+                InputImage = parameters.ImagePrompt
+            };
+
+            // Act
+            var result = ImageModelFactory.CreateImageModel(parameters);
+
+            // Assert
+            result.Should().BeOfType<FluxKontextPro>();
+            result.Should().BeEquivalentTo(expectedResult);
         }
     }
 }

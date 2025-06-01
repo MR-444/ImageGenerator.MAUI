@@ -2,9 +2,9 @@ using System.Text.Json.Serialization;
 
 namespace ImageGenerator.MAUI.Models.Flux;
 
-public class FluxKontextMax : FluxBase
+public class FluxKontextPro : FluxBase
 {
-    public override required string ModelName { get; set; } = "black-forest-labs/flux-kontext-max";
+    public override required string ModelName { get; set; } = "black-forest-labs/flux-kontext-pro";
 
     [JsonPropertyName("input_image")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
