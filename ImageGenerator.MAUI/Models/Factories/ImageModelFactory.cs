@@ -31,7 +31,9 @@ public static class ImageModelFactory
                 AspectRatio = parameters.AspectRatio,
                 ImagePrompt = parameters.ImagePrompt,
                 SafetyTolerance = parameters.SafetyTolerance,
-                OutputFormat = parameters.OutputFormat
+                OutputFormat = parameters.OutputFormat,
+                Raw = parameters.Raw,
+                ImagePromptStrength = parameters.ImagePromptStrength
             },
             "black-forest-labs/flux-dev" => new FluxDev
             {
@@ -52,7 +54,8 @@ public static class ImageModelFactory
                 AspectRatio = parameters.AspectRatio,
                 ImagePrompt = parameters.ImagePrompt,
                 SafetyTolerance = parameters.SafetyTolerance,
-                OutputFormat = parameters.OutputFormat
+                OutputFormat = parameters.OutputFormat,
+                OutputQuality = parameters.OutputQuality
             },
             // OpenAI models
             "gpt-image-1" => new OpenAiRequest
