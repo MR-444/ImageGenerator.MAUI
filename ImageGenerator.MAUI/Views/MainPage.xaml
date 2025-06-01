@@ -4,7 +4,9 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="ImageGenerator.MAUI.Views.MainPage"
              Padding="10">
-    <ScrollView Margin="0" Padding="0" VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
+    <ScrollView VerticalOptions="FillAndExpand" 
+                HorizontalOptions="FillAndExpand"
+                HorizontalScrollBarVisibility="Never">
         <Grid
             Padding="20"
             ColumnSpacing="20"
@@ -12,14 +14,17 @@
             HorizontalOptions="FillAndExpand"
             VerticalOptions="FillAndExpand">
 
-            <!-- Define two columns with equal width -->
+            <!-- Responsive column definitions -->
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="{OnPlatform Default=*, Android=*, iOS=*, WinUI=*}" />
+                <ColumnDefinition Width="{OnPlatform Default=*, Android=*, iOS=*, WinUI=*}" />
             </Grid.ColumnDefinitions>
 
             <!-- First item in column 0 -->
-             <VerticalStackLayout Grid.Column="0" Spacing="20" HorizontalOptions="FillAndExpand">
+            <VerticalStackLayout Grid.Column="0" 
+                                Grid.ColumnSpan="{OnPlatform Default=1, Android=1, iOS=1, WinUI=1}"
+                                Spacing="20" 
+                                HorizontalOptions="FillAndExpand">
 
                     <!-- API Token Border -->
                     <Border Style="{StaticResource RoundedBorder}" HorizontalOptions="FillAndExpand">
@@ -66,7 +71,9 @@
                                            Aspect="AspectFit"
                                            HeightRequest="{OnPlatform Android=200, iOS=200, WinUI=250}"
                                            HorizontalOptions="FillAndExpand"
-                                           IsVisible="{Binding IsImageSelected}"/>
+                                           IsVisible="{Binding IsImageSelected}"
+                                           AutomationProperties.Name="Selected Image Preview"
+                                           AutomationProperties.HelpText="Preview of the selected image for image prompt"/>
         
                                     <!-- Slider for the image prompt strength-->
                                     <Slider Minimum="0" Maximum="1"
@@ -97,9 +104,12 @@
              </VerticalStackLayout>
 
             <!-- Second item in column 1 -->
-            <Border Grid.Column="1" Style="{StaticResource RoundedBorder}" HorizontalOptions="FillAndExpand">
-                <!-- Your controls go here -->
-                <VerticalStackLayout Spacing="20" HorizontalOptions="FillAndExpand">
+            <Border Grid.Column="1" 
+                    Grid.ColumnSpan="{OnPlatform Default=1, Android=1, iOS=1, WinUI=1}"
+                    Style="{StaticResource RoundedBorder}" 
+                    HorizontalOptions="FillAndExpand">
+                <VerticalStackLayout Spacing="20" 
+                                   HorizontalOptions="FillAndExpand">
                     <!-- Aspect Ratio Border -->
                     <Border Style="{StaticResource RoundedBorder}" HorizontalOptions="FillAndExpand">
                         <VerticalStackLayout Spacing="12">
@@ -152,11 +162,15 @@
                     <Button Text="Generate Image"
                             Style="{StaticResource PressedButtonStyle}"
                             Command="{Binding GenerateImageCommand}"
-                            HorizontalOptions="FillAndExpand" />
+                            HorizontalOptions="FillAndExpand"
+                            AutomationProperties.Name="Generate Image Button"
+                            AutomationProperties.HelpText="Click to generate an image based on the current settings"
+                            IsEnabled="{Binding IsValid}"/>
 
                     <Label Text="{Binding StatusMessage}"
-                           TextColor="Black"
-                           HorizontalOptions="FillAndExpand" />
+                           TextColor="{Binding StatusMessageColor}"
+                           HorizontalOptions="FillAndExpand"
+                           AutomationProperties.Name="Status Message" />
 
                     <!-- Generated Image Preview -->
                     <Image Source="{Binding GeneratedImagePath}"
@@ -164,7 +178,17 @@
                            HeightRequest="{OnPlatform Android=300, iOS=300, WinUI=400}"
                            HorizontalOptions="FillAndExpand"
                            VerticalOptions="FillAndExpand"
-                           MinimumHeightRequest="200"/>
+                           MinimumHeightRequest="300"
+                           AutomationProperties.Name="Generated Image"
+                           AutomationProperties.HelpText="The generated image based on your settings">
+                        <Image.Triggers>
+                            <DataTrigger TargetType="Image"
+                                        Binding="{Binding IsGenerating}"
+                                        Value="True">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </DataTrigger>
+                        </Image.Triggers>
+                    </Image>
                 </VerticalStackLayout>
             </Border>
         </Grid>
