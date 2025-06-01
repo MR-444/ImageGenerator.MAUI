@@ -3,7 +3,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="ImageGenerator.MAUI.Views.MainPage"
-             Padding="0">
+             Padding="10">
     <ScrollView Margin="0" Padding="0" VerticalOptions="FillAndExpand" HorizontalOptions="FillAndExpand">
         <Grid
             Padding="20"
@@ -12,14 +12,14 @@
             HorizontalOptions="FillAndExpand"
             VerticalOptions="FillAndExpand">
 
-            <!-- Define two columns (you can adjust or add more columns if needed) -->
+            <!-- Define two columns with equal width -->
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
             <!-- First item in column 0 -->
-             <VerticalStackLayout Grid.Column="0" Spacing="20">
+             <VerticalStackLayout Grid.Column="0" Spacing="20" HorizontalOptions="FillAndExpand">
 
                     <!-- API Token Border -->
                     <Border Style="{StaticResource RoundedBorder}" HorizontalOptions="FillAndExpand">
@@ -64,8 +64,8 @@
                                     <!-- Display the selected Image Preview -->
                                     <Image Source="{Binding SelectedImagePreview}" 
                                            Aspect="AspectFit"
-                                           HeightRequest="150"
-                                           HorizontalOptions="Center"
+                                           HeightRequest="{OnPlatform Android=200, iOS=200, WinUI=250}"
+                                           HorizontalOptions="FillAndExpand"
                                            IsVisible="{Binding IsImageSelected}"/>
         
                                     <!-- Slider for the image prompt strength-->
@@ -97,9 +97,9 @@
              </VerticalStackLayout>
 
             <!-- Second item in column 1 -->
-            <Border Grid.Column="1" Style="{StaticResource RoundedBorder}">
+            <Border Grid.Column="1" Style="{StaticResource RoundedBorder}" HorizontalOptions="FillAndExpand">
                 <!-- Your controls go here -->
-                <VerticalStackLayout>
+                <VerticalStackLayout Spacing="20" HorizontalOptions="FillAndExpand">
                     <!-- Aspect Ratio Border -->
                     <Border Style="{StaticResource RoundedBorder}" HorizontalOptions="FillAndExpand">
                         <VerticalStackLayout Spacing="12">
@@ -163,7 +163,8 @@
                            Aspect="AspectFit"
                            HeightRequest="{OnPlatform Android=300, iOS=300, WinUI=400}"
                            HorizontalOptions="FillAndExpand"
-                           VerticalOptions="FillAndExpand"/>
+                           VerticalOptions="FillAndExpand"
+                           MinimumHeightRequest="200"/>
                 </VerticalStackLayout>
             </Border>
         </Grid>
