@@ -58,6 +58,14 @@ public static class ImageModelFactory
                 OutputFormat = parameters.OutputFormat,
                 OutputQuality = parameters.OutputQuality
             },
+            ModelConstants.Flux.KontextMax => new FluxKontextMax
+            {
+                ModelName = parameters.Model,
+                Prompt = parameters.Prompt,
+                Seed = parameters.Seed,
+                AspectRatio = parameters.AspectRatio,
+                InputImage = parameters.ImagePrompt // Using ImagePrompt as InputImage since they serve similar purposes
+            },
             // OpenAI models
             ModelConstants.OpenAI.GptImage1 => new OpenAiRequest
             {

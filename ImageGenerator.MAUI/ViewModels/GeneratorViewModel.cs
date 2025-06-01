@@ -36,7 +36,8 @@ public partial class GeneratorViewModel : ObservableObject
         "black-forest-labs/flux-pro", 
         "black-forest-labs/flux-1.1-pro",
         "black-forest-labs/flux-schnell", 
-        "black-forest-labs/flux-1.1-pro-ultra"
+        "black-forest-labs/flux-1.1-pro-ultra",
+        "black-forest-labs/flux-kontext-max"
     ];
 
     [ObservableProperty]
@@ -60,6 +61,22 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private string? _imagePromptBase64;
 
+    partial void OnParametersChanged(ImageGenerationParameters value)
+    {
+        UpdateCustomAspectRatio(value.AspectRatio);
+    }
+
+    private void UpdateCustomAspectRatio(string aspectRatio)
+    {
+        IsCustomAspectRatio = aspectRatio == "custom";
+        
+        if (IsCustomAspectRatio)
+        {
+            // Ensure width and height are within valid ranges
+            Parameters.Width = Math.Clamp(Parameters.Width, ValidationConstants.ImageWidthMin, ValidationConstants.ImageWidthMax);
+            Parameters.Height = Math.Clamp(Parameters.Height, ValidationConstants.ImageHeightMin, ValidationConstants.ImageHeightMax);
+        }
+    }
 
     public ICommand? GenerateImageCommand { get; }
        
@@ -80,6 +97,15 @@ public partial class GeneratorViewModel : ObservableObject
             PromptUpsampling = false,
             Seed = Random.Shared.NextInt64(),
             RandomizeSeed = true
+        };
+        
+        // Subscribe to aspect ratio changes
+        _parameters.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName == nameof(ImageGenerationParameters.AspectRatio))
+            {
+                UpdateCustomAspectRatio(_parameters.AspectRatio);
+            }
         };
         
         GenerateImageCommand = new AsyncRelayCommand(GenerateImageAsync);
