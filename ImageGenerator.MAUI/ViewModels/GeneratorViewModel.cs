@@ -43,7 +43,7 @@ public partial class GeneratorViewModel : ObservableObject
     private List<string> _aspectRatioOptions = ["1:1", "16:9", "9:16","3:2", "2:3", "4:3", "3:4","4:5", "5:4", "9:21", "21:9", "custom"];
 
     [ObservableProperty]
-    private List<string> _outputFormats = ["png", "jpg"];
+    private List<string> _outputFormats = [ImageOutputFormat.Png.ToString().ToLower(), ImageOutputFormat.Jpg.ToString().ToLower()];
 
     [ObservableProperty]
     private bool _isCustomAspectRatio;

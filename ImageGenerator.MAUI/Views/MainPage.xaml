@@ -45,7 +45,7 @@
                             <Picker
                                 Title="ModelName"
                                 ItemsSource="{Binding AllModels}"
-                                SelectedItem="{Binding Parameters.ModelName}"
+                                SelectedItem="{Binding Parameters.Model}"
                                 HorizontalOptions="FillAndExpand" />
                             <Editor
                                 Text="{Binding Parameters.Prompt}"
@@ -148,7 +148,7 @@
                         <VerticalStackLayout Spacing="12">
                             <Picker Title="Output Format"
                                     ItemsSource="{Binding OutputFormats}"
-                                    SelectedItem="{Binding Parameters.OutputFormat}"
+                                    SelectedItem="{Binding Parameters.OutputFormat, Converter={StaticResource StringToEnumConverter}}"
                                     HorizontalOptions="FillAndExpand" />
 
                             <Slider Minimum="0" Maximum="100"
