@@ -37,7 +37,8 @@ public partial class GeneratorViewModel : ObservableObject
         "black-forest-labs/flux-1.1-pro",
         "black-forest-labs/flux-schnell", 
         "black-forest-labs/flux-1.1-pro-ultra",
-        "black-forest-labs/flux-kontext-max"
+        "black-forest-labs/flux-kontext-max",
+        "black-forest-labs/flux-kontext-pro"
     ];
 
     [ObservableProperty]

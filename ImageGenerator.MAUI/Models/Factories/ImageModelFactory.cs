@@ -66,6 +66,14 @@ public static class ImageModelFactory
                 AspectRatio = parameters.AspectRatio,
                 InputImage = parameters.ImagePrompt // Using ImagePrompt as InputImage since they serve similar purposes
             },
+            ModelConstants.Flux.KontextPro => new FluxKontextPro
+            {
+                ModelName = parameters.Model,
+                Prompt = parameters.Prompt,
+                Seed = parameters.Seed,
+                AspectRatio = parameters.AspectRatio,
+                InputImage = parameters.ImagePrompt // Using ImagePrompt as InputImage since they serve similar purposes
+            },
             // OpenAI models
             ModelConstants.OpenAI.GptImage1 => new OpenAiRequest
             {

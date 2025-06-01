@@ -18,5 +18,6 @@ public static class ModelConstants
         public const string CannyPro = "flux-canny-pro";
         public const string FillPro = "flux-fill-pro";
         public const string KontextMax = "black-forest-labs/flux-kontext-max";
+        public const string KontextPro = "black-forest-labs/flux-kontext-pro";
     }
 } 
