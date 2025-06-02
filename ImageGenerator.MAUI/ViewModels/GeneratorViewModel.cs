@@ -132,6 +132,7 @@ public partial class GeneratorViewModel : ObservableObject
             Height = 1080,
             OutputFormat = ImageOutputFormat.Png,
             OutputQuality = ValidationConstants.OutputQualityMax,
+            SafetyTolerance = ValidationConstants.SafetyMax,
             PromptUpsampling = false,
             Seed = Random.Shared.NextInt64(),
             RandomizeSeed = true

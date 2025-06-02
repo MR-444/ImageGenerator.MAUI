@@ -151,17 +151,10 @@
                     <Border Style="{StaticResource RoundedBorder}" HorizontalOptions="FillAndExpand">
                         <VerticalStackLayout Spacing="6">
                             <Label Text="Safety Tolerance" />
-                            <Slider HorizontalOptions="FillAndExpand">
-                                <Slider.Minimum>
-                                    <Binding Source="{x:Static common:ValidationConstants.SafetyMin}" Converter="{StaticResource IntToDoubleConverter}" />
-                                </Slider.Minimum>
-                                <Slider.Maximum>
-                                    <Binding Source="{x:Static common:ValidationConstants.SafetyMax}" Converter="{StaticResource IntToDoubleConverter}" />
-                                </Slider.Maximum>
-                                <Slider.Value>
-                                    <Binding Path="Parameters.SafetyTolerance" Mode="TwoWay" />
-                                </Slider.Value>
-                            </Slider>
+                            <Slider Minimum="1" 
+                                    Maximum="6"
+                                    Value="{Binding Parameters.SafetyTolerance, Mode=TwoWay}"
+                                    HorizontalOptions="FillAndExpand" />
                             <Label Text="{Binding Parameters.SafetyTolerance, StringFormat='Safety Tolerance: {0:F0}'}" />
                         </VerticalStackLayout>
                     </Border>
@@ -175,17 +168,10 @@
                                     HorizontalOptions="FillAndExpand" />
 
                             <Label Text="Output Quality" />
-                            <Slider HorizontalOptions="FillAndExpand">
-                                <Slider.Minimum>
-                                    <Binding Source="{x:Static common:ValidationConstants.OutputQualityMin}" Converter="{StaticResource IntToDoubleConverter}" />
-                                </Slider.Minimum>
-                                <Slider.Maximum>
-                                    <Binding Source="{x:Static common:ValidationConstants.OutputQualityMax}" Converter="{StaticResource IntToDoubleConverter}" />
-                                </Slider.Maximum>
-                                <Slider.Value>
-                                    <Binding Path="Parameters.OutputQuality" Mode="TwoWay" />
-                                </Slider.Value>
-                            </Slider>
+                            <Slider Minimum="1" 
+                                    Maximum="100"
+                                    Value="{Binding Parameters.OutputQuality, Mode=TwoWay}"
+                                    HorizontalOptions="FillAndExpand" />
                             <Label Text="{Binding Parameters.OutputQuality, StringFormat='Output Quality: {0:F0}%'}" />
                         </VerticalStackLayout>
                     </Border>
