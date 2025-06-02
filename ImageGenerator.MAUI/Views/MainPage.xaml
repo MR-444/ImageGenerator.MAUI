@@ -205,6 +205,21 @@
                             </DataTrigger>
                         </Image.Triggers>
                     </Image>
+
+                    <!-- Use Generated Image as Input Button -->
+                    <Button Text="Use as Input"
+                            Command="{Binding UseGeneratedImageAsInputCommand}"
+                            Style="{StaticResource PressedButtonStyle}"
+                            HorizontalOptions="FillAndExpand"
+                            SemanticProperties.Description="Use the generated image as input for the next generation">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button"
+                                        Binding="{Binding GeneratedImagePath}"
+                                        Value="{x:Null}">
+                                <Setter Property="IsVisible" Value="False"/>
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
                 </VerticalStackLayout>
             </Border>
         </Grid>

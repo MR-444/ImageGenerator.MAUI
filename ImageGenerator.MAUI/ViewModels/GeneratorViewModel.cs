@@ -250,4 +250,39 @@ public partial class GeneratorViewModel : ObservableObject
             SelectedImagePreview = null;
         }
     }
+
+    [RelayCommand]
+    private async Task UseGeneratedImageAsInputAsync()
+    {
+        if (string.IsNullOrEmpty(GeneratedImagePath) || !File.Exists(GeneratedImagePath))
+        {
+            StatusMessage = "No generated image available to use as input.";
+            StatusMessageColor = MauiColor.FromArgb("#FF0000"); // Red for error
+            return;
+        }
+
+        try
+        {
+            // Read the generated image file
+            var imageBytes = await File.ReadAllBytesAsync(GeneratedImagePath);
+
+            // First set IsImageSelected to true to update aspect ratio options
+            IsImageSelected = true;
+
+            // Store base64 for API parameter
+            ImagePromptBase64 = Convert.ToBase64String(imageBytes);
+            Parameters.ImagePrompt = ImagePromptBase64;
+
+            // Update image preview
+            SelectedImagePreview = ImageSource.FromStream(() => new MemoryStream(imageBytes));
+
+            StatusMessage = "Generated image set as input prompt.";
+            StatusMessageColor = MauiColor.FromArgb("#008000"); // Green for success
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error using generated image as input: {ex.Message}";
+            StatusMessageColor = MauiColor.FromArgb("#FF0000"); // Red for error
+        }
+    }
 }
