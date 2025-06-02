@@ -209,7 +209,7 @@
                            VerticalOptions="FillAndExpand"
                            MinimumHeightRequest="300"
                            SemanticProperties.Description="Generated Image"
-                           AutomationProperties.HelpText="The generated image based on your settings">
+                           SemanticProperties.Hint="The generated image based on your settings">
                         <Image.Triggers>
                             <DataTrigger TargetType="Image"
                                         Binding="{Binding IsGenerating}"

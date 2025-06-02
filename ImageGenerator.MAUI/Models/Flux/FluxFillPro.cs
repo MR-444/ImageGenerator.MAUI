@@ -13,6 +13,4 @@ public class FluxFillPro : FluxBase
     public double Guidance { get; set; } = 60;
 
     public string Outpaint { get; set; } = "None";
-
-    public bool PromptUpsampling { get; set; } = false;
 }

@@ -13,9 +13,6 @@ public class FluxSchnell : FluxBase
 
     public int NumOutputs { get; set; } = 1;
 
-    [Range(ValidationConstants.OutputQualityMin, ValidationConstants.OutputQualityMax, ErrorMessage = "Output quality must be between 1 and 100.")]
-    public int OutputQuality { get; set; } = ValidationConstants.OutputQualityMax;
-
     [Range(ValidationConstants.StepsMin, ValidationConstants.StepsMax, ErrorMessage = "Number of inference steps must be between 1 and 150.")]
     public int NumInferenceSteps { get; set; } = ValidationConstants.StepsMin;
 

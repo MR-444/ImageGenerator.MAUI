@@ -9,6 +9,4 @@ public class FluxDepthPro : FluxBase
     public double Guidance { get; set; } = 15;
 
     public string? ControlImage { get; set; }
-
-    public bool PromptUpsampling { get; set; } = false;
 }

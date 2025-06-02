@@ -9,6 +9,4 @@ public class FluxCannyPro : FluxBase
     public double Guidance { get; set; } = 30;
 
     public string? ControlImage { get; set; }
-
-    public bool PromptUpsampling { get; set; } = false;
 }
