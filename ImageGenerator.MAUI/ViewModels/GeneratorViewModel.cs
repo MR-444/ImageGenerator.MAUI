@@ -11,7 +11,7 @@ using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.PixelFormats;
 using Image = SixLabors.ImageSharp.Image;
-
+using MauiColor = Microsoft.Maui.Graphics.Color;
 
 namespace ImageGenerator.MAUI.ViewModels;
 
@@ -64,6 +64,12 @@ public partial class GeneratorViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isValid;
+
+    [ObservableProperty]
+    private MauiColor _statusMessageColor = MauiColor.FromArgb("#000000");
+
+    [ObservableProperty]
+    private bool _isGenerating;
 
     partial void OnParametersChanged(ImageGenerationParameters value)
     {
@@ -154,40 +160,57 @@ public partial class GeneratorViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(Parameters.ApiToken))
         {
             StatusMessage = "API Token is required to generate images.";
+            StatusMessageColor = MauiColor.FromArgb("#FF0000"); // Red for error
             return;
         }
 
-        StatusMessage = "Generating image...";
-        
-        // Explicitly randomize before calling the service if required
-        if (Parameters.RandomizeSeed)
+        try
         {
-            // Use Random.Shared for a better randomness /static instance:
-            Parameters.Seed = Random.Shared.NextInt64(0, ValidationConstants.SeedMaxValue);
+            IsGenerating = true;
+            StatusMessage = "Generating image...";
+            StatusMessageColor = MauiColor.FromArgb("#000000"); // Black for normal status
+            
+            // Explicitly randomize before calling the service if required
+            if (Parameters.RandomizeSeed)
+            {
+                Parameters.Seed = Random.Shared.NextInt64(0, ValidationConstants.SeedMaxValue);
+            }
+
+            var result = await _imageService!.GenerateImageAsync(Parameters);
+            
+            if (!string.IsNullOrEmpty(result.ImageDataBase64))
+            {
+                var outputDir = Path.Combine(AppContext.BaseDirectory, "Generated_Pictures");
+                Directory.CreateDirectory(outputDir);
+
+                var newImagePath = Path.Combine(outputDir, BuildFileName(Parameters));
+
+                // Decode from Base64 just once here
+                var imageBytes = Convert.FromBase64String(result.ImageDataBase64);
+
+                await SaveImageWithMetadataAsync(newImagePath, imageBytes, Parameters);
+
+                GeneratedImagePath = newImagePath;
+                StatusMessage = result.Message;
+                StatusMessageColor = MauiColor.FromArgb("#008000"); // Green for success
+            }
+            else
+            {
+                // Error
+                StatusMessage = result.Message;
+                StatusMessageColor = MauiColor.FromArgb("#FF0000"); // Red for error
+                GeneratedImagePath = null;
+            }
         }
-
-        var result = await _imageService!.GenerateImageAsync(Parameters);
-        
-        if (!string.IsNullOrEmpty(result.ImageDataBase64))
+        catch (Exception ex)
         {
-            var outputDir = Path.Combine(AppContext.BaseDirectory, "Generated_Pictures");
-            Directory.CreateDirectory(outputDir);
-
-            var newImagePath = Path.Combine(outputDir, BuildFileName(Parameters));
-
-            // Decode from Base64 just once here
-            var imageBytes = Convert.FromBase64String(result.ImageDataBase64);
-
-            await SaveImageWithMetadataAsync(newImagePath, imageBytes, Parameters);
-
-            GeneratedImagePath = newImagePath;
-            StatusMessage = result.Message;
-        }
-        else
-        {
-            // Error
-            StatusMessage = result.Message;
+            StatusMessage = $"Error: {ex.Message}";
+            StatusMessageColor = MauiColor.FromArgb("#FF0000"); // Red for error
             GeneratedImagePath = null;
+        }
+        finally
+        {
+            IsGenerating = false;
         }
     }
     

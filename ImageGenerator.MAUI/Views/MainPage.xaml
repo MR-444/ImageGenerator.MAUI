@@ -5,7 +5,9 @@
              xmlns:common="clr-namespace:ImageGenerator.MAUI.Common"
              xmlns:converters="clr-namespace:ImageGenerator.MAUI.Converters"
              xmlns:behaviors="clr-namespace:ImageGenerator.MAUI.Behaviors"
+             xmlns:viewmodels="clr-namespace:ImageGenerator.MAUI.ViewModels"
              x:Class="ImageGenerator.MAUI.Views.MainPage"
+             x:DataType="viewmodels:GeneratorViewModel"
              Padding="10">
     <ContentPage.Resources>
         <ResourceDictionary>

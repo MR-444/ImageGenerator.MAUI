@@ -20,6 +20,8 @@
 		<SingleProject>true</SingleProject>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
+		<MauiEnableXamlCBindingWithSourceCompilation>true</MauiEnableXamlCBindingWithSourceCompilation>
+		<NoWarn>MVVMTK0045</NoWarn>
 
 		<!-- Display name -->
 		<ApplicationTitle>ImageGenerator.MAUI</ApplicationTitle>

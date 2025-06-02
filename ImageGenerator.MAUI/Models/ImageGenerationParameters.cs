@@ -3,7 +3,6 @@ using ImageGenerator.MAUI.Common;
 
 namespace ImageGenerator.MAUI.Models;
 
-// Make it partial so that [ObservableProperty] can generate the backing fields
 public partial class ImageGenerationParameters : ObservableObject
 {
     [ObservableProperty]

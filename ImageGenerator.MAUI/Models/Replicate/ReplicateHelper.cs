@@ -16,6 +16,11 @@ public static class ReplicateHelper
                 predictionId
             );
 
+            if (prediction == null)
+            {
+                return null;
+            }
+
             switch (prediction.Status)
             {
                 case "succeeded":
