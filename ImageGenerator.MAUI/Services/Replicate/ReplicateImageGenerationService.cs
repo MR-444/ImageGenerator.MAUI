@@ -23,23 +23,47 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
             // Use the factory to create the appropriate image model instance
             var imageModel = ImageModelFactory.CreateImageModel(parameters);
 
-            // If we have a base64 image, convert it to data URI format
+            // If we have a base64 image, convert it to data URI format for Kontext models
             if (!string.IsNullOrEmpty(parameters.ImagePrompt))
             {
                 if (imageModel is FluxKontextPro kontextPro)
                 {
-                    kontextPro.InputImage = $"data:image/jpeg;base64,{parameters.ImagePrompt}";
+                    // Check if the ImagePrompt is already a data URI
+                    if (parameters.ImagePrompt.StartsWith("data:"))
+                    {
+                        kontextPro.InputImage = parameters.ImagePrompt;
+                    }
+                    else
+                    {
+                        // Detect image format from base64 data or use PNG as default
+                        var mimeType = DetectImageMimeType(parameters.ImagePrompt);
+                        kontextPro.InputImage = $"data:{mimeType};base64,{parameters.ImagePrompt}";
+                    }
                 }
                 else if (imageModel is FluxKontextMax kontextMax)
                 {
-                    kontextMax.InputImage = $"data:image/jpeg;base64,{parameters.ImagePrompt}";
+                    // Check if the ImagePrompt is already a data URI
+                    if (parameters.ImagePrompt.StartsWith("data:"))
+                    {
+                        kontextMax.InputImage = parameters.ImagePrompt;
+                    }
+                    else
+                    {
+                        // Detect image format from base64 data or use PNG as default
+                        var mimeType = DetectImageMimeType(parameters.ImagePrompt);
+                        kontextMax.InputImage = $"data:{mimeType};base64,{parameters.ImagePrompt}";
+                    }
                 }
             }
 
             // Make the call to the generation model
             var finalResponse = await CallReplicateModelAsync(parameters, imageModel);
             if(finalResponse?.Output == null)
-                throw new InvalidOperationException("ModelName prediction failed or returned no result.");
+            {
+                var errorMessage = finalResponse?.Error ?? "Unknown error";
+                var status = finalResponse?.Status ?? "Unknown status";
+                throw new InvalidOperationException($"Model prediction failed or returned no result. Status: {status}, Error: {errorMessage}");
+            }
 
             var imageUrl = finalResponse.Output;
             var imageDataBase64 = await DownloadImageAsBase64Async(imageUrl!);
@@ -104,5 +128,35 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
         {
             throw new InvalidOperationException($"Failed to download image from {imageUrl}", ex);
         }
+    }
+
+    // Detect MIME type from base64 image data
+    private static string DetectImageMimeType(string base64Data)
+    {
+        try
+        {
+            // Decode the first few bytes to check the file signature
+            var bytes = Convert.FromBase64String(base64Data.Substring(0, Math.Min(base64Data.Length, 20)));
+            
+            // Check for common image file signatures
+            if (bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
+                return "image/png";
+            
+            if (bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
+                return "image/jpeg";
+            
+            if (bytes.Length >= 6 && bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46)
+                return "image/gif";
+            
+            if (bytes.Length >= 12 && bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50)
+                return "image/webp";
+        }
+        catch
+        {
+            // If detection fails, fall back to PNG
+        }
+        
+        // Default to PNG if detection fails
+        return "image/png";
     }
 }

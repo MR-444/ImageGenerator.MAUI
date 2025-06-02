@@ -271,6 +271,9 @@ public partial class GeneratorViewModel : ObservableObject
 
             // Store base64 for API parameter
             ImagePromptBase64 = Convert.ToBase64String(imageBytes);
+            
+            // For Kontext models, we need to provide the image as base64 only
+            // The service will handle the data URI conversion
             Parameters.ImagePrompt = ImagePromptBase64;
 
             // Update image preview

@@ -27,8 +27,8 @@ public static class ReplicateHelper
                     // Return the final output if succeeded
                     return prediction;
                 case "failed":
-                    // End loop if failed
-                    return null;
+                    // Return the prediction with error details instead of null
+                    return prediction;
                 default:
                     // Wait briefly before the next check
                     await Task.Delay(TimeSpan.FromSeconds(3));
