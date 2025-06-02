@@ -67,6 +67,30 @@ public partial class GeneratorViewModel : ObservableObject
         UpdateCustomAspectRatio(value.AspectRatio);
     }
 
+    partial void OnIsImageSelectedChanged(bool value)
+    {
+        if (value)
+        {
+            if (!AspectRatioOptions.Contains("match_input_image"))
+            {
+                var newOptions = new List<string>(AspectRatioOptions);
+                newOptions.Insert(0, "match_input_image");
+                AspectRatioOptions = newOptions;
+                Parameters.AspectRatio = "match_input_image";
+            }
+        }
+        else
+        {
+            if (Parameters.AspectRatio == "match_input_image")
+            {
+                Parameters.AspectRatio = "16:9";
+            }
+            var newOptions = new List<string>(AspectRatioOptions);
+            newOptions.Remove("match_input_image");
+            AspectRatioOptions = newOptions;
+        }
+    }
+
     private void UpdateCustomAspectRatio(string aspectRatio)
     {
         IsCustomAspectRatio = aspectRatio == "custom";
@@ -218,6 +242,9 @@ public partial class GeneratorViewModel : ObservableObject
 
         if (result != null)
         {
+            // First set IsImageSelected to true to update aspect ratio options
+            IsImageSelected = true;
+
             await using var stream = await result.OpenReadAsync();
             using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream);
@@ -229,15 +256,14 @@ public partial class GeneratorViewModel : ObservableObject
 
             // Update image preview
             SelectedImagePreview = ImageSource.FromStream(() => new MemoryStream(imageBytes));
-            IsImageSelected = true;
         }
         else
         {
-            // If no image is selected
+            // If no image is selected, clear everything
+            IsImageSelected = false;
             ImagePromptBase64 = null;
             Parameters.ImagePrompt = null;
             SelectedImagePreview = null;
-            IsImageSelected = false;
         }
     }
 }

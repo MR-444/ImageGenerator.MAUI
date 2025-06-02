@@ -1,6 +1,8 @@
 using ImageGenerator.MAUI.Models;
 using ImageGenerator.MAUI.Models.Factories;
 using ImageGenerator.MAUI.Models.Replicate;
+using System.Text;
+using ImageGenerator.MAUI.Models.Flux;
 
 namespace ImageGenerator.MAUI.Services.Replicate;
 
@@ -19,8 +21,14 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
             // Use the factory to create the appropriate image model instance
             var imageModel = ImageModelFactory.CreateImageModel(parameters);
 
+            // If we have a base64 image, convert it to data URI format
+            if (imageModel is FluxKontextPro kontextPro && !string.IsNullOrEmpty(parameters.ImagePrompt))
+            {
+                kontextPro.InputImage = $"data:image/jpeg;base64,{parameters.ImagePrompt}";
+            }
+
             // Make the call to the generation model
-            var finalResponse = await CallReplicateModelAsync(parameters,imageModel);
+            var finalResponse = await CallReplicateModelAsync(parameters, imageModel);
             if(finalResponse?.Output == null)
                 throw new InvalidOperationException("ModelName prediction failed or returned no result.");
 
@@ -88,4 +96,10 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
             throw new InvalidOperationException($"Failed to download image from {imageUrl}", ex);
         }
     }
+}
+
+public class FileIoResponse
+{
+    public bool Success { get; set; }
+    public string? Link { get; set; }
 }

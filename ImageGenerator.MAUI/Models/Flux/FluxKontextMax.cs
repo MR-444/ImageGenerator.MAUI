@@ -11,5 +11,9 @@ public class FluxKontextMax : FluxBase
     public string? InputImage { get; set; }
 
     [JsonPropertyName("aspect_ratio")]
-    public override string AspectRatio { get; set; } = "match_input_image";
+    public override string AspectRatio 
+    { 
+        get => InputImage != null ? "match_input_image" : base.AspectRatio;
+        set => base.AspectRatio = value;
+    }
 } 

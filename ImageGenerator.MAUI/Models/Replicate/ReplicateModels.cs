@@ -7,7 +7,6 @@ public class ReplicatePredictionRequest
     public required object Input { get; set; }
 }
 
-
 public class ReplicatePredictionResponse
 {
     [JsonPropertyName("id")]
