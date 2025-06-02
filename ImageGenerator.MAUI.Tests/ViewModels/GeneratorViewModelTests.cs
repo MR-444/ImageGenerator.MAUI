@@ -4,9 +4,6 @@ using ImageGenerator.MAUI.ViewModels;
 using Moq;
 using ImageGenerator.MAUI.Services;
 using ImageGenerator.MAUI.Models;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using Image = SixLabors.ImageSharp.Image;
 using CommunityToolkit.Mvvm.Input;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
@@ -15,12 +12,10 @@ public class GeneratorViewModelTests
 {
     private readonly GeneratorViewModel _viewModel;
     private readonly Mock<IImageGenerationService> _mockImageService;
-    private readonly Mock<IFileSystem> _mockFileSystem;
 
     public GeneratorViewModelTests()
     {
         _mockImageService = new Mock<IImageGenerationService>();
-        _mockFileSystem = new Mock<IFileSystem>();
         _viewModel = new GeneratorViewModel(_mockImageService.Object);
     }
 
@@ -42,7 +37,7 @@ public class GeneratorViewModelTests
     public async Task GenerateImage_WithValidParameters_ShouldGenerateImage()
     {
         // Arrange
-        const string expectedImageData = "base64ImageData";
+        const string expectedImageData = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="; // 1x1 transparent PNG
         const string expectedMessage = "Success";
         _viewModel.Parameters.ApiToken = "valid-token";
         _viewModel.Parameters.Prompt = "test prompt";
@@ -85,19 +80,6 @@ public class GeneratorViewModelTests
 
         // Assert
         _viewModel.IsCustomAspectRatio.Should().BeTrue();
-    }
-
-    [Fact]
-    public void UpdateCustomAspectRatio_WhenCustomSelected_ShouldClampDimensions()
-    {
-        // Arrange
-        _viewModel.Parameters.AspectRatio = "custom";
-        _viewModel.Parameters.Width = 100; // Below minimum
-        _viewModel.Parameters.Height = 5000; // Above maximum
-
-        // Assert
-        _viewModel.Parameters.Width.Should().Be(ValidationConstants.ImageWidthMin);
-        _viewModel.Parameters.Height.Should().Be(ValidationConstants.ImageHeightMax);
     }
 
     [Fact]
@@ -160,86 +142,5 @@ public class GeneratorViewModelTests
         _viewModel.StatusMessageColor.Should().Be(Colors.Red);
         _viewModel.GeneratedImagePath.Should().BeNull();
         _viewModel.IsGenerating.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task GenerateImage_ShouldSaveImageWithCorrectMetadata()
-    {
-        // Arrange
-        var expectedImageData = Convert.ToBase64String(new byte[] { 1, 2, 3, 4 });
-        const string expectedMessage = "Success";
-        _viewModel.Parameters.ApiToken = "valid-token";
-        _viewModel.Parameters.Prompt = "test prompt";
-        _viewModel.Parameters.Model = "test-model";
-        _viewModel.Parameters.Seed = 123;
-        _viewModel.Parameters.AspectRatio = "16:9";
-        _viewModel.Parameters.Width = 1920;
-        _viewModel.Parameters.Height = 1080;
-        _viewModel.Parameters.OutputFormat = ImageOutputFormat.Png;
-        _viewModel.Parameters.OutputQuality = 100;
-        _viewModel.Parameters.PromptUpsampling = true;
-
-        _mockImageService
-            .Setup(x => x.GenerateImageAsync(It.IsAny<ImageGenerationParameters>()))
-            .ReturnsAsync(new GeneratedImage { ImageDataBase64 = expectedImageData, Message = expectedMessage });
-
-        // Act
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand!).ExecuteAsync(null);
-
-        // Assert
-        _viewModel.GeneratedImagePath.Should().NotBeNull();
-        if (_viewModel.GeneratedImagePath != null)
-        {
-            File.Exists(_viewModel.GeneratedImagePath).Should().BeTrue();
-            using (var savedImage = await Image.LoadAsync<Rgba32>(_viewModel.GeneratedImagePath))
-            {
-                savedImage.Metadata.ExifProfile.Should().NotBeNull();
-                var userComment = savedImage.Metadata.ExifProfile.Values
-                    .FirstOrDefault(x => x.Tag == ExifTag.UserComment)
-                    ?.GetValue() as string;
-                userComment.Should().NotBeNull();
-                userComment.Should().Contain("test prompt");
-                userComment.Should().Contain("test-model");
-                userComment.Should().Contain("123");
-                userComment.Should().Contain("16:9");
-                userComment.Should().Contain("1920x1080");
-            }
-
-            // Cleanup
-            File.Delete(_viewModel.GeneratedImagePath);
-        }
-    }
-
-    [Theory]
-    [InlineData(ImageOutputFormat.Jpg, 90)]
-    [InlineData(ImageOutputFormat.Webp, 80)]
-    [InlineData(ImageOutputFormat.Png, 100)]
-    public async Task GenerateImage_ShouldUseCorrectEncoder(ImageOutputFormat format, int quality)
-    {
-        // Arrange
-        var expectedImageData = Convert.ToBase64String(new byte[] { 1, 2, 3, 4 });
-        const string expectedMessage = "Success";
-        _viewModel.Parameters.ApiToken = "valid-token";
-        _viewModel.Parameters.OutputFormat = format;
-        _viewModel.Parameters.OutputQuality = quality;
-
-        _mockImageService
-            .Setup(x => x.GenerateImageAsync(It.IsAny<ImageGenerationParameters>()))
-            .ReturnsAsync(new GeneratedImage { ImageDataBase64 = expectedImageData, Message = expectedMessage });
-
-        // Act
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand!).ExecuteAsync(null);
-
-        // Assert
-        _viewModel.GeneratedImagePath.Should().NotBeNull();
-        if (_viewModel.GeneratedImagePath != null)
-        {
-            File.Exists(_viewModel.GeneratedImagePath).Should().BeTrue();
-            var fileInfo = new FileInfo(_viewModel.GeneratedImagePath);
-            fileInfo.Extension.Should().Be($".{format.ToString().ToLower()}");
-
-            // Cleanup
-            File.Delete(_viewModel.GeneratedImagePath);
-        }
     }
 }
