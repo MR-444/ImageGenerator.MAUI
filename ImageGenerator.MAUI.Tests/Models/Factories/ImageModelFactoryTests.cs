@@ -3,7 +3,6 @@ using ImageGenerator.MAUI.Common;
 using ImageGenerator.MAUI.Models;
 using ImageGenerator.MAUI.Models.Factories;
 using ImageGenerator.MAUI.Models.Flux;
-using ImageGenerator.MAUI.Models.Flux;
 using ImageGenerator.MAUI.Models.OpenAi;
 
 namespace ImageGenerator.MAUI.Tests.Models.Factories

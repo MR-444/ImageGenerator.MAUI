@@ -1,7 +1,6 @@
 using ImageGenerator.MAUI.Models;
 using ImageGenerator.MAUI.Models.Factories;
 using ImageGenerator.MAUI.Models.Replicate;
-using System.Text;
 using ImageGenerator.MAUI.Models.Flux;
 
 namespace ImageGenerator.MAUI.Services.Replicate;
