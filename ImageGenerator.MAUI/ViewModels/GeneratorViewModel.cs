@@ -114,7 +114,7 @@ public partial class GeneratorViewModel : ObservableObject
     public ICommand? GenerateImageCommand { get; }
        
     public GeneratorViewModel(IImageGenerationService imageService)
-        : this(imageService, new ImageFileService()) { }
+        : this(imageService, new ImageFileService(new ImageEncoderProvider())) { }
 
     // For DI/testing
     public GeneratorViewModel(IImageGenerationService imageService, IImageFileService imageFileService)
