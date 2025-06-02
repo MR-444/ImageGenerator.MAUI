@@ -22,9 +22,16 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
             var imageModel = ImageModelFactory.CreateImageModel(parameters);
 
             // If we have a base64 image, convert it to data URI format
-            if (imageModel is FluxKontextPro kontextPro && !string.IsNullOrEmpty(parameters.ImagePrompt))
+            if (!string.IsNullOrEmpty(parameters.ImagePrompt))
             {
-                kontextPro.InputImage = $"data:image/jpeg;base64,{parameters.ImagePrompt}";
+                if (imageModel is FluxKontextPro kontextPro)
+                {
+                    kontextPro.InputImage = $"data:image/jpeg;base64,{parameters.ImagePrompt}";
+                }
+                else if (imageModel is FluxKontextMax kontextMax)
+                {
+                    kontextMax.InputImage = $"data:image/jpeg;base64,{parameters.ImagePrompt}";
+                }
             }
 
             // Make the call to the generation model
