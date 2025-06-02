@@ -12,12 +12,14 @@ public class Flux11Pro : FluxBase
     public bool PromptUpsampling { get; set; }
 
     [JsonPropertyName("width")]
-    [Range(ValidationConstants.ImageWidthMin, ValidationConstants.ImageWidthMax, ErrorMessage = "Width must be between 64 and 2048.")]
-    public int Width { get; set; } = ValidationConstants.ImageWidthMax / 2;
+    [Range(256, 1440, ErrorMessage = "Width must be between 256 and 1440.")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Width { get; set; }
 
     [JsonPropertyName("height")]
-    [Range(ValidationConstants.ImageHeightMin, ValidationConstants.ImageHeightMax, ErrorMessage = "Height must be between 64 and 2048.")]
-    public int Height { get; set; } = ValidationConstants.ImageHeightMax / 2;
+    [Range(256, 1440, ErrorMessage = "Height must be between 256 and 1440.")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Height { get; set; }
 
     [JsonPropertyName("output_quality")]
     [Range(ValidationConstants.OutputQualityMin, ValidationConstants.OutputQualityMax, ErrorMessage = "Output quality must be between 1 and 100.")]

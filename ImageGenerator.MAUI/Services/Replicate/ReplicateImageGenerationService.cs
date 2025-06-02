@@ -6,7 +6,11 @@ namespace ImageGenerator.MAUI.Services.Replicate;
 
 public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImageGenerationService
 {
-    private static readonly HttpClient HttpClient = new();
+    private static readonly HttpClient HttpClient = new()
+    {
+        Timeout = TimeSpan.FromSeconds(30),
+        DefaultRequestHeaders = { { "Accept-Encoding", "gzip, deflate" } }
+    };
 
     public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters)
     {
@@ -71,12 +75,17 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
     // Download the image from the returned URL
     private static async Task<string> DownloadImageAsBase64Async(string imageUrl)
     {
-        var response = await HttpClient.GetAsync(imageUrl);
-        response.EnsureSuccessStatusCode();
-        
-        var bytes = await response.Content.ReadAsByteArrayAsync();
-
-        // return just as base64, ABI safe and simple
-        return Convert.ToBase64String(bytes);
+        try
+        {
+            var response = await HttpClient.GetAsync(imageUrl);
+            response.EnsureSuccessStatusCode();
+            
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            return Convert.ToBase64String(bytes);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new InvalidOperationException($"Failed to download image from {imageUrl}", ex);
+        }
     }
 }

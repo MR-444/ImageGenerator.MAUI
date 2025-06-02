@@ -19,9 +19,8 @@ public abstract class FluxBase : ImageModelBase
     public long? Seed { get; set; }
 
     [JsonPropertyName("output_format")]
-    [RegularExpression("jpg|png", ErrorMessage = "Output format must be 'jpg' 'webp' or 'png'.")]
-    [Required(ErrorMessage = "Output format is required.")]
-    public ImageOutputFormat OutputFormat { get; set; } = ImageOutputFormat.Png;
+    [RegularExpression("webp|jpg|png", ErrorMessage = "Output format must be 'webp', 'jpg', or 'png'.")]
+    public string OutputFormat { get; set; } = "webp";
     
     [JsonPropertyName("aspect_ratio")]
     public virtual string AspectRatio { get; set; } = "1:1";
@@ -36,9 +35,16 @@ public abstract class FluxBase : ImageModelBase
     private string? _imagePrompt;
 
     [JsonPropertyName("safety_tolerance")]
-    [Range(ValidationConstants.SafetyMin, ValidationConstants.SafetyMax, ErrorMessage = "Safety tolerance must be between 1 and 6.")]
-    public int SafetyTolerance { get; set; } = ValidationConstants.SafetyMax;
-    
+    [Range(1, 6, ErrorMessage = "Safety tolerance must be between 1 and 6.")]
+    public int SafetyTolerance { get; set; } = 2;
+
+    [JsonPropertyName("output_quality")]
+    [Range(0, 100, ErrorMessage = "Output quality must be between 0 and 100.")]
+    public int OutputQuality { get; set; } = 80;
+
+    [JsonPropertyName("prompt_upsampling")]
+    public bool PromptUpsampling { get; set; } = false;
+
     [JsonPropertyName("webhook_url")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [StringLength(2083)]

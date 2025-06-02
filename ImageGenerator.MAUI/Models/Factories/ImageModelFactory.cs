@@ -16,12 +16,12 @@ public static class ImageModelFactory
                 Prompt = parameters.Prompt,
                 PromptUpsampling = parameters.PromptUpsampling,
                 Seed = parameters.Seed,
-                Width = parameters.Width,
-                Height = parameters.Height,
+                Width = parameters.AspectRatio == "custom" ? parameters.Width : null,
+                Height = parameters.AspectRatio == "custom" ? parameters.Height : null,
                 AspectRatio = parameters.AspectRatio,
                 ImagePrompt = parameters.ImagePrompt,
                 SafetyTolerance = parameters.SafetyTolerance,
-                OutputFormat = parameters.OutputFormat,
+                OutputFormat = parameters.OutputFormat.ToString().ToLower(),
                 OutputQuality = parameters.OutputQuality
             },
             ModelConstants.Flux.Pro11Ultra => new Flux11ProUltra
@@ -32,7 +32,7 @@ public static class ImageModelFactory
                 AspectRatio = parameters.AspectRatio,
                 ImagePrompt = parameters.ImagePrompt,
                 SafetyTolerance = parameters.SafetyTolerance,
-                OutputFormat = parameters.OutputFormat,
+                OutputFormat = parameters.OutputFormat.ToString().ToLower(),
                 Raw = parameters.Raw,
                 ImagePromptStrength = parameters.ImagePromptStrength
             },
@@ -44,7 +44,7 @@ public static class ImageModelFactory
                 AspectRatio = parameters.AspectRatio,
                 ImagePrompt = parameters.ImagePrompt,
                 SafetyTolerance = parameters.SafetyTolerance,
-                OutputFormat = parameters.OutputFormat,
+                OutputFormat = parameters.OutputFormat.ToString().ToLower(),
                 OutputQuality = parameters.OutputQuality
             },
             ModelConstants.Flux.Schnell => new FluxSchnell
@@ -55,7 +55,7 @@ public static class ImageModelFactory
                 AspectRatio = parameters.AspectRatio,
                 ImagePrompt = parameters.ImagePrompt,
                 SafetyTolerance = parameters.SafetyTolerance,
-                OutputFormat = parameters.OutputFormat,
+                OutputFormat = parameters.OutputFormat.ToString().ToLower(),
                 OutputQuality = parameters.OutputQuality
             },
             ModelConstants.Flux.KontextMax => new FluxKontextMax

@@ -3,6 +3,7 @@ using ImageGenerator.MAUI.Common;
 using ImageGenerator.MAUI.Models;
 using ImageGenerator.MAUI.Models.Factories;
 using ImageGenerator.MAUI.Models.Flux;
+using ImageGenerator.MAUI.Models.Flux;
 using ImageGenerator.MAUI.Models.OpenAi;
 
 namespace ImageGenerator.MAUI.Tests.Models.Factories
@@ -10,158 +11,174 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories
     public class ImageModelFactoryTests
     {
         [Fact]
-        public void CreateImageModel_ShouldReturnFlux11Pro_ForFlux11ProModelName()
+        public void CreateImageModel_WithFluxPro11_ReturnsCorrectModel()
         {
             // Arrange
             var parameters = new ImageGenerationParameters
             {
                 Model = ModelConstants.Flux.Pro11,
-                Prompt = "A beautiful landscape",
-                PromptUpsampling = true,
-                Seed = 12345,
-                Width = 1920,
-                Height = 1080,
-                AspectRatio = "16:9",
-                ImagePrompt = "Forest",
-                SafetyTolerance = 6,
+                Prompt = "test prompt",
+                Seed = 123,
+                Width = 1024,
+                Height = 1024,
+                AspectRatio = "custom",
+                ImagePrompt = "test image prompt",
+                SafetyTolerance = 2,
                 OutputFormat = ImageOutputFormat.Png,
-                OutputQuality = 90
-            };
-
-            var expectedResult = new Flux11Pro
-            {
-                ModelName = parameters.Model,
-                Prompt = parameters.Prompt,
-                PromptUpsampling = parameters.PromptUpsampling,
-                Seed = parameters.Seed,
-                Width = parameters.Width,
-                Height = parameters.Height,
-                AspectRatio = parameters.AspectRatio,
-                ImagePrompt = parameters.ImagePrompt,
-                SafetyTolerance = parameters.SafetyTolerance,
-                OutputFormat = parameters.OutputFormat,
-                OutputQuality = parameters.OutputQuality
+                OutputQuality = 80,
+                PromptUpsampling = true
             };
 
             // Act
-            var result = ImageModelFactory.CreateImageModel(parameters);
+            var result = ImageModelFactory.CreateImageModel(parameters) as Flux11Pro;
 
             // Assert
-            result.Should().BeOfType<Flux11Pro>();
-            result.Should().BeEquivalentTo(expectedResult);
+            Assert.NotNull(result);
+            Assert.Equal(ModelConstants.Flux.Pro11, result.ModelName);
+            Assert.Equal("test prompt", result.Prompt);
+            Assert.Equal(123, result.Seed);
+            Assert.Equal(1024, result.Width);
+            Assert.Equal(1024, result.Height);
+            Assert.Equal("custom", result.AspectRatio);
+            Assert.Equal("test image prompt", result.ImagePrompt);
+            Assert.Equal(2, result.SafetyTolerance);
+            Assert.Equal("png", result.OutputFormat);
+            Assert.Equal(80, result.OutputQuality);
+            Assert.True(result.PromptUpsampling);
         }
 
         [Fact]
-        public void CreateImageModel_ShouldReturnFlux11ProUltra_ForFlux11ProUltraModelName()
+        public void CreateImageModel_WithFluxPro11_WithPredefinedAspectRatio_ReturnsCorrectModel()
+        {
+            // Arrange
+            var parameters = new ImageGenerationParameters
+            {
+                Model = ModelConstants.Flux.Pro11,
+                Prompt = "test prompt",
+                Seed = 123,
+                Width = 1024,
+                Height = 1024,
+                AspectRatio = "1:1",
+                ImagePrompt = "test image prompt",
+                SafetyTolerance = 2,
+                OutputFormat = ImageOutputFormat.Png,
+                OutputQuality = 80,
+                PromptUpsampling = true
+            };
+
+            // Act
+            var result = ImageModelFactory.CreateImageModel(parameters) as Flux11Pro;
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal(ModelConstants.Flux.Pro11, result.ModelName);
+            Assert.Equal("test prompt", result.Prompt);
+            Assert.Equal(123, result.Seed);
+            Assert.Null(result.Width);
+            Assert.Null(result.Height);
+            Assert.Equal("1:1", result.AspectRatio);
+            Assert.Equal("test image prompt", result.ImagePrompt);
+            Assert.Equal(2, result.SafetyTolerance);
+            Assert.Equal("png", result.OutputFormat);
+            Assert.Equal(80, result.OutputQuality);
+            Assert.True(result.PromptUpsampling);
+        }
+
+        [Fact]
+        public void CreateImageModel_WithFluxPro11Ultra_ReturnsCorrectModel()
         {
             // Arrange
             var parameters = new ImageGenerationParameters
             {
                 Model = ModelConstants.Flux.Pro11Ultra,
-                Prompt = "A futuristic cityscape",
-                Seed = 98765,
-                AspectRatio = "21:9",
-                ImagePrompt = "Sci-Fi",
-                SafetyTolerance = 6,
-                OutputFormat = ImageOutputFormat.Png,
-                ImagePromptStrength = 0.1
-            };
-
-            var expectedResult = new Flux11ProUltra
-            {
-                ModelName = parameters.Model,
-                Prompt = parameters.Prompt,
-                Seed = parameters.Seed,
-                AspectRatio = parameters.AspectRatio,
-                ImagePrompt = parameters.ImagePrompt,
-                SafetyTolerance = parameters.SafetyTolerance,
-                OutputFormat = parameters.OutputFormat,
-                ImagePromptStrength = parameters.ImagePromptStrength
+                Prompt = "test prompt",
+                Seed = 123,
+                AspectRatio = "1:1",
+                ImagePrompt = "test image prompt",
+                SafetyTolerance = 2,
+                OutputFormat = ImageOutputFormat.Jpg,
+                Raw = true,
+                ImagePromptStrength = 0.5f
             };
 
             // Act
-            var result = ImageModelFactory.CreateImageModel(parameters);
+            var result = ImageModelFactory.CreateImageModel(parameters) as Flux11ProUltra;
 
             // Assert
-            result.Should().BeOfType<Flux11ProUltra>();
-            result.Should().BeEquivalentTo(expectedResult);
+            Assert.NotNull(result);
+            Assert.Equal(ModelConstants.Flux.Pro11Ultra, result.ModelName);
+            Assert.Equal("test prompt", result.Prompt);
+            Assert.Equal(123, result.Seed);
+            Assert.Equal("1:1", result.AspectRatio);
+            Assert.Equal("test image prompt", result.ImagePrompt);
+            Assert.Equal(2, result.SafetyTolerance);
+            Assert.Equal("jpg", result.OutputFormat);
+            Assert.True(result.Raw);
+            Assert.Equal(0.5f, result.ImagePromptStrength);
         }
 
         [Fact]
-        public void CreateImageModel_ShouldReturnFluxDev_ForFluxDevModelName()
+        public void CreateImageModel_WithFluxDev_ReturnsCorrectModel()
         {
             // Arrange
             var parameters = new ImageGenerationParameters
             {
                 Model = ModelConstants.Flux.Dev,
-                Prompt = "A surreal painting",
-                PromptUpsampling = true,
-                Seed = 112233,
-                Width = 1280,
-                Height = 720,
-                AspectRatio = "4:3",
-                ImagePrompt = "Dream",
-                SafetyTolerance = 7,
-                OutputFormat = ImageOutputFormat.Jpg,
+                Prompt = "test prompt",
+                Seed = 123,
+                AspectRatio = "1:1",
+                ImagePrompt = "test image prompt",
+                SafetyTolerance = 2,
+                OutputFormat = ImageOutputFormat.Webp,
                 OutputQuality = 80
             };
 
-            var expectedResult = new FluxDev
-            {
-                ModelName = parameters.Model,
-                Prompt = parameters.Prompt,
-                Seed = parameters.Seed,
-                AspectRatio = parameters.AspectRatio,
-                ImagePrompt = parameters.ImagePrompt,
-                SafetyTolerance = parameters.SafetyTolerance,
-                OutputFormat = parameters.OutputFormat,
-                OutputQuality = parameters.OutputQuality
-            };
-
             // Act
-            var result = ImageModelFactory.CreateImageModel(parameters);
+            var result = ImageModelFactory.CreateImageModel(parameters) as FluxDev;
 
             // Assert
-            result.Should().BeOfType<FluxDev>();
-            result.Should().BeEquivalentTo(expectedResult);
+            Assert.NotNull(result);
+            Assert.Equal(ModelConstants.Flux.Dev, result.ModelName);
+            Assert.Equal("test prompt", result.Prompt);
+            Assert.Equal(123, result.Seed);
+            Assert.Equal("1:1", result.AspectRatio);
+            Assert.Equal("test image prompt", result.ImagePrompt);
+            Assert.Equal(2, result.SafetyTolerance);
+            Assert.Equal("webp", result.OutputFormat);
+            Assert.Equal(80, result.OutputQuality);
         }
 
         [Fact]
-        public void CreateImageModel_ShouldReturnFluxSchnell_ForFluxSchnellModelName()
+        public void CreateImageModel_WithFluxSchnell_ReturnsCorrectModel()
         {
             // Arrange
             var parameters = new ImageGenerationParameters
             {
                 Model = ModelConstants.Flux.Schnell,
-                Prompt = "A fast rendering sketch",
-                Seed = 445566,
+                Prompt = "test prompt",
+                Seed = 123,
                 AspectRatio = "1:1",
-                ImagePrompt = "Quick sketch",
-                SafetyTolerance = 5,
+                ImagePrompt = "test image prompt",
+                SafetyTolerance = 2,
                 OutputFormat = ImageOutputFormat.Png,
                 OutputQuality = 80
             };
 
-            var expectedResult = new FluxSchnell
-            {
-                ModelName = parameters.Model,
-                Prompt = parameters.Prompt,
-                Seed = parameters.Seed,
-                AspectRatio = parameters.AspectRatio,
-                ImagePrompt = parameters.ImagePrompt,
-                SafetyTolerance = parameters.SafetyTolerance,
-                OutputFormat = parameters.OutputFormat,
-                OutputQuality = parameters.OutputQuality
-            };
-
             // Act
-            var result = ImageModelFactory.CreateImageModel(parameters);
+            var result = ImageModelFactory.CreateImageModel(parameters) as FluxSchnell;
 
             // Assert
-            result.Should().BeOfType<FluxSchnell>();
-            result.Should().BeEquivalentTo(expectedResult);
+            Assert.NotNull(result);
+            Assert.Equal(ModelConstants.Flux.Schnell, result.ModelName);
+            Assert.Equal("test prompt", result.Prompt);
+            Assert.Equal(123, result.Seed);
+            Assert.Equal("1:1", result.AspectRatio);
+            Assert.Equal("test image prompt", result.ImagePrompt);
+            Assert.Equal(2, result.SafetyTolerance);
+            Assert.Equal("png", result.OutputFormat);
+            Assert.Equal(80, result.OutputQuality);
         }
-       
+
         [Fact]
         public void CreateImageModel_ShouldReturnOpenAiRequest_ForGptImage1ModelName()
         {
