@@ -1,5 +1,4 @@
 using ImageGenerator.MAUI.Common;
-using ImageGenerator.MAUI.Models;
 using ImageGenerator.MAUI.Services.OpenAi;
 using ImageGenerator.MAUI.Services.Replicate;
 
@@ -24,16 +23,6 @@ public class ImageGenerationServiceFactory : IImageGenerationServiceFactory
         {
             ModelConstants.OpenAI.GptImage1 => _openAiService,
             _ => _replicateService
-        };
-    }
-
-    public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters)
-    {
-        // Route to the appropriate service based on the model
-        return parameters.Model switch
-        {
-            ModelConstants.OpenAI.GptImage1 => await _openAiService.GenerateImageAsync(parameters),
-            _ => await _replicateService.GenerateImageAsync(parameters)
         };
     }
 } 

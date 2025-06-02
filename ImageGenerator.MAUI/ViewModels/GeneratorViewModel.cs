@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Common;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Formats.Webp;
@@ -250,27 +251,20 @@ public partial class GeneratorViewModel : ObservableObject
         image.Metadata.ExifProfile ??= new ExifProfile();
         image.Metadata.ExifProfile.SetValue(ExifTag.UserComment, metadataText);
 
-        // Choose the encoder depending on file format
-        switch (parameters.OutputFormat)
+        // Use the extracted encoder selection method
+        var encoder = GetImageEncoder(parameters.OutputFormat, parameters.OutputQuality);
+        await image.SaveAsync(imagePath, encoder);
+    }
+
+    // Extracted encoder selection logic
+    private static IImageEncoder GetImageEncoder(ImageOutputFormat format, int quality)
+    {
+        return format switch
         {
-            case ImageOutputFormat.Jpg:
-                // JPEG Encoder with specified quality
-                var jpegEncoder = new JpegEncoder { Quality = parameters.OutputQuality };
-                await image.SaveAsync(imagePath, jpegEncoder);
-                break;
-
-            case ImageOutputFormat.Webp:
-                var webpEncoder = new WebpEncoder { Quality = parameters.OutputQuality };
-                await image.SaveAsync(imagePath, webpEncoder);
-                break;
-
-            case ImageOutputFormat.Png:
-            default:
-                // PNG Encoder
-                var pngEncoder = new PngEncoder(); // PNG typically doesn't have quality param
-                await image.SaveAsync(imagePath, pngEncoder);
-                break;
-        }
+            ImageOutputFormat.Jpg => new JpegEncoder { Quality = quality },
+            ImageOutputFormat.Webp => new WebpEncoder { Quality = quality },
+            ImageOutputFormat.Png => new PngEncoder(),_ => new PngEncoder(),
+        };
     }
     
     [RelayCommand]
