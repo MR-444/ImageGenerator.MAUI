@@ -14,6 +14,8 @@ A cross-platform image generation application built with .NET MAUI that leverage
 - Async/await best practices implementation
 - Easy-to-use interface for generating AI images
 
+![image](https://github.com/user-attachments/assets/41f98c75-5f43-4ee7-aab3-f1ca575c7075)
+
 ## 🛠️ Technologies
 
 - .NET MAUI 9.0
