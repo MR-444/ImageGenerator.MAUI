@@ -111,7 +111,7 @@ public partial class GeneratorViewModel : ObservableObject
         
         _parameters = new ImageGenerationParameters
         {
-            // Default values for your sliders, etc.
+            // Default values for sliders, etc.
             ApiToken = "",
             Model = "black-forest-labs/flux-1.1-pro",
             AspectRatio = "16:9",

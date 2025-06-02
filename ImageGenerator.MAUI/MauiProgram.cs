@@ -2,6 +2,7 @@
 using ImageGenerator.MAUI.Models.OpenAi;
 using ImageGenerator.MAUI.Models.Replicate;
 using ImageGenerator.MAUI.Services;
+using ImageGenerator.MAUI.Services.OpenAi;
 using ImageGenerator.MAUI.Services.Replicate;
 using ImageGenerator.MAUI.Views; 
 using ImageGenerator.MAUI.ViewModels;
@@ -31,7 +32,10 @@ public static class MauiProgram
 		builder.Services.AddRefitClient<IOpenAiApi>("https://api.openai.com");
 		
 		// 2) Register your services and ViewModels
-		builder.Services.AddSingleton<IImageGenerationService, ReplicateImageGenerationService>();
+		builder.Services.AddSingleton<IOpenAiImageGenerationService, OpenAiImageGenerationService>();
+		builder.Services.AddSingleton<IReplicateImageGenerationService, ReplicateImageGenerationService>();
+		builder.Services.AddSingleton<IImageGenerationServiceFactory, ImageGenerationServiceFactory>();
+		builder.Services.AddSingleton<IImageGenerationService, ImageGenerationOrchestrator>();
 		builder.Services.AddTransient<GeneratorViewModel>();
 
 		// 3) Register MainPage so it (and its constructor) can be injected

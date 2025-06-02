@@ -5,9 +5,16 @@ using ImageGenerator.MAUI.Models.Flux;
 
 namespace ImageGenerator.MAUI.Services.Replicate;
 
-public class ReplicateImageGenerationService(IReplicateApi replicateApi, HttpClient httpClient) : IImageGenerationService
+public class ReplicateImageGenerationService : IReplicateImageGenerationService
 {
-    private readonly HttpClient _httpClient = httpClient;
+    private readonly HttpClient _httpClient;
+    private readonly IReplicateApi _replicateApi;
+
+    public ReplicateImageGenerationService(IReplicateApi replicateApi, HttpClient httpClient)
+    {
+        _replicateApi = replicateApi ?? throw new ArgumentNullException(nameof(replicateApi));
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+    }
 
     public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters)
     {
@@ -65,7 +72,7 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi, HttpCli
         var bearerToken = $"Bearer {parameters.ApiToken}";
 
         // Invoke the endpoint using the injected Refit interface
-        var response = await replicateApi.CreatePredictionAsync(
+        var response = await _replicateApi.CreatePredictionAsync(
             bearerToken,
             parameters.Model,
             replicateRequest
@@ -73,7 +80,7 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi, HttpCli
             
         // Poll for final output, using the returned prediction ID
         var finalResponse = await ReplicateHelper.PollForOutputAsync(
-            replicateApi,
+            _replicateApi,
             bearerToken,
             response.Id ?? string.Empty
         );

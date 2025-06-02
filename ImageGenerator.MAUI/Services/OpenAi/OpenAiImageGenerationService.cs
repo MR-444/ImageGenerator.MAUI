@@ -4,7 +4,7 @@ using ImageGenerator.MAUI.Models.Factories;
 
 namespace ImageGenerator.MAUI.Services.OpenAi;
 
-public class OpenAiImageGenerationService : IImageGenerationService
+public class OpenAiImageGenerationService : IOpenAiImageGenerationService
 {
     private readonly IOpenAiApi _openAiApi;
 
