@@ -62,9 +62,13 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private string? _imagePromptBase64;
 
+    [ObservableProperty]
+    private bool _isValid;
+
     partial void OnParametersChanged(ImageGenerationParameters value)
     {
         UpdateCustomAspectRatio(value.AspectRatio);
+        ValidateParameters();
     }
 
     partial void OnIsImageSelectedChanged(bool value)
@@ -103,6 +107,11 @@ public partial class GeneratorViewModel : ObservableObject
         }
     }
 
+    private void ValidateParameters()
+    {
+        IsValid = !string.IsNullOrWhiteSpace(Parameters.ApiToken);
+    }
+
     public ICommand? GenerateImageCommand { get; }
        
     public GeneratorViewModel(IImageGenerationService imageService)
@@ -131,6 +140,10 @@ public partial class GeneratorViewModel : ObservableObject
             {
                 UpdateCustomAspectRatio(_parameters.AspectRatio);
             }
+            else if (e.PropertyName == nameof(ImageGenerationParameters.ApiToken))
+            {
+                ValidateParameters();
+            }
         };
         
         GenerateImageCommand = new AsyncRelayCommand(GenerateImageAsync);
@@ -138,6 +151,12 @@ public partial class GeneratorViewModel : ObservableObject
 
     private async Task GenerateImageAsync()
     {
+        if (string.IsNullOrWhiteSpace(Parameters.ApiToken))
+        {
+            StatusMessage = "API Token is required to generate images.";
+            return;
+        }
+
         StatusMessage = "Generating image...";
         
         // Explicitly randomize before calling the service if required

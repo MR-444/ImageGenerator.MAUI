@@ -41,7 +41,7 @@
                             <Label Text="API Token" FontAttributes="Bold"/>
                             <Entry
                                 Text="{Binding Parameters.ApiToken}"
-                                AutomationProperties.HelpText="Enter the API Token obtained from your Replicate account. It will remain secure."
+                                SemanticProperties.Description="Enter the API Token obtained from your Replicate account. It will remain secure."
                                 Placeholder="Enter your Replicate API Token"
                                 IsPassword="True"
                                 HorizontalOptions="FillAndExpand" />
@@ -81,8 +81,7 @@
                                            HeightRequest="{OnPlatform Android=200, iOS=200, WinUI=250}"
                                            HorizontalOptions="FillAndExpand"
                                            IsVisible="{Binding IsImageSelected}"
-                                           AutomationProperties.Name="Selected Image Preview"
-                                           AutomationProperties.HelpText="Preview of the selected image for image prompt"/>
+                                           SemanticProperties.Description="Preview of the selected image for image prompt"/>
         
                                     <!-- Slider for the image prompt strength-->
                                     <Slider Minimum="0" Maximum="1"
@@ -194,14 +193,13 @@
                             Style="{StaticResource PressedButtonStyle}"
                             Command="{Binding GenerateImageCommand}"
                             HorizontalOptions="FillAndExpand"
-                            AutomationProperties.Name="Generate Image Button"
-                            AutomationProperties.HelpText="Click to generate an image based on the current settings"
+                            SemanticProperties.Description="Generate Image Button"
                             IsEnabled="{Binding IsValid}"/>
 
                     <Label Text="{Binding StatusMessage}"
                            TextColor="{Binding StatusMessageColor}"
                            HorizontalOptions="FillAndExpand"
-                           AutomationProperties.Name="Status Message" />
+                           SemanticProperties.Description="Status Message" />
 
                     <!-- Generated Image Preview -->
                     <Image Source="{Binding GeneratedImagePath}"
@@ -210,7 +208,7 @@
                            HorizontalOptions="FillAndExpand"
                            VerticalOptions="FillAndExpand"
                            MinimumHeightRequest="300"
-                           AutomationProperties.Name="Generated Image"
+                           SemanticProperties.Description="Generated Image"
                            AutomationProperties.HelpText="The generated image based on your settings">
                         <Image.Triggers>
                             <DataTrigger TargetType="Image"
