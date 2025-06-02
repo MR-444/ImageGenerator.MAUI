@@ -32,6 +32,7 @@ public static class MauiProgram
 		builder.Services.AddRefitClient<IOpenAiApi>("https://api.openai.com");
 		
 		// 2) Register your services and ViewModels
+		builder.Services.AddSingleton<IImageFileService, ImageFileService>();
 		builder.Services.AddSingleton<IOpenAiImageGenerationService, OpenAiImageGenerationService>();
 		builder.Services.AddSingleton<IReplicateImageGenerationService, ReplicateImageGenerationService>();
 		builder.Services.AddSingleton<IImageGenerationServiceFactory, ImageGenerationServiceFactory>();

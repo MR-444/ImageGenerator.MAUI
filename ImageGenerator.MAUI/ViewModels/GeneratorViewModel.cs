@@ -4,14 +4,6 @@ using ImageGenerator.MAUI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Common;
-using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.Formats.Webp;
-using SixLabors.ImageSharp.PixelFormats;
-using Image = SixLabors.ImageSharp.Image;
 using MauiColor = Microsoft.Maui.Graphics.Color;
 
 namespace ImageGenerator.MAUI.ViewModels;
@@ -19,6 +11,7 @@ namespace ImageGenerator.MAUI.ViewModels;
 public partial class GeneratorViewModel : ObservableObject
 {
     private readonly IImageGenerationService? _imageService;
+    private readonly IImageFileService _imageFileService;
 
     [ObservableProperty]
     private ImageGenerationParameters _parameters;
@@ -121,8 +114,13 @@ public partial class GeneratorViewModel : ObservableObject
     public ICommand? GenerateImageCommand { get; }
        
     public GeneratorViewModel(IImageGenerationService imageService)
+        : this(imageService, new ImageFileService()) { }
+
+    // For DI/testing
+    public GeneratorViewModel(IImageGenerationService imageService, IImageFileService imageFileService)
     {
         _imageService = imageService ?? throw new ArgumentNullException(nameof(imageService));
+        _imageFileService = imageFileService ?? throw new ArgumentNullException(nameof(imageFileService));
         
         _parameters = new ImageGenerationParameters
         {
@@ -183,12 +181,12 @@ public partial class GeneratorViewModel : ObservableObject
                 var outputDir = Path.Combine(AppContext.BaseDirectory, "Generated_Pictures");
                 Directory.CreateDirectory(outputDir);
 
-                var newImagePath = Path.Combine(outputDir, BuildFileName(Parameters));
+                var newImagePath = Path.Combine(outputDir, _imageFileService.BuildFileName(Parameters));
 
                 // Decode from Base64 just once here
                 var imageBytes = Convert.FromBase64String(result.ImageDataBase64);
 
-                await SaveImageWithMetadataAsync(newImagePath, imageBytes, Parameters);
+                await _imageFileService.SaveImageWithMetadataAsync(newImagePath, imageBytes, Parameters);
 
                 GeneratedImagePath = newImagePath;
                 StatusMessage = result.Message;
@@ -214,58 +212,7 @@ public partial class GeneratorViewModel : ObservableObject
         }
     }
     
-    // Helper method (clearly organize filenames):
-    private static string BuildFileName(ImageGenerationParameters parameters)
-    {
-        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        var invalidChars = Path.GetInvalidFileNameChars();
-        var safePrompt = new string(parameters.Prompt.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray())
-            .Replace(" ", "_")
-            .Replace("__", "_"); // Replace double underscores
- 
-        safePrompt = safePrompt.Length > 30 ? safePrompt[..30] : safePrompt;
-
-        var fileExtension = parameters.OutputFormat.ToString().ToLowerInvariant();
-
-        return $"{timestamp}_{safePrompt}_{parameters.Seed}.{fileExtension}";
-    }
-
-    
-    private static async Task SaveImageWithMetadataAsync(string imagePath,
-                                                  byte[] imageBytes,
-                                                  ImageGenerationParameters parameters)
-    {
-        using var image = await Image.LoadAsync<Rgba32>(new MemoryStream(imageBytes));
-
-        // Construct your metadata string (you can format differently)
-        var metadataText = 
-            $"Prompt: {parameters.Prompt}\n" +
-            $"ModelName: {parameters.Model}\n" +
-            $"Seed: {parameters.Seed}\n" +
-            $"AspectRatio: {parameters.AspectRatio}\n" +
-            $"Dimensions: {parameters.Width}x{parameters.Height}\n" +
-            $"Format: {parameters.OutputFormat}\n" +
-            $"Quality: {parameters.OutputQuality}\n" +
-            $"Upsampling: {parameters.PromptUpsampling}";
-
-        image.Metadata.ExifProfile ??= new ExifProfile();
-        image.Metadata.ExifProfile.SetValue(ExifTag.UserComment, metadataText);
-
-        // Use the extracted encoder selection method
-        var encoder = GetImageEncoder(parameters.OutputFormat, parameters.OutputQuality);
-        await image.SaveAsync(imagePath, encoder);
-    }
-
-    // Extracted encoder selection logic
-    private static IImageEncoder GetImageEncoder(ImageOutputFormat format, int quality)
-    {
-        return format switch
-        {
-            ImageOutputFormat.Jpg => new JpegEncoder { Quality = quality },
-            ImageOutputFormat.Webp => new WebpEncoder { Quality = quality },
-            ImageOutputFormat.Png => new PngEncoder(),_ => new PngEncoder(),
-        };
-    }
+    // Removed file I/O and image processing methods. Now handled by ImageFileService.
     
     [RelayCommand]
     private async Task SelectImagePromptAsync()
