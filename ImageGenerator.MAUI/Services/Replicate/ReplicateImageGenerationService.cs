@@ -5,13 +5,9 @@ using ImageGenerator.MAUI.Models.Flux;
 
 namespace ImageGenerator.MAUI.Services.Replicate;
 
-public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImageGenerationService
+public class ReplicateImageGenerationService(IReplicateApi replicateApi, HttpClient httpClient) : IImageGenerationService
 {
-    private static readonly HttpClient HttpClient = new()
-    {
-        Timeout = TimeSpan.FromSeconds(30),
-        DefaultRequestHeaders = { { "Accept-Encoding", "gzip, deflate" } }
-    };
+    private readonly HttpClient _httpClient = httpClient;
 
     public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters)
     {
@@ -87,11 +83,11 @@ public class ReplicateImageGenerationService(IReplicateApi replicateApi) : IImag
     }
         
     // Download the image from the returned URL
-    private static async Task<string> DownloadImageAsBase64Async(string imageUrl)
+    protected virtual async Task<string> DownloadImageAsBase64Async(string imageUrl)
     {
         try
         {
-            var response = await HttpClient.GetAsync(imageUrl);
+            var response = await _httpClient.GetAsync(imageUrl);
             response.EnsureSuccessStatusCode();
             
             var bytes = await response.Content.ReadAsByteArrayAsync();
