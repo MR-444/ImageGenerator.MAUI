@@ -45,7 +45,7 @@ public partial class GeneratorViewModel : ObservableObject
     private List<string> _aspectRatioOptions = ["1:1", "16:9", "9:16","3:2", "2:3", "4:3", "3:4","4:5", "5:4", "9:21", "21:9", "custom"];
 
     [ObservableProperty]
-    private List<string> _outputFormats = [ImageOutputFormat.Png.ToString().ToLower(), ImageOutputFormat.Jpg.ToString().ToLower(), ImageOutputFormat.Webp.ToString().ToLower()];
+    private List<string> _outputFormats = [nameof(ImageOutputFormat.Png).ToLower(), nameof(ImageOutputFormat.Jpg).ToLower(), nameof(ImageOutputFormat.Webp).ToLower()];
 
     [ObservableProperty]
     private bool _isCustomAspectRatio;
@@ -81,13 +81,12 @@ public partial class GeneratorViewModel : ObservableObject
     {
         if (value)
         {
-            if (!AspectRatioOptions.Contains("match_input_image"))
-            {
-                var newOptions = new List<string>(AspectRatioOptions);
-                newOptions.Insert(0, "match_input_image");
-                AspectRatioOptions = newOptions;
-                Parameters.AspectRatio = "match_input_image";
-            }
+            if (AspectRatioOptions.Contains("match_input_image")) return;
+            
+            var newOptions = new List<string>(AspectRatioOptions);
+            newOptions.Insert(0, "match_input_image");
+            AspectRatioOptions = newOptions;
+            Parameters.AspectRatio = "match_input_image";
         }
         else
         {
@@ -265,6 +264,7 @@ public partial class GeneratorViewModel : ObservableObject
                 await image.SaveAsync(imagePath, webpEncoder);
                 break;
 
+            case ImageOutputFormat.Png:
             default:
                 // PNG Encoder
                 var pngEncoder = new PngEncoder(); // PNG typically doesn't have quality param

@@ -48,7 +48,7 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
             {
                 Message = $"Image generated successfully with model {parameters.Model}.",
                 FilePath = null,
-                ImageDataBase64 = imageDataBase64,
+                ImageDataBase64 = imageDataBase64
             };
         }
         catch (Exception ex)
@@ -105,10 +105,4 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
             throw new InvalidOperationException($"Failed to download image from {imageUrl}", ex);
         }
     }
-}
-
-public class FileIoResponse
-{
-    public bool Success { get; set; }
-    public string? Link { get; set; }
 }

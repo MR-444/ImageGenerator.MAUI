@@ -1,10 +1,9 @@
-﻿namespace ImageGenerator.MAUI
+﻿namespace ImageGenerator.MAUI;
+
+public partial class AppShell
 {
-    public partial class AppShell : Shell
+    public AppShell()
     {
-        public AppShell()
-        {
-            InitializeComponent();
-        }
+        InitializeComponent();
     }
 }

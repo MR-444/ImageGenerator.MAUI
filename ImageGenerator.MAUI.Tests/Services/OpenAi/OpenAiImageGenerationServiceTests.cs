@@ -36,10 +36,7 @@ public class OpenAiImageGenerationServiceTests
         var expectedResponse = new OpenAiResponse
         {
             Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            Data = new List<ImageData>
-            {
-                new() { B64Json = "test-base64-data" }
-            },
+            Data = [new ImageData { B64Json = "test-base64-data" }],
             Usage = new UsageInfo
             {
                 TotalTokens = 100,
@@ -115,7 +112,7 @@ public class OpenAiImageGenerationServiceTests
         var emptyResponse = new OpenAiResponse
         {
             Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            Data = new List<ImageData>(),
+            Data = [],
             Usage = new UsageInfo
             {
                 TotalTokens = 0,

@@ -14,15 +14,14 @@ public class ReplicateImageGenerationServiceTests
 {
     private readonly Mock<IReplicateApi> _mockReplicateApi;
     private readonly Mock<HttpMessageHandler> _mockHttpMessageHandler;
-    private readonly HttpClient _httpClient;
     private readonly ReplicateImageGenerationService _service;
 
     public ReplicateImageGenerationServiceTests()
     {
         _mockReplicateApi = new Mock<IReplicateApi>();
         _mockHttpMessageHandler = new Mock<HttpMessageHandler>();
-        _httpClient = new HttpClient(_mockHttpMessageHandler.Object);
-        _service = new ReplicateImageGenerationService(_mockReplicateApi.Object, _httpClient);
+        var httpClient = new HttpClient(_mockHttpMessageHandler.Object);
+        _service = new ReplicateImageGenerationService(_mockReplicateApi.Object, httpClient);
     }
 
     [Fact]
@@ -74,7 +73,7 @@ public class ReplicateImageGenerationServiceTests
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
-                Content = new ByteArrayContent(new byte[] { 1, 2, 3 }) // Mock image data
+                Content = new ByteArrayContent([1, 2, 3]) // Mock image data
             });
 
         // Act
@@ -135,7 +134,7 @@ public class ReplicateImageGenerationServiceTests
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
-                Content = new ByteArrayContent(new byte[] { 1, 2, 3 }) // Mock image data
+                Content = new ByteArrayContent([1, 2, 3]) // Mock image data
             });
 
         // Act
@@ -196,7 +195,7 @@ public class ReplicateImageGenerationServiceTests
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
-                Content = new ByteArrayContent(new byte[] { 1, 2, 3 }) // Mock image data
+                Content = new ByteArrayContent([1, 2, 3]) // Mock image data
             });
 
         // Act

@@ -2,14 +2,9 @@ using ImageGenerator.MAUI.Models;
 
 namespace ImageGenerator.MAUI.Services;
 
-public class ImageGenerationOrchestrator : IImageGenerationService
+public class ImageGenerationOrchestrator(IImageGenerationServiceFactory serviceFactory) : IImageGenerationService
 {
-    private readonly IImageGenerationServiceFactory _serviceFactory;
-
-    public ImageGenerationOrchestrator(IImageGenerationServiceFactory serviceFactory)
-    {
-        _serviceFactory = serviceFactory ?? throw new ArgumentNullException(nameof(serviceFactory));
-    }
+    private readonly IImageGenerationServiceFactory _serviceFactory = serviceFactory ?? throw new ArgumentNullException(nameof(serviceFactory));
 
     public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters)
     {

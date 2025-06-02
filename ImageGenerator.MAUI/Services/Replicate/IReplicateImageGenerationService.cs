@@ -1,5 +1,3 @@
 namespace ImageGenerator.MAUI.Services.Replicate;
 
-public interface IReplicateImageGenerationService : IImageGenerationService
-{
-} 
+public interface IReplicateImageGenerationService : IImageGenerationService; 

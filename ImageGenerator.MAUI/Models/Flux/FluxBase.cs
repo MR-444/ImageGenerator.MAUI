@@ -43,7 +43,7 @@ public abstract class FluxBase : ImageModelBase
     public int OutputQuality { get; set; } = ValidationConstants.OutputQualityMax;
 
     [JsonPropertyName("prompt_upsampling")]
-    public bool PromptUpsampling { get; set; } = false;
+    public bool PromptUpsampling { get; set; }
 
     [JsonPropertyName("webhook_url")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
