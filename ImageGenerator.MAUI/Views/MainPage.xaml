@@ -4,6 +4,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:common="clr-namespace:ImageGenerator.MAUI.Common"
              xmlns:converters="clr-namespace:ImageGenerator.MAUI.Converters"
+             xmlns:behaviors="clr-namespace:ImageGenerator.MAUI.Behaviors"
              x:Class="ImageGenerator.MAUI.Views.MainPage"
              Padding="10">
     <ContentPage.Resources>
@@ -101,7 +102,11 @@
                             <Entry Text="{Binding Parameters.Seed}"
                                    Keyboard="Numeric"
                                    Placeholder="Seed"
-                                   HorizontalOptions="FillAndExpand" />
+                                   HorizontalOptions="FillAndExpand">
+                                <Entry.Behaviors>
+                                    <behaviors:NumericOnlyBehavior />
+                                </Entry.Behaviors>
+                            </Entry>
 
                             <HorizontalStackLayout Spacing="10">
                                 <CheckBox IsChecked="{Binding Parameters.RandomizeSeed}" />
