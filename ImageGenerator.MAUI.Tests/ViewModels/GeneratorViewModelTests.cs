@@ -4,16 +4,10 @@ using ImageGenerator.MAUI.ViewModels;
 using Moq;
 using ImageGenerator.MAUI.Services;
 using ImageGenerator.MAUI.Models;
-using Microsoft.Maui.Graphics;
-using Microsoft.Maui.Storage;
-using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using System.Reflection;
-using Microsoft.Maui.Controls;
 using Image = SixLabors.ImageSharp.Image;
 using CommunityToolkit.Mvvm.Input;
-using System.Linq;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels
 {
