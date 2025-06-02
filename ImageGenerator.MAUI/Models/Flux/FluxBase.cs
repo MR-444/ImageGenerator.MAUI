@@ -20,7 +20,7 @@ public abstract class FluxBase : ImageModelBase
 
     [JsonPropertyName("output_format")]
     [RegularExpression("webp|jpg|png", ErrorMessage = "Output format must be 'webp', 'jpg', or 'png'.")]
-    public string OutputFormat { get; set; } = "webp";
+    public string OutputFormat { get; set; } = "png";
     
     [JsonPropertyName("aspect_ratio")]
     public virtual string AspectRatio { get; set; } = "1:1";
@@ -36,11 +36,11 @@ public abstract class FluxBase : ImageModelBase
 
     [JsonPropertyName("safety_tolerance")]
     [Range(1, 6, ErrorMessage = "Safety tolerance must be between 1 and 6.")]
-    public int SafetyTolerance { get; set; } = 2;
+    public int SafetyTolerance { get; set; } = ValidationConstants.SafetyMax;
 
     [JsonPropertyName("output_quality")]
     [Range(0, 100, ErrorMessage = "Output quality must be between 0 and 100.")]
-    public int OutputQuality { get; set; } = 80;
+    public int OutputQuality { get; set; } = ValidationConstants.OutputQualityMax;
 
     [JsonPropertyName("prompt_upsampling")]
     public bool PromptUpsampling { get; set; } = false;
