@@ -1,10 +1,10 @@
 using FluentAssertions;
-using ImageGenerator.MAUI.Common;
-using ImageGenerator.MAUI.ViewModels;
+using ImageGenerator.MAUI.Presentation.ViewModels;
 using Moq;
-using ImageGenerator.MAUI.Services;
-using ImageGenerator.MAUI.Models;
 using CommunityToolkit.Mvvm.Input;
+using ImageGenerator.MAUI.Core.Application.Interfaces;
+using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Shared.Constants;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
 

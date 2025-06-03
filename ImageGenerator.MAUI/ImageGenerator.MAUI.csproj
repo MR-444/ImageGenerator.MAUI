@@ -86,7 +86,12 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Folder Include="Behaviors\" />
+	  <Folder Include="Core\Domain\Interfaces\" />
+	  <Folder Include="Infrastructure\External\" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <AdditionalFiles Include="Presentation\Views\MainPage.xaml" />
 	</ItemGroup>
 
 </Project>

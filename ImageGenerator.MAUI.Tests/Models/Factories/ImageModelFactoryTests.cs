@@ -1,9 +1,10 @@
 ﻿using FluentAssertions;
-using ImageGenerator.MAUI.Common;
-using ImageGenerator.MAUI.Models;
-using ImageGenerator.MAUI.Models.Factories;
-using ImageGenerator.MAUI.Models.Flux;
-using ImageGenerator.MAUI.Models.OpenAi;
+using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Core.Domain.Enums;
+using ImageGenerator.MAUI.Core.Domain.ValueObjects.Factories;
+using ImageGenerator.MAUI.Core.Domain.ValueObjects.Flux;
+using ImageGenerator.MAUI.Infrastructure.External.OpenAi;
+using ImageGenerator.MAUI.Shared.Constants;
 
 namespace ImageGenerator.MAUI.Tests.Models.Factories;
 

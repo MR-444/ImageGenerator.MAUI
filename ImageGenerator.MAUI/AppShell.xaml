@@ -3,7 +3,7 @@
     x:Class="ImageGenerator.MAUI.AppShell"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    xmlns:views="clr-namespace:ImageGenerator.MAUI.Views"
+    xmlns:views="using:ImageGenerator.MAUI.Presentation.Views"
     FlyoutBehavior="Flyout"
     Title="ImageGenerator">
 

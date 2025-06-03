@@ -1,12 +1,13 @@
 using FluentAssertions;
-using ImageGenerator.MAUI.Common;
-using ImageGenerator.MAUI.Models;
-using ImageGenerator.MAUI.Models.Flux;
-using ImageGenerator.MAUI.Models.Replicate;
-using ImageGenerator.MAUI.Services.Replicate;
 using Moq;
 using Moq.Protected;
 using System.Net;
+using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Core.Domain.ValueObjects.Flux;
+using ImageGenerator.MAUI.Infrastructure.External.Replicate;
+using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
+using ImageGenerator.MAUI.Models.Replicate;
+using ImageGenerator.MAUI.Shared.Constants;
 
 namespace ImageGenerator.MAUI.Tests.Services.Replicate;
 

@@ -1,8 +1,9 @@
 using FluentAssertions;
-using ImageGenerator.MAUI.Common;
-using ImageGenerator.MAUI.Models;
-using ImageGenerator.MAUI.Models.OpenAi;
-using ImageGenerator.MAUI.Services.OpenAi;
+using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Core.Domain.Enums;
+using ImageGenerator.MAUI.Infrastructure.External.OpenAi;
+using ImageGenerator.MAUI.Infrastructure.External.OpenAi.Interfaces;
+using ImageGenerator.MAUI.Shared.Constants;
 using Moq;
 
 namespace ImageGenerator.MAUI.Tests.Services.OpenAi;
