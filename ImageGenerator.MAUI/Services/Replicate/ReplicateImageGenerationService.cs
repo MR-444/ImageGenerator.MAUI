@@ -5,17 +5,28 @@ using ImageGenerator.MAUI.Models.Flux;
 
 namespace ImageGenerator.MAUI.Services.Replicate;
 
+/// <summary>
+/// Provides functionality for generating images using the Replicate API service.
+/// </summary>
 public class ReplicateImageGenerationService : IReplicateImageGenerationService
 {
+
     private readonly HttpClient _httpClient;
     private readonly IReplicateApi _replicateApi;
 
+    /// A service responsible for generating images using the Replicate API.
+    /// This service implements the `IReplicateImageGenerationService` interface and provides functionality to create
+    /// predictions for image generation using the external Replicate API. It also contains methods for additional operations
+    /// like downloading the generated image as a Base64 encoded string.
     public ReplicateImageGenerationService(IReplicateApi replicateApi, HttpClient httpClient)
     {
         _replicateApi = replicateApi ?? throw new ArgumentNullException(nameof(replicateApi));
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
     }
 
+    /// Generates an image asynchronously based on the specified generation parameters.
+    /// <param name="parameters">The parameters required to generate the image, including model details and image prompt information.</param>
+    /// <returns>A GeneratedImage object containing the result of the image generation process, including any relevant messages and the generated image data in base64 format.</returns>
     public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters)
     {
         try
@@ -85,7 +96,12 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
             };
         }
     }
-    
+
+    /// Asynchronously makes a call to the Replicate API's model endpoint to initiate and retrieve a prediction result.
+    /// This method constructs and sends the appropriate request payload and monitors for a finalized response.
+    /// <param name="parameters">The parameters required for the image generation process, including the API token and model details.</param>
+    /// <param name="imageModel">The specific image model instance to be used for the image generation request.</param>
+    /// <returns>A task representing the asynchronous operation. The result contains the prediction response from the API, including the model's output.</returns>
     private async Task<ReplicatePredictionResponse?> CallReplicateModelAsync(ImageGenerationParameters parameters,
                                                                              ImageModelBase imageModel)
     {
@@ -114,6 +130,9 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
     }
         
     // Download the image from the returned URL
+    /// Downloads an image from the specified URL and converts it to a Base64 encoded string.
+    /// <param name="imageUrl">The URL of the image to be downloaded.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the Base64 encoded string of the downloaded image.</returns>
     protected virtual async Task<string> DownloadImageAsBase64Async(string imageUrl)
     {
         try
@@ -131,6 +150,9 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
     }
 
     // Detect MIME type from base64 image data
+    /// Detects the MIME type of an image based on its Base64-encoded data.
+    /// <param name="base64Data">A string containing the Base64-encoded image data.</param>
+    /// <returns>A string representing the detected MIME type of the image (e.g., "image/png", "image/jpeg"). Defaults to "image/png" if detection fails.</returns>
     private static string DetectImageMimeType(string base64Data)
     {
         try

@@ -97,13 +97,12 @@ public partial class GeneratorViewModel : ObservableObject
     private void UpdateCustomAspectRatio(string aspectRatio)
     {
         IsCustomAspectRatio = aspectRatio == "custom";
-        
-        if (IsCustomAspectRatio)
-        {
-            // Ensure width and height are within valid ranges
-            Parameters.Width = Math.Clamp(Parameters.Width, ValidationConstants.ImageWidthMin, ValidationConstants.ImageWidthMax);
-            Parameters.Height = Math.Clamp(Parameters.Height, ValidationConstants.ImageHeightMin, ValidationConstants.ImageHeightMax);
-        }
+
+        if (!IsCustomAspectRatio) return;
+            
+        // Ensure width and height are within valid ranges
+        Parameters.Width = Math.Clamp(Parameters.Width, ValidationConstants.ImageWidthMin, ValidationConstants.ImageWidthMax);
+        Parameters.Height = Math.Clamp(Parameters.Height, ValidationConstants.ImageHeightMin, ValidationConstants.ImageHeightMax);
     }
 
     private void ValidateParameters()

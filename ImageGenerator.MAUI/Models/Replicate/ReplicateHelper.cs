@@ -1,7 +1,20 @@
 namespace ImageGenerator.MAUI.Models.Replicate;
 
+/// <summary>
+/// Provides utility methods for interacting with the Replicate API in image generation workflows.
+/// </summary>
 public static class ReplicateHelper
 {
+    /// <summary>
+    /// Polls the Replicate API for the final output of a prediction by periodically checking its status.
+    /// </summary>
+    /// <param name="replicateApi">The interface to interact with the Replicate API.</param>
+    /// <param name="bearerToken">The bearer token used for authentication with the Replicate API.</param>
+    /// <param name="predictionId">The unique identifier of the prediction to monitor.</param>
+    /// <returns>
+    /// A task representing the asynchronous operation. The task result is the <see cref="ReplicatePredictionResponse"/> object
+    /// containing the final prediction output if successful, the error details if failed, or null if no response was obtained.
+    /// </returns>
     public static async Task<ReplicatePredictionResponse?> PollForOutputAsync(
         IReplicateApi replicateApi,
         string bearerToken,
