@@ -2,26 +2,17 @@ using ImageGenerationParameters = ImageGenerator.MAUI.Core.Domain.Entities.Image
 
 namespace ImageGenerator.MAUI.Infrastructure.Interfaces;
 
-/// <summary>
-/// Provides functionalities for saving image files with accompanying metadata, and
-/// generating file names based on specified image generation parameters.
-/// </summary>
 public interface IImageFileService
 {
-    /// <summary>
-    /// Asynchronously saves an image to the specified file path and associates it with metadata
-    /// based on the provided image generation parameters.
-    /// </summary>
-    /// <param name="imagePath">The file path where the image should be saved.</param>
-    /// <param name="imageBytes">The raw byte data of the image to save.</param>
-    /// <param name="parameters">The parameters containing metadata associated with the image generation process.</param>
-    /// <returns>A task that represents the asynchronous operation.</returns>
+    /// <summary>Saves the image to <paramref name="imagePath"/> with parameter metadata embedded.</summary>
     Task SaveImageWithMetadataAsync(string imagePath, byte[] imageBytes, ImageGenerationParameters parameters);
 
-    /// <summary>
-    /// Generates a file name based on the provided image generation parameters.
-    /// </summary>
-    /// <param name="parameters">The parameters used for generating the image, which influence the generated file name.</param>
-    /// <returns>A string representing the generated file name.</returns>
+    /// <summary>Builds a filename (no directory) from the parameters. Caller combines with a directory.</summary>
     string BuildFileName(ImageGenerationParameters parameters);
+
+    /// <summary>
+    /// Returns a full path inside <paramref name="directory"/> that does not collide with an existing file.
+    /// Appends _1, _2, ... before the extension if the base filename is already taken.
+    /// </summary>
+    string GetUniqueSavePath(string directory, ImageGenerationParameters parameters);
 }

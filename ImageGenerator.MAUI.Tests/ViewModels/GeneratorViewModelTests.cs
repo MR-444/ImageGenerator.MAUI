@@ -64,30 +64,31 @@ public class GeneratorViewModelTests
     public async Task GenerateImage_WithValidParameters_ShouldGenerateImage()
     {
         const string expectedImageData = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-        const string expectedMessage = "Success";
         _viewModel.Parameters.ApiToken = "valid-token";
         _viewModel.Parameters.Prompt = "test prompt";
 
         _mockImageService
             .Setup(x => x.GenerateImageAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GeneratedImage { ImageDataBase64 = expectedImageData, Message = expectedMessage });
+            .ReturnsAsync(new GeneratedImage { ImageDataBase64 = expectedImageData, Message = "ok" });
 
         await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
 
-        _viewModel.StatusMessage.Should().Be(expectedMessage);
+        _viewModel.StatusMessage.Should().StartWith("Saved to ");
         _viewModel.StatusKind.Should().Be(StatusKind.Success);
         _viewModel.GeneratedImagePath.Should().NotBeNull();
         _viewModel.IsGenerating.Should().BeFalse();
     }
 
     [Fact]
-    public async Task GenerateImage_WithInvalidToken_ShouldShowError()
+    public async Task GenerateImage_WithMissingFields_ShouldShowError()
     {
         _viewModel.Parameters.ApiToken = "";
+        _viewModel.Parameters.Prompt = "";
 
         await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
 
-        _viewModel.StatusMessage.Should().Be("API Token is required to generate images.");
+        _viewModel.StatusMessage.Should().Contain("API Token");
+        _viewModel.StatusMessage.Should().Contain("Prompt");
         _viewModel.StatusKind.Should().Be(StatusKind.Error);
         _viewModel.GeneratedImagePath.Should().BeNull();
         _viewModel.IsGenerating.Should().BeFalse();
@@ -151,6 +152,7 @@ public class GeneratorViewModelTests
     public async Task GenerateImage_WhenServiceThrowsException_ShouldHandleError()
     {
         _viewModel.Parameters.ApiToken = "valid-token";
+        _viewModel.Parameters.Prompt = "test prompt";
         _mockImageService
             .Setup(x => x.GenerateImageAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("Test error"));
@@ -167,6 +169,7 @@ public class GeneratorViewModelTests
     public async Task GenerateImage_WhenServiceReturnsCanceledMessage_ShouldSetCanceledKind()
     {
         _viewModel.Parameters.ApiToken = "valid-token";
+        _viewModel.Parameters.Prompt = "test prompt";
         _mockImageService
             .Setup(x => x.GenerateImageAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GeneratedImage { Message = "Image generation was canceled.", ImageDataBase64 = null });

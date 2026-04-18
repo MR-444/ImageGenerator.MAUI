@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
@@ -12,9 +13,14 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 public partial class GeneratorViewModel : ObservableObject
 {
     private const string AllProvidersLabel = "All providers";
+    private const string OutputFolderName = "ImageGenerator.MAUI";
 
     private readonly IImageGenerationService _imageService;
     private readonly IImageFileService _imageFileService;
+
+    // Save to the user's Pictures folder so images are easy to find and survive app rebuilds.
+    private static string OutputDirectory =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), OutputFolderName);
 
     // Master catalog — single source of truth for model metadata.
     private static readonly IReadOnlyList<ModelOption> Catalog =
@@ -255,16 +261,15 @@ public partial class GeneratorViewModel : ObservableObject
 
             if (!string.IsNullOrEmpty(result.ImageDataBase64))
             {
-                var outputDir = Path.Combine(AppContext.BaseDirectory, "Generated_Pictures");
-                Directory.CreateDirectory(outputDir);
+                Directory.CreateDirectory(OutputDirectory);
 
-                var newImagePath = Path.Combine(outputDir, _imageFileService.BuildFileName(Parameters));
+                var newImagePath = _imageFileService.GetUniqueSavePath(OutputDirectory, Parameters);
                 var imageBytes = Convert.FromBase64String(result.ImageDataBase64);
 
                 await _imageFileService.SaveImageWithMetadataAsync(newImagePath, imageBytes, Parameters);
 
                 GeneratedImagePath = newImagePath;
-                SetStatus(result.Message ?? "Image generated.", StatusKind.Success);
+                SetStatus($"Saved to {newImagePath}", StatusKind.Success);
             }
             else
             {
@@ -324,6 +329,42 @@ public partial class GeneratorViewModel : ObservableObject
             Parameters.ImagePrompt = null;
             SelectedImagePreview = null;
             SetStatus(string.Empty, StatusKind.None);
+        }
+    }
+
+    [RelayCommand]
+    private void ShowInFolder()
+    {
+        var target = !string.IsNullOrEmpty(GeneratedImagePath) && File.Exists(GeneratedImagePath)
+            ? GeneratedImagePath
+            : null;
+
+        try
+        {
+            if (target != null)
+            {
+                // Windows-only: open Explorer with the file highlighted.
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"/select,\"{target}\"",
+                    UseShellExecute = true
+                });
+            }
+            else
+            {
+                Directory.CreateDirectory(OutputDirectory);
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"\"{OutputDirectory}\"",
+                    UseShellExecute = true
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Couldn't open Explorer: {ex.Message}", StatusKind.Error);
         }
     }
 

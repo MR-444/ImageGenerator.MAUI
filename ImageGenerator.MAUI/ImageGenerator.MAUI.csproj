@@ -1,8 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<!-- Windows-only: only platform the author can test against. -->
-		<TargetFramework>net10.0-windows10.0.19041</TargetFramework>
+		<!-- Windows-only: only platform the author can test against.
+		     SDK is 22621 (Windows 11 22H2) for modern WinUI/WinRT API surface.
+		     Min/supported runtime stays at 17763 so Windows 10 1809+ still runs it. -->
+		<TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
 
 		<OutputType>Exe</OutputType>
 

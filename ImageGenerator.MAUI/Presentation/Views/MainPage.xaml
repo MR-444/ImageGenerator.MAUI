@@ -288,6 +288,17 @@
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="12">
                     <Label Text="Result" Style="{StaticResource CardTitle}" />
+
+                    <Label Text="{Binding GeneratedImagePath, StringFormat='Saved: {0}'}"
+                           Style="{StaticResource HelperText}"
+                           LineBreakMode="MiddleTruncation">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding GeneratedImagePath}" Value="{x:Null}">
+                                <Setter Property="IsVisible" Value="False" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+
                     <Image Source="{Binding GeneratedImagePath}"
                            Aspect="AspectFit"
                            HeightRequest="420"
@@ -299,17 +310,24 @@
                             </DataTrigger>
                         </Image.Triggers>
                     </Image>
-                    <Button Text="Use as input for next generation"
-                            Command="{Binding UseGeneratedImageAsInputCommand}"
-                            Style="{StaticResource SecondaryButton}"
-                            HorizontalOptions="Start"
-                            AutomationId="UseAsInputButton">
-                        <Button.Triggers>
-                            <DataTrigger TargetType="Button" Binding="{Binding GeneratedImagePath}" Value="{x:Null}">
-                                <Setter Property="IsVisible" Value="False" />
-                            </DataTrigger>
-                        </Button.Triggers>
-                    </Button>
+
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="Show in folder"
+                                Command="{Binding ShowInFolderCommand}"
+                                Style="{StaticResource SecondaryButton}"
+                                SemanticProperties.Description="Open the generated-images folder in Explorer"
+                                AutomationId="ShowInFolderButton" />
+                        <Button Text="Use as input for next generation"
+                                Command="{Binding UseGeneratedImageAsInputCommand}"
+                                Style="{StaticResource SecondaryButton}"
+                                AutomationId="UseAsInputButton">
+                            <Button.Triggers>
+                                <DataTrigger TargetType="Button" Binding="{Binding GeneratedImagePath}" Value="{x:Null}">
+                                    <Setter Property="IsVisible" Value="False" />
+                                </DataTrigger>
+                            </Button.Triggers>
+                        </Button>
+                    </HorizontalStackLayout>
                 </VerticalStackLayout>
             </Border>
         </VerticalStackLayout>
