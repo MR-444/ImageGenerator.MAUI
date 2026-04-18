@@ -22,36 +22,60 @@ public class GeneratorViewModelTests
     [Fact]
     public void AllModels_ShouldContainExpectedModels()
     {
-        // Assert
-        _viewModel.AllModels.Should().Contain(ModelConstants.OpenAI.GptImage1);
-        _viewModel.AllModels.Should().Contain(ModelConstants.Flux.Dev);
-        _viewModel.AllModels.Should().Contain(ModelConstants.Flux.Pro);
-        _viewModel.AllModels.Should().Contain(ModelConstants.Flux.Pro11);
-        _viewModel.AllModels.Should().Contain(ModelConstants.Flux.Schnell);
-        _viewModel.AllModels.Should().Contain(ModelConstants.Flux.Pro11Ultra);
-        _viewModel.AllModels.Should().Contain(ModelConstants.Flux.KontextMax);
-        _viewModel.AllModels.Should().Contain(ModelConstants.Flux.KontextPro);
+        var values = _viewModel.AllModels.Select(m => m.Value).ToList();
+        values.Should().Contain(ModelConstants.OpenAI.GptImage1);
+        values.Should().Contain(ModelConstants.Flux.Dev);
+        values.Should().Contain(ModelConstants.Flux.Pro);
+        values.Should().Contain(ModelConstants.Flux.Pro11);
+        values.Should().Contain(ModelConstants.Flux.Schnell);
+        values.Should().Contain(ModelConstants.Flux.Pro11Ultra);
+        values.Should().Contain(ModelConstants.Flux.KontextMax);
+        values.Should().Contain(ModelConstants.Flux.KontextPro);
+    }
+
+    [Fact]
+    public void Providers_ShouldIncludeAllAndDistinctProviders()
+    {
+        _viewModel.Providers.Should().Contain("All providers");
+        _viewModel.Providers.Should().Contain("OpenAI");
+        _viewModel.Providers.Should().Contain("Black Forest Labs");
+    }
+
+    [Fact]
+    public void SelectedProvider_WhenSet_FiltersModels()
+    {
+        _viewModel.SelectedProvider = "OpenAI";
+
+        _viewModel.FilteredModels.Should().OnlyContain(m => m.Provider == "OpenAI");
+        _viewModel.FilteredModels.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void SelectedModel_WhenChanged_UpdatesParametersModel()
+    {
+        var target = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Schnell);
+
+        _viewModel.SelectedModel = target;
+
+        _viewModel.Parameters.Model.Should().Be(ModelConstants.Flux.Schnell);
     }
 
     [Fact]
     public async Task GenerateImage_WithValidParameters_ShouldGenerateImage()
     {
-        // Arrange
-        const string expectedImageData = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="; // 1x1 transparent PNG
+        const string expectedImageData = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
         const string expectedMessage = "Success";
         _viewModel.Parameters.ApiToken = "valid-token";
         _viewModel.Parameters.Prompt = "test prompt";
 
         _mockImageService
-            .Setup(x => x.GenerateImageAsync(It.IsAny<ImageGenerationParameters>()))
+            .Setup(x => x.GenerateImageAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new GeneratedImage { ImageDataBase64 = expectedImageData, Message = expectedMessage });
 
-        // Act
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand!).ExecuteAsync(null);
+        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
 
-        // Assert
         _viewModel.StatusMessage.Should().Be(expectedMessage);
-        _viewModel.StatusMessageColor.Should().Be(Colors.Green);
+        _viewModel.StatusKind.Should().Be(StatusKind.Success);
         _viewModel.GeneratedImagePath.Should().NotBeNull();
         _viewModel.IsGenerating.Should().BeFalse();
     }
@@ -59,15 +83,12 @@ public class GeneratorViewModelTests
     [Fact]
     public async Task GenerateImage_WithInvalidToken_ShouldShowError()
     {
-        // Arrange
         _viewModel.Parameters.ApiToken = "";
 
-        // Act
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand!).ExecuteAsync(null);
+        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
 
-        // Assert
         _viewModel.StatusMessage.Should().Be("API Token is required to generate images.");
-        _viewModel.StatusMessageColor.Should().Be(Colors.Red);
+        _viewModel.StatusKind.Should().Be(StatusKind.Error);
         _viewModel.GeneratedImagePath.Should().BeNull();
         _viewModel.IsGenerating.Should().BeFalse();
     }
@@ -75,40 +96,43 @@ public class GeneratorViewModelTests
     [Fact]
     public void UpdateCustomAspectRatio_WhenCustomSelected_ShouldEnableCustomInput()
     {
-        // Arrange
         _viewModel.Parameters.AspectRatio = "custom";
 
-        // Assert
         _viewModel.IsCustomAspectRatio.Should().BeTrue();
     }
 
     [Fact]
     public void ValidateParameters_WithEmptyToken_ShouldSetInvalid()
     {
-        // Arrange
         _viewModel.Parameters.ApiToken = "";
+        _viewModel.Parameters.Prompt = "anything";
 
-        // Assert
         _viewModel.IsValid.Should().BeFalse();
     }
 
     [Fact]
-    public void ValidateParameters_WithValidToken_ShouldSetValid()
+    public void ValidateParameters_WithEmptyPrompt_ShouldSetInvalid()
     {
-        // Arrange
         _viewModel.Parameters.ApiToken = "valid-token";
+        _viewModel.Parameters.Prompt = "";
 
-        // Assert
+        _viewModel.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ValidateParameters_WithTokenAndPrompt_ShouldSetValid()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        _viewModel.Parameters.Prompt = "a cat on a sofa";
+
         _viewModel.IsValid.Should().BeTrue();
     }
 
     [Fact]
     public void OnIsImageSelectedChanged_WhenTrue_ShouldAddMatchInputImageOption()
     {
-        // Arrange
         _viewModel.IsImageSelected = true;
 
-        // Assert
         _viewModel.AspectRatioOptions.Should().Contain("match_input_image");
         _viewModel.Parameters.AspectRatio.Should().Be("match_input_image");
     }
@@ -116,11 +140,9 @@ public class GeneratorViewModelTests
     [Fact]
     public void OnIsImageSelectedChanged_WhenFalse_ShouldRemoveMatchInputImageOption()
     {
-        // Arrange
         _viewModel.IsImageSelected = true;
         _viewModel.IsImageSelected = false;
 
-        // Assert
         _viewModel.AspectRatioOptions.Should().NotContain("match_input_image");
         _viewModel.Parameters.AspectRatio.Should().Be("16:9");
     }
@@ -128,19 +150,30 @@ public class GeneratorViewModelTests
     [Fact]
     public async Task GenerateImage_WhenServiceThrowsException_ShouldHandleError()
     {
-        // Arrange
         _viewModel.Parameters.ApiToken = "valid-token";
         _mockImageService
-            .Setup(x => x.GenerateImageAsync(It.IsAny<ImageGenerationParameters>()))
+            .Setup(x => x.GenerateImageAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("Test error"));
 
-        // Act
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand!).ExecuteAsync(null);
+        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
 
-        // Assert
         _viewModel.StatusMessage.Should().Be("Error: Test error");
-        _viewModel.StatusMessageColor.Should().Be(Colors.Red);
+        _viewModel.StatusKind.Should().Be(StatusKind.Error);
         _viewModel.GeneratedImagePath.Should().BeNull();
         _viewModel.IsGenerating.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GenerateImage_WhenServiceReturnsCanceledMessage_ShouldSetCanceledKind()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        _mockImageService
+            .Setup(x => x.GenerateImageAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GeneratedImage { Message = "Image generation was canceled.", ImageDataBase64 = null });
+
+        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+
+        _viewModel.StatusKind.Should().Be(StatusKind.Canceled);
+        _viewModel.GeneratedImagePath.Should().BeNull();
     }
 }

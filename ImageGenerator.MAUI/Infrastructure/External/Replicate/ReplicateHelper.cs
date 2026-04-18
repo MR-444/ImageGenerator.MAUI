@@ -3,34 +3,37 @@ using ImageGenerator.MAUI.Models.Replicate;
 
 namespace ImageGenerator.MAUI.Infrastructure.External.Replicate;
 
-/// <summary>
-/// Provides utility methods for interacting with the Replicate API in image generation workflows.
-/// </summary>
 public static class ReplicateHelper
 {
+    private static readonly TimeSpan DefaultPollInterval = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan DefaultMaxPollDuration = TimeSpan.FromMinutes(5);
+
     /// <summary>
-    /// Polls the Replicate API for the final output of a prediction by periodically checking its status.
+    /// Polls the Replicate predictions endpoint until the prediction reaches a terminal state
+    /// (succeeded, failed, canceled) or until cancellation / the max-duration guard trips.
     /// </summary>
-    /// <param name="replicateApi">The interface to interact with the Replicate API.</param>
-    /// <param name="bearerToken">The bearer token used for authentication with the Replicate API.</param>
-    /// <param name="predictionId">The unique identifier of the prediction to monitor.</param>
-    /// <returns>
-    /// A task representing the asynchronous operation. The task result is the <see cref="ReplicatePredictionResponse"/> object
-    /// containing the final prediction output if successful, the error details if failed, or null if no response was obtained.
-    /// </returns>
     public static async Task<ReplicatePredictionResponse?> PollForOutputAsync(
         IReplicateApi replicateApi,
         string bearerToken,
-        string predictionId
-    )
+        string predictionId,
+        CancellationToken cancellationToken = default,
+        TimeSpan? maxDuration = null,
+        TimeSpan? pollInterval = null)
     {
+        var deadline = DateTimeOffset.UtcNow + (maxDuration ?? DefaultMaxPollDuration);
+        var delay = pollInterval ?? DefaultPollInterval;
+
         while (true)
         {
-            // Fetch the latest status from Replicate
-            var prediction = await replicateApi.GetPredictionAsync(
-                bearerToken, // e.g. "Bearer YOUR_API_TOKEN"
-                predictionId
-            );
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (DateTimeOffset.UtcNow >= deadline)
+            {
+                throw new TimeoutException(
+                    $"Replicate prediction {predictionId} did not reach a terminal state within {(maxDuration ?? DefaultMaxPollDuration).TotalMinutes:F0} minutes.");
+            }
+
+            var prediction = await replicateApi.GetPredictionAsync(bearerToken, predictionId, cancellationToken);
 
             if (prediction == null)
             {
@@ -40,15 +43,20 @@ public static class ReplicateHelper
             switch (prediction.Status)
             {
                 case "succeeded":
-                    // Return the final output if succeeded
-                    return prediction;
                 case "failed":
-                    // Return the prediction with error details instead of null
+                case "canceled":
                     return prediction;
-                default:
-                    // Wait briefly before the next check
-                    await Task.Delay(TimeSpan.FromSeconds(3));
+
+                case "starting":
+                case "processing":
+                case null:
+                case "":
+                    await Task.Delay(delay, cancellationToken);
                     break;
+
+                default:
+                    throw new InvalidOperationException(
+                        $"Unexpected Replicate prediction status '{prediction.Status}' for prediction {predictionId}.");
             }
         }
     }

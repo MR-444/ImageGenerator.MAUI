@@ -14,12 +14,12 @@ public class OpenAiImageGenerationService : IOpenAiImageGenerationService
         _openAiApi = openAiApi ?? throw new ArgumentNullException(nameof(openAiApi));
     }
 
-    public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters)
+    public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters, CancellationToken cancellationToken = default)
     {
         try
         {
-            var result = await CallOpenAiModelAsync(parameters);
-            if (result?.Data == null || !result.Data.Any())
+            var result = await CallOpenAiModelAsync(parameters, cancellationToken);
+            if (result?.Data == null || result.Data.Count == 0)
                 throw new InvalidOperationException("OpenAI image generation failed or returned no result.");
 
             return new GeneratedImage
@@ -27,6 +27,15 @@ public class OpenAiImageGenerationService : IOpenAiImageGenerationService
                 Message = "Image generated successfully with OpenAI.",
                 FilePath = null,
                 ImageDataBase64 = result.Data[0].B64Json
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            return new GeneratedImage
+            {
+                Message = "Image generation was canceled.",
+                FilePath = null,
+                ImageDataBase64 = null
             };
         }
         catch (Exception ex)
@@ -40,21 +49,17 @@ public class OpenAiImageGenerationService : IOpenAiImageGenerationService
         }
     }
 
-    private async Task<OpenAiResponse?> CallOpenAiModelAsync(ImageGenerationParameters parameters)
+    private async Task<OpenAiResponse?> CallOpenAiModelAsync(ImageGenerationParameters parameters, CancellationToken cancellationToken)
     {
-        // Create the request model using the factory
         var request = (OpenAiRequest)ImageModelFactory.CreateImageModel(parameters);
 
-        // Set additional OpenAI-specific parameters
         request.Size = $"{parameters.Width}x{parameters.Height}";
         request.OutputFormat = parameters.OutputFormat.ToString().ToLower();
         request.OutputCompression = parameters.OutputQuality;
-        request.ResponseFormat = "b64_json"; // Required for base64 response
+        request.ResponseFormat = "b64_json";
 
-        // Construct the bearer token
         var bearerToken = $"Bearer {parameters.ApiToken}";
 
-        // Make the API call
-        return await _openAiApi.CreatePredictionAsync(bearerToken, request);
+        return await _openAiApi.CreatePredictionAsync(bearerToken, request, cancellationToken);
     }
 }

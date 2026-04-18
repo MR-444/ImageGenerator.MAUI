@@ -1,11 +1,10 @@
-﻿<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <?xaml-comp compile="true" ?>
-<ResourceDictionary 
+<ResourceDictionary
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
-    <!-- Note: For Android please see also Platforms\Android\Resources\values\colors.xml -->
-
+    <!-- Brand -->
     <Color x:Key="Primary">#512BD4</Color>
     <Color x:Key="PrimaryDark">#ac99ea</Color>
     <Color x:Key="PrimaryDarkText">#242424</Color>
@@ -13,6 +12,7 @@
     <Color x:Key="SecondaryDarkText">#9880e5</Color>
     <Color x:Key="Tertiary">#2B0B98</Color>
 
+    <!-- Neutrals -->
     <Color x:Key="White">White</Color>
     <Color x:Key="Black">Black</Color>
     <Color x:Key="Magenta">#D600AA</Color>
@@ -28,6 +28,29 @@
     <Color x:Key="Gray900">#212121</Color>
     <Color x:Key="Gray950">#141414</Color>
 
+    <!-- Surfaces (cards, panels) -->
+    <Color x:Key="SurfaceLight">#FAFAFA</Color>
+    <Color x:Key="SurfaceDark">#262626</Color>
+    <Color x:Key="SurfaceBorderLight">#E1E1E1</Color>
+    <Color x:Key="SurfaceBorderDark">#404040</Color>
+
+    <!-- Status palette — WCAG-AA against light/dark backgrounds -->
+    <Color x:Key="StatusSuccessLight">#1B5E20</Color>
+    <Color x:Key="StatusSuccessDark">#81C784</Color>
+    <Color x:Key="StatusErrorLight">#B71C1C</Color>
+    <Color x:Key="StatusErrorDark">#E57373</Color>
+    <Color x:Key="StatusInfoLight">#424242</Color>
+    <Color x:Key="StatusInfoDark">#BDBDBD</Color>
+    <Color x:Key="StatusWarningLight">#E65100</Color>
+    <Color x:Key="StatusWarningDark">#FFB74D</Color>
+    <Color x:Key="StatusCanceledLight">#616161</Color>
+    <Color x:Key="StatusCanceledDark">#9E9E9E</Color>
+
+    <!-- Danger (cancel buttons) -->
+    <Color x:Key="DangerLight">#C62828</Color>
+    <Color x:Key="DangerDark">#EF5350</Color>
+
+    <!-- Brushes -->
     <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource Primary}"/>
     <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource Secondary}"/>
     <SolidColorBrush x:Key="TertiaryBrush" Color="{StaticResource Tertiary}"/>

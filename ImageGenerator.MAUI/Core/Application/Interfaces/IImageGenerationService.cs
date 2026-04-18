@@ -5,21 +5,14 @@ namespace ImageGenerator.MAUI.Core.Application.Interfaces;
 
 /// <summary>
 /// Defines the contract for a service responsible for generating images based on
-/// the provided parameters. Implementors of this interface should encapsulate
-/// specific image generation logic and technologies.
+/// the provided parameters.
 /// </summary>
 public interface IImageGenerationService
 {
     /// <summary>
     /// Asynchronously generates an image based on the provided parameters.
     /// </summary>
-    /// <param name="parameters">
-    /// The parameters that define the image generation process, including details such as model selection,
-    /// image attributes, and any other customizable options.
-    /// </param>
-    /// <returns>
-    /// A task that represents the asynchronous operation. The task result is a <see cref="GeneratedImage"/> object
-    /// containing the generated image details.
-    /// </returns>
-    Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters);
+    /// <param name="parameters">Image generation parameters (model, prompt, dimensions, token, ...).</param>
+    /// <param name="cancellationToken">Token that cancels the generation and any in-flight HTTP / polling work.</param>
+    Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters, CancellationToken cancellationToken = default);
 }
