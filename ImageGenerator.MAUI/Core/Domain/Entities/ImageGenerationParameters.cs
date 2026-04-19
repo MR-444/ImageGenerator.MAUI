@@ -16,7 +16,7 @@ public partial class ImageGenerationParameters : ObservableObject
     private string _apiToken = string.Empty;
 
     [ObservableProperty]
-    private string _model = "black-forest-labs/flux-1.1-pro";
+    private string _model = "openai/gpt-image-1.5";
 
     [ObservableProperty]
     private string _prompt = string.Empty;

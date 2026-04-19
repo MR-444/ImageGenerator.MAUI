@@ -121,7 +121,11 @@ Covers the model factory payload shapes, Replicate + OpenAI service HTTP flows (
 
 Windows 10 (build 17763 / 1809) and later, including Windows 11. Compiled against the Windows 11 22H2 SDK.
 
-## 🤝 Contributing
+## 🤝 Feedback & contributions
+
+This is a small side project — bug reports, feature requests, and pull requests are all very welcome. There's no formal process: open an [issue](https://github.com/MR-444/ImageGenerator.MAUI/issues) if something's broken or missing, and I'll take a look. Please be kind and patient, but don't be shy.
+
+If you'd like to contribute code:
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/your-feature`)

@@ -24,7 +24,7 @@
             <!-- Page header -->
             <VerticalStackLayout Spacing="4">
                 <Label Text="AI Image Generator" Style="{StaticResource PageTitle}" />
-                <Label Text="Generate images via Replicate (Flux) or OpenAI. Prompt and parameters are embedded into the saved file."
+                <Label Text="Generate images via Replicate API. Prompt and parameters are embedded into the saved file."
                        Style="{StaticResource PageSubtitle}" />
             </VerticalStackLayout>
 
@@ -405,6 +405,22 @@
                     </Grid>
                 </VerticalStackLayout>
             </Border>
+
+            <!-- Footer: version + About -->
+            <Grid ColumnDefinitions="*,Auto"
+                  ColumnSpacing="12"
+                  Margin="0,8,0,0">
+                <Label Grid.Column="0"
+                       Text="{Binding AppVersion, StringFormat='v{0}'}"
+                       Style="{StaticResource HelperText}"
+                       VerticalOptions="Center"
+                       AutomationId="VersionLabel" />
+                <Button Grid.Column="1"
+                        Text="About"
+                        Style="{StaticResource SecondaryButton}"
+                        Clicked="OnAboutClicked"
+                        AutomationId="AboutButton" />
+            </Grid>
 
         </VerticalStackLayout>
     </ScrollView>

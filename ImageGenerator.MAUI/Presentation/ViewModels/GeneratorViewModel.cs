@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Storage;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Enums;
@@ -99,6 +100,8 @@ public partial class GeneratorViewModel : ObservableObject
 
     public int InputImageCount => SelectedImages.Count;
     public bool CanAddImage => SelectedImages.Count < MaxImageInputs;
+
+    public string AppVersion => AppInfo.Current.VersionString;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GenerateImageCommand))]
@@ -285,7 +288,7 @@ public partial class GeneratorViewModel : ObservableObject
         _parameters = new ImageGenerationParameters
         {
             ApiToken = "",
-            Model = ModelConstants.Flux.Pro11,
+            Model = ModelConstants.OpenAI.GptImage15OnReplicate,
             AspectRatio = "16:9",
             Width = 1920,
             Height = 1080,
