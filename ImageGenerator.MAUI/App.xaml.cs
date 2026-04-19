@@ -26,9 +26,9 @@ public partial class App
     {
         var window = new Window(new AppShell())
         {
-            Width = 1200,
-            Height = 900,
-            MinimumWidth = 800,
+            Width = 1500,
+            Height = 1000,
+            MinimumWidth = 900,
             MinimumHeight = 600
         };
         return window;
