@@ -4,6 +4,7 @@
              xmlns:behaviors="clr-namespace:ImageGenerator.MAUI.Presentation.Behaviors"
              xmlns:converters="clr-namespace:ImageGenerator.MAUI.Presentation.Converters"
              xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
+             x:Name="Root"
              x:Class="ImageGenerator.MAUI.Presentation.Views.MainPage"
              x:DataType="vm:GeneratorViewModel"
              Shell.NavBarIsVisible="False"
@@ -126,7 +127,7 @@
                                         <Button Text="×" FontSize="14" Padding="0"
                                                 WidthRequest="28" HeightRequest="28"
                                                 HorizontalOptions="End" VerticalOptions="Start"
-                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GeneratorViewModel}}, Path=RemoveImageCommand}"
+                                                Command="{Binding Source={x:Reference Root}, Path=BindingContext.RemoveImageCommand}"
                                                 CommandParameter="{Binding .}"
                                                 AutomationId="RemoveImageButton" />
                                     </Grid>
