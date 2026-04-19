@@ -92,7 +92,7 @@ public partial class GeneratorViewModel : ObservableObject
         OnPropertyChanged(nameof(SupportsCustomDimensions));
     }
 
-    public sealed record InputImageItem(string Base64, ImageSource? Preview, string FileName);
+    public sealed record InputImageItem(string Base64, ImageSource? Preview, string FileName, string? SourcePath = null);
 
     public ObservableCollection<InputImageItem> SelectedImages { get; } = [];
 
@@ -406,6 +406,12 @@ public partial class GeneratorViewModel : ObservableObject
             return;
         }
 
+        if (SelectedImages.Any(i => string.Equals(i.SourcePath, result.FullPath, StringComparison.OrdinalIgnoreCase)))
+        {
+            SetStatus($"'{result.FileName}' is already in the list.", StatusKind.Warning);
+            return;
+        }
+
         await using var stream = await result.OpenReadAsync();
         using var memoryStream = new MemoryStream();
         await stream.CopyToAsync(memoryStream);
@@ -413,7 +419,7 @@ public partial class GeneratorViewModel : ObservableObject
         var base64 = Convert.ToBase64String(imageBytes);
         var preview = ImageSource.FromStream(() => new MemoryStream(imageBytes));
 
-        SelectedImages.Add(new InputImageItem(base64, preview, result.FileName));
+        SelectedImages.Add(new InputImageItem(base64, preview, result.FileName, result.FullPath));
         SetStatus($"Added image: {result.FileName} ({SelectedImages.Count}/{MaxImageInputs})", StatusKind.Info);
     }
 
@@ -612,7 +618,7 @@ public partial class GeneratorViewModel : ObservableObject
             var preview = ImageSource.FromStream(() => new MemoryStream(imageBytes));
             var name = Path.GetFileName(GeneratedImagePath);
 
-            SelectedImages.Add(new InputImageItem(base64, preview, name));
+            SelectedImages.Add(new InputImageItem(base64, preview, name, GeneratedImagePath));
 
             SetStatus("Generated image added as input.", StatusKind.Success);
         }
