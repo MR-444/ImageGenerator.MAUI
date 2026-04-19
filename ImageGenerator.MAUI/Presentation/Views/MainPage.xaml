@@ -110,15 +110,21 @@
                         VerticalOptions="Start"
                         IsVisible="{Binding SupportsImagePrompt}">
                     <VerticalStackLayout Spacing="12">
-                        <Label Text="Input Image (optional)" Style="{StaticResource CardTitle}" />
-                        <Label Text="Used by Flux Kontext models as an image prompt."
+                        <Label Text="{Binding ImagePromptCardTitle}" Style="{StaticResource CardTitle}" />
+                        <Label Text="Optional reference image. Support varies by model."
                                Style="{StaticResource HelperText}" />
 
-                        <Button Text="Choose an image…"
-                                Command="{Binding SelectImagePromptCommand}"
-                                Style="{StaticResource SecondaryButton}"
-                                HorizontalOptions="Start"
-                                AutomationId="SelectImageButton" />
+                        <HorizontalStackLayout Spacing="8">
+                            <Button Text="Choose an image…"
+                                    Command="{Binding SelectImagePromptCommand}"
+                                    Style="{StaticResource SecondaryButton}"
+                                    AutomationId="SelectImageButton" />
+                            <Button Text="Remove"
+                                    Command="{Binding RemoveImagePromptCommand}"
+                                    Style="{StaticResource SecondaryButton}"
+                                    IsVisible="{Binding IsImageSelected}"
+                                    AutomationId="RemoveImageButton" />
+                        </HorizontalStackLayout>
 
                         <Image Source="{Binding SelectedImagePreview}"
                                Aspect="AspectFit"
@@ -128,11 +134,11 @@
 
                         <Label Text="{Binding Parameters.ImagePromptStrength, StringFormat='Image prompt strength: {0:F2}'}"
                                Style="{StaticResource FieldLabel}"
-                               IsVisible="{Binding IsImageSelected}" />
+                               IsVisible="{Binding SupportsImagePromptStrength}" />
                         <Slider Minimum="0" Maximum="1"
                                 Value="{Binding Parameters.ImagePromptStrength, Mode=TwoWay}"
                                 HorizontalOptions="Fill"
-                                IsVisible="{Binding IsImageSelected}" />
+                                IsVisible="{Binding SupportsImagePromptStrength}" />
                     </VerticalStackLayout>
                 </Border>
 

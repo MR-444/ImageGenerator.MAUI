@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
-using ImageGenerator.MAUI.Infrastructure.External.OpenAi.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
 using Microsoft.Maui.Storage;
@@ -11,7 +10,6 @@ namespace ImageGenerator.MAUI.Infrastructure.Services;
 public class ModelCatalogService : IModelCatalogService
 {
     private const string CacheFileName = "model-catalog.json";
-    private static readonly string[] OpenAiImageIdPrefixes = { "gpt-image", "dall-e" };
     private static readonly HashSet<string> ReplicateOwnerAllowlist =
         new(StringComparer.OrdinalIgnoreCase) { "black-forest-labs", "openai", "google" };
 
@@ -20,16 +18,13 @@ public class ModelCatalogService : IModelCatalogService
     private static readonly JsonSerializerOptions CacheJsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IReplicateApi _replicateApi;
-    private readonly IOpenAiApi _openAiApi;
     private readonly string _cacheDirectory;
 
     public ModelCatalogService(
         IReplicateApi replicateApi,
-        IOpenAiApi openAiApi,
         string? cacheDirectoryOverride = null)
     {
         _replicateApi = replicateApi ?? throw new ArgumentNullException(nameof(replicateApi));
-        _openAiApi = openAiApi ?? throw new ArgumentNullException(nameof(openAiApi));
         // Tests override this with a temp path; production resolves the MAUI app-data dir.
         _cacheDirectory = cacheDirectoryOverride ?? FileSystem.AppDataDirectory;
     }
@@ -39,10 +34,7 @@ public class ModelCatalogService : IModelCatalogService
         if (string.IsNullOrWhiteSpace(apiToken)) return [];
 
         var bearer = $"Bearer {apiToken}";
-        var replicateTask = SafeFetchReplicateAsync(bearer, ct);
-        var openAiTask = SafeFetchOpenAiAsync(bearer, ct);
-        await Task.WhenAll(replicateTask, openAiTask);
-        return [..replicateTask.Result, ..openAiTask.Result];
+        return await SafeFetchReplicateAsync(bearer, ct);
     }
 
     private async Task<IReadOnlyList<ModelOption>> SafeFetchReplicateAsync(string bearer, CancellationToken ct)
@@ -76,23 +68,6 @@ public class ModelCatalogService : IModelCatalogService
         // added without a matching display label — silent fallthrough would ship the raw slug.
         _ => throw new InvalidOperationException($"Unexpected owner past allowlist: {owner}")
     };
-
-    private async Task<IReadOnlyList<ModelOption>> SafeFetchOpenAiAsync(string bearer, CancellationToken ct)
-    {
-        try
-        {
-            var models = await _openAiApi.ListModelsAsync(bearer, ct);
-            return models.Data
-                .Where(m => OpenAiImageIdPrefixes.Any(p => m.Id.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
-                .Select(m => new ModelOption(m.Id, $"openAI/{m.Id}", "OpenAI"))
-                .ToList();
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"OpenAI catalog fetch failed: {ex.Message}");
-            return [];
-        }
-    }
 
     public async Task<IReadOnlyList<ModelOption>?> LoadCachedAsync(CancellationToken ct = default)
     {

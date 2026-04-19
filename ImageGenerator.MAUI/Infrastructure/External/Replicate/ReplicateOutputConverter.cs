@@ -4,9 +4,8 @@ using System.Text.Json.Serialization;
 namespace ImageGenerator.MAUI.Infrastructure.External.Replicate;
 
 /// <summary>
-/// Replicate's "output" field is either a single URL string (older Flux Pro models)
-/// or an array of URL strings (Flux Schnell, Dev, Kontext). Normalize to a list
-/// so callers can always do output?.FirstOrDefault().
+/// Replicate's "output" field is either a single URL string (some older Flux Pro variants)
+/// or an array of URL strings. Normalize to a list so callers can always do output?.FirstOrDefault().
 /// </summary>
 public sealed class ReplicateOutputConverter : JsonConverter<IReadOnlyList<string>?>
 {

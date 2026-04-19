@@ -42,7 +42,6 @@ public class GeneratorViewModelTests
     public void AllModels_ShouldContainExpectedSeed()
     {
         var values = _viewModel.AllModels.Select(m => m.Value).ToList();
-        values.Should().Contain(ModelConstants.OpenAI.GptImage1);
         values.Should().Contain(ModelConstants.OpenAI.GptImage15OnReplicate);
         values.Should().Contain(ModelConstants.Flux.Pro11);
         values.Should().Contain(ModelConstants.Flux.Pro11Ultra);
@@ -54,7 +53,6 @@ public class GeneratorViewModelTests
     public void Providers_ShouldIncludeAllAndDistinctProviders()
     {
         _viewModel.Providers.Should().Contain("All providers");
-        _viewModel.Providers.Should().Contain("OpenAI");
         _viewModel.Providers.Should().Contain("OpenAI (via Replicate)");
         _viewModel.Providers.Should().Contain("Black Forest Labs");
         _viewModel.Providers.Should().Contain("Google");
@@ -63,9 +61,9 @@ public class GeneratorViewModelTests
     [Fact]
     public void SelectedProvider_WhenSet_FiltersModels()
     {
-        _viewModel.SelectedProvider = "OpenAI";
+        _viewModel.SelectedProvider = "Google";
 
-        _viewModel.FilteredModels.Should().OnlyContain(m => m.Provider == "OpenAI");
+        _viewModel.FilteredModels.Should().OnlyContain(m => m.Provider == "Google");
         _viewModel.FilteredModels.Should().HaveCount(1);
     }
 
@@ -183,15 +181,6 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
-    public void SelectedModel_GptImage1_ExposesSizeOptions()
-    {
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage1);
-
-        _viewModel.AspectRatioLabel.Should().Be("Size");
-        _viewModel.AspectRatioOptions.Should().BeEquivalentTo("auto", "1024x1024", "1536x1024", "1024x1536");
-    }
-
-    [Fact]
     public async Task GenerateImage_WhenServiceThrowsException_ShouldHandleError()
     {
         _viewModel.Parameters.ApiToken = "valid-token";
@@ -212,7 +201,6 @@ public class GeneratorViewModelTests
     [InlineData(ModelConstants.Flux.Pro11,                  true,  true,  true,  true,  true,  true)]
     [InlineData(ModelConstants.Flux.Pro11Ultra,             true,  false, false, true,  true,  true)]
     [InlineData(ModelConstants.Flux.Klein4b,                false, false, true,  true,  true,  true)]
-    [InlineData(ModelConstants.OpenAI.GptImage1,            false, false, true,  true,  false, false)]
     [InlineData(ModelConstants.OpenAI.GptImage15OnReplicate, false, false, true, true,  false, true)]
     [InlineData(ModelConstants.Google.NanoBanana2,          false, false, false, true,  false, true)]
     public void Capabilities_MatchExpectedMatrixPerModel(

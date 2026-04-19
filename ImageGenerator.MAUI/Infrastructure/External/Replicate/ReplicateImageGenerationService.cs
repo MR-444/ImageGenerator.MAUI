@@ -106,12 +106,16 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
 
     protected virtual async Task<string> DownloadImageAsBase64Async(string imageUrl, CancellationToken cancellationToken)
     {
+        // The injected HttpClient is the default unnamed factory client, so it doesn't share
+        // the Refit pipeline's timeouts. Put a concrete ceiling on the CDN download here.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromSeconds(60));
         try
         {
-            var response = await _httpClient.GetAsync(imageUrl, cancellationToken);
+            using var response = await _httpClient.GetAsync(imageUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
             response.EnsureSuccessStatusCode();
 
-            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            var bytes = await response.Content.ReadAsByteArrayAsync(cts.Token);
             return Convert.ToBase64String(bytes);
         }
         catch (HttpRequestException ex)

@@ -27,7 +27,6 @@ public partial class GeneratorViewModel : ObservableObject
     // Master catalog — first-launch seed before Refresh Models hydrates from the live APIs.
     private static readonly IReadOnlyList<ModelOption> HardcodedCatalogSeed =
     [
-        new("GPT Image 1", ModelConstants.OpenAI.GptImage1, "OpenAI"),
         new("GPT Image 1.5", ModelConstants.OpenAI.GptImage15OnReplicate, "OpenAI (via Replicate)"),
         new("Flux 1.1 Pro", ModelConstants.Flux.Pro11, "Black Forest Labs"),
         new("Flux 1.1 Pro Ultra", ModelConstants.Flux.Pro11Ultra, "Black Forest Labs"),
@@ -118,6 +117,11 @@ public partial class GeneratorViewModel : ObservableObject
     public bool SupportsCustomDimensions => _capabilities.CustomDimensions && IsCustomAspectRatio;
     public bool SupportsSeed => _capabilities.Seed;
     public bool SupportsImagePrompt => _capabilities.ImagePrompt;
+    public bool SupportsImagePromptStrength => _capabilities.ImagePromptStrength && IsImageSelected;
+    public int MaxImageInputs => _capabilities.MaxImageInputs;
+    public string ImagePromptCardTitle => _capabilities.MaxImageInputs > 1
+        ? $"Input Images (optional, up to {_capabilities.MaxImageInputs})"
+        : "Input Image (optional)";
     public bool SupportsResolution => _capabilities.Resolutions is not null;
     public bool SupportsGptQuality => _capabilities.GptQualityOptions is not null;
     public bool SupportsGptBackground => _capabilities.GptBackgroundOptions is not null;
@@ -134,8 +138,8 @@ public partial class GeneratorViewModel : ObservableObject
 
     partial void OnIsImageSelectedChanged(bool value)
     {
-        // When the user loads an image on a Kontext model, auto-select "match_input_image"
-        // (the option is already in the capability's AR list for Kontext models).
+        // When the user loads an image on a model whose AR list includes "match_input_image",
+        // auto-select it (Flux 2 family and nano-banana-2).
         if (value && AspectRatioOptions.Contains("match_input_image"))
         {
             Parameters.AspectRatio = "match_input_image";
@@ -146,6 +150,7 @@ public partial class GeneratorViewModel : ObservableObject
             var fallback = _capabilities.AspectRatios.FirstOrDefault(r => r != "match_input_image");
             if (fallback != null) Parameters.AspectRatio = fallback;
         }
+        OnPropertyChanged(nameof(SupportsImagePromptStrength));
     }
 
     partial void OnSelectedProviderChanged(string value)
@@ -189,6 +194,9 @@ public partial class GeneratorViewModel : ObservableObject
         OnPropertyChanged(nameof(SupportsCustomDimensions));
         OnPropertyChanged(nameof(SupportsSeed));
         OnPropertyChanged(nameof(SupportsImagePrompt));
+        OnPropertyChanged(nameof(SupportsImagePromptStrength));
+        OnPropertyChanged(nameof(MaxImageInputs));
+        OnPropertyChanged(nameof(ImagePromptCardTitle));
         OnPropertyChanged(nameof(SupportsResolution));
         OnPropertyChanged(nameof(SupportsGptQuality));
         OnPropertyChanged(nameof(SupportsGptBackground));
@@ -392,6 +400,16 @@ public partial class GeneratorViewModel : ObservableObject
             SelectedImagePreview = null;
             SetStatus(string.Empty, StatusKind.None);
         }
+    }
+
+    [RelayCommand]
+    private void RemoveImagePrompt()
+    {
+        IsImageSelected = false;
+        ImagePromptBase64 = null;
+        Parameters.ImagePrompt = null;
+        SelectedImagePreview = null;
+        SetStatus(string.Empty, StatusKind.None);
     }
 
     [RelayCommand]

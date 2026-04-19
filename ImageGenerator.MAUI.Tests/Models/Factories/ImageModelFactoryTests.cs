@@ -3,7 +3,6 @@ using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects.Factories;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects.Flux;
-using ImageGenerator.MAUI.Infrastructure.External.OpenAi;
 using ImageGenerator.MAUI.Shared.Constants;
 
 namespace ImageGenerator.MAUI.Tests.Models.Factories;
@@ -89,27 +88,6 @@ public class ImageModelFactoryTests
         Assert.Equal("test image prompt", result.ImagePrompt);
         Assert.True(result.Raw);
         Assert.Equal(0.5f, result.ImagePromptStrength);
-    }
-
-    [Fact]
-    public void CreateImageModel_ShouldReturnOpenAiRequest_ForGptImage1ModelName()
-    {
-        var parameters = new ImageGenerationParameters
-        {
-            Model = ModelConstants.OpenAI.GptImage1,
-            Prompt = "A robot creating art",
-            AspectRatio = "1024x1024"
-        };
-
-        var result = ImageModelFactory.CreateImageModel(parameters);
-
-        result.Should().BeOfType<OpenAiRequest>();
-        result.Should().BeEquivalentTo(new OpenAiRequest
-        {
-            ModelName = parameters.Model,
-            Prompt = parameters.Prompt,
-            Size = "1024x1024"
-        });
     }
 
     [Fact]

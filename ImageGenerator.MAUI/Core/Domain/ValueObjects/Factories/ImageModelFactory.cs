@@ -1,5 +1,4 @@
 using ImageGenerator.MAUI.Core.Domain.ValueObjects.Flux;
-using ImageGenerator.MAUI.Infrastructure.External.OpenAi;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate;
 using ImageGenerator.MAUI.Shared.Constants;
 
@@ -37,15 +36,6 @@ public static class ImageModelFactory
                 Raw = parameters.Raw,
                 ImagePromptStrength = parameters.ImagePromptStrength
             },
-            ModelConstants.OpenAI.GptImage1 => new OpenAiRequest
-            {
-               ModelName = parameters.Model,
-               Prompt = parameters.Prompt,
-               // gpt-image-1 takes explicit size strings: 1024x1024, 1536x1024, 1024x1536, or auto.
-               // The VM's AspectRatio picker already constrains the choices to that set for this model.
-               Size = parameters.AspectRatio
-            },
-
             // Flux 2 family (schema from GET /v1/models/black-forest-labs/flux-2-klein-4b).
             // No safety_tolerance / prompt_upsampling — the model rejects them. Null values
             // are stripped at the serializer layer (NullSkippingDictionaryConverter), so

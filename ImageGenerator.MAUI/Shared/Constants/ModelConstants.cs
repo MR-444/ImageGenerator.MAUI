@@ -4,10 +4,6 @@ public static class ModelConstants
 {
     public static class OpenAI
     {
-        // Legacy: the only value that routes to the native OpenAI API client.
-        public const string GptImage1 = "openAI/gpt-image-1";
-
-        // Replicate-hosted OpenAI model (routes through the Replicate client).
         public const string GptImage15OnReplicate = "openai/gpt-image-1.5";
     }
 

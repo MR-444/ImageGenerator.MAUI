@@ -1,13 +1,13 @@
 # 🎨 Image Generator MAUI
 
-A Windows desktop image generation app built on .NET MAUI that drives the Replicate and OpenAI APIs. Generates images through the Flux family and OpenAI image models, then saves them locally with the prompt and generation parameters embedded as EXIF metadata.
+A Windows desktop image generation app built on .NET MAUI that drives the Replicate API. Generates images through the Flux family, Replicate-hosted OpenAI, and Google models, then saves them locally with the prompt and generation parameters embedded as EXIF metadata.
 
 ## 🌟 Features
 
 - Windows 10/11 desktop (MAUI Windows target, `net10.0-windows10.0.22621.0`)
-- **Dynamic model catalog** — "Refresh Models" queries Replicate's `text-to-image` collection (filtered to `black-forest-labs`, `openai`, and `google` owners) and OpenAI's `/models` endpoint, so new models surface without recompiling. The catalog is cached to `FileSystem.AppDataDirectory/model-catalog.json` and restored on launch.
+- **Dynamic model catalog** — "Refresh Models" queries Replicate's `text-to-image` collection (filtered to `black-forest-labs`, `openai`, and `google` owners) so new models surface without recompiling. The catalog is cached to `FileSystem.AppDataDirectory/model-catalog.json` and restored on launch.
 - **Flux 2 family** — `flux-2-klein-4b`, `flux-2-flex`, `flux-2-pro`, `flux-2-max` with per-model payload shaping and optional `images` input
-- **OpenAI** — `gpt-image-1` (direct OpenAI API) and `openai/gpt-image-1.5` (via Replicate). The UI exposes the 1.5-specific knobs: `quality`, `background` (incl. transparent PNGs), `moderation`, `input_fidelity`.
+- **OpenAI** — `openai/gpt-image-1.5` (via Replicate). The UI exposes the 1.5-specific knobs: `quality`, `background` (incl. transparent PNGs), `moderation`, `input_fidelity`.
 - **Google nano-banana-2** — `google/nano-banana-2` with its 15-value aspect enum, a resolution picker (1K / 2K / 4K), and image-input support. `webp` is auto-coerced to `jpg` (the model doesn't accept webp).
 - **Flux classic** — 1.1 Pro / 1.1 Pro Ultra
 - API tokens persisted via `SecureStorage` (Windows DPAPI under the hood)
