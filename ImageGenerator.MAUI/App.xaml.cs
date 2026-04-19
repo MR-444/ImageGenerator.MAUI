@@ -31,6 +31,13 @@ public partial class App
             MinimumWidth = 900,
             MinimumHeight = 600
         };
+
+        var display = DeviceDisplay.Current.MainDisplayInfo;
+        var screenWidth = display.Width / display.Density;
+        var screenHeight = display.Height / display.Density;
+        window.X = Math.Max(0, (screenWidth - window.Width) / 2);
+        window.Y = Math.Max(0, (screenHeight - window.Height) / 2);
+
         return window;
     }
 }
