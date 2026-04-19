@@ -382,7 +382,9 @@
         </Grid>
 
         <!-- RIGHT PANE: persistent result canvas. Own VSM swaps Grid.Row/Grid.Column to stack below the left rail on narrow windows. -->
-        <Border x:Name="RightPane" Style="{StaticResource ResultCanvas}">
+        <Border x:Name="RightPane"
+                Style="{StaticResource ResultCanvas}"
+                IsVisible="{Binding GeneratedImagePath, Converter={StaticResource NonEmptyStringToBool}}">
             <VisualStateManager.VisualStateGroups>
                 <VisualStateGroup x:Name="PanePlacement">
                     <VisualState x:Name="StackedBelow">
