@@ -27,7 +27,7 @@
 
             <!-- 2-column card grid. Fixed columns with * sizing so it adapts to window width. -->
             <Grid ColumnDefinitions="*,*"
-                  RowDefinitions="Auto,Auto,Auto"
+                  RowDefinitions="Auto,Auto"
                   ColumnSpacing="16"
                   RowSpacing="16">
 
@@ -62,29 +62,30 @@
                     <VerticalStackLayout Spacing="12">
                         <Label Text="Prompt" Style="{StaticResource CardTitle}" />
 
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowSpacing="4">
-                            <VerticalStackLayout Grid.Column="0" Spacing="4">
-                                <Label Text="Provider" Style="{StaticResource FieldLabel}" />
-                                <Picker ItemsSource="{Binding Providers}"
-                                        SelectedItem="{Binding SelectedProvider}"
-                                        AutomationId="ProviderPicker" />
-                            </VerticalStackLayout>
-                            <VerticalStackLayout Grid.Column="1" Spacing="4">
-                                <Label Text="Model" Style="{StaticResource FieldLabel}" />
-                                <Picker ItemsSource="{Binding FilteredModels}"
-                                        ItemDisplayBinding="{Binding Display}"
-                                        SelectedItem="{Binding SelectedModel}"
-                                        AutomationId="ModelPicker" />
-                            </VerticalStackLayout>
+                        <Grid ColumnDefinitions="*,*,Auto"
+                              RowDefinitions="Auto,Auto"
+                              ColumnSpacing="12"
+                              RowSpacing="4">
+                            <Label Grid.Row="0" Grid.Column="0" Text="Provider" Style="{StaticResource FieldLabel}" />
+                            <Picker Grid.Row="1" Grid.Column="0"
+                                    ItemsSource="{Binding Providers}"
+                                    SelectedItem="{Binding SelectedProvider}"
+                                    AutomationId="ProviderPicker" />
+                            <Label Grid.Row="0" Grid.Column="1" Text="Model" Style="{StaticResource FieldLabel}" />
+                            <Picker Grid.Row="1" Grid.Column="1"
+                                    ItemsSource="{Binding FilteredModels}"
+                                    ItemDisplayBinding="{Binding Display}"
+                                    SelectedItem="{Binding SelectedModel}"
+                                    AutomationId="ModelPicker" />
+                            <Button Grid.Row="1" Grid.Column="2"
+                                    Text="Refresh"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Command="{Binding RefreshModelsCommand}"
+                                    IsEnabled="{Binding Parameters.ApiToken, Converter={StaticResource NonEmptyStringToBool}}"
+                                    VerticalOptions="End"
+                                    SemanticProperties.Description="Fetch live model catalogs from Replicate and OpenAI"
+                                    AutomationId="RefreshModelsButton" />
                         </Grid>
-
-                        <Button Text="Refresh Models"
-                                Style="{StaticResource SecondaryButton}"
-                                Command="{Binding RefreshModelsCommand}"
-                                IsEnabled="{Binding Parameters.ApiToken, Converter={StaticResource NonEmptyStringToBool}}"
-                                HorizontalOptions="Start"
-                                SemanticProperties.Description="Fetch live model catalogs from Replicate and OpenAI"
-                                AutomationId="RefreshModelsButton" />
 
                         <Label Text="What should the image show?" Style="{StaticResource FieldLabel}" />
                         <Editor Text="{Binding Parameters.Prompt}"
@@ -154,20 +155,21 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- CARD: Output size -->
+                <!-- CARD: Output (aspect, resolution, format, quality, safety, seed) -->
                 <Border Grid.Row="1" Grid.Column="1"
                         Style="{StaticResource Card}"
-                        VerticalOptions="Start"
-                        IsVisible="{Binding SupportsAspectRatio}">
+                        VerticalOptions="Start">
                     <VerticalStackLayout Spacing="12">
-                        <Label Text="Output Size" Style="{StaticResource CardTitle}" />
+                        <Label Text="Output" Style="{StaticResource CardTitle}" />
 
-                        <Label Text="{Binding AspectRatioLabel}" Style="{StaticResource FieldLabel}" />
-                        <Picker ItemsSource="{Binding AspectRatioOptions}"
-                                SelectedItem="{Binding Parameters.AspectRatio}"
-                                MaximumWidthRequest="220"
-                                HorizontalOptions="Start"
-                                AutomationId="AspectRatioPicker" />
+                        <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsAspectRatio}">
+                            <Label Text="{Binding AspectRatioLabel}" Style="{StaticResource FieldLabel}" />
+                            <Picker ItemsSource="{Binding AspectRatioOptions}"
+                                    SelectedItem="{Binding Parameters.AspectRatio}"
+                                    MaximumWidthRequest="220"
+                                    HorizontalOptions="Start"
+                                    AutomationId="AspectRatioPicker" />
+                        </VerticalStackLayout>
 
                         <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsResolution}">
                             <Label Text="Resolution" Style="{StaticResource FieldLabel}" />
@@ -201,24 +203,6 @@
                                 </VerticalStackLayout>
                             </Grid>
                         </VerticalStackLayout>
-                    </VerticalStackLayout>
-                </Border>
-
-                <!-- ROW 2 -->
-                <!-- CARD: Quality & Format -->
-                <Border Grid.Row="2" Grid.Column="0"
-                        Style="{StaticResource Card}"
-                        VerticalOptions="Start">
-                    <VerticalStackLayout Spacing="12">
-                        <Label Text="Quality &amp; Format" Style="{StaticResource CardTitle}" />
-
-                        <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsSafetyTolerance}">
-                            <Label Text="{Binding Parameters.SafetyTolerance, StringFormat='Safety tolerance: {0:F0} (1 strictest — 6 loosest)'}"
-                                   Style="{StaticResource FieldLabel}" />
-                            <Slider Minimum="1" Maximum="6"
-                                    Value="{Binding Parameters.SafetyTolerance, Mode=TwoWay}"
-                                    HorizontalOptions="Fill" />
-                        </VerticalStackLayout>
 
                         <VerticalStackLayout Spacing="4">
                             <Label Text="Output format" Style="{StaticResource FieldLabel}" />
@@ -235,31 +219,31 @@
                                     Value="{Binding Parameters.OutputQuality, Mode=TwoWay}"
                                     HorizontalOptions="Fill" />
                         </VerticalStackLayout>
-                    </VerticalStackLayout>
-                </Border>
 
-                <!-- CARD: Seed -->
-                <Border Grid.Row="2" Grid.Column="1"
-                        Style="{StaticResource Card}"
-                        VerticalOptions="Start"
-                        IsVisible="{Binding SupportsSeed}">
-                    <VerticalStackLayout Spacing="12">
-                        <Label Text="Seed" Style="{StaticResource CardTitle}" />
-                        <Label Text="Fixing the seed makes regeneration deterministic for the same prompt."
-                               Style="{StaticResource HelperText}" />
+                        <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsSafetyTolerance}">
+                            <Label Text="{Binding Parameters.SafetyTolerance, StringFormat='Safety tolerance: {0:F0} (1 strictest — 6 loosest)'}"
+                                   Style="{StaticResource FieldLabel}" />
+                            <Slider Minimum="1" Maximum="6"
+                                    Value="{Binding Parameters.SafetyTolerance, Mode=TwoWay}"
+                                    HorizontalOptions="Fill" />
+                        </VerticalStackLayout>
 
-                        <Entry Text="{Binding Parameters.Seed}"
-                               Keyboard="Numeric"
-                               Placeholder="Seed">
-                            <Entry.Behaviors>
-                                <behaviors:NumericOnlyBehavior />
-                            </Entry.Behaviors>
-                        </Entry>
-
-                        <HorizontalStackLayout Spacing="8">
-                            <CheckBox IsChecked="{Binding Parameters.RandomizeSeed}" VerticalOptions="Center" />
-                            <Label Text="Randomize on each generation" VerticalOptions="Center" />
-                        </HorizontalStackLayout>
+                        <VerticalStackLayout Spacing="8" IsVisible="{Binding SupportsSeed}">
+                            <Label Text="Seed" Style="{StaticResource FieldLabel}" />
+                            <Label Text="Fixing the seed makes regeneration deterministic for the same prompt."
+                                   Style="{StaticResource HelperText}" />
+                            <Entry Text="{Binding Parameters.Seed}"
+                                   Keyboard="Numeric"
+                                   Placeholder="Seed">
+                                <Entry.Behaviors>
+                                    <behaviors:NumericOnlyBehavior />
+                                </Entry.Behaviors>
+                            </Entry>
+                            <HorizontalStackLayout Spacing="8">
+                                <CheckBox IsChecked="{Binding Parameters.RandomizeSeed}" VerticalOptions="Center" />
+                                <Label Text="Randomize on each generation" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                        </VerticalStackLayout>
                     </VerticalStackLayout>
                 </Border>
             </Grid>
