@@ -32,10 +32,10 @@
                 </VisualState>
                 <VisualState x:Name="Wide">
                     <VisualState.StateTriggers>
-                        <AdaptiveTrigger MinWindowWidth="1000" />
+                        <AdaptiveTrigger MinWindowWidth="1100" />
                     </VisualState.StateTriggers>
                     <VisualState.Setters>
-                        <Setter Property="ColumnDefinitions" Value="460,*" />
+                        <Setter Property="ColumnDefinitions" Value="560,*" />
                         <Setter Property="RowDefinitions" Value="*" />
                     </VisualState.Setters>
                 </VisualState>
@@ -54,16 +54,10 @@
                        Style="{StaticResource PageSubtitle}" />
             </VerticalStackLayout>
 
-            <!-- 2-column card grid. Fixed columns with * sizing so it adapts to window width. -->
-            <Grid ColumnDefinitions="*,*"
-                  RowDefinitions="Auto,Auto"
-                  ColumnSpacing="16"
-                  RowSpacing="16">
+            <!-- Cards stack vertically inside the left rail -->
 
-                <!-- ROW 0 -->
                 <!-- CARD: API Token -->
-                <Border Grid.Row="0" Grid.Column="0"
-                        Style="{StaticResource Card}"
+                <Border Style="{StaticResource Card}"
                         VerticalOptions="Start">
                     <VerticalStackLayout Spacing="8">
                         <Label Text="API Token" Style="{StaticResource CardTitle}" />
@@ -85,13 +79,12 @@
                 </Border>
 
                 <!-- CARD: Prompt & Model (cascading Provider + Model pickers) -->
-                <Border Grid.Row="0" Grid.Column="1"
-                        Style="{StaticResource Card}"
+                <Border Style="{StaticResource Card}"
                         VerticalOptions="Start">
                     <VerticalStackLayout Spacing="12">
                         <Label Text="Prompt" Style="{StaticResource CardTitle}" />
 
-                        <Grid ColumnDefinitions="*,*,Auto"
+                        <Grid ColumnDefinitions="*,*"
                               RowDefinitions="Auto,Auto"
                               ColumnSpacing="12"
                               RowSpacing="4">
@@ -106,15 +99,15 @@
                                     ItemDisplayBinding="{Binding Display}"
                                     SelectedItem="{Binding SelectedModel}"
                                     AutomationId="ModelPicker" />
-                            <Button Grid.Row="1" Grid.Column="2"
-                                    Text="Refresh"
-                                    Style="{StaticResource SecondaryButton}"
-                                    Command="{Binding RefreshModelsCommand}"
-                                    IsEnabled="{Binding Parameters.ApiToken, Converter={StaticResource NonEmptyStringToBool}}"
-                                    VerticalOptions="End"
-                                    SemanticProperties.Description="Fetch live model catalogs from Replicate and OpenAI"
-                                    AutomationId="RefreshModelsButton" />
                         </Grid>
+
+                        <Button Text="Refresh Models"
+                                Style="{StaticResource SecondaryButton}"
+                                Command="{Binding RefreshModelsCommand}"
+                                IsEnabled="{Binding Parameters.ApiToken, Converter={StaticResource NonEmptyStringToBool}}"
+                                HorizontalOptions="Start"
+                                SemanticProperties.Description="Fetch live model catalogs from Replicate and OpenAI"
+                                AutomationId="RefreshModelsButton" />
 
                         <Label Text="What should the image show?" Style="{StaticResource FieldLabel}" />
                         <Editor Text="{Binding Parameters.Prompt}"
@@ -130,10 +123,8 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- ROW 1 -->
                 <!-- CARD: Input Image (optional) -->
-                <Border Grid.Row="1" Grid.Column="0"
-                        Style="{StaticResource Card}"
+                <Border Style="{StaticResource Card}"
                         VerticalOptions="Start"
                         IsVisible="{Binding SupportsImagePrompt}">
                     <VerticalStackLayout Spacing="12">
@@ -185,8 +176,7 @@
                 </Border>
 
                 <!-- CARD: Output (aspect, resolution, format, quality, safety, seed) -->
-                <Border Grid.Row="1" Grid.Column="1"
-                        Style="{StaticResource Card}"
+                <Border Style="{StaticResource Card}"
                         VerticalOptions="Start">
                     <VerticalStackLayout Spacing="12">
                         <Label Text="Output" Style="{StaticResource CardTitle}" />
@@ -275,7 +265,6 @@
                         </VerticalStackLayout>
                     </VerticalStackLayout>
                 </Border>
-            </Grid>
 
             <!-- CARD: GPT Image 1.5 advanced options (only visible when that model is selected) -->
             <Border Style="{StaticResource Card}"
@@ -399,6 +388,8 @@
                     <VisualState x:Name="StackedBelow">
                         <VisualState.StateTriggers>
                             <AdaptiveTrigger MinWindowWidth="0" />
+                        <!-- Narrow below 1100 px -->
+                        <!-- (Wide trigger sits in the sibling VisualState below and wins when its MinWindowWidth is met.) -->
                         </VisualState.StateTriggers>
                         <VisualState.Setters>
                             <Setter Property="Grid.Row" Value="1" />
@@ -407,7 +398,7 @@
                     </VisualState>
                     <VisualState x:Name="SideBySide">
                         <VisualState.StateTriggers>
-                            <AdaptiveTrigger MinWindowWidth="1000" />
+                            <AdaptiveTrigger MinWindowWidth="1100" />
                         </VisualState.StateTriggers>
                         <VisualState.Setters>
                             <Setter Property="Grid.Row" Value="0" />
