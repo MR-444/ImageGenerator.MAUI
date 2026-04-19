@@ -19,4 +19,14 @@ public partial class MainPage
         await _viewModel.LoadSavedTokenAsync();
         await _viewModel.LoadCachedCatalogAsync();
     }
+
+    // Code-behind because RelativeSource lookups inside a CollectionView.ItemTemplate
+    // don't reliably cross the DataTemplate scope under MAUI's compiled bindings.
+    private void OnRemoveImageClicked(object sender, EventArgs e)
+    {
+        if (sender is Button { CommandParameter: GeneratorViewModel.InputImageItem item })
+        {
+            _viewModel.RemoveImageCommand.Execute(item);
+        }
+    }
 }

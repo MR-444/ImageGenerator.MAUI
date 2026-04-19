@@ -125,8 +125,8 @@
                                         <Button Text="×" FontSize="14" Padding="0"
                                                 WidthRequest="28" HeightRequest="28"
                                                 HorizontalOptions="End" VerticalOptions="Start"
-                                                Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.RemoveImageCommand}"
                                                 CommandParameter="{Binding .}"
+                                                Clicked="OnRemoveImageClicked"
                                                 AutomationId="RemoveImageButton" />
                                     </Grid>
                                 </DataTemplate>
