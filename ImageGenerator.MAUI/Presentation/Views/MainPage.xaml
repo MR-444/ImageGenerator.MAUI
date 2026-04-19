@@ -6,6 +6,7 @@
              xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
              x:Class="ImageGenerator.MAUI.Presentation.Views.MainPage"
              x:DataType="vm:GeneratorViewModel"
+             Shell.NavBarIsVisible="False"
              Padding="0">
     <ContentPage.Resources>
         <ResourceDictionary>
@@ -15,10 +16,39 @@
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <ScrollView>
-        <VerticalStackLayout Padding="24" Spacing="20">
+    <Grid x:Name="RootGrid"
+          Style="{StaticResource ContentShell}"
+          ColumnDefinitions="*"
+          RowDefinitions="*,Auto">
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup x:Name="LayoutStates">
+                <VisualState x:Name="Narrow">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="0" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Property="ColumnDefinitions" Value="*" />
+                        <Setter Property="RowDefinitions" Value="*,Auto" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="Wide">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="1000" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Property="ColumnDefinitions" Value="460,*" />
+                        <Setter Property="RowDefinitions" Value="*" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
 
-            <!-- Page header -->
+        <!-- LEFT RAIL: scrollable controls + pinned action bar -->
+        <Grid Grid.Row="0" Grid.Column="0" RowDefinitions="*,Auto">
+            <ScrollView Grid.Row="0" Style="{StaticResource LeftRailScroll}">
+                <VerticalStackLayout Spacing="16" Padding="0,0,10,16">
+
+                    <!-- Page header -->
             <VerticalStackLayout Spacing="4">
                 <Label Text="AI Image Generator" Style="{StaticResource PageTitle}" />
                 <Label Text="Generate images via Replicate (Flux) or OpenAI. Prompt and parameters are embedded into the saved file."
@@ -285,110 +315,149 @@
                 </VerticalStackLayout>
             </Border>
 
-            <!-- Idle action row: Generate only -->
-            <VerticalStackLayout Spacing="6"
-                                 IsVisible="{Binding IsGenerating, Converter={StaticResource InverseBool}}">
-                <Button Text="Generate Image"
-                        Style="{StaticResource PrimaryButton}"
-                        Command="{Binding GenerateImageCommand}"
-                        HorizontalOptions="Start"
-                        MinimumWidthRequest="220"
-                        SemanticProperties.Description="Start image generation"
-                        AutomationId="GenerateButton">
-                    <Button.Triggers>
-                        <!-- Visual-only disabled look when required fields are missing.
-                             The button stays clickable so tapping surfaces an explicit
-                             "what's missing" message rather than MAUI's focus-jump. -->
-                        <DataTrigger TargetType="Button" Binding="{Binding IsValid}" Value="False">
-                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}" />
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray300}}" />
-                            <Setter Property="Opacity" Value="0.85" />
-                        </DataTrigger>
-                    </Button.Triggers>
-                </Button>
-                <Label Text="Fill in API Token and a prompt to enable generation."
-                       Style="{StaticResource HelperText}"
-                       IsVisible="{Binding IsValid, Converter={StaticResource InverseBool}}" />
-            </VerticalStackLayout>
+                </VerticalStackLayout>
+            </ScrollView>
 
-            <!-- Generating action row: spinner + Cancel -->
-            <Grid ColumnDefinitions="*,Auto"
-                  ColumnSpacing="12"
-                  IsVisible="{Binding IsGenerating}">
-                <HorizontalStackLayout Grid.Column="0" Spacing="12" VerticalOptions="Center">
-                    <ActivityIndicator IsRunning="{Binding IsGenerating}"
-                                       VerticalOptions="Center"
-                                       HeightRequest="20"
-                                       WidthRequest="20" />
-                    <Label Text="Working…" VerticalOptions="Center" />
-                </HorizontalStackLayout>
-                <Button Grid.Column="1"
-                        Text="Cancel"
-                        Style="{StaticResource DangerButton}"
-                        Command="{Binding GenerateImageCancelCommand}"
-                        SemanticProperties.Description="Cancel in-flight image generation"
-                        AutomationId="CancelButton" />
-            </Grid>
-
-            <!-- Status (theme-aware via DataTriggers) -->
-            <Label Text="{Binding StatusMessage}"
-                   Style="{StaticResource StatusLabel}"
-                   AutomationId="StatusLabel">
-                <Label.Triggers>
-                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
-                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
-                    </DataTrigger>
-                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
-                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
-                    </DataTrigger>
-                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Warning}">
-                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
-                    </DataTrigger>
-                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Canceled}">
-                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusCanceledLight}, Dark={StaticResource StatusCanceledDark}}" />
-                    </DataTrigger>
-                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Info}">
-                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusInfoLight}, Dark={StaticResource StatusInfoDark}}" />
-                    </DataTrigger>
-                </Label.Triggers>
-            </Label>
-
-            <!-- Result card -->
-            <Border Style="{StaticResource Card}">
-                <VerticalStackLayout Spacing="12">
-                    <Label Text="Result" Style="{StaticResource CardTitle}" />
-
-                    <Image Source="{Binding GeneratedImagePath}"
-                           Aspect="AspectFit"
-                           HeightRequest="420"
-                           MinimumHeightRequest="200"
-                           SemanticProperties.Description="Generated image preview">
-                        <Image.Triggers>
-                            <DataTrigger TargetType="Image" Binding="{Binding IsGenerating}" Value="True">
-                                <Setter Property="Opacity" Value="0.5" />
-                            </DataTrigger>
-                        </Image.Triggers>
-                    </Image>
-
-                    <HorizontalStackLayout Spacing="8">
-                        <Button Text="Show in folder"
-                                Command="{Binding ShowInFolderCommand}"
-                                Style="{StaticResource SecondaryButton}"
-                                SemanticProperties.Description="Open the generated-images folder in Explorer"
-                                AutomationId="ShowInFolderButton" />
-                        <Button Text="Use as input for next generation"
-                                Command="{Binding UseGeneratedImageAsInputCommand}"
-                                Style="{StaticResource SecondaryButton}"
-                                AutomationId="UseAsInputButton">
+            <!-- PINNED ACTION BAR: Generate / Cancel / Status — always visible at the bottom of the left rail -->
+            <Border Grid.Row="1" Style="{StaticResource LeftRailActionBar}">
+                <VerticalStackLayout Spacing="8">
+                    <!-- Idle: Generate -->
+                    <VerticalStackLayout Spacing="6"
+                                         IsVisible="{Binding IsGenerating, Converter={StaticResource InverseBool}}">
+                        <Button Text="Generate Image"
+                                Style="{StaticResource PrimaryButton}"
+                                Command="{Binding GenerateImageCommand}"
+                                HorizontalOptions="Fill"
+                                SemanticProperties.Description="Start image generation"
+                                AutomationId="GenerateButton">
                             <Button.Triggers>
-                                <DataTrigger TargetType="Button" Binding="{Binding GeneratedImagePath}" Value="{x:Null}">
-                                    <Setter Property="IsVisible" Value="False" />
+                                <!-- Visual-only disabled look when required fields are missing.
+                                     The button stays clickable so tapping surfaces an explicit
+                                     "what's missing" message rather than MAUI's focus-jump. -->
+                                <DataTrigger TargetType="Button" Binding="{Binding IsValid}" Value="False">
+                                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}" />
+                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray300}}" />
+                                    <Setter Property="Opacity" Value="0.85" />
                                 </DataTrigger>
                             </Button.Triggers>
                         </Button>
-                    </HorizontalStackLayout>
+                        <Label Text="Fill in API Token and a prompt to enable generation."
+                               Style="{StaticResource HelperText}"
+                               IsVisible="{Binding IsValid, Converter={StaticResource InverseBool}}" />
+                    </VerticalStackLayout>
+
+                    <!-- Generating: spinner + Cancel -->
+                    <Grid ColumnDefinitions="*,Auto"
+                          ColumnSpacing="12"
+                          IsVisible="{Binding IsGenerating}">
+                        <HorizontalStackLayout Grid.Column="0" Spacing="12" VerticalOptions="Center">
+                            <ActivityIndicator IsRunning="{Binding IsGenerating}"
+                                               VerticalOptions="Center"
+                                               HeightRequest="20"
+                                               WidthRequest="20" />
+                            <Label Text="Working…" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                        <Button Grid.Column="1"
+                                Text="Cancel"
+                                Style="{StaticResource DangerButton}"
+                                Command="{Binding GenerateImageCancelCommand}"
+                                SemanticProperties.Description="Cancel in-flight image generation"
+                                AutomationId="CancelButton" />
+                    </Grid>
+
+                    <!-- Status (theme-aware via DataTriggers) -->
+                    <Label Text="{Binding StatusMessage}"
+                           Style="{StaticResource StatusLabel}"
+                           LineBreakMode="TailTruncation"
+                           MaxLines="2"
+                           AutomationId="StatusLabel">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Warning}">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Canceled}">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusCanceledLight}, Dark={StaticResource StatusCanceledDark}}" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Info}">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusInfoLight}, Dark={StaticResource StatusInfoDark}}" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
                 </VerticalStackLayout>
             </Border>
-        </VerticalStackLayout>
-    </ScrollView>
+        </Grid>
+
+        <!-- RIGHT PANE: persistent result canvas. Own VSM swaps Grid.Row/Grid.Column to stack below the left rail on narrow windows. -->
+        <Border x:Name="RightPane" Style="{StaticResource ResultCanvas}">
+            <VisualStateManager.VisualStateGroups>
+                <VisualStateGroup x:Name="PanePlacement">
+                    <VisualState x:Name="StackedBelow">
+                        <VisualState.StateTriggers>
+                            <AdaptiveTrigger MinWindowWidth="0" />
+                        </VisualState.StateTriggers>
+                        <VisualState.Setters>
+                            <Setter Property="Grid.Row" Value="1" />
+                            <Setter Property="Grid.Column" Value="0" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="SideBySide">
+                        <VisualState.StateTriggers>
+                            <AdaptiveTrigger MinWindowWidth="1000" />
+                        </VisualState.StateTriggers>
+                        <VisualState.Setters>
+                            <Setter Property="Grid.Row" Value="0" />
+                            <Setter Property="Grid.Column" Value="1" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+            <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="12">
+                <Label Grid.Row="0" Text="Result" Style="{StaticResource CardTitle}" />
+
+                <Image Grid.Row="1"
+                       Source="{Binding GeneratedImagePath}"
+                       Aspect="AspectFit"
+                       HorizontalOptions="Fill"
+                       VerticalOptions="Fill"
+                       MinimumHeightRequest="240"
+                       SemanticProperties.Description="Generated image preview">
+                    <Image.Triggers>
+                        <DataTrigger TargetType="Image" Binding="{Binding IsGenerating}" Value="True">
+                            <Setter Property="Opacity" Value="0.5" />
+                        </DataTrigger>
+                    </Image.Triggers>
+                </Image>
+
+                <Label Grid.Row="2"
+                       Text="{Binding Parameters.Prompt}"
+                       Style="{StaticResource HelperText}"
+                       MaxLines="3"
+                       LineBreakMode="TailTruncation" />
+
+                <HorizontalStackLayout Grid.Row="3" Spacing="8">
+                    <Button Text="Use as input for next generation"
+                            Command="{Binding UseGeneratedImageAsInputCommand}"
+                            Style="{StaticResource ActionPrimary}"
+                            AutomationId="UseAsInputButton">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding GeneratedImagePath}" Value="{x:Null}">
+                                <Setter Property="IsVisible" Value="False" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+                    <Button Text="Show in folder"
+                            Command="{Binding ShowInFolderCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            SemanticProperties.Description="Open the generated-images folder in Explorer"
+                            AutomationId="ShowInFolderButton" />
+                </HorizontalStackLayout>
+            </Grid>
+        </Border>
+    </Grid>
 </ContentPage>
