@@ -28,15 +28,15 @@
                        Style="{StaticResource PageSubtitle}" />
             </VerticalStackLayout>
 
-            <!-- 3-column card grid: controls in cols 0-1, action + result in col 2 (row-span 2) -->
+            <!-- 3-column grid where each column stacks its own cards independently,
+                 so a tall Prompt card in col 1 doesn't leave a gap below API Token in col 0. -->
             <Grid ColumnDefinitions="*,*,*"
-                  RowDefinitions="Auto,Auto"
-                  ColumnSpacing="16"
-                  RowSpacing="16">
+                  ColumnSpacing="16">
+
+                <VerticalStackLayout Grid.Column="0" Spacing="16">
 
                 <!-- CARD: API Token -->
-                <Border Grid.Row="0" Grid.Column="0"
-                        Style="{StaticResource Card}"
+                <Border Style="{StaticResource Card}"
                         VerticalOptions="Start">
                     <VerticalStackLayout Spacing="8">
                         <Label Text="API Token" Style="{StaticResource CardTitle}" />
@@ -57,55 +57,8 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- CARD: Prompt & Model -->
-                <Border Grid.Row="0" Grid.Column="1"
-                        Style="{StaticResource Card}"
-                        VerticalOptions="Start">
-                    <VerticalStackLayout Spacing="12">
-                        <Label Text="Prompt" Style="{StaticResource CardTitle}" />
-
-                        <Grid ColumnDefinitions="*,*"
-                              RowDefinitions="Auto,Auto"
-                              ColumnSpacing="12"
-                              RowSpacing="4">
-                            <Label Grid.Row="0" Grid.Column="0" Text="Provider" Style="{StaticResource FieldLabel}" />
-                            <Picker Grid.Row="1" Grid.Column="0"
-                                    ItemsSource="{Binding Providers}"
-                                    SelectedItem="{Binding SelectedProvider}"
-                                    AutomationId="ProviderPicker" />
-                            <Label Grid.Row="0" Grid.Column="1" Text="Model" Style="{StaticResource FieldLabel}" />
-                            <Picker Grid.Row="1" Grid.Column="1"
-                                    ItemsSource="{Binding FilteredModels}"
-                                    ItemDisplayBinding="{Binding Display}"
-                                    SelectedItem="{Binding SelectedModel}"
-                                    AutomationId="ModelPicker" />
-                        </Grid>
-
-                        <Button Text="Refresh Models"
-                                Style="{StaticResource SecondaryButton}"
-                                Command="{Binding RefreshModelsCommand}"
-                                IsEnabled="{Binding Parameters.ApiToken, Converter={StaticResource NonEmptyStringToBool}}"
-                                HorizontalOptions="Start"
-                                SemanticProperties.Description="Fetch live model catalogs from Replicate and OpenAI"
-                                AutomationId="RefreshModelsButton" />
-
-                        <Label Text="What should the image show?" Style="{StaticResource FieldLabel}" />
-                        <Editor Text="{Binding Parameters.Prompt}"
-                                Placeholder="Describe the image you want to generate…"
-                                AutoSize="TextChanges"
-                                MinimumHeightRequest="90"
-                                AutomationId="PromptEditor" />
-
-                        <HorizontalStackLayout Spacing="8" IsVisible="{Binding SupportsPromptUpsampling}">
-                            <CheckBox IsChecked="{Binding Parameters.PromptUpsampling}" VerticalOptions="Center" />
-                            <Label Text="Prompt upsampling" VerticalOptions="Center" />
-                        </HorizontalStackLayout>
-                    </VerticalStackLayout>
-                </Border>
-
                 <!-- CARD: Input Image (optional) -->
-                <Border Grid.Row="1" Grid.Column="0"
-                        Style="{StaticResource Card}"
+                <Border Style="{StaticResource Card}"
                         VerticalOptions="Start"
                         IsVisible="{Binding SupportsImagePrompt}">
                     <VerticalStackLayout Spacing="12">
@@ -156,9 +109,57 @@
                     </VerticalStackLayout>
                 </Border>
 
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Column="1" Spacing="16">
+
+                <!-- CARD: Prompt & Model -->
+                <Border Style="{StaticResource Card}"
+                        VerticalOptions="Start">
+                    <VerticalStackLayout Spacing="12">
+                        <Label Text="Prompt" Style="{StaticResource CardTitle}" />
+
+                        <Grid ColumnDefinitions="*,*"
+                              RowDefinitions="Auto,Auto"
+                              ColumnSpacing="12"
+                              RowSpacing="4">
+                            <Label Grid.Row="0" Grid.Column="0" Text="Provider" Style="{StaticResource FieldLabel}" />
+                            <Picker Grid.Row="1" Grid.Column="0"
+                                    ItemsSource="{Binding Providers}"
+                                    SelectedItem="{Binding SelectedProvider}"
+                                    AutomationId="ProviderPicker" />
+                            <Label Grid.Row="0" Grid.Column="1" Text="Model" Style="{StaticResource FieldLabel}" />
+                            <Picker Grid.Row="1" Grid.Column="1"
+                                    ItemsSource="{Binding FilteredModels}"
+                                    ItemDisplayBinding="{Binding Display}"
+                                    SelectedItem="{Binding SelectedModel}"
+                                    AutomationId="ModelPicker" />
+                        </Grid>
+
+                        <Button Text="Refresh Models"
+                                Style="{StaticResource SecondaryButton}"
+                                Command="{Binding RefreshModelsCommand}"
+                                IsEnabled="{Binding Parameters.ApiToken, Converter={StaticResource NonEmptyStringToBool}}"
+                                HorizontalOptions="Start"
+                                SemanticProperties.Description="Fetch live model catalogs from Replicate and OpenAI"
+                                AutomationId="RefreshModelsButton" />
+
+                        <Label Text="What should the image show?" Style="{StaticResource FieldLabel}" />
+                        <Editor Text="{Binding Parameters.Prompt}"
+                                Placeholder="Describe the image you want to generate…"
+                                AutoSize="TextChanges"
+                                MinimumHeightRequest="90"
+                                AutomationId="PromptEditor" />
+
+                        <HorizontalStackLayout Spacing="8" IsVisible="{Binding SupportsPromptUpsampling}">
+                            <CheckBox IsChecked="{Binding Parameters.PromptUpsampling}" VerticalOptions="Center" />
+                            <Label Text="Prompt upsampling" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
                 <!-- CARD: Output (aspect, resolution, format, quality, safety, seed) -->
-                <Border Grid.Row="1" Grid.Column="1"
-                        Style="{StaticResource Card}"
+                <Border Style="{StaticResource Card}"
                         VerticalOptions="Start">
                     <VerticalStackLayout Spacing="12">
                         <Label Text="Output" Style="{StaticResource CardTitle}" />
@@ -248,9 +249,12 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- ACTION + RESULT column (spans both rows) -->
-                <Border Grid.Row="0" Grid.Column="2" Grid.RowSpan="2"
-                        Style="{StaticResource Card}"
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Column="2" Spacing="16">
+
+                <!-- ACTION + RESULT column -->
+                <Border Style="{StaticResource Card}"
                         VerticalOptions="Start">
                     <VerticalStackLayout Spacing="12">
                         <Label Text="Run" Style="{StaticResource CardTitle}" />
@@ -362,6 +366,8 @@
                         </VerticalStackLayout>
                     </VerticalStackLayout>
                 </Border>
+
+                </VerticalStackLayout>
             </Grid>
 
             <!-- CARD: GPT Image 1.5 advanced options (only visible when that model is selected) -->
