@@ -1,9 +1,13 @@
 # Produces the single-file, self-contained Windows x64 build that ships with each
 # GitHub release. Matches the command used for v0.2.0-preview.
 #
-# Usage:
-#   pwsh ./publish.ps1            # clean Release publish
-#   pwsh ./publish.ps1 -SkipClean # faster rebuild on top of the existing Release output
+# Usage (PowerShell 7+ or Windows PowerShell 5.1):
+#   pwsh ./publish.ps1                # clean Release publish (PowerShell 7+)
+#   powershell -File ./publish.ps1    # Windows PowerShell 5.1 — ships with Windows
+#   pwsh ./publish.ps1 -SkipClean     # faster rebuild on top of the existing output
+#
+# From Git Bash on Windows, `pwsh` is not on PATH by default; use `powershell -File …`
+# or install PowerShell 7.
 #
 # Output:
 #   ImageGenerator.MAUI/bin/Release/net10.0-windows10.0.22621.0/win-x64/publish/ImageGenerator.MAUI.exe
