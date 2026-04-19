@@ -13,7 +13,7 @@ public class ModelCatalogService : IModelCatalogService
     private const string CacheFileName = "model-catalog.json";
     private static readonly string[] OpenAiImageIdPrefixes = { "gpt-image", "dall-e" };
     private static readonly HashSet<string> ReplicateOwnerAllowlist =
-        new(StringComparer.OrdinalIgnoreCase) { "black-forest-labs", "openai" };
+        new(StringComparer.OrdinalIgnoreCase) { "black-forest-labs", "openai", "google" };
 
     // Single options instance for both save and load — keeps the disk format pinned so
     // adding `Web` defaults or a converter on one path can't silently desync the other.
@@ -21,11 +21,17 @@ public class ModelCatalogService : IModelCatalogService
 
     private readonly IReplicateApi _replicateApi;
     private readonly IOpenAiApi _openAiApi;
+    private readonly string _cacheDirectory;
 
-    public ModelCatalogService(IReplicateApi replicateApi, IOpenAiApi openAiApi)
+    public ModelCatalogService(
+        IReplicateApi replicateApi,
+        IOpenAiApi openAiApi,
+        string? cacheDirectoryOverride = null)
     {
         _replicateApi = replicateApi ?? throw new ArgumentNullException(nameof(replicateApi));
         _openAiApi = openAiApi ?? throw new ArgumentNullException(nameof(openAiApi));
+        // Tests override this with a temp path; production resolves the MAUI app-data dir.
+        _cacheDirectory = cacheDirectoryOverride ?? FileSystem.AppDataDirectory;
     }
 
     public async Task<IReadOnlyList<ModelOption>> FetchAsync(string apiToken, CancellationToken ct = default)
@@ -65,7 +71,10 @@ public class ModelCatalogService : IModelCatalogService
     {
         "black-forest-labs" => "Black Forest Labs",
         "openai" => "OpenAI (via Replicate)",
-        _ => owner
+        "google" => "Google",
+        // The allowlist guarantees `owner` is one of the above. Throw if a new entry is ever
+        // added without a matching display label — silent fallthrough would ship the raw slug.
+        _ => throw new InvalidOperationException($"Unexpected owner past allowlist: {owner}")
     };
 
     private async Task<IReadOnlyList<ModelOption>> SafeFetchOpenAiAsync(string bearer, CancellationToken ct)
@@ -107,7 +116,7 @@ public class ModelCatalogService : IModelCatalogService
     {
         try
         {
-            Directory.CreateDirectory(FileSystem.AppDataDirectory);
+            Directory.CreateDirectory(_cacheDirectory);
             var path = CachePath();
             var tempPath = path + ".tmp";
 
@@ -126,5 +135,5 @@ public class ModelCatalogService : IModelCatalogService
         }
     }
 
-    private static string CachePath() => Path.Combine(FileSystem.AppDataDirectory, CacheFileName);
+    private string CachePath() => Path.Combine(_cacheDirectory, CacheFileName);
 }

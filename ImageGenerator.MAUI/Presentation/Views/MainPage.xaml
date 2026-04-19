@@ -151,6 +151,15 @@
                                 HorizontalOptions="Start"
                                 AutomationId="AspectRatioPicker" />
 
+                        <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsResolution}">
+                            <Label Text="Resolution" Style="{StaticResource FieldLabel}" />
+                            <Picker ItemsSource="{Binding ResolutionOptions}"
+                                    SelectedItem="{Binding Parameters.Resolution}"
+                                    MaximumWidthRequest="140"
+                                    HorizontalOptions="Start"
+                                    AutomationId="ResolutionPicker" />
+                        </VerticalStackLayout>
+
                         <VerticalStackLayout Spacing="8" IsVisible="{Binding SupportsCustomDimensions}">
                             <Label Text="Custom dimensions (px)" Style="{StaticResource FieldLabel}" />
                             <Label Text="64 - 2048 px. Flux 1.1 Pro model range: 256 - 1440."
@@ -236,6 +245,43 @@
                     </VerticalStackLayout>
                 </Border>
             </Grid>
+
+            <!-- CARD: GPT Image 1.5 advanced options (only visible when that model is selected) -->
+            <Border Style="{StaticResource Card}"
+                    IsVisible="{Binding SupportsGptQuality}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="GPT Image 1.5 options" Style="{StaticResource CardTitle}" />
+                    <Label Text="Fine-grained knobs the Replicate-hosted gpt-image-1.5 schema accepts."
+                           Style="{StaticResource HelperText}" />
+
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto" RowSpacing="12">
+                        <VerticalStackLayout Grid.Row="0" Grid.Column="0" Spacing="4">
+                            <Label Text="Quality" Style="{StaticResource FieldLabel}" />
+                            <Picker ItemsSource="{Binding GptQualityOptions}"
+                                    SelectedItem="{Binding Parameters.GptQuality}"
+                                    AutomationId="GptQualityPicker" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Row="0" Grid.Column="1" Spacing="4">
+                            <Label Text="Background" Style="{StaticResource FieldLabel}" />
+                            <Picker ItemsSource="{Binding GptBackgroundOptions}"
+                                    SelectedItem="{Binding Parameters.GptBackground}"
+                                    AutomationId="GptBackgroundPicker" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Row="1" Grid.Column="0" Spacing="4">
+                            <Label Text="Moderation" Style="{StaticResource FieldLabel}" />
+                            <Picker ItemsSource="{Binding GptModerationOptions}"
+                                    SelectedItem="{Binding Parameters.GptModeration}"
+                                    AutomationId="GptModerationPicker" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Row="1" Grid.Column="1" Spacing="4">
+                            <Label Text="Input fidelity" Style="{StaticResource FieldLabel}" />
+                            <Picker ItemsSource="{Binding GptInputFidelityOptions}"
+                                    SelectedItem="{Binding Parameters.GptInputFidelity}"
+                                    AutomationId="GptInputFidelityPicker" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
 
             <!-- Idle action row: Generate only -->
             <VerticalStackLayout Spacing="6"

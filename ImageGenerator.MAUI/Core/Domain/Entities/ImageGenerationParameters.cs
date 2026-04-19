@@ -56,11 +56,29 @@ public partial class ImageGenerationParameters : ObservableObject
 
     [ObservableProperty]
     private bool _promptUpsampling;
-    
+
     // Use by FluxPro Ultra
     [ObservableProperty]
     private double _imagePromptStrength = 0.5; // default init value
-    
+
     [ObservableProperty]
     private bool _raw; // Optional flag used by Flux Ultra
+
+    // google/nano-banana-2: "1K" | "2K" | "4K".
+    [ObservableProperty]
+    private string _resolution = "1K";
+
+    // openai/gpt-image-1.5 advanced knobs. Defaults match the API defaults so
+    // silence on other models stays equivalent to not sending the field.
+    [ObservableProperty]
+    private string _gptQuality = "auto";
+
+    [ObservableProperty]
+    private string _gptBackground = "auto";
+
+    [ObservableProperty]
+    private string _gptModeration = "auto";
+
+    [ObservableProperty]
+    private string _gptInputFidelity = "low";
 }

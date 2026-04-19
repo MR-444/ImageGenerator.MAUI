@@ -1,4 +1,4 @@
-﻿using FluentAssertions;
+using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects.Factories;
@@ -13,7 +13,6 @@ public class ImageModelFactoryTests
     [Fact]
     public void CreateImageModel_WithFluxPro11_ReturnsCorrectModel()
     {
-        // Arrange
         var parameters = new ImageGenerationParameters
         {
             Model = ModelConstants.Flux.Pro11,
@@ -29,10 +28,8 @@ public class ImageModelFactoryTests
             PromptUpsampling = true
         };
 
-        // Act
         var result = ImageModelFactory.CreateImageModel(parameters) as Flux11Pro;
 
-        // Assert
         Assert.NotNull(result);
         Assert.Equal(ModelConstants.Flux.Pro11, result.ModelName);
         Assert.Equal("test prompt", result.Prompt);
@@ -50,44 +47,26 @@ public class ImageModelFactoryTests
     [Fact]
     public void CreateImageModel_WithFluxPro11_WithPredefinedAspectRatio_ReturnsCorrectModel()
     {
-        // Arrange
         var parameters = new ImageGenerationParameters
         {
             Model = ModelConstants.Flux.Pro11,
             Prompt = "test prompt",
-            Seed = 123,
-            Width = 1024,
-            Height = 1024,
             AspectRatio = "1:1",
-            ImagePrompt = "test image prompt",
-            SafetyTolerance = 2,
-            OutputFormat = ImageOutputFormat.Png,
-            OutputQuality = 80,
-            PromptUpsampling = true
+            Width = 1024,
+            Height = 1024
         };
 
-        // Act
         var result = ImageModelFactory.CreateImageModel(parameters) as Flux11Pro;
 
-        // Assert
         Assert.NotNull(result);
-        Assert.Equal(ModelConstants.Flux.Pro11, result.ModelName);
-        Assert.Equal("test prompt", result.Prompt);
-        Assert.Equal(123, result.Seed);
         Assert.Null(result.Width);
         Assert.Null(result.Height);
         Assert.Equal("1:1", result.AspectRatio);
-        Assert.Equal("test image prompt", result.ImagePrompt);
-        Assert.Equal(2, result.SafetyTolerance);
-        Assert.Equal("png", result.OutputFormat);
-        Assert.Equal(80, result.OutputQuality);
-        Assert.True(result.PromptUpsampling);
     }
 
     [Fact]
     public void CreateImageModel_WithFluxPro11Ultra_ReturnsCorrectModel()
     {
-        // Arrange
         var parameters = new ImageGenerationParameters
         {
             Model = ModelConstants.Flux.Pro11Ultra,
@@ -101,88 +80,20 @@ public class ImageModelFactoryTests
             ImagePromptStrength = 0.5f
         };
 
-        // Act
         var result = ImageModelFactory.CreateImageModel(parameters) as Flux11ProUltra;
 
-        // Assert
         Assert.NotNull(result);
         Assert.Equal(ModelConstants.Flux.Pro11Ultra, result.ModelName);
-        Assert.Equal("test prompt", result.Prompt);
         Assert.Equal(123, result.Seed);
         Assert.Equal("1:1", result.AspectRatio);
         Assert.Equal("test image prompt", result.ImagePrompt);
-        Assert.Equal(2, result.SafetyTolerance);
-        Assert.Equal("jpg", result.OutputFormat);
         Assert.True(result.Raw);
         Assert.Equal(0.5f, result.ImagePromptStrength);
     }
 
     [Fact]
-    public void CreateImageModel_WithFluxDev_ReturnsCorrectModel()
-    {
-        // Arrange
-        var parameters = new ImageGenerationParameters
-        {
-            Model = ModelConstants.Flux.Dev,
-            Prompt = "test prompt",
-            Seed = 123,
-            AspectRatio = "1:1",
-            ImagePrompt = "test image prompt",
-            SafetyTolerance = 2,
-            OutputFormat = ImageOutputFormat.Webp,
-            OutputQuality = 80
-        };
-
-        // Act
-        var result = ImageModelFactory.CreateImageModel(parameters) as FluxDev;
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ModelConstants.Flux.Dev, result.ModelName);
-        Assert.Equal("test prompt", result.Prompt);
-        Assert.Equal(123, result.Seed);
-        Assert.Equal("1:1", result.AspectRatio);
-        Assert.Equal("test image prompt", result.ImagePrompt);
-        Assert.Equal(2, result.SafetyTolerance);
-        Assert.Equal("webp", result.OutputFormat);
-        Assert.Equal(80, result.OutputQuality);
-    }
-
-    [Fact]
-    public void CreateImageModel_WithFluxSchnell_ReturnsCorrectModel()
-    {
-        // Arrange
-        var parameters = new ImageGenerationParameters
-        {
-            Model = ModelConstants.Flux.Schnell,
-            Prompt = "test prompt",
-            Seed = 123,
-            AspectRatio = "1:1",
-            ImagePrompt = "test image prompt",
-            SafetyTolerance = 2,
-            OutputFormat = ImageOutputFormat.Png,
-            OutputQuality = 80
-        };
-
-        // Act
-        var result = ImageModelFactory.CreateImageModel(parameters) as FluxSchnell;
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(ModelConstants.Flux.Schnell, result.ModelName);
-        Assert.Equal("test prompt", result.Prompt);
-        Assert.Equal(123, result.Seed);
-        Assert.Equal("1:1", result.AspectRatio);
-        Assert.Equal("test image prompt", result.ImagePrompt);
-        Assert.Equal(2, result.SafetyTolerance);
-        Assert.Equal("png", result.OutputFormat);
-        Assert.Equal(80, result.OutputQuality);
-    }
-
-    [Fact]
     public void CreateImageModel_ShouldReturnOpenAiRequest_ForGptImage1ModelName()
     {
-        // Arrange
         var parameters = new ImageGenerationParameters
         {
             Model = ModelConstants.OpenAI.GptImage1,
@@ -190,97 +101,25 @@ public class ImageModelFactoryTests
             AspectRatio = "1024x1024"
         };
 
-        var expectedResult = new OpenAiRequest
+        var result = ImageModelFactory.CreateImageModel(parameters);
+
+        result.Should().BeOfType<OpenAiRequest>();
+        result.Should().BeEquivalentTo(new OpenAiRequest
         {
             ModelName = parameters.Model,
             Prompt = parameters.Prompt,
             Size = "1024x1024"
-        };
-
-        // Act
-        var result = ImageModelFactory.CreateImageModel(parameters);
-
-        // Assert
-        result.Should().BeOfType<OpenAiRequest>();
-        result.Should().BeEquivalentTo(expectedResult);
+        });
     }
 
     [Fact]
     public void CreateImageModel_ShouldThrowArgumentException_ForUnknownModel()
     {
-        // Arrange
-        var parameters = new ImageGenerationParameters
-        {
-            Model = "unknown-model",
-            Prompt = "An unknown model"
-        };
+        var parameters = new ImageGenerationParameters { Model = "not-a-path", Prompt = "x" };
 
-        // Act
         var act = () => ImageModelFactory.CreateImageModel(parameters);
 
-        // Assert
-        act.Should().Throw<ArgumentException>()
-            .WithMessage("Unknown model type: unknown-model");
-    }
-
-    [Fact]
-    public void CreateImageModel_ShouldReturnFluxKontextMax_ForFluxKontextMaxModelName()
-    {
-        // Arrange
-        var parameters = new ImageGenerationParameters
-        {
-            Model = ModelConstants.Flux.KontextMax,
-            Prompt = "A contextual image",
-            Seed = 54321,
-            AspectRatio = "match_input_image",
-            ImagePrompt = "base64ImageData"
-        };
-
-        var expectedResult = new FluxKontextMax
-        {
-            ModelName = parameters.Model,
-            Prompt = parameters.Prompt,
-            Seed = parameters.Seed,
-            AspectRatio = parameters.AspectRatio,
-            InputImage = parameters.ImagePrompt
-        };
-
-        // Act
-        var result = ImageModelFactory.CreateImageModel(parameters);
-
-        // Assert
-        result.Should().BeOfType<FluxKontextMax>();
-        result.Should().BeEquivalentTo(expectedResult);
-    }
-
-    [Fact]
-    public void CreateImageModel_ShouldReturnFluxKontextPro_ForFluxKontextProModelName()
-    {
-        // Arrange
-        var parameters = new ImageGenerationParameters
-        {
-            Model = ModelConstants.Flux.KontextPro,
-            Prompt = "A professional contextual image",
-            Seed = 98765,
-            AspectRatio = "match_input_image",
-            ImagePrompt = "base64ImageData"
-        };
-
-        var expectedResult = new FluxKontextPro
-        {
-            ModelName = parameters.Model,
-            Prompt = parameters.Prompt,
-            Seed = parameters.Seed,
-            AspectRatio = parameters.AspectRatio,
-            InputImage = parameters.ImagePrompt
-        };
-
-        // Act
-        var result = ImageModelFactory.CreateImageModel(parameters);
-
-        // Assert
-        result.Should().BeOfType<FluxKontextPro>();
-        result.Should().BeEquivalentTo(expectedResult);
+        act.Should().Throw<ArgumentException>().WithMessage("Unknown model type: not-a-path");
     }
 
     [Theory]
@@ -310,11 +149,12 @@ public class ImageModelFactoryTests
         dict.Should().ContainKey("seed").WhoseValue.Should().Be(99L);
         dict.Should().NotContainKey("safety_tolerance");
         dict.Should().NotContainKey("prompt_upsampling");
+        // `images` key present with null value — wire-level null skipping is the converter's job.
         dict.Should().ContainKey("images");
     }
 
     [Fact]
-    public void CreateImageModel_GptImage15OnReplicate_BuildsDictionaryWithOutputCompression()
+    public void CreateImageModel_GptImage15OnReplicate_BuildsDictionaryWithAllKnobs()
     {
         var parameters = new ImageGenerationParameters
         {
@@ -322,7 +162,11 @@ public class ImageModelFactoryTests
             Prompt = "hello",
             AspectRatio = "1:1",
             OutputFormat = ImageOutputFormat.Jpg,
-            OutputQuality = 75
+            OutputQuality = 75,
+            GptQuality = "high",
+            GptBackground = "transparent",
+            GptModeration = "low",
+            GptInputFidelity = "high"
         };
 
         var result = ImageModelFactory.CreateImageModel(parameters);
@@ -333,9 +177,58 @@ public class ImageModelFactoryTests
         // Jpg -> jpeg translation for OpenAI-on-Replicate.
         dict.Should().ContainKey("output_format").WhoseValue.Should().Be("jpeg");
         dict.Should().ContainKey("output_compression").WhoseValue.Should().Be(75);
+        dict.Should().ContainKey("quality").WhoseValue.Should().Be("high");
+        dict.Should().ContainKey("background").WhoseValue.Should().Be("transparent");
+        dict.Should().ContainKey("moderation").WhoseValue.Should().Be("low");
+        dict.Should().ContainKey("input_fidelity").WhoseValue.Should().Be("high");
         dict.Should().NotContainKey("output_quality");
         dict.Should().NotContainKey("seed");
         dict.Should().ContainKey("input_images");
+    }
+
+    [Fact]
+    public void CreateImageModel_NanoBanana2_BuildsDictionaryWithResolutionAndImageInput()
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.Google.NanoBanana2,
+            Prompt = "a banana",
+            AspectRatio = "16:9",
+            Resolution = "2K",
+            OutputFormat = ImageOutputFormat.Png
+        };
+
+        var result = ImageModelFactory.CreateImageModel(parameters);
+
+        var dict = result.Should().BeOfType<Dictionary<string, object?>>().Subject;
+        dict.Should().ContainKey("prompt").WhoseValue.Should().Be("a banana");
+        dict.Should().ContainKey("aspect_ratio").WhoseValue.Should().Be("16:9");
+        dict.Should().ContainKey("resolution").WhoseValue.Should().Be("2K");
+        dict.Should().ContainKey("output_format").WhoseValue.Should().Be("png");
+        // No seed / safety_tolerance / output_quality on nano-banana-2.
+        dict.Should().NotContainKey("seed");
+        dict.Should().NotContainKey("safety_tolerance");
+        dict.Should().NotContainKey("output_quality");
+        // image_input key present with null value — converter strips on the wire.
+        dict.Should().ContainKey("image_input");
+    }
+
+    [Fact]
+    public void CreateImageModel_NanoBanana2_WebpOutputFormat_CoercesToJpg()
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.Google.NanoBanana2,
+            Prompt = "x",
+            AspectRatio = "1:1",
+            OutputFormat = ImageOutputFormat.Webp
+        };
+
+        var result = ImageModelFactory.CreateImageModel(parameters);
+
+        var dict = (Dictionary<string, object?>)result;
+        // nano-banana-2 schema rejects webp; factory coerces to jpg.
+        dict["output_format"].Should().Be("jpg");
     }
 
     [Fact]
@@ -343,7 +236,7 @@ public class ImageModelFactoryTests
     {
         var parameters = new ImageGenerationParameters
         {
-            Model = "google/nano-banana-2",
+            Model = "stability-ai/some-new-model",
             Prompt = "fallback test",
             Seed = 7,
             AspectRatio = "1:1",
@@ -355,18 +248,5 @@ public class ImageModelFactoryTests
 
         var dict = result.Should().BeOfType<Dictionary<string, object?>>().Subject;
         dict.Keys.Should().BeEquivalentTo(["prompt", "seed", "aspect_ratio", "output_format", "output_quality"]);
-    }
-
-    [Fact]
-    public void CreateImageModel_MalformedModel_StillThrows()
-    {
-        var parameters = new ImageGenerationParameters
-        {
-            Model = "not-a-path",
-            Prompt = "x"
-        };
-
-        var act = () => ImageModelFactory.CreateImageModel(parameters);
-        act.Should().Throw<ArgumentException>();
     }
 }

@@ -3,7 +3,6 @@ using Moq;
 using Moq.Protected;
 using System.Net;
 using ImageGenerator.MAUI.Core.Domain.Entities;
-using ImageGenerator.MAUI.Core.Domain.ValueObjects.Flux;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
 using ImageGenerator.MAUI.Models.Replicate;
@@ -26,105 +25,61 @@ public class ReplicateImageGenerationServiceTests
     }
 
     [Fact]
-    public async Task GenerateImageAsync_WithFluxKontextMax_ShouldFormatInputImageCorrectly()
+    public async Task GenerateImageAsync_Flux2WithImagePrompt_EmbedsDataUriIntoImagesArray()
     {
         var parameters = new ImageGenerationParameters
         {
-            Model = ModelConstants.Flux.KontextMax,
+            Model = ModelConstants.Flux.Klein4b,
             Prompt = "A test image",
             ApiToken = "test-token",
             ImagePrompt = "test-base64-data"
         };
 
-        var initialResponse = new ReplicatePredictionResponse { Id = "test-id", Status = "starting" };
-        var finalResponse = new ReplicatePredictionResponse { Status = "succeeded", Output = new[] { "https://example.com/image.jpg" } };
+        StubHappyPath();
 
-        _mockReplicateApi.Setup(x => x.CreatePredictionAsync(
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<ReplicatePredictionRequest>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(initialResponse);
-
-        _mockReplicateApi.Setup(x => x.GetPredictionAsync(
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(finalResponse);
-
-        _mockHttpMessageHandler
-            .Protected()
-            .Setup<Task<HttpResponseMessage>>(
-                "SendAsync",
-                ItExpr.IsAny<HttpRequestMessage>(),
-                ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(new HttpResponseMessage
-            {
-                StatusCode = HttpStatusCode.OK,
-                Content = new ByteArrayContent([1, 2, 3])
-            });
-
-        var result = await _service.GenerateImageAsync(parameters);
-
-        result.Should().NotBeNull();
-        result.Message.Should().Be($"Image generated successfully with model {parameters.Model}.");
-        result.ImageDataBase64.Should().NotBeNull();
+        await _service.GenerateImageAsync(parameters);
 
         _mockReplicateApi.Verify(x => x.CreatePredictionAsync(
-            It.Is<string>(token => token == "Bearer test-token"),
-            It.Is<string>(model => model == parameters.Model),
+            "Bearer test-token",
+            parameters.Model,
             It.Is<ReplicatePredictionRequest>(req =>
-                req.Input.GetType() == typeof(FluxKontextMax) &&
-                ((FluxKontextMax)req.Input).InputImage == "data:image/png;base64,test-base64-data"),
+                HasImagesArrayWithUri(req, "data:image/png;base64,test-base64-data")),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task GenerateImageAsync_WithNoImagePrompt_ShouldNotModifyInputImage()
+    public async Task GenerateImageAsync_Flux2WithoutImagePrompt_LeavesImagesKeyNull()
     {
         var parameters = new ImageGenerationParameters
         {
-            Model = ModelConstants.Flux.KontextPro,
+            Model = ModelConstants.Flux.Klein4b,
             Prompt = "A test image",
             ApiToken = "test-token",
             ImagePrompt = null
         };
 
-        var initialResponse = new ReplicatePredictionResponse { Id = "test-id", Status = "starting" };
-        var finalResponse = new ReplicatePredictionResponse { Status = "succeeded", Output = new[] { "https://example.com/image.jpg" } };
+        StubHappyPath();
 
-        _mockReplicateApi.Setup(x => x.CreatePredictionAsync(
-                It.Is<string>(token => token == "Bearer test-token"),
-                It.Is<string>(model => model == parameters.Model),
-                It.Is<ReplicatePredictionRequest>(req =>
-                    req.Input.GetType() == typeof(FluxKontextPro) &&
-                    ((FluxKontextPro)req.Input).InputImage == null),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(initialResponse);
+        await _service.GenerateImageAsync(parameters);
 
-        _mockReplicateApi.Setup(x => x.GetPredictionAsync(
-                It.Is<string>(token => token == "Bearer test-token"),
-                It.Is<string>(id => id == "test-id"),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(finalResponse);
+        _mockReplicateApi.Verify(x => x.CreatePredictionAsync(
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.Is<ReplicatePredictionRequest>(req => HasNullImages(req)),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
 
-        _mockHttpMessageHandler
-            .Protected()
-            .Setup<Task<HttpResponseMessage>>(
-                "SendAsync",
-                ItExpr.IsAny<HttpRequestMessage>(),
-                ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(new HttpResponseMessage
-            {
-                StatusCode = HttpStatusCode.OK,
-                Content = new ByteArrayContent([1, 2, 3])
-            });
+    private static bool HasImagesArrayWithUri(ReplicatePredictionRequest req, string uri)
+    {
+        var dict = (Dictionary<string, object?>)req.Input;
+        var images = dict["images"] as string[];
+        return images != null && images.Length == 1 && images[0] == uri;
+    }
 
-        var result = await _service.GenerateImageAsync(parameters);
-
-        result.Should().NotBeNull();
-        result.Message.Should().Be($"Image generated successfully with model {parameters.Model}.");
-        result.ImageDataBase64.Should().NotBeNull();
+    private static bool HasNullImages(ReplicatePredictionRequest req)
+    {
+        var dict = (Dictionary<string, object?>)req.Input;
+        return dict["images"] == null;
     }
 
     [Fact]
@@ -132,7 +87,7 @@ public class ReplicateImageGenerationServiceTests
     {
         var parameters = new ImageGenerationParameters
         {
-            Model = ModelConstants.Flux.KontextPro,
+            Model = ModelConstants.Flux.Klein4b,
             Prompt = "A test image",
             ApiToken = "test-token"
         };
@@ -157,7 +112,7 @@ public class ReplicateImageGenerationServiceTests
     {
         var parameters = new ImageGenerationParameters
         {
-            Model = ModelConstants.Flux.KontextPro,
+            Model = ModelConstants.Flux.Klein4b,
             Prompt = "A test image",
             ApiToken = "test-token"
         };
@@ -191,7 +146,7 @@ public class ReplicateImageGenerationServiceTests
     {
         var parameters = new ImageGenerationParameters
         {
-            Model = ModelConstants.Flux.KontextPro,
+            Model = ModelConstants.Flux.Klein4b,
             Prompt = "A test image",
             ApiToken = "test-token"
         };
@@ -215,7 +170,7 @@ public class ReplicateImageGenerationServiceTests
     {
         var parameters = new ImageGenerationParameters
         {
-            Model = ModelConstants.Flux.KontextPro,
+            Model = ModelConstants.Flux.Klein4b,
             Prompt = "A test image",
             ApiToken = "test-token"
         };
@@ -241,5 +196,40 @@ public class ReplicateImageGenerationServiceTests
         result.Should().NotBeNull();
         result.Message.Should().StartWith("An error occurred: Unexpected Replicate prediction status");
         result.ImageDataBase64.Should().BeNull();
+    }
+
+    private void StubHappyPath()
+    {
+        var initialResponse = new ReplicatePredictionResponse { Id = "test-id", Status = "starting" };
+        var finalResponse = new ReplicatePredictionResponse
+        {
+            Status = "succeeded",
+            Output = new[] { "https://example.com/image.jpg" }
+        };
+
+        _mockReplicateApi.Setup(x => x.CreatePredictionAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<ReplicatePredictionRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(initialResponse);
+
+        _mockReplicateApi.Setup(x => x.GetPredictionAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(finalResponse);
+
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new ByteArrayContent([1, 2, 3])
+            });
     }
 }

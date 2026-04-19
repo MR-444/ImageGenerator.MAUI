@@ -1,6 +1,5 @@
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects.Factories;
-using ImageGenerator.MAUI.Core.Domain.ValueObjects.Flux;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
 using ImageGenerator.MAUI.Models.Replicate;
 
@@ -23,20 +22,6 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
         try
         {
             var imageModel = ImageModelFactory.CreateImageModel(parameters);
-
-            if (!string.IsNullOrEmpty(parameters.ImagePrompt))
-            {
-                var dataUri = ReplicateImageEncoding.BuildDataUri(parameters.ImagePrompt);
-                switch (imageModel)
-                {
-                    case FluxKontextPro kontextPro:
-                        kontextPro.InputImage = dataUri;
-                        break;
-                    case FluxKontextMax kontextMax:
-                        kontextMax.InputImage = dataUri;
-                        break;
-                }
-            }
 
             var finalResponse = await CallReplicateModelAsync(parameters, imageModel, cancellationToken);
             var outputUrl = finalResponse?.Output?.FirstOrDefault();

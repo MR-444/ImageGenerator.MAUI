@@ -36,11 +36,12 @@ public class ImageGenerationServiceFactoryTests
     [Theory]
     [InlineData(ModelConstants.Flux.Pro11)]
     [InlineData(ModelConstants.Flux.Pro11Ultra)]
-    [InlineData(ModelConstants.Flux.Dev)]
-    [InlineData(ModelConstants.Flux.Schnell)]
-    [InlineData(ModelConstants.Flux.KontextMax)]
-    [InlineData(ModelConstants.Flux.KontextPro)]
-    public async Task GenerateImageAsync_FluxModel_RoutesToReplicate(string model)
+    [InlineData(ModelConstants.Flux.Klein4b)]
+    [InlineData(ModelConstants.Flux.Flex2)]
+    [InlineData(ModelConstants.Flux.Pro2)]
+    [InlineData(ModelConstants.Flux.Max2)]
+    [InlineData(ModelConstants.Google.NanoBanana2)]
+    public async Task GenerateImageAsync_ReplicateModel_RoutesToReplicate(string model)
     {
         var parameters = new ImageGenerationParameters { Model = model };
         var expected = new GeneratedImage { ImageDataBase64 = "y", Message = "ok" };

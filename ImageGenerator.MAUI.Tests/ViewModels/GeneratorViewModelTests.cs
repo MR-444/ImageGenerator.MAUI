@@ -39,16 +39,15 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
-    public void AllModels_ShouldContainExpectedModels()
+    public void AllModels_ShouldContainExpectedSeed()
     {
         var values = _viewModel.AllModels.Select(m => m.Value).ToList();
         values.Should().Contain(ModelConstants.OpenAI.GptImage1);
-        values.Should().Contain(ModelConstants.Flux.Dev);
+        values.Should().Contain(ModelConstants.OpenAI.GptImage15OnReplicate);
         values.Should().Contain(ModelConstants.Flux.Pro11);
-        values.Should().Contain(ModelConstants.Flux.Schnell);
         values.Should().Contain(ModelConstants.Flux.Pro11Ultra);
-        values.Should().Contain(ModelConstants.Flux.KontextMax);
-        values.Should().Contain(ModelConstants.Flux.KontextPro);
+        values.Should().Contain(ModelConstants.Flux.Klein4b);
+        values.Should().Contain(ModelConstants.Google.NanoBanana2);
     }
 
     [Fact]
@@ -56,7 +55,9 @@ public class GeneratorViewModelTests
     {
         _viewModel.Providers.Should().Contain("All providers");
         _viewModel.Providers.Should().Contain("OpenAI");
+        _viewModel.Providers.Should().Contain("OpenAI (via Replicate)");
         _viewModel.Providers.Should().Contain("Black Forest Labs");
+        _viewModel.Providers.Should().Contain("Google");
     }
 
     [Fact]
@@ -71,11 +72,11 @@ public class GeneratorViewModelTests
     [Fact]
     public void SelectedModel_WhenChanged_UpdatesParametersModel()
     {
-        var target = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Schnell);
+        var target = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
 
         _viewModel.SelectedModel = target;
 
-        _viewModel.Parameters.Model.Should().Be(ModelConstants.Flux.Schnell);
+        _viewModel.Parameters.Model.Should().Be(ModelConstants.Flux.Klein4b);
     }
 
     [Fact]
@@ -148,9 +149,9 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
-    public void OnIsImageSelected_OnKontextModel_AutoSelectsMatchInputImage()
+    public void OnIsImageSelected_OnFlux2Model_AutoSelectsMatchInputImage()
     {
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.KontextMax);
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
 
         _viewModel.AspectRatioOptions.Should().Contain("match_input_image");
 
@@ -160,9 +161,9 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
-    public void OnIsImageDeselected_OnKontextModel_FallsBackToFirstAspectRatio()
+    public void OnIsImageDeselected_OnFlux2Model_FallsBackToFirstAspectRatio()
     {
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.KontextMax);
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
         _viewModel.IsImageSelected = true;
         _viewModel.Parameters.AspectRatio.Should().Be("match_input_image");
 
@@ -174,9 +175,10 @@ public class GeneratorViewModelTests
     [Fact]
     public void SelectedModel_Changed_AdjustsAspectRatioOptionsToSupportedList()
     {
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Schnell);
+        // Switching from Flux 1.1 Pro (has "custom") to Klein 4B (no "custom") must narrow the list.
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
 
-        _viewModel.AspectRatioOptions.Should().NotContain("3:4").And.NotContain("4:3");
+        _viewModel.AspectRatioOptions.Should().NotContain("custom");
         _viewModel.AspectRatioOptions.Should().Contain("1:1");
     }
 
@@ -207,13 +209,12 @@ public class GeneratorViewModelTests
     }
 
     [Theory]
-    [InlineData(ModelConstants.Flux.Pro11,      true,  true,  true,  true,  true,  true)]
-    [InlineData(ModelConstants.Flux.Pro11Ultra, true,  false, false, true,  true,  true)]
-    [InlineData(ModelConstants.Flux.Dev,        true,  false, true,  true,  true,  true)]
-    [InlineData(ModelConstants.Flux.Schnell,    true,  false, true,  true,  true,  false)]
-    [InlineData(ModelConstants.Flux.KontextMax, false, false, false, true,  true,  true)]
-    [InlineData(ModelConstants.Flux.KontextPro, false, false, false, true,  true,  true)]
-    [InlineData(ModelConstants.OpenAI.GptImage1, false, false, true, true, false, false)]
+    [InlineData(ModelConstants.Flux.Pro11,                  true,  true,  true,  true,  true,  true)]
+    [InlineData(ModelConstants.Flux.Pro11Ultra,             true,  false, false, true,  true,  true)]
+    [InlineData(ModelConstants.Flux.Klein4b,                false, false, true,  true,  true,  true)]
+    [InlineData(ModelConstants.OpenAI.GptImage1,            false, false, true,  true,  false, false)]
+    [InlineData(ModelConstants.OpenAI.GptImage15OnReplicate, false, false, true, true,  false, true)]
+    [InlineData(ModelConstants.Google.NanoBanana2,          false, false, false, true,  false, true)]
     public void Capabilities_MatchExpectedMatrixPerModel(
         string modelValue,
         bool safety,
@@ -231,6 +232,40 @@ public class GeneratorViewModelTests
         _viewModel.SupportsAspectRatio.Should().Be(aspectRatio);
         _viewModel.SupportsSeed.Should().Be(seed);
         _viewModel.SupportsImagePrompt.Should().Be(imagePrompt);
+    }
+
+    [Fact]
+    public void Capabilities_NanoBanana2_ExposesResolution()
+    {
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Google.NanoBanana2);
+
+        _viewModel.SupportsResolution.Should().BeTrue();
+        _viewModel.ResolutionOptions.Should().BeEquivalentTo("1K", "2K", "4K");
+    }
+
+    [Fact]
+    public void Capabilities_GptImage15_ExposesAllFourGptOptionLists()
+    {
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage15OnReplicate);
+
+        _viewModel.SupportsGptQuality.Should().BeTrue();
+        _viewModel.SupportsGptBackground.Should().BeTrue();
+        _viewModel.SupportsGptModeration.Should().BeTrue();
+        _viewModel.SupportsGptInputFidelity.Should().BeTrue();
+        _viewModel.GptQualityOptions.Should().BeEquivalentTo("auto", "low", "medium", "high");
+        _viewModel.GptBackgroundOptions.Should().BeEquivalentTo("auto", "transparent", "opaque");
+        _viewModel.GptModerationOptions.Should().BeEquivalentTo("auto", "low");
+        _viewModel.GptInputFidelityOptions.Should().BeEquivalentTo("low", "high");
+    }
+
+    [Fact]
+    public void Capabilities_NonGptModel_HidesGptOptionLists()
+    {
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+
+        _viewModel.SupportsGptQuality.Should().BeFalse();
+        _viewModel.SupportsGptBackground.Should().BeFalse();
+        _viewModel.SupportsResolution.Should().BeFalse();
     }
 
     [Fact]

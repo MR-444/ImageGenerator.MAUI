@@ -24,16 +24,15 @@ public partial class GeneratorViewModel : ObservableObject
     private static string OutputDirectory =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), OutputFolderName);
 
-    // Master catalog — single source of truth for model metadata.
+    // Master catalog — first-launch seed before Refresh Models hydrates from the live APIs.
     private static readonly IReadOnlyList<ModelOption> HardcodedCatalogSeed =
     [
         new("GPT Image 1", ModelConstants.OpenAI.GptImage1, "OpenAI"),
+        new("GPT Image 1.5", ModelConstants.OpenAI.GptImage15OnReplicate, "OpenAI (via Replicate)"),
         new("Flux 1.1 Pro", ModelConstants.Flux.Pro11, "Black Forest Labs"),
         new("Flux 1.1 Pro Ultra", ModelConstants.Flux.Pro11Ultra, "Black Forest Labs"),
-        new("Flux Dev", ModelConstants.Flux.Dev, "Black Forest Labs"),
-        new("Flux Schnell", ModelConstants.Flux.Schnell, "Black Forest Labs"),
-        new("Flux Kontext Max", ModelConstants.Flux.KontextMax, "Black Forest Labs"),
-        new("Flux Kontext Pro", ModelConstants.Flux.KontextPro, "Black Forest Labs"),
+        new("Flux 2 Klein 4B", ModelConstants.Flux.Klein4b, "Black Forest Labs"),
+        new("Nano Banana 2", ModelConstants.Google.NanoBanana2, "Google"),
     ];
 
     [ObservableProperty]
@@ -65,6 +64,21 @@ public partial class GeneratorViewModel : ObservableObject
 
     [ObservableProperty]
     private List<string> _aspectRatioOptions = ModelCapabilities.For(ModelConstants.Flux.Pro11).AspectRatios.ToList();
+
+    [ObservableProperty]
+    private List<string> _resolutionOptions = [];
+
+    [ObservableProperty]
+    private List<string> _gptQualityOptions = [];
+
+    [ObservableProperty]
+    private List<string> _gptBackgroundOptions = [];
+
+    [ObservableProperty]
+    private List<string> _gptModerationOptions = [];
+
+    [ObservableProperty]
+    private List<string> _gptInputFidelityOptions = [];
 
     [ObservableProperty]
     private List<string> _outputFormats = [nameof(ImageOutputFormat.Png).ToLower(), nameof(ImageOutputFormat.Jpg).ToLower(), nameof(ImageOutputFormat.Webp).ToLower()];
@@ -104,6 +118,11 @@ public partial class GeneratorViewModel : ObservableObject
     public bool SupportsCustomDimensions => _capabilities.CustomDimensions && IsCustomAspectRatio;
     public bool SupportsSeed => _capabilities.Seed;
     public bool SupportsImagePrompt => _capabilities.ImagePrompt;
+    public bool SupportsResolution => _capabilities.Resolutions is not null;
+    public bool SupportsGptQuality => _capabilities.GptQualityOptions is not null;
+    public bool SupportsGptBackground => _capabilities.GptBackgroundOptions is not null;
+    public bool SupportsGptModeration => _capabilities.GptModerationOptions is not null;
+    public bool SupportsGptInputFidelity => _capabilities.GptInputFidelityOptions is not null;
     public string AspectRatioLabel => _capabilities.AspectRatioLabel;
 
     partial void OnParametersChanged(ImageGenerationParameters value)
@@ -151,6 +170,18 @@ public partial class GeneratorViewModel : ObservableObject
         {
             Parameters.AspectRatio = _capabilities.AspectRatios[0];
         }
+
+        ResolutionOptions = _capabilities.Resolutions?.ToList() ?? [];
+        if (ResolutionOptions.Count > 0 && !ResolutionOptions.Contains(Parameters.Resolution))
+        {
+            Parameters.Resolution = ResolutionOptions[0];
+        }
+
+        GptQualityOptions = _capabilities.GptQualityOptions?.ToList() ?? [];
+        GptBackgroundOptions = _capabilities.GptBackgroundOptions?.ToList() ?? [];
+        GptModerationOptions = _capabilities.GptModerationOptions?.ToList() ?? [];
+        GptInputFidelityOptions = _capabilities.GptInputFidelityOptions?.ToList() ?? [];
+
         OnPropertyChanged(nameof(SupportsSafetyTolerance));
         OnPropertyChanged(nameof(SupportsPromptUpsampling));
         OnPropertyChanged(nameof(SupportsOutputQuality));
@@ -158,6 +189,11 @@ public partial class GeneratorViewModel : ObservableObject
         OnPropertyChanged(nameof(SupportsCustomDimensions));
         OnPropertyChanged(nameof(SupportsSeed));
         OnPropertyChanged(nameof(SupportsImagePrompt));
+        OnPropertyChanged(nameof(SupportsResolution));
+        OnPropertyChanged(nameof(SupportsGptQuality));
+        OnPropertyChanged(nameof(SupportsGptBackground));
+        OnPropertyChanged(nameof(SupportsGptModeration));
+        OnPropertyChanged(nameof(SupportsGptInputFidelity));
         OnPropertyChanged(nameof(AspectRatioLabel));
     }
 
