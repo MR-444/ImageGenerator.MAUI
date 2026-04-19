@@ -18,13 +18,9 @@ A Windows desktop image generation app built on .NET MAUI that drives the Replic
 
 ## 📸 Screenshots
 
-![Controls — API token, provider/model picker, prompt, input images, output size](documents/screenshot-1-controls.png)
+![Initial state — three-column layout: API token + input images, prompt + output settings, run/result column](<documents/Initial_Screenshot 2026-04-19 162057.png>)
 
-![Result — generate button and generated image with "Show in folder" / "Use as input" actions](documents/screenshot-2-result.png)
-
-## 🗺️ Roadmap
-
-- **UI redesign** — the current layout needed two screenshots to cover comfortably, which is a smell. A full visual/UX redesign is planned: tighter single-view layout, better grouping, and general polish.
+![After generation — result thumbnail with "Use as input for next generation" and "Show in folder" actions](<documents/Result_Screenshot 2026-04-19 162259.png>)
 
 ## 🛠️ Technologies
 

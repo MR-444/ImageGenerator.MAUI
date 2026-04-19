@@ -144,7 +144,6 @@
                                 SemanticProperties.Description="Fetch live model catalogs from Replicate and OpenAI"
                                 AutomationId="RefreshModelsButton" />
 
-                        <Label Text="What should the image show?" Style="{StaticResource FieldLabel}" />
                         <Editor Text="{Binding Parameters.Prompt}"
                                 Placeholder="Describe the image you want to generate…"
                                 AutoSize="TextChanges"
@@ -355,7 +354,7 @@
                             <HorizontalStackLayout Spacing="8">
                                 <Button Text="Use as input for next generation"
                                         Command="{Binding UseGeneratedImageAsInputCommand}"
-                                        Style="{StaticResource ActionPrimary}"
+                                        Style="{StaticResource SecondaryButton}"
                                         AutomationId="UseAsInputButton" />
                                 <Button Text="Show in folder"
                                         Command="{Binding ShowInFolderCommand}"
