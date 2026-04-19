@@ -1,5 +1,6 @@
 ﻿using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Extensions;
+using ImageGenerator.MAUI.Infrastructure.Diagnostics;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
@@ -14,6 +15,8 @@ public static class MauiProgram
 {
     public static MauiApp CreateMauiApp()
     {
+        CrashLogger.Install();
+
         var builder = MauiApp.CreateBuilder();
         builder
             .UseMauiApp<App>()
