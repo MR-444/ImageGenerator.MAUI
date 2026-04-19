@@ -469,6 +469,26 @@ public partial class GeneratorViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void OpenImage()
+    {
+        if (string.IsNullOrEmpty(GeneratedImagePath) || !File.Exists(GeneratedImagePath))
+            return;
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = GeneratedImagePath,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Couldn't open image: {ex.Message}", StatusKind.Error);
+        }
+    }
+
+    [RelayCommand]
     private async Task RefreshModelsAsync(CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(Parameters.ApiToken))
