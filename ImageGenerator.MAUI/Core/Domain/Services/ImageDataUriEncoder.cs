@@ -1,10 +1,10 @@
-namespace ImageGenerator.MAUI.Infrastructure.External.Replicate;
+namespace ImageGenerator.MAUI.Core.Domain.Services;
 
 /// <summary>
-/// Shared helpers for turning a base64 image payload into a Replicate-friendly
-/// data URI, without re-introducing the old per-service duplication.
+/// Turns a base64-encoded image payload into a data URI (content-type sniffed from magic bytes).
+/// Pure string/byte math — no HTTP or Replicate specifics, so it belongs in Domain.
 /// </summary>
-public static class ReplicateImageEncoding
+public static class ImageDataUriEncoder
 {
     public static string BuildDataUri(string base64)
     {

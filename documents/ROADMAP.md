@@ -66,17 +66,15 @@ Files: `Core/Domain/ValueObjects/Factories/ImageModelFactory.cs`, `Infrastructur
 
 **Size:** 30 min.
 
-#### 1.2c `Core/Domain/Entities/ImageGenerationParameters.cs` is a MAUI ViewModel in disguise
-`using CommunityToolkit.Mvvm.ComponentModel;` + `[ObservableProperty]` attributes — Core can't compile without a MAUI toolkit reference. Framework leak into Domain. Two fixes, in order of aggressiveness:
+#### 1.2c `Core/Domain/Entities/ImageGenerationParameters.cs` uses CommunityToolkit.Mvvm
+`using CommunityToolkit.Mvvm.ComponentModel;` + `[ObservableProperty]`. Audit flagged as "framework leak," but on a second look:
+- `CommunityToolkit.Mvvm` is UI-framework-agnostic (it only generates `INotifyPropertyChanged` plumbing — cross-platform, works in WPF / Avalonia / console / etc.). Not MAUI-specific.
+- The project is a single `.csproj`; there's no compile-time separation of layers to enforce.
+- Moving the entity to Presentation (originally "minimal" recommendation) would force Core/Application and Infrastructure services (`IImageGenerationService`, `IImageFileService`, `ImageModelFactory`) to import Presentation — a *worse* CA violation than the current state.
 
-- **Minimal (recommended for 1.0):** Leave the entity as-is but acknowledge it's actually a Presentation concern misfiled. Move the file to `Presentation/ViewModels/ImageGenerationParameters.cs`. This respects what it actually is (UI state) without refactoring every use site. Update all `using ImageGenerator.MAUI.Core.Domain.Entities;` imports that reach for it.
-- **Proper (later):** Split into plain record `Core/Domain/Entities/ImageGenerationParameters.cs` + Presentation wrapper `Presentation/ViewModels/ImageGenerationParametersVm.cs` that observes it. Payload construction in `ImageModelFactory` takes the plain record.
+**Decision:** keep the entity in Core, document the deliberate choice with an inline comment. Status: **closed as pragmatic no-op**. Re-open only if the project is ever split into separate Core/Infrastructure/Presentation `.csproj` files — then swap to hand-rolled `INotifyPropertyChanged` so Core carries zero external deps. That's ~1 hour of boilerplate.
 
-Go with minimal for 1.0.
-
-Files: move the .cs file; update all `using ...Core.Domain.Entities;` imports that use it (grep).
-
-**Size:** 1–2 hours (mechanical rename + import fixes + any namespace breaks in tests).
+**Size:** done (one comment added at `Core/Domain/Entities/ImageGenerationParameters.cs`).
 
 #### 1.2d `GeneratorViewModel` calls platform APIs directly
 Lines 351, 397, 444, 453, 462, 480, 485, 538, 577, 590, 603, 616 — direct `SecureStorage`, `FilePicker`, `Process.Start`, `Directory.CreateDirectory`, `File.*`. Audit recommends extracting to `ISecureTokenStorage` / `IFileDialogService` / `IProcessLauncher`.

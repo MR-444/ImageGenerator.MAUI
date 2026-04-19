@@ -1,8 +1,8 @@
 using FluentAssertions;
+using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.Services;
 using ImageGenerator.MAUI.Models.Replicate;
-using ImageGenerator.MAUI.Presentation.ViewModels;
 using Moq;
 
 namespace ImageGenerator.MAUI.Tests.Services;

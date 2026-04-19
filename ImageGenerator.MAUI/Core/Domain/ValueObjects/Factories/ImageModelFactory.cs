@@ -1,5 +1,5 @@
+using ImageGenerator.MAUI.Core.Domain.Services;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects.Flux;
-using ImageGenerator.MAUI.Infrastructure.External.Replicate;
 using ImageGenerator.MAUI.Shared.Constants;
 
 namespace ImageGenerator.MAUI.Core.Domain.ValueObjects.Factories;
@@ -110,7 +110,7 @@ public static class ImageModelFactory
     private static string[]? BuildDataUris(IReadOnlyCollection<string> prompts, int maxCount)
         => prompts.Count == 0
             ? null
-            : prompts.Take(maxCount).Select(ReplicateImageEncoding.BuildDataUri).ToArray();
+            : prompts.Take(maxCount).Select(ImageDataUriEncoder.BuildDataUri).ToArray();
 
     private static bool LooksLikeReplicatePath(string modelName)
     {

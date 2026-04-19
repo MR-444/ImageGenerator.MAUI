@@ -1,4 +1,4 @@
-using ImageGenerator.MAUI.Presentation.ViewModels;
+using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 
 namespace ImageGenerator.MAUI.Core.Application.Interfaces;
 

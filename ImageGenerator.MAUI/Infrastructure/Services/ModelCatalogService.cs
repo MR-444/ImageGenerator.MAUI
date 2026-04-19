@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Text.Json;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
+using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
-using ImageGenerator.MAUI.Presentation.ViewModels;
 using Microsoft.Maui.Storage;
 
 namespace ImageGenerator.MAUI.Infrastructure.Services;

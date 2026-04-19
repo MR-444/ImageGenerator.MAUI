@@ -5,6 +5,11 @@ using ImageGenerator.MAUI.Shared.Constants;
 
 namespace ImageGenerator.MAUI.Core.Domain.Entities;
 
+// CommunityToolkit.Mvvm is cross-platform and UI-framework-agnostic (it only implements
+// INotifyPropertyChanged via source gen). Keeping it in Core is a deliberate pragmatic
+// call for this single-.csproj app — revisit if the project is ever split into separate
+// Core/Infrastructure/Presentation assemblies, in which case swap for hand-rolled
+// INotifyPropertyChanged so Core carries zero external deps.
 public partial class ImageGenerationParameters : ObservableObject
 {
     [ObservableProperty]

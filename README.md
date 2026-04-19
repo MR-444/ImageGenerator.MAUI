@@ -22,6 +22,41 @@ A Windows desktop image generation app built on .NET MAUI that drives the Replic
 
 ![After generation — result thumbnail with "Use as input for next generation" and "Show in folder" actions](<documents/Result_Screenshot 2026-04-19 162259.png>)
 
+## 🖥️ Using the app (end users)
+
+### Download
+
+Grab `ImageGenerator.MAUI.exe` from the latest [release](https://github.com/MR-444/ImageGenerator.MAUI/releases). It's a self-contained single-file executable — no installer, no .NET runtime prerequisite. First launch unpacks the bundle once (a few seconds of apparent hang); subsequent launches are fast.
+
+### Windows SmartScreen warning
+
+The exe ships unsigned — buying a code-signing certificate is expensive for a hobby project. On first run, Windows SmartScreen will show **"Windows protected your PC"**. That's expected. Click **More info → Run anyway**. Reputation builds with downloads over time, so the warning will soften eventually.
+
+If you'd rather not click through a SmartScreen warning, you can always [build from source](#-building-from-source).
+
+### Getting a Replicate API token
+
+The app calls Replicate under the hood — including the OpenAI-hosted `gpt-image-1.5` and Google's `nano-banana-2`, which are accessible through Replicate's catalog.
+
+1. Sign up at [replicate.com](https://replicate.com).
+2. Go to **Account → API tokens** (or directly [replicate.com/account/api-tokens](https://replicate.com/account/api-tokens)).
+3. Create a token, copy it.
+4. Paste it into the **API Token** field in the app. It's stored locally with Windows `SecureStorage` (DPAPI, per-user) — never leaves your machine except to call the Replicate endpoint.
+
+### Costs
+
+Each generation costs roughly **$0.003 – $0.05** depending on the model. Flux Pro is on the cheaper end; `gpt-image-1.5` at high quality and `nano-banana-2` at 4K land on the higher end. See [replicate.com/pricing](https://replicate.com/pricing) for current per-model rates.
+
+Replicate pay-as-you-go means no monthly commitment — you only get charged for successful calls.
+
+### Where images are saved
+
+Generated images land in `%USERPROFILE%\Pictures\ImageGenerator.MAUI\` with collision-safe filenames (timestamp + model). The **Show in folder** button on the result card opens Explorer at that location with the new file highlighted.
+
+### Reading back the embedded metadata
+
+The app embeds the full prompt and generation parameters as EXIF `UserComment` so you can recover the recipe months later. To inspect the metadata on a saved image, the recommended tool is **[MediaInfo](https://mediaarea.net/en/MediaInfo)** — cross-platform, free, with both GUI and CLI. Load any generated image and the `UserComment` field shows the JSON-encoded parameters.
+
 ## 🛠️ Technologies
 
 - .NET MAUI 10 (Windows target)
@@ -38,7 +73,7 @@ A Windows desktop image generation app built on .NET MAUI that drives the Replic
 - Windows 10 1809 (build 17763) or newer
 - Replicate API token and/or OpenAI API key
 
-## 🚀 Getting Started
+## 🚀 Building from source
 
 1. Clone the repository:
 ```bash
@@ -48,6 +83,8 @@ git clone https://github.com/MR-444/ImageGenerator.MAUI.git
 2. Open `ImageGenerator.MAUI.sln` in Visual Studio or Rider, restore NuGet packages, build.
 
 3. Run the app. Paste an API token, click **Refresh Models** to populate the picker, pick a model + prompt, and **Generate**.
+
+4. To produce the self-contained single-file release exe, run `pwsh ./publish.ps1` from the repo root.
 
 ## 🏗️ Project Structure
 
@@ -62,7 +99,7 @@ ImageGenerator.MAUI/
 │   │   └── Replicate/        # Refit client + DTOs + service + image encoding helpers
 │   └── Services/             # ImageFileService, ModelCatalogService (fetch + disk cache)
 ├── Presentation/
-│   ├── ViewModels/           # GeneratorViewModel, ModelOption, ModelCapabilities
+│   ├── ViewModels/           # GeneratorViewModel, ModelCapabilities
 │   ├── Views/                # MainPage.xaml
 │   ├── Behaviors/            # NumericOnlyBehavior
 │   └── Converters/           # StringToBool / Inverse / StringToEnum
