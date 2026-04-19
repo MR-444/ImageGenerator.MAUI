@@ -6,7 +6,6 @@
              xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
              x:Class="ImageGenerator.MAUI.Presentation.Views.MainPage"
              x:DataType="vm:GeneratorViewModel"
-             Title="AI Image Generator"
              Padding="0">
     <ContentPage.Resources>
         <ResourceDictionary>
@@ -66,15 +65,13 @@
                         <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowSpacing="4">
                             <VerticalStackLayout Grid.Column="0" Spacing="4">
                                 <Label Text="Provider" Style="{StaticResource FieldLabel}" />
-                                <Picker Title="Provider"
-                                        ItemsSource="{Binding Providers}"
+                                <Picker ItemsSource="{Binding Providers}"
                                         SelectedItem="{Binding SelectedProvider}"
                                         AutomationId="ProviderPicker" />
                             </VerticalStackLayout>
                             <VerticalStackLayout Grid.Column="1" Spacing="4">
                                 <Label Text="Model" Style="{StaticResource FieldLabel}" />
-                                <Picker Title="Model"
-                                        ItemsSource="{Binding FilteredModels}"
+                                <Picker ItemsSource="{Binding FilteredModels}"
                                         ItemDisplayBinding="{Binding Display}"
                                         SelectedItem="{Binding SelectedModel}"
                                         AutomationId="ModelPicker" />
@@ -376,16 +373,6 @@
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="12">
                     <Label Text="Result" Style="{StaticResource CardTitle}" />
-
-                    <Label Text="{Binding GeneratedImagePath, StringFormat='Saved: {0}'}"
-                           Style="{StaticResource HelperText}"
-                           LineBreakMode="MiddleTruncation">
-                        <Label.Triggers>
-                            <DataTrigger TargetType="Label" Binding="{Binding GeneratedImagePath}" Value="{x:Null}">
-                                <Setter Property="IsVisible" Value="False" />
-                            </DataTrigger>
-                        </Label.Triggers>
-                    </Label>
 
                     <Image Source="{Binding GeneratedImagePath}"
                            Aspect="AspectFit"

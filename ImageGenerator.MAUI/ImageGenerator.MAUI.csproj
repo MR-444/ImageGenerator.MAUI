@@ -16,7 +16,7 @@
 		<MauiEnableXamlCBindingWithSourceCompilation>true</MauiEnableXamlCBindingWithSourceCompilation>
 		<NoWarn>MVVMTK0045</NoWarn>
 
-		<ApplicationTitle>ImageGenerator.MAUI</ApplicationTitle>
+		<ApplicationTitle>AI Image Generator</ApplicationTitle>
 		<ApplicationId>com.companyname.imagegenerator.maui</ApplicationId>
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
