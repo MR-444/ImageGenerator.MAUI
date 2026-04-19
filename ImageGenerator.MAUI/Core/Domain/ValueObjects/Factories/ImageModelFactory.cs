@@ -19,7 +19,7 @@ public static class ImageModelFactory
                 Width = parameters.AspectRatio == "custom" ? parameters.Width : null,
                 Height = parameters.AspectRatio == "custom" ? parameters.Height : null,
                 AspectRatio = parameters.AspectRatio,
-                ImagePrompt = parameters.ImagePrompt,
+                ImagePrompt = parameters.ImagePrompts.FirstOrDefault(),
                 SafetyTolerance = parameters.SafetyTolerance,
                 OutputFormat = parameters.OutputFormat.ToString().ToLower(),
                 OutputQuality = parameters.OutputQuality
@@ -30,7 +30,7 @@ public static class ImageModelFactory
                 Prompt = parameters.Prompt,
                 Seed = parameters.Seed,
                 AspectRatio = parameters.AspectRatio,
-                ImagePrompt = parameters.ImagePrompt,
+                ImagePrompt = parameters.ImagePrompts.FirstOrDefault(),
                 SafetyTolerance = parameters.SafetyTolerance,
                 OutputFormat = parameters.OutputFormat.ToString().ToLower(),
                 Raw = parameters.Raw,
@@ -50,12 +50,11 @@ public static class ImageModelFactory
                     ["aspect_ratio"] = parameters.AspectRatio,
                     ["output_format"] = parameters.OutputFormat.ToString().ToLowerInvariant(),
                     ["output_quality"] = parameters.OutputQuality,
-                    ["images"] = string.IsNullOrEmpty(parameters.ImagePrompt)
-                        ? null
-                        : new[] { ReplicateImageEncoding.BuildDataUri(parameters.ImagePrompt) }
+                    ["images"] = BuildDataUris(parameters.ImagePrompts, maxCount: 1)
                 },
 
-            // Replicate-hosted openai/gpt-image-1.5 — narrow AR enum, its own field names.
+            // Replicate-hosted openai/gpt-image-1.5 — narrow AR enum, its own field names,
+            // input_images accepts up to 10.
             ModelConstants.OpenAI.GptImage15OnReplicate => new Dictionary<string, object?>
                 {
                     ["prompt"] = parameters.Prompt,
@@ -70,12 +69,10 @@ public static class ImageModelFactory
                     ["background"] = parameters.GptBackground,
                     ["moderation"] = parameters.GptModeration,
                     ["input_fidelity"] = parameters.GptInputFidelity,
-                    ["input_images"] = string.IsNullOrEmpty(parameters.ImagePrompt)
-                        ? null
-                        : new[] { ReplicateImageEncoding.BuildDataUri(parameters.ImagePrompt) }
+                    ["input_images"] = BuildDataUris(parameters.ImagePrompts, maxCount: 10)
                 },
 
-            // google/nano-banana-2 — no seed, uses `image_input`, wider AR enum,
+            // google/nano-banana-2 — no seed, uses `image_input` (up to 14), wider AR enum,
             // `resolution` knob (1K/2K/4K), rejects webp.
             ModelConstants.Google.NanoBanana2 => new Dictionary<string, object?>
                 {
@@ -87,9 +84,7 @@ public static class ImageModelFactory
                         "webp" => "jpg",
                         var fmt => fmt
                     },
-                    ["image_input"] = string.IsNullOrEmpty(parameters.ImagePrompt)
-                        ? null
-                        : new[] { ReplicateImageEncoding.BuildDataUri(parameters.ImagePrompt) }
+                    ["image_input"] = BuildDataUris(parameters.ImagePrompts, maxCount: 14)
                     // google_search / image_search stay at API defaults (false/false).
                 },
 
@@ -104,12 +99,18 @@ public static class ImageModelFactory
                     ["seed"] = parameters.Seed,
                     ["aspect_ratio"] = parameters.AspectRatio,
                     ["output_format"] = parameters.OutputFormat.ToString().ToLowerInvariant(),
-                    ["output_quality"] = parameters.OutputQuality
+                    ["output_quality"] = parameters.OutputQuality,
+                    ["images"] = BuildDataUris(parameters.ImagePrompts, maxCount: 1)
                 },
 
             _ => throw new ArgumentException($"Unknown model type: {parameters.Model}")
         };
     }
+
+    private static string[]? BuildDataUris(IReadOnlyCollection<string> prompts, int maxCount)
+        => prompts.Count == 0
+            ? null
+            : prompts.Take(maxCount).Select(ReplicateImageEncoding.BuildDataUri).ToArray();
 
     private static bool LooksLikeReplicatePath(string modelName)
     {

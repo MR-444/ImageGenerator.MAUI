@@ -111,26 +111,41 @@
                         IsVisible="{Binding SupportsImagePrompt}">
                     <VerticalStackLayout Spacing="12">
                         <Label Text="{Binding ImagePromptCardTitle}" Style="{StaticResource CardTitle}" />
-                        <Label Text="Optional reference image. Support varies by model."
+                        <Label Text="Optional reference image(s). Max count and payload field vary by model."
                                Style="{StaticResource HelperText}" />
 
-                        <HorizontalStackLayout Spacing="8">
-                            <Button Text="Choose an image…"
-                                    Command="{Binding SelectImagePromptCommand}"
-                                    Style="{StaticResource SecondaryButton}"
-                                    AutomationId="SelectImageButton" />
-                            <Button Text="Remove"
-                                    Command="{Binding RemoveImagePromptCommand}"
-                                    Style="{StaticResource SecondaryButton}"
-                                    IsVisible="{Binding IsImageSelected}"
-                                    AutomationId="RemoveImageButton" />
-                        </HorizontalStackLayout>
+                        <CollectionView ItemsSource="{Binding SelectedImages}"
+                                        ItemsLayout="HorizontalList"
+                                        HeightRequest="140"
+                                        IsVisible="{Binding InputImageCount, Converter={StaticResource IntGreaterThanZero}}">
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="vm:GeneratorViewModel+InputImageItem">
+                                    <Grid Padding="4" WidthRequest="140" HeightRequest="140">
+                                        <Image Source="{Binding Preview}" Aspect="AspectFill"
+                                               SemanticProperties.Description="{Binding FileName}" />
+                                        <Button Text="×" FontSize="14" Padding="0"
+                                                WidthRequest="28" HeightRequest="28"
+                                                HorizontalOptions="End" VerticalOptions="Start"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:GeneratorViewModel}}, Path=RemoveImageCommand}"
+                                                CommandParameter="{Binding .}"
+                                                AutomationId="RemoveImageButton" />
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
 
-                        <Image Source="{Binding SelectedImagePreview}"
-                               Aspect="AspectFit"
-                               HeightRequest="180"
-                               IsVisible="{Binding IsImageSelected}"
-                               SemanticProperties.Description="Selected input image preview" />
+                        <HorizontalStackLayout Spacing="8">
+                            <Button Text="Add image"
+                                    Command="{Binding AddImageCommand}"
+                                    IsEnabled="{Binding CanAddImage}"
+                                    Style="{StaticResource SecondaryButton}"
+                                    AutomationId="AddImageButton" />
+                            <Button Text="Clear all"
+                                    Command="{Binding ClearImagesCommand}"
+                                    IsVisible="{Binding InputImageCount, Converter={StaticResource IntGreaterThanZero}}"
+                                    Style="{StaticResource SecondaryButton}"
+                                    AutomationId="ClearImagesButton" />
+                        </HorizontalStackLayout>
 
                         <Label Text="{Binding Parameters.ImagePromptStrength, StringFormat='Image prompt strength: {0:F2}'}"
                                Style="{StaticResource FieldLabel}"

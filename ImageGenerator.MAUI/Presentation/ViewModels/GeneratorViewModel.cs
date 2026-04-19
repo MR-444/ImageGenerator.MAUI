@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -90,14 +92,12 @@ public partial class GeneratorViewModel : ObservableObject
         OnPropertyChanged(nameof(SupportsCustomDimensions));
     }
 
-    [ObservableProperty]
-    private ImageSource? _selectedImagePreview;
+    public sealed record InputImageItem(string Base64, ImageSource? Preview, string FileName);
 
-    [ObservableProperty]
-    private bool _isImageSelected;
+    public ObservableCollection<InputImageItem> SelectedImages { get; } = [];
 
-    [ObservableProperty]
-    private string? _imagePromptBase64;
+    public int InputImageCount => SelectedImages.Count;
+    public bool CanAddImage => SelectedImages.Count < MaxImageInputs;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GenerateImageCommand))]
@@ -117,7 +117,7 @@ public partial class GeneratorViewModel : ObservableObject
     public bool SupportsCustomDimensions => _capabilities.CustomDimensions && IsCustomAspectRatio;
     public bool SupportsSeed => _capabilities.Seed;
     public bool SupportsImagePrompt => _capabilities.ImagePrompt;
-    public bool SupportsImagePromptStrength => _capabilities.ImagePromptStrength && IsImageSelected;
+    public bool SupportsImagePromptStrength => _capabilities.ImagePromptStrength && SelectedImages.Count > 0;
     public int MaxImageInputs => _capabilities.MaxImageInputs;
     public string ImagePromptCardTitle => _capabilities.MaxImageInputs > 1
         ? $"Input Images (optional, up to {_capabilities.MaxImageInputs})"
@@ -136,20 +136,30 @@ public partial class GeneratorViewModel : ObservableObject
         SyncSelectionFromParameters(value.Model);
     }
 
-    partial void OnIsImageSelectedChanged(bool value)
+    private int _lastImageCount;
+
+    private void OnSelectedImagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        // When the user loads an image on a model whose AR list includes "match_input_image",
-        // auto-select it (Flux 2 family and nano-banana-2).
-        if (value && AspectRatioOptions.Contains("match_input_image"))
+        // Mirror into the domain-layer entity so the factory sees the same list.
+        Parameters.ImagePrompts.Clear();
+        foreach (var item in SelectedImages) Parameters.ImagePrompts.Add(item.Base64);
+
+        // Auto-select match_input_image on 0→1, fall back on 1→0. Models without the option
+        // in their AR list (Flux 1.1 Pro/Pro Ultra) no-op the first branch.
+        var count = SelectedImages.Count;
+        if (_lastImageCount == 0 && count > 0 && AspectRatioOptions.Contains("match_input_image"))
         {
             Parameters.AspectRatio = "match_input_image";
         }
-        else if (!value && Parameters.AspectRatio == "match_input_image")
+        else if (_lastImageCount > 0 && count == 0 && Parameters.AspectRatio == "match_input_image")
         {
-            // Fall back to the first non-"match_input_image" option — typically "1:1".
             var fallback = _capabilities.AspectRatios.FirstOrDefault(r => r != "match_input_image");
             if (fallback != null) Parameters.AspectRatio = fallback;
         }
+        _lastImageCount = count;
+
+        OnPropertyChanged(nameof(InputImageCount));
+        OnPropertyChanged(nameof(CanAddImage));
         OnPropertyChanged(nameof(SupportsImagePromptStrength));
     }
 
@@ -187,6 +197,10 @@ public partial class GeneratorViewModel : ObservableObject
         GptModerationOptions = _capabilities.GptModerationOptions?.ToList() ?? [];
         GptInputFidelityOptions = _capabilities.GptInputFidelityOptions?.ToList() ?? [];
 
+        // Truncate attached images to the new model's cap so users don't silently lose excess
+        // images at generation time. The CollectionChanged handler raises CanAddImage etc.
+        while (SelectedImages.Count > _capabilities.MaxImageInputs) SelectedImages.RemoveAt(SelectedImages.Count - 1);
+
         OnPropertyChanged(nameof(SupportsSafetyTolerance));
         OnPropertyChanged(nameof(SupportsPromptUpsampling));
         OnPropertyChanged(nameof(SupportsOutputQuality));
@@ -196,6 +210,7 @@ public partial class GeneratorViewModel : ObservableObject
         OnPropertyChanged(nameof(SupportsImagePrompt));
         OnPropertyChanged(nameof(SupportsImagePromptStrength));
         OnPropertyChanged(nameof(MaxImageInputs));
+        OnPropertyChanged(nameof(CanAddImage));
         OnPropertyChanged(nameof(ImagePromptCardTitle));
         OnPropertyChanged(nameof(SupportsResolution));
         OnPropertyChanged(nameof(SupportsGptQuality));
@@ -261,6 +276,8 @@ public partial class GeneratorViewModel : ObservableObject
         _imageService = imageService ?? throw new ArgumentNullException(nameof(imageService));
         _imageFileService = imageFileService ?? throw new ArgumentNullException(nameof(imageFileService));
         _catalogService = catalogService ?? throw new ArgumentNullException(nameof(catalogService));
+
+        SelectedImages.CollectionChanged += OnSelectedImagesChanged;
 
         _providers = BuildProviders();
 
@@ -367,8 +384,14 @@ public partial class GeneratorViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task SelectImagePromptAsync()
+    private async Task AddImageAsync()
     {
+        if (!CanAddImage)
+        {
+            SetStatus($"Maximum {MaxImageInputs} image(s) for this model.", StatusKind.Error);
+            return;
+        }
+
         SetStatus("Opening file picker…", StatusKind.Info);
 
         var result = await FilePicker.PickAsync(new PickOptions
@@ -377,38 +400,35 @@ public partial class GeneratorViewModel : ObservableObject
             FileTypes = FilePickerFileType.Images
         });
 
-        if (result != null)
+        if (result == null)
         {
-            IsImageSelected = true;
-
-            await using var stream = await result.OpenReadAsync();
-            using var memoryStream = new MemoryStream();
-            await stream.CopyToAsync(memoryStream);
-            var imageBytes = memoryStream.ToArray();
-
-            ImagePromptBase64 = Convert.ToBase64String(imageBytes);
-            Parameters.ImagePrompt = ImagePromptBase64;
-
-            SelectedImagePreview = ImageSource.FromStream(() => new MemoryStream(imageBytes));
-            SetStatus($"Selected image: {result.FileName}", StatusKind.Info);
-        }
-        else
-        {
-            IsImageSelected = false;
-            ImagePromptBase64 = null;
-            Parameters.ImagePrompt = null;
-            SelectedImagePreview = null;
             SetStatus(string.Empty, StatusKind.None);
+            return;
         }
+
+        await using var stream = await result.OpenReadAsync();
+        using var memoryStream = new MemoryStream();
+        await stream.CopyToAsync(memoryStream);
+        var imageBytes = memoryStream.ToArray();
+        var base64 = Convert.ToBase64String(imageBytes);
+        var preview = ImageSource.FromStream(() => new MemoryStream(imageBytes));
+
+        SelectedImages.Add(new InputImageItem(base64, preview, result.FileName));
+        SetStatus($"Added image: {result.FileName} ({SelectedImages.Count}/{MaxImageInputs})", StatusKind.Info);
     }
 
     [RelayCommand]
-    private void RemoveImagePrompt()
+    private void RemoveImage(InputImageItem? item)
     {
-        IsImageSelected = false;
-        ImagePromptBase64 = null;
-        Parameters.ImagePrompt = null;
-        SelectedImagePreview = null;
+        if (item is null) return;
+        SelectedImages.Remove(item);
+        SetStatus(string.Empty, StatusKind.None);
+    }
+
+    [RelayCommand]
+    private void ClearImages()
+    {
+        SelectedImages.Clear();
         SetStatus(string.Empty, StatusKind.None);
     }
 
@@ -559,18 +579,22 @@ public partial class GeneratorViewModel : ObservableObject
             SetStatus("No generated image available to use as input.", StatusKind.Error);
             return;
         }
+        if (!CanAddImage)
+        {
+            SetStatus($"Maximum {MaxImageInputs} image(s) for this model.", StatusKind.Error);
+            return;
+        }
 
         try
         {
             var imageBytes = await File.ReadAllBytesAsync(GeneratedImagePath);
+            var base64 = Convert.ToBase64String(imageBytes);
+            var preview = ImageSource.FromStream(() => new MemoryStream(imageBytes));
+            var name = Path.GetFileName(GeneratedImagePath);
 
-            IsImageSelected = true;
-            ImagePromptBase64 = Convert.ToBase64String(imageBytes);
-            Parameters.ImagePrompt = ImagePromptBase64;
+            SelectedImages.Add(new InputImageItem(base64, preview, name));
 
-            SelectedImagePreview = ImageSource.FromStream(() => new MemoryStream(imageBytes));
-
-            SetStatus("Generated image set as input prompt.", StatusKind.Success);
+            SetStatus("Generated image added as input.", StatusKind.Success);
         }
         catch (Exception ex)
         {

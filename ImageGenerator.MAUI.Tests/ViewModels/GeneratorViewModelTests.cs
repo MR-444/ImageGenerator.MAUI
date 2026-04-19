@@ -147,28 +147,30 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
-    public void OnIsImageSelected_OnFlux2Model_AutoSelectsMatchInputImage()
+    public void AddImage_OnFlux2Model_AutoSelectsMatchInputImage()
     {
         _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
-
         _viewModel.AspectRatioOptions.Should().Contain("match_input_image");
 
-        _viewModel.IsImageSelected = true;
+        _viewModel.SelectedImages.Add(FakeImage("a"));
 
         _viewModel.Parameters.AspectRatio.Should().Be("match_input_image");
     }
 
     [Fact]
-    public void OnIsImageDeselected_OnFlux2Model_FallsBackToFirstAspectRatio()
+    public void RemoveLastImage_OnFlux2Model_FallsBackToFirstAspectRatio()
     {
         _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
-        _viewModel.IsImageSelected = true;
+        _viewModel.SelectedImages.Add(FakeImage("a"));
         _viewModel.Parameters.AspectRatio.Should().Be("match_input_image");
 
-        _viewModel.IsImageSelected = false;
+        _viewModel.SelectedImages.Clear();
 
         _viewModel.Parameters.AspectRatio.Should().NotBe("match_input_image");
     }
+
+    private static GeneratorViewModel.InputImageItem FakeImage(string base64 = "abc", string name = "test.png") =>
+        new(base64, null, name);
 
     [Fact]
     public void SelectedModel_Changed_AdjustsAspectRatioOptionsToSupportedList()
@@ -449,5 +451,128 @@ public class GeneratorViewModelTests
 
         _viewModel.StatusKind.Should().Be(StatusKind.Canceled);
         _viewModel.GeneratedImagePath.Should().BeNull();
+    }
+
+    // --- Card title + strength gate state machine ---
+
+    [Theory]
+    [InlineData(ModelConstants.Flux.Pro11,                  "Input Image (optional)")]
+    [InlineData(ModelConstants.Flux.Pro11Ultra,             "Input Image (optional)")]
+    [InlineData(ModelConstants.Flux.Klein4b,                "Input Image (optional)")]
+    [InlineData(ModelConstants.OpenAI.GptImage15OnReplicate, "Input Images (optional, up to 10)")]
+    [InlineData(ModelConstants.Google.NanoBanana2,          "Input Images (optional, up to 14)")]
+    public void ImagePromptCardTitle_ReflectsMaxImageInputs(string model, string expected)
+    {
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == model);
+
+        _viewModel.ImagePromptCardTitle.Should().Be(expected);
+    }
+
+    [Fact]
+    public void SupportsImagePromptStrength_RequiresBothUltraModelAndAtLeastOneImage()
+    {
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11Ultra);
+        _viewModel.SupportsImagePromptStrength.Should().BeFalse("no image yet");
+
+        _viewModel.SelectedImages.Add(FakeImage("a"));
+        _viewModel.SupportsImagePromptStrength.Should().BeTrue();
+
+        _viewModel.SelectedImages.Clear();
+        _viewModel.SupportsImagePromptStrength.Should().BeFalse("image removed");
+    }
+
+    [Fact]
+    public void SupportsImagePromptStrength_NonUltraModel_StaysFalseEvenWithImages()
+    {
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
+        _viewModel.SelectedImages.Add(FakeImage("a"));
+
+        _viewModel.SupportsImagePromptStrength.Should().BeFalse();
+    }
+
+    // --- Multi-image commands ---
+
+    [Fact]
+    public async Task AddImageCommand_AtCap_SetsErrorStatus_AndDoesNotOpenPicker()
+    {
+        // Flux 1.1 Pro has MaxImageInputs = 1.
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.SelectedImages.Add(FakeImage("a"));
+
+        _viewModel.CanAddImage.Should().BeFalse();
+        await ((IAsyncRelayCommand)_viewModel.AddImageCommand).ExecuteAsync(null);
+
+        _viewModel.StatusKind.Should().Be(StatusKind.Error);
+        _viewModel.StatusMessage.Should().Contain("Maximum");
+        _viewModel.SelectedImages.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void RemoveImageCommand_RemovesOnlyTargetedItem()
+    {
+        var a = FakeImage("a", "a.png");
+        var b = FakeImage("b", "b.png");
+        var c = FakeImage("c", "c.png");
+        _viewModel.SelectedImages.Add(a);
+        _viewModel.SelectedImages.Add(b);
+        _viewModel.SelectedImages.Add(c);
+
+        _viewModel.RemoveImageCommand.Execute(b);
+
+        _viewModel.SelectedImages.Should().ContainInOrder(a, c);
+        _viewModel.SelectedImages.Should().NotContain(b);
+    }
+
+    [Fact]
+    public void ClearImagesCommand_EmptiesCollection()
+    {
+        _viewModel.SelectedImages.Add(FakeImage("a"));
+        _viewModel.SelectedImages.Add(FakeImage("b"));
+
+        _viewModel.ClearImagesCommand.Execute(null);
+
+        _viewModel.SelectedImages.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SwitchModelWithNarrowerCap_TruncatesSelectedImagesToNewCap()
+    {
+        // Start on nano-banana-2 (cap 14), load 5 images, switch to Flux 1.1 Pro (cap 1).
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Google.NanoBanana2);
+        for (var i = 0; i < 5; i++) _viewModel.SelectedImages.Add(FakeImage($"img{i}"));
+        _viewModel.SelectedImages.Should().HaveCount(5);
+
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+
+        _viewModel.SelectedImages.Should().HaveCount(1);
+        _viewModel.CanAddImage.Should().BeFalse();
+    }
+
+    [Fact]
+    public void CanAddImage_FlipsAtExactlyTheCap()
+    {
+        // gpt-image-1.5: cap is 10.
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage15OnReplicate);
+
+        for (var i = 0; i < 9; i++)
+        {
+            _viewModel.SelectedImages.Add(FakeImage($"img{i}"));
+            _viewModel.CanAddImage.Should().BeTrue($"only {i + 1} of 10 added");
+        }
+
+        _viewModel.SelectedImages.Add(FakeImage("img10"));
+        _viewModel.CanAddImage.Should().BeFalse("reached cap");
+    }
+
+    [Fact]
+    public void ImagePrompts_MirrorsSelectedImagesOnChange()
+    {
+        _viewModel.SelectedImages.Add(FakeImage("a", "a.png"));
+        _viewModel.SelectedImages.Add(FakeImage("b", "b.png"));
+
+        _viewModel.Parameters.ImagePrompts.Should().ContainInOrder("a", "b");
+
+        _viewModel.SelectedImages.RemoveAt(0);
+        _viewModel.Parameters.ImagePrompts.Should().ContainInOrder("b").And.HaveCount(1);
     }
 }

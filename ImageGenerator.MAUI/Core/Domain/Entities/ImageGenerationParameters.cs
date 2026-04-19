@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Shared.Constants;
@@ -23,9 +24,8 @@ public partial class ImageGenerationParameters : ObservableObject
 
     [ObservableProperty]
     private string _aspectRatio = "16:9";
-    
-    [ObservableProperty]
-    private string? _imagePrompt;
+
+    public ObservableCollection<string> ImagePrompts { get; } = [];
 
     [ObservableProperty]
     private int _width = ValidationConstants.ImageWidthMax / 2;

@@ -31,9 +31,9 @@ public class ReplicateImageGenerationServiceTests
         {
             Model = ModelConstants.Flux.Klein4b,
             Prompt = "A test image",
-            ApiToken = "test-token",
-            ImagePrompt = "test-base64-data"
+            ApiToken = "test-token"
         };
+        parameters.ImagePrompts.Add("test-base64-data");
 
         StubHappyPath();
 
@@ -54,8 +54,7 @@ public class ReplicateImageGenerationServiceTests
         {
             Model = ModelConstants.Flux.Klein4b,
             Prompt = "A test image",
-            ApiToken = "test-token",
-            ImagePrompt = null
+            ApiToken = "test-token"
         };
 
         StubHappyPath();

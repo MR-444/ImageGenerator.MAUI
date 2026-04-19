@@ -20,12 +20,12 @@ public class ImageModelFactoryTests
             Width = 1024,
             Height = 1024,
             AspectRatio = "custom",
-            ImagePrompt = "test image prompt",
             SafetyTolerance = 2,
             OutputFormat = ImageOutputFormat.Png,
             OutputQuality = 80,
             PromptUpsampling = true
         };
+        parameters.ImagePrompts.Add("test image prompt");
 
         var result = ImageModelFactory.CreateImageModel(parameters) as Flux11Pro;
 
@@ -72,12 +72,12 @@ public class ImageModelFactoryTests
             Prompt = "test prompt",
             Seed = 123,
             AspectRatio = "1:1",
-            ImagePrompt = "test image prompt",
             SafetyTolerance = 2,
             OutputFormat = ImageOutputFormat.Jpg,
             Raw = true,
             ImagePromptStrength = 0.5f
         };
+        parameters.ImagePrompts.Add("test image prompt");
 
         var result = ImageModelFactory.CreateImageModel(parameters) as Flux11ProUltra;
 
@@ -225,6 +225,76 @@ public class ImageModelFactoryTests
         var result = ImageModelFactory.CreateImageModel(parameters);
 
         var dict = result.Should().BeOfType<Dictionary<string, object?>>().Subject;
-        dict.Keys.Should().BeEquivalentTo(["prompt", "seed", "aspect_ratio", "output_format", "output_quality"]);
+        dict.Keys.Should().BeEquivalentTo(["prompt", "seed", "aspect_ratio", "output_format", "output_quality", "images"]);
+        dict["images"].Should().BeNull();
+    }
+
+    // --- Multi-image payload shape ---
+
+    [Fact]
+    public void CreateImageModel_Flux11Pro_TakesOnlyFirstImageFromCollection()
+    {
+        var parameters = new ImageGenerationParameters { Model = ModelConstants.Flux.Pro11, Prompt = "p" };
+        parameters.ImagePrompts.Add("first");
+        parameters.ImagePrompts.Add("second");
+
+        var result = (Flux11Pro)ImageModelFactory.CreateImageModel(parameters)!;
+
+        result.ImagePrompt.Should().Be("first");
+    }
+
+    [Fact]
+    public void CreateImageModel_GptImage15OnReplicate_TruncatesInputImagesToTen()
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.OpenAI.GptImage15OnReplicate,
+            Prompt = "p",
+            AspectRatio = "1:1",
+            OutputFormat = ImageOutputFormat.Png
+        };
+        for (var i = 0; i < 15; i++) parameters.ImagePrompts.Add($"img{i}");
+
+        var result = (Dictionary<string, object?>)ImageModelFactory.CreateImageModel(parameters);
+
+        var arr = (string[])result["input_images"]!;
+        arr.Should().HaveCount(10);
+    }
+
+    [Fact]
+    public void CreateImageModel_NanoBanana2_TruncatesImageInputToFourteen()
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.Google.NanoBanana2,
+            Prompt = "p",
+            AspectRatio = "1:1",
+            OutputFormat = ImageOutputFormat.Png
+        };
+        for (var i = 0; i < 20; i++) parameters.ImagePrompts.Add($"img{i}");
+
+        var result = (Dictionary<string, object?>)ImageModelFactory.CreateImageModel(parameters);
+
+        var arr = (string[])result["image_input"]!;
+        arr.Should().HaveCount(14);
+    }
+
+    [Fact]
+    public void CreateImageModel_Flux2Family_ImagesArrayHasExactlyOne_WhenMultipleProvided()
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.Flux.Klein4b,
+            Prompt = "p",
+            AspectRatio = "1:1",
+            OutputFormat = ImageOutputFormat.Png
+        };
+        parameters.ImagePrompts.Add("a");
+        parameters.ImagePrompts.Add("b");
+
+        var result = (Dictionary<string, object?>)ImageModelFactory.CreateImageModel(parameters);
+
+        var arr = (string[])result["images"]!;
+        arr.Should().HaveCount(1);
     }
 }
