@@ -28,11 +28,6 @@
         </Setter>
     </Style>
 
-    <Style x:Key="ContentShell" TargetType="Grid">
-        <Setter Property="MaximumWidthRequest" Value="1600" />
-        <Setter Property="HorizontalOptions" Value="Center" />
-    </Style>
-
     <Style x:Key="LeftRailScroll" TargetType="ScrollView">
         <Setter Property="Padding" Value="20,20,10,0" />
     </Style>

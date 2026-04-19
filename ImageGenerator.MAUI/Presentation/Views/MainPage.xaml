@@ -17,7 +17,6 @@
     </ContentPage.Resources>
 
     <Grid x:Name="RootGrid"
-          Style="{StaticResource ContentShell}"
           ColumnDefinitions="*"
           RowDefinitions="*,Auto">
         <VisualStateManager.VisualStateGroups>
