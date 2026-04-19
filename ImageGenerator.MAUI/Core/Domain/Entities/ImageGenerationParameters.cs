@@ -33,6 +33,18 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private int _height = ValidationConstants.ImageHeightMax / 2;
 
+    partial void OnWidthChanged(int value)
+    {
+        if (value < ValidationConstants.ImageWidthMin) Width = ValidationConstants.ImageWidthMin;
+        else if (value > ValidationConstants.ImageWidthMax) Width = ValidationConstants.ImageWidthMax;
+    }
+
+    partial void OnHeightChanged(int value)
+    {
+        if (value < ValidationConstants.ImageHeightMin) Height = ValidationConstants.ImageHeightMin;
+        else if (value > ValidationConstants.ImageHeightMax) Height = ValidationConstants.ImageHeightMax;
+    }
+
     [ObservableProperty]
     private int _safetyTolerance = ValidationConstants.SafetyMax;
 

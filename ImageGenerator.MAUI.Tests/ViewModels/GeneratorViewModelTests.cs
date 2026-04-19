@@ -4,19 +4,38 @@ using Moq;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
+using System.Collections.ObjectModel;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
 
 public class GeneratorViewModelTests
 {
+    private const string FakeSavePath = @"C:\fake\generated.png";
+
     private readonly GeneratorViewModel _viewModel;
     private readonly Mock<IImageGenerationService> _mockImageService;
+    private readonly Mock<IImageFileService> _mockImageFileService;
+    private readonly Mock<IModelCatalogService> _mockCatalogService;
 
     public GeneratorViewModelTests()
     {
         _mockImageService = new Mock<IImageGenerationService>();
-        _viewModel = new GeneratorViewModel(_mockImageService.Object);
+        _mockImageFileService = new Mock<IImageFileService>();
+        _mockImageFileService
+            .Setup(x => x.GetUniqueSavePath(It.IsAny<string>(), It.IsAny<ImageGenerationParameters>()))
+            .Returns(FakeSavePath);
+        _mockImageFileService
+            .Setup(x => x.SaveImageWithMetadataAsync(It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<ImageGenerationParameters>()))
+            .Returns(Task.CompletedTask);
+
+        _mockCatalogService = new Mock<IModelCatalogService>();
+        _mockCatalogService
+            .Setup(x => x.FetchAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ModelOption>());
+
+        _viewModel = new GeneratorViewModel(_mockImageService.Object, _mockImageFileService.Object, _mockCatalogService.Object);
     }
 
     [Fact]
@@ -25,7 +44,6 @@ public class GeneratorViewModelTests
         var values = _viewModel.AllModels.Select(m => m.Value).ToList();
         values.Should().Contain(ModelConstants.OpenAI.GptImage1);
         values.Should().Contain(ModelConstants.Flux.Dev);
-        values.Should().Contain(ModelConstants.Flux.Pro);
         values.Should().Contain(ModelConstants.Flux.Pro11);
         values.Should().Contain(ModelConstants.Flux.Schnell);
         values.Should().Contain(ModelConstants.Flux.Pro11Ultra);
@@ -130,22 +148,45 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
-    public void OnIsImageSelectedChanged_WhenTrue_ShouldAddMatchInputImageOption()
+    public void OnIsImageSelected_OnKontextModel_AutoSelectsMatchInputImage()
     {
-        _viewModel.IsImageSelected = true;
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.KontextMax);
 
         _viewModel.AspectRatioOptions.Should().Contain("match_input_image");
+
+        _viewModel.IsImageSelected = true;
+
         _viewModel.Parameters.AspectRatio.Should().Be("match_input_image");
     }
 
     [Fact]
-    public void OnIsImageSelectedChanged_WhenFalse_ShouldRemoveMatchInputImageOption()
+    public void OnIsImageDeselected_OnKontextModel_FallsBackToFirstAspectRatio()
     {
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.KontextMax);
         _viewModel.IsImageSelected = true;
+        _viewModel.Parameters.AspectRatio.Should().Be("match_input_image");
+
         _viewModel.IsImageSelected = false;
 
-        _viewModel.AspectRatioOptions.Should().NotContain("match_input_image");
-        _viewModel.Parameters.AspectRatio.Should().Be("16:9");
+        _viewModel.Parameters.AspectRatio.Should().NotBe("match_input_image");
+    }
+
+    [Fact]
+    public void SelectedModel_Changed_AdjustsAspectRatioOptionsToSupportedList()
+    {
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Schnell);
+
+        _viewModel.AspectRatioOptions.Should().NotContain("3:4").And.NotContain("4:3");
+        _viewModel.AspectRatioOptions.Should().Contain("1:1");
+    }
+
+    [Fact]
+    public void SelectedModel_GptImage1_ExposesSizeOptions()
+    {
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage1);
+
+        _viewModel.AspectRatioLabel.Should().Be("Size");
+        _viewModel.AspectRatioOptions.Should().BeEquivalentTo("auto", "1024x1024", "1536x1024", "1024x1536");
     }
 
     [Fact]
@@ -163,6 +204,213 @@ public class GeneratorViewModelTests
         _viewModel.StatusKind.Should().Be(StatusKind.Error);
         _viewModel.GeneratedImagePath.Should().BeNull();
         _viewModel.IsGenerating.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(ModelConstants.Flux.Pro11,      true,  true,  true,  true,  true,  true)]
+    [InlineData(ModelConstants.Flux.Pro11Ultra, true,  false, false, true,  true,  true)]
+    [InlineData(ModelConstants.Flux.Dev,        true,  false, true,  true,  true,  true)]
+    [InlineData(ModelConstants.Flux.Schnell,    true,  false, true,  true,  true,  false)]
+    [InlineData(ModelConstants.Flux.KontextMax, false, false, false, true,  true,  true)]
+    [InlineData(ModelConstants.Flux.KontextPro, false, false, false, true,  true,  true)]
+    [InlineData(ModelConstants.OpenAI.GptImage1, false, false, true, true, false, false)]
+    public void Capabilities_MatchExpectedMatrixPerModel(
+        string modelValue,
+        bool safety,
+        bool upsampling,
+        bool outputQuality,
+        bool aspectRatio,
+        bool seed,
+        bool imagePrompt)
+    {
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == modelValue);
+
+        _viewModel.SupportsSafetyTolerance.Should().Be(safety);
+        _viewModel.SupportsPromptUpsampling.Should().Be(upsampling);
+        _viewModel.SupportsOutputQuality.Should().Be(outputQuality);
+        _viewModel.SupportsAspectRatio.Should().Be(aspectRatio);
+        _viewModel.SupportsSeed.Should().Be(seed);
+        _viewModel.SupportsImagePrompt.Should().Be(imagePrompt);
+    }
+
+    [Fact]
+    public void Capabilities_FluxKlein4b_ReturnsTwelveAspectRatios()
+    {
+        var caps = ModelCapabilities.For(ModelConstants.Flux.Klein4b);
+
+        caps.AspectRatios.Should().HaveCount(12).And.Contain("match_input_image");
+        caps.SafetyTolerance.Should().BeFalse();
+        caps.PromptUpsampling.Should().BeFalse();
+        caps.Seed.Should().BeTrue();
+        caps.ImagePrompt.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Capabilities_GptImage15OnReplicate_ReturnsThreeAspectRatios()
+    {
+        var caps = ModelCapabilities.For(ModelConstants.OpenAI.GptImage15OnReplicate);
+
+        caps.AspectRatios.Should().BeEquivalentTo(["1:1", "3:2", "2:3"]);
+        caps.AspectRatioLabel.Should().Be("Aspect ratio");
+        caps.Seed.Should().BeFalse();
+        caps.ImagePrompt.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Width_WhenSetBelowMin_IsClampedToMin()
+    {
+        _viewModel.Parameters.Width = 10;
+        _viewModel.Parameters.Width.Should().Be(ValidationConstants.ImageWidthMin);
+    }
+
+    [Fact]
+    public void Width_WhenSetAboveMax_IsClampedToMax()
+    {
+        _viewModel.Parameters.Width = 999_999;
+        _viewModel.Parameters.Width.Should().Be(ValidationConstants.ImageWidthMax);
+    }
+
+    [Fact]
+    public void Height_WhenSetBelowMin_IsClampedToMin()
+    {
+        _viewModel.Parameters.Height = 0;
+        _viewModel.Parameters.Height.Should().Be(ValidationConstants.ImageHeightMin);
+    }
+
+    [Fact]
+    public void Height_WhenSetAboveMax_IsClampedToMax()
+    {
+        _viewModel.Parameters.Height = 10_000;
+        _viewModel.Parameters.Height.Should().Be(ValidationConstants.ImageHeightMax);
+    }
+
+    [Fact]
+    public async Task RefreshModels_Success_ReplacesAllModelsAndReportsSuccess()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        var fetched = new List<ModelOption>
+        {
+            new("flux-2", "black-forest-labs/flux-2", "Black Forest Labs"),
+            new("gpt-image-1.5", "openai/gpt-image-1.5", "OpenAI (via Replicate)")
+        };
+        _mockCatalogService
+            .Setup(x => x.FetchAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(fetched);
+
+        await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
+
+        _viewModel.AllModels.Should().HaveCount(2);
+        _viewModel.AllModels.Select(m => m.Value).Should().BeEquivalentTo(
+            ["black-forest-labs/flux-2", "openai/gpt-image-1.5"]);
+        _viewModel.StatusKind.Should().Be(StatusKind.Success);
+        _mockCatalogService.Verify(
+            x => x.SaveCachedAsync(It.IsAny<IReadOnlyList<ModelOption>>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task LoadCachedCatalog_WithCachedModels_ReplacesAllModelsAndProviders()
+    {
+        var cached = new List<ModelOption>
+        {
+            new("flux-2-pro", "black-forest-labs/flux-2-pro", "Black Forest Labs"),
+            new("gpt-image-1.5", "openai/gpt-image-1.5", "OpenAI (via Replicate)")
+        };
+        _mockCatalogService
+            .Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(cached);
+
+        await _viewModel.LoadCachedCatalogAsync();
+
+        _viewModel.AllModels.Select(m => m.Value).Should().BeEquivalentTo(
+            ["black-forest-labs/flux-2-pro", "openai/gpt-image-1.5"]);
+        _viewModel.Providers.Should().Contain("Black Forest Labs")
+            .And.Contain("OpenAI (via Replicate)");
+    }
+
+    [Fact]
+    public async Task LoadCachedCatalog_WhenCacheEmpty_KeepsHardcodedSeed()
+    {
+        var seed = _viewModel.AllModels.ToList();
+        _mockCatalogService
+            .Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<ModelOption>?)null);
+
+        await _viewModel.LoadCachedCatalogAsync();
+
+        _viewModel.AllModels.Should().BeEquivalentTo(seed);
+    }
+
+    [Fact]
+    public async Task LoadCachedCatalog_RunningTwice_IgnoresSecondInvocation()
+    {
+        // OnAppearing can fire more than once; the second hydrate must not stomp the live list.
+        var cached = new List<ModelOption>
+        {
+            new("flux-2", "black-forest-labs/flux-2", "Black Forest Labs")
+        };
+        _mockCatalogService
+            .Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(cached);
+
+        await _viewModel.LoadCachedCatalogAsync();
+        await _viewModel.LoadCachedCatalogAsync();
+
+        _mockCatalogService.Verify(
+            x => x.LoadCachedAsync(It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task RefreshModels_Success_UpdatesFilteredModelsFromAllModels()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        var fetched = new List<ModelOption>
+        {
+            new("flux-2-pro", "black-forest-labs/flux-2-pro", "Black Forest Labs"),
+            new("gpt-image-1.5", "openai/gpt-image-1.5", "OpenAI (via Replicate)"),
+            new("nano-banana-2", "google/nano-banana-2", "google")
+        };
+        _mockCatalogService
+            .Setup(x => x.FetchAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(fetched);
+
+        await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
+
+        // Regression: FilteredModels must reflect fetched AllModels, not the hardcoded seed.
+        _viewModel.FilteredModels.Select(m => m.Value).Should().BeEquivalentTo(
+            ["black-forest-labs/flux-2-pro", "openai/gpt-image-1.5", "google/nano-banana-2"]);
+        _viewModel.Providers.Should().Contain("Black Forest Labs")
+            .And.Contain("OpenAI (via Replicate)")
+            .And.Contain("google");
+    }
+
+    [Fact]
+    public async Task RefreshModels_EmptyToken_SetsErrorStatusWithoutFetching()
+    {
+        _viewModel.Parameters.ApiToken = "";
+
+        await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
+
+        _viewModel.StatusKind.Should().Be(StatusKind.Error);
+        _mockCatalogService.Verify(
+            x => x.FetchAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task RefreshModels_EmptyResult_KeepsExistingCatalogAndReportsError()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        var originalModels = _viewModel.AllModels.ToList();
+        _mockCatalogService
+            .Setup(x => x.FetchAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ModelOption>());
+
+        await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
+
+        _viewModel.AllModels.Should().BeEquivalentTo(originalModels);
+        _viewModel.StatusKind.Should().Be(StatusKind.Error);
     }
 
     [Fact]

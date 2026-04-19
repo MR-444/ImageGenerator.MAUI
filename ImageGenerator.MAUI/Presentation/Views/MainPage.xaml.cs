@@ -4,12 +4,19 @@ namespace ImageGenerator.MAUI.Presentation.Views;
 
 public partial class MainPage
 {
-    // Notice we inject GeneratorViewModel from the DI container:
+    private readonly GeneratorViewModel _viewModel;
+
     public MainPage(GeneratorViewModel viewModel)
     {
         InitializeComponent();
-            
-        // Assign the BindingContext to the injected viewModel:
+        _viewModel = viewModel;
         BindingContext = viewModel;
+    }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        await _viewModel.LoadSavedTokenAsync();
+        await _viewModel.LoadCachedCatalogAsync();
     }
 }

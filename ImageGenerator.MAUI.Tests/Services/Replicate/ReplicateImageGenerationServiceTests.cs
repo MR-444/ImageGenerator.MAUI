@@ -37,7 +37,7 @@ public class ReplicateImageGenerationServiceTests
         };
 
         var initialResponse = new ReplicatePredictionResponse { Id = "test-id", Status = "starting" };
-        var finalResponse = new ReplicatePredictionResponse { Status = "succeeded", Output = "https://example.com/image.jpg" };
+        var finalResponse = new ReplicatePredictionResponse { Status = "succeeded", Output = new[] { "https://example.com/image.jpg" } };
 
         _mockReplicateApi.Setup(x => x.CreatePredictionAsync(
                 It.IsAny<string>(),
@@ -91,7 +91,7 @@ public class ReplicateImageGenerationServiceTests
         };
 
         var initialResponse = new ReplicatePredictionResponse { Id = "test-id", Status = "starting" };
-        var finalResponse = new ReplicatePredictionResponse { Status = "succeeded", Output = "https://example.com/image.jpg" };
+        var finalResponse = new ReplicatePredictionResponse { Status = "succeeded", Output = new[] { "https://example.com/image.jpg" } };
 
         _mockReplicateApi.Setup(x => x.CreatePredictionAsync(
                 It.Is<string>(token => token == "Bearer test-token"),

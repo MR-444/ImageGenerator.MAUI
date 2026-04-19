@@ -5,8 +5,6 @@ namespace ImageGenerator.MAUI.Core.Domain.ValueObjects.Flux;
 
 public class FluxSchnell : FluxBase
 {
-    public override required string ModelName { get; set; } = "flux-schnell";
-    
     public bool GoFast { get; set; } = true;
 
     public string Megapixels { get; set; } = "1";

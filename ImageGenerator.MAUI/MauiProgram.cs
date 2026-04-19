@@ -38,8 +38,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<IImageFileService, ImageFileService>();
         builder.Services.AddSingleton<IOpenAiImageGenerationService, OpenAiImageGenerationService>();
         builder.Services.AddSingleton<IReplicateImageGenerationService, ReplicateImageGenerationService>();
-        builder.Services.AddSingleton<IImageGenerationServiceFactory, ImageGenerationServiceFactory>();
-        builder.Services.AddSingleton<IImageGenerationService, ImageGenerationOrchestrator>();
+        builder.Services.AddSingleton<IImageGenerationService, ImageGenerationServiceFactory>();
+        builder.Services.AddSingleton<IModelCatalogService, ModelCatalogService>();
         builder.Services.AddTransient<GeneratorViewModel>();
 
         // 3) Register MainPage so it (and its constructor) can be injected

@@ -1,4 +1,4 @@
- IDE Folders
+# IDE Folders
 .vs/
 .idea/
 
@@ -9,3 +9,17 @@ obj/
 # OS Files
 .DS_Store
 Thumbs.db
+
+# User-specific IDE/editor files
+*.user
+*.suo
+*.DotSettings.user
+
+# Local config / secrets
+appsettings.Development.json
+secrets.json
+.env
+launchSettings.json
+
+# Claude Code workspace state
+.claude/

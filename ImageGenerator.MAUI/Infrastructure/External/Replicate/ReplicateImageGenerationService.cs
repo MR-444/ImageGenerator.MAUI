@@ -26,10 +26,7 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
 
             if (!string.IsNullOrEmpty(parameters.ImagePrompt))
             {
-                var dataUri = parameters.ImagePrompt.StartsWith("data:")
-                    ? parameters.ImagePrompt
-                    : $"data:{DetectImageMimeType(parameters.ImagePrompt)};base64,{parameters.ImagePrompt}";
-
+                var dataUri = ReplicateImageEncoding.BuildDataUri(parameters.ImagePrompt);
                 switch (imageModel)
                 {
                     case FluxKontextPro kontextPro:
@@ -42,14 +39,15 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
             }
 
             var finalResponse = await CallReplicateModelAsync(parameters, imageModel, cancellationToken);
-            if (finalResponse?.Output == null)
+            var outputUrl = finalResponse?.Output?.FirstOrDefault();
+            if (string.IsNullOrEmpty(outputUrl))
             {
                 var errorMessage = finalResponse?.Error ?? "Unknown error";
                 var status = finalResponse?.Status ?? "Unknown status";
                 throw new InvalidOperationException($"Model prediction failed or returned no result. Status: {status}, Error: {errorMessage}");
             }
 
-            var imageDataBase64 = await DownloadImageAsBase64Async(finalResponse.Output!, cancellationToken);
+            var imageDataBase64 = await DownloadImageAsBase64Async(outputUrl, cancellationToken);
 
             return new GeneratedImage
             {
@@ -71,16 +69,36 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
         {
             return new GeneratedImage
             {
-                Message = $"An error occurred: {ex.Message}",
+                Message = FormatError(ex),
                 FilePath = null,
                 ImageDataBase64 = null
             };
         }
     }
 
+    private static string FormatError(Exception ex)
+    {
+        // Refit wraps non-2xx as ApiException with StatusCode + body. Deserialization failures
+        // (gzip not decompressed, malformed JSON) also come through as ApiException — with the
+        // real cause buried on InnerException while .Content reads empty.
+        if (ex is Refit.ApiException api)
+        {
+            var body = string.IsNullOrWhiteSpace(api.Content) ? "(no body)" : api.Content;
+            var head = $"HTTP {(int)api.StatusCode} {api.StatusCode}: {body}";
+            return api.InnerException != null ? $"{head} — inner: {api.InnerException.Message}" : head;
+        }
+        // HttpRequestException.Message is usually "An error occurred while sending a request.";
+        // the actionable detail lives on the inner (SocketException, AuthenticationException, ...).
+        var deepest = ex;
+        while (deepest.InnerException != null) deepest = deepest.InnerException;
+        return deepest.Message == ex.Message
+            ? $"An error occurred: {ex.Message}"
+            : $"An error occurred: {ex.Message} ({deepest.Message})";
+    }
+
     private async Task<ReplicatePredictionResponse?> CallReplicateModelAsync(
         ImageGenerationParameters parameters,
-        ImageModelBase imageModel,
+        object imageModel,
         CancellationToken cancellationToken)
     {
         var replicateRequest = new ReplicatePredictionRequest { Input = imageModel };
@@ -92,12 +110,6 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
             replicateRequest,
             cancellationToken
         );
-
-        // If the Prefer: wait returned a terminal state already, skip polling.
-        if (response.Status is "succeeded" or "failed" or "canceled")
-        {
-            return response;
-        }
 
         return await ReplicateHelper.PollForOutputAsync(
             _replicateApi,
@@ -123,30 +135,4 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
         }
     }
 
-    private static string DetectImageMimeType(string base64Data)
-    {
-        byte[] bytes;
-        try
-        {
-            bytes = Convert.FromBase64String(base64Data[..Math.Min(base64Data.Length, 20)]);
-        }
-        catch (FormatException)
-        {
-            return "image/png";
-        }
-
-        if (bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
-            return "image/png";
-
-        if (bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
-            return "image/jpeg";
-
-        if (bytes.Length >= 6 && bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46)
-            return "image/gif";
-
-        if (bytes.Length >= 12 && bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50)
-            return "image/webp";
-
-        return "image/png";
-    }
 }

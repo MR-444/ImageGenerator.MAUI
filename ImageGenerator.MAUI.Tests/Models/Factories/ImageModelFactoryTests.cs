@@ -186,13 +186,15 @@ public class ImageModelFactoryTests
         var parameters = new ImageGenerationParameters
         {
             Model = ModelConstants.OpenAI.GptImage1,
-            Prompt = "A robot creating art"
+            Prompt = "A robot creating art",
+            AspectRatio = "1024x1024"
         };
 
         var expectedResult = new OpenAiRequest
         {
             ModelName = parameters.Model,
-            Prompt = parameters.Prompt
+            Prompt = parameters.Prompt,
+            Size = "1024x1024"
         };
 
         // Act
@@ -279,5 +281,92 @@ public class ImageModelFactoryTests
         // Assert
         result.Should().BeOfType<FluxKontextPro>();
         result.Should().BeEquivalentTo(expectedResult);
+    }
+
+    [Theory]
+    [InlineData(ModelConstants.Flux.Klein4b)]
+    [InlineData(ModelConstants.Flux.Flex2)]
+    [InlineData(ModelConstants.Flux.Pro2)]
+    [InlineData(ModelConstants.Flux.Max2)]
+    public void CreateImageModel_Flux2Family_BuildsDictionaryWithExpectedKeys(string model)
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = model,
+            Prompt = "a flux 2 test",
+            Seed = 99,
+            AspectRatio = "16:9",
+            OutputFormat = ImageOutputFormat.Png,
+            OutputQuality = 90
+        };
+
+        var result = ImageModelFactory.CreateImageModel(parameters);
+
+        var dict = result.Should().BeOfType<Dictionary<string, object?>>().Subject;
+        dict.Should().ContainKey("prompt").WhoseValue.Should().Be("a flux 2 test");
+        dict.Should().ContainKey("aspect_ratio").WhoseValue.Should().Be("16:9");
+        dict.Should().ContainKey("output_format").WhoseValue.Should().Be("png");
+        dict.Should().ContainKey("output_quality").WhoseValue.Should().Be(90);
+        dict.Should().ContainKey("seed").WhoseValue.Should().Be(99L);
+        dict.Should().NotContainKey("safety_tolerance");
+        dict.Should().NotContainKey("prompt_upsampling");
+        dict.Should().ContainKey("images");
+    }
+
+    [Fact]
+    public void CreateImageModel_GptImage15OnReplicate_BuildsDictionaryWithOutputCompression()
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.OpenAI.GptImage15OnReplicate,
+            Prompt = "hello",
+            AspectRatio = "1:1",
+            OutputFormat = ImageOutputFormat.Jpg,
+            OutputQuality = 75
+        };
+
+        var result = ImageModelFactory.CreateImageModel(parameters);
+
+        var dict = result.Should().BeOfType<Dictionary<string, object?>>().Subject;
+        dict.Should().ContainKey("prompt").WhoseValue.Should().Be("hello");
+        dict.Should().ContainKey("aspect_ratio").WhoseValue.Should().Be("1:1");
+        // Jpg -> jpeg translation for OpenAI-on-Replicate.
+        dict.Should().ContainKey("output_format").WhoseValue.Should().Be("jpeg");
+        dict.Should().ContainKey("output_compression").WhoseValue.Should().Be(75);
+        dict.Should().NotContainKey("output_quality");
+        dict.Should().NotContainKey("seed");
+        dict.Should().ContainKey("input_images");
+    }
+
+    [Fact]
+    public void CreateImageModel_UnknownReplicatePath_BuildsFallbackDictionary()
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = "google/nano-banana-2",
+            Prompt = "fallback test",
+            Seed = 7,
+            AspectRatio = "1:1",
+            OutputFormat = ImageOutputFormat.Webp,
+            OutputQuality = 80
+        };
+
+        var result = ImageModelFactory.CreateImageModel(parameters);
+
+        var dict = result.Should().BeOfType<Dictionary<string, object?>>().Subject;
+        dict.Keys.Should().BeEquivalentTo(["prompt", "seed", "aspect_ratio", "output_format", "output_quality"]);
+    }
+
+    [Fact]
+    public void CreateImageModel_MalformedModel_StillThrows()
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = "not-a-path",
+            Prompt = "x"
+        };
+
+        var act = () => ImageModelFactory.CreateImageModel(parameters);
+        act.Should().Throw<ArgumentException>();
     }
 }

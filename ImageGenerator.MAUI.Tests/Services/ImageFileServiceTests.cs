@@ -2,6 +2,11 @@ using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Infrastructure.Services;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace ImageGenerator.MAUI.Tests.Services;
 
@@ -65,6 +70,37 @@ public class ImageFileServiceTests : IDisposable
         second.Should().NotBe(first);
         Path.GetFileNameWithoutExtension(second).Should().EndWith("_1");
         File.Exists(second).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(ImageOutputFormat.Png)]
+    [InlineData(ImageOutputFormat.Jpg)]
+    public async Task SaveImageWithMetadataAsync_RoundTripsUserComment(ImageOutputFormat format)
+    {
+        var parameters = SampleParameters();
+        parameters.Prompt = "a round-trip cat";
+        parameters.Seed = 42;
+        parameters.OutputFormat = format;
+
+        var bytes = Build1x1Image(format);
+        var path = _sut.GetUniqueSavePath(_tempDir, parameters);
+
+        await _sut.SaveImageWithMetadataAsync(path, bytes, parameters);
+
+        File.Exists(path).Should().BeTrue();
+        using var saved = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(path);
+        saved.Metadata.ExifProfile.Should().NotBeNull();
+        saved.Metadata.ExifProfile!.TryGetValue(ExifTag.UserComment, out var comment).Should().BeTrue();
+        comment!.Value.Text.Should().Contain("Prompt: a round-trip cat").And.Contain("Seed: 42");
+    }
+
+    private static byte[] Build1x1Image(ImageOutputFormat format)
+    {
+        using var image = new SixLabors.ImageSharp.Image<Rgba32>(1, 1);
+        using var memory = new MemoryStream();
+        if (format == ImageOutputFormat.Png) image.Save(memory, new PngEncoder());
+        else image.Save(memory, new JpegEncoder());
+        return memory.ToArray();
     }
 
     [Fact]

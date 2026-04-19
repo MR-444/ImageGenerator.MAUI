@@ -5,8 +5,6 @@ namespace ImageGenerator.MAUI.Core.Domain.ValueObjects.Flux;
 
 public class FluxDev : FluxBase
 {
-    public override required string ModelName { get; set; } = "flux-dev";
-    
     public string? Image { get; set; }
 
     public bool GoFast { get; set; } = true;

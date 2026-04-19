@@ -1,19 +1,19 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
-using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Shared.Constants;
 
 namespace ImageGenerator.MAUI.Core.Domain.ValueObjects.Flux;
 
-public abstract class FluxBase : ImageModelBase
+public abstract class FluxBase
 {
-    [JsonIgnore] // Typically we don't serialize the model name into the flux request body
-    public override required string ModelName { get; set; }
+    [JsonIgnore] // Not part of the Flux request body; combining [JsonIgnore] with `required`
+    // trips STJ metadata validation in .NET 10, so we rely on the factory setting this explicitly.
+    public string ModelName { get; set; } = string.Empty;
 
     [JsonPropertyName("prompt")]
     [Required(ErrorMessage = "Prompt is mandatory for every Flux request.")]
     [StringLength(2000, ErrorMessage = "Prompt cannot exceed 2000 characters.")]
-    public override required string Prompt { get; set; }
+    public required string Prompt { get; set; } = string.Empty;
 
     [JsonPropertyName("seed")]
     [Range(0, ValidationConstants.SeedMaxValue, ErrorMessage = "Seed must be between 0 and 4294967295.")]

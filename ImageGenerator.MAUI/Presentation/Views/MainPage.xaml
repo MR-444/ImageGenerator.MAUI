@@ -12,6 +12,7 @@
         <ResourceDictionary>
             <converters:StringToEnumConverter x:Key="StringToEnumConverter" />
             <converters:InverseBoolConverter x:Key="InverseBool" />
+            <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -45,6 +46,13 @@
                                IsPassword="True"
                                SemanticProperties.Description="API token"
                                AutomationId="ApiTokenEntry" />
+                        <Button Text="Forget token"
+                                Command="{Binding ForgetTokenCommand}"
+                                Style="{StaticResource SecondaryButton}"
+                                IsEnabled="{Binding Parameters.ApiToken, Converter={StaticResource NonEmptyStringToBool}}"
+                                HorizontalOptions="Start"
+                                SemanticProperties.Description="Clear the saved API token from secure storage"
+                                AutomationId="ForgetTokenButton" />
                     </VerticalStackLayout>
                 </Border>
 
@@ -73,6 +81,14 @@
                             </VerticalStackLayout>
                         </Grid>
 
+                        <Button Text="Refresh Models"
+                                Style="{StaticResource SecondaryButton}"
+                                Command="{Binding RefreshModelsCommand}"
+                                IsEnabled="{Binding Parameters.ApiToken, Converter={StaticResource NonEmptyStringToBool}}"
+                                HorizontalOptions="Start"
+                                SemanticProperties.Description="Fetch live model catalogs from Replicate and OpenAI"
+                                AutomationId="RefreshModelsButton" />
+
                         <Label Text="What should the image show?" Style="{StaticResource FieldLabel}" />
                         <Editor Text="{Binding Parameters.Prompt}"
                                 Placeholder="Describe the image you want to generate…"
@@ -80,7 +96,7 @@
                                 MinimumHeightRequest="90"
                                 AutomationId="PromptEditor" />
 
-                        <HorizontalStackLayout Spacing="8">
+                        <HorizontalStackLayout Spacing="8" IsVisible="{Binding SupportsPromptUpsampling}">
                             <CheckBox IsChecked="{Binding Parameters.PromptUpsampling}" VerticalOptions="Center" />
                             <Label Text="Prompt upsampling" VerticalOptions="Center" />
                         </HorizontalStackLayout>
@@ -91,7 +107,8 @@
                 <!-- CARD: Input Image (optional) -->
                 <Border Grid.Row="1" Grid.Column="0"
                         Style="{StaticResource Card}"
-                        VerticalOptions="Start">
+                        VerticalOptions="Start"
+                        IsVisible="{Binding SupportsImagePrompt}">
                     <VerticalStackLayout Spacing="12">
                         <Label Text="Input Image (optional)" Style="{StaticResource CardTitle}" />
                         <Label Text="Used by Flux Kontext models as an image prompt."
@@ -122,19 +139,22 @@
                 <!-- CARD: Output size -->
                 <Border Grid.Row="1" Grid.Column="1"
                         Style="{StaticResource Card}"
-                        VerticalOptions="Start">
+                        VerticalOptions="Start"
+                        IsVisible="{Binding SupportsAspectRatio}">
                     <VerticalStackLayout Spacing="12">
                         <Label Text="Output Size" Style="{StaticResource CardTitle}" />
 
-                        <Label Text="Aspect ratio" Style="{StaticResource FieldLabel}" />
+                        <Label Text="{Binding AspectRatioLabel}" Style="{StaticResource FieldLabel}" />
                         <Picker ItemsSource="{Binding AspectRatioOptions}"
                                 SelectedItem="{Binding Parameters.AspectRatio}"
                                 MaximumWidthRequest="220"
                                 HorizontalOptions="Start"
                                 AutomationId="AspectRatioPicker" />
 
-                        <VerticalStackLayout Spacing="8" IsVisible="{Binding IsCustomAspectRatio}">
+                        <VerticalStackLayout Spacing="8" IsVisible="{Binding SupportsCustomDimensions}">
                             <Label Text="Custom dimensions (px)" Style="{StaticResource FieldLabel}" />
+                            <Label Text="64 - 2048 px. Flux 1.1 Pro model range: 256 - 1440."
+                                   Style="{StaticResource HelperText}" />
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                                 <VerticalStackLayout Grid.Column="0" Spacing="4">
                                     <Label Text="Width" Style="{StaticResource HelperText}" />
@@ -165,7 +185,7 @@
                     <VerticalStackLayout Spacing="12">
                         <Label Text="Quality &amp; Format" Style="{StaticResource CardTitle}" />
 
-                        <VerticalStackLayout Spacing="4">
+                        <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsSafetyTolerance}">
                             <Label Text="{Binding Parameters.SafetyTolerance, StringFormat='Safety tolerance: {0:F0} (1 strictest — 6 loosest)'}"
                                    Style="{StaticResource FieldLabel}" />
                             <Slider Minimum="1" Maximum="6"
@@ -181,7 +201,7 @@
                                     HorizontalOptions="Start" />
                         </VerticalStackLayout>
 
-                        <VerticalStackLayout Spacing="4">
+                        <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsOutputQuality}">
                             <Label Text="{Binding Parameters.OutputQuality, StringFormat='Output quality: {0:F0}%'}"
                                    Style="{StaticResource FieldLabel}" />
                             <Slider Minimum="1" Maximum="100"
@@ -194,7 +214,8 @@
                 <!-- CARD: Seed -->
                 <Border Grid.Row="2" Grid.Column="1"
                         Style="{StaticResource Card}"
-                        VerticalOptions="Start">
+                        VerticalOptions="Start"
+                        IsVisible="{Binding SupportsSeed}">
                     <VerticalStackLayout Spacing="12">
                         <Label Text="Seed" Style="{StaticResource CardTitle}" />
                         <Label Text="Fixing the seed makes regeneration deterministic for the same prompt."

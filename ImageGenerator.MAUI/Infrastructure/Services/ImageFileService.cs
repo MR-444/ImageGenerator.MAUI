@@ -1,5 +1,8 @@
+using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Formats.Png.Chunks;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.PixelFormats;
 using ImageGenerationParameters = ImageGenerator.MAUI.Core.Domain.Entities.ImageGenerationParameters;
@@ -31,7 +34,17 @@ public class ImageFileService : IImageFileService
                             """;
 
         image.Metadata.ExifProfile ??= new ExifProfile();
-        image.Metadata.ExifProfile.SetValue(ExifTag.UserComment, metadataText);
+        // EncodedString writes the 8-byte UNICODE\0 charset prefix required by the EXIF 2.3 spec
+        // so third-party readers (IrfanView, Explorer Properties) see a proper UTF-16 string.
+        image.Metadata.ExifProfile.SetValue(
+            ExifTag.UserComment,
+            new EncodedString(EncodedString.CharacterCode.Unicode, metadataText));
+
+        // PNG's EXIF support is patchy across viewers; mirror the metadata as a tEXt chunk too.
+        if (parameters.OutputFormat == ImageOutputFormat.Png)
+        {
+            image.Metadata.GetPngMetadata().TextData.Add(new PngTextData("Comment", metadataText, "en", string.Empty));
+        }
 
         var encoder = _encoderProvider.GetImageEncoder(parameters.OutputFormat, parameters.OutputQuality);
         await image.SaveAsync(imagePath, encoder);

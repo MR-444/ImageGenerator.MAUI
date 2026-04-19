@@ -10,4 +10,10 @@ public interface IOpenAiApi
         [Body] OpenAiRequest request,
         CancellationToken cancellationToken = default
     );
+
+    [Get("/v1/models")]
+    Task<OpenAiModelsResponse> ListModelsAsync(
+        [Header("Authorization")] string bearerToken,
+        CancellationToken cancellationToken = default
+    );
 }

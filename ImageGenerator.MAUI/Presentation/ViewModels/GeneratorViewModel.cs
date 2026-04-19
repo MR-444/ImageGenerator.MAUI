@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Maui.Storage;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
-using ImageGenerator.MAUI.Infrastructure.Services;
 using ImageGenerator.MAUI.Shared.Constants;
 using ImageGenerationParameters = ImageGenerator.MAUI.Core.Domain.Entities.ImageGenerationParameters;
 
@@ -14,21 +14,22 @@ public partial class GeneratorViewModel : ObservableObject
 {
     private const string AllProvidersLabel = "All providers";
     private const string OutputFolderName = "ImageGenerator.MAUI";
+    private const string TokenStorageKey = "imggen.api_token";
 
     private readonly IImageGenerationService _imageService;
     private readonly IImageFileService _imageFileService;
+    private readonly IModelCatalogService _catalogService;
 
     // Save to the user's Pictures folder so images are easy to find and survive app rebuilds.
     private static string OutputDirectory =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), OutputFolderName);
 
     // Master catalog — single source of truth for model metadata.
-    private static readonly IReadOnlyList<ModelOption> Catalog =
+    private static readonly IReadOnlyList<ModelOption> HardcodedCatalogSeed =
     [
         new("GPT Image 1", ModelConstants.OpenAI.GptImage1, "OpenAI"),
         new("Flux 1.1 Pro", ModelConstants.Flux.Pro11, "Black Forest Labs"),
         new("Flux 1.1 Pro Ultra", ModelConstants.Flux.Pro11Ultra, "Black Forest Labs"),
-        new("Flux Pro", ModelConstants.Flux.Pro, "Black Forest Labs"),
         new("Flux Dev", ModelConstants.Flux.Dev, "Black Forest Labs"),
         new("Flux Schnell", ModelConstants.Flux.Schnell, "Black Forest Labs"),
         new("Flux Kontext Max", ModelConstants.Flux.KontextMax, "Black Forest Labs"),
@@ -48,7 +49,7 @@ public partial class GeneratorViewModel : ObservableObject
     private string? _generatedImagePath;
 
     [ObservableProperty]
-    private List<ModelOption> _allModels = Catalog.ToList();
+    private List<ModelOption> _allModels = HardcodedCatalogSeed.ToList();
 
     [ObservableProperty]
     private List<string> _providers;
@@ -63,13 +64,18 @@ public partial class GeneratorViewModel : ObservableObject
     private ModelOption? _selectedModel;
 
     [ObservableProperty]
-    private List<string> _aspectRatioOptions = ["1:1", "16:9", "9:16", "3:2", "2:3", "4:3", "3:4", "4:5", "5:4", "9:21", "21:9", "custom"];
+    private List<string> _aspectRatioOptions = ModelCapabilities.For(ModelConstants.Flux.Pro11).AspectRatios.ToList();
 
     [ObservableProperty]
     private List<string> _outputFormats = [nameof(ImageOutputFormat.Png).ToLower(), nameof(ImageOutputFormat.Jpg).ToLower(), nameof(ImageOutputFormat.Webp).ToLower()];
 
     [ObservableProperty]
     private bool _isCustomAspectRatio;
+
+    partial void OnIsCustomAspectRatioChanged(bool value)
+    {
+        OnPropertyChanged(nameof(SupportsCustomDimensions));
+    }
 
     [ObservableProperty]
     private ImageSource? _selectedImagePreview;
@@ -88,6 +94,18 @@ public partial class GeneratorViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(GenerateImageCommand))]
     private bool _isGenerating;
 
+    private ModelCapabilities _capabilities = ModelCapabilities.For(ModelConstants.Flux.Pro11);
+    private bool _cachedCatalogLoaded;
+
+    public bool SupportsSafetyTolerance => _capabilities.SafetyTolerance;
+    public bool SupportsPromptUpsampling => _capabilities.PromptUpsampling;
+    public bool SupportsOutputQuality => _capabilities.OutputQuality;
+    public bool SupportsAspectRatio => _capabilities.AspectRatio;
+    public bool SupportsCustomDimensions => _capabilities.CustomDimensions && IsCustomAspectRatio;
+    public bool SupportsSeed => _capabilities.Seed;
+    public bool SupportsImagePrompt => _capabilities.ImagePrompt;
+    public string AspectRatioLabel => _capabilities.AspectRatioLabel;
+
     partial void OnParametersChanged(ImageGenerationParameters value)
     {
         UpdateCustomAspectRatio(value.AspectRatio);
@@ -97,24 +115,17 @@ public partial class GeneratorViewModel : ObservableObject
 
     partial void OnIsImageSelectedChanged(bool value)
     {
-        if (value)
+        // When the user loads an image on a Kontext model, auto-select "match_input_image"
+        // (the option is already in the capability's AR list for Kontext models).
+        if (value && AspectRatioOptions.Contains("match_input_image"))
         {
-            if (AspectRatioOptions.Contains("match_input_image")) return;
-
-            var newOptions = new List<string>(AspectRatioOptions);
-            newOptions.Insert(0, "match_input_image");
-            AspectRatioOptions = newOptions;
             Parameters.AspectRatio = "match_input_image";
         }
-        else
+        else if (!value && Parameters.AspectRatio == "match_input_image")
         {
-            if (Parameters.AspectRatio == "match_input_image")
-            {
-                Parameters.AspectRatio = "16:9";
-            }
-            var newOptions = new List<string>(AspectRatioOptions);
-            newOptions.Remove("match_input_image");
-            AspectRatioOptions = newOptions;
+            // Fall back to the first non-"match_input_image" option — typically "1:1".
+            var fallback = _capabilities.AspectRatios.FirstOrDefault(r => r != "match_input_image");
+            if (fallback != null) Parameters.AspectRatio = fallback;
         }
     }
 
@@ -129,13 +140,32 @@ public partial class GeneratorViewModel : ObservableObject
         {
             Parameters.Model = value.Value;
         }
+        RefreshCapabilities(value?.Value);
+    }
+
+    private void RefreshCapabilities(string? modelValue)
+    {
+        _capabilities = ModelCapabilities.For(modelValue);
+        AspectRatioOptions = _capabilities.AspectRatios.ToList();
+        if (!_capabilities.AspectRatios.Contains(Parameters.AspectRatio))
+        {
+            Parameters.AspectRatio = _capabilities.AspectRatios[0];
+        }
+        OnPropertyChanged(nameof(SupportsSafetyTolerance));
+        OnPropertyChanged(nameof(SupportsPromptUpsampling));
+        OnPropertyChanged(nameof(SupportsOutputQuality));
+        OnPropertyChanged(nameof(SupportsAspectRatio));
+        OnPropertyChanged(nameof(SupportsCustomDimensions));
+        OnPropertyChanged(nameof(SupportsSeed));
+        OnPropertyChanged(nameof(SupportsImagePrompt));
+        OnPropertyChanged(nameof(AspectRatioLabel));
     }
 
     private void RecomputeFilteredModels()
     {
         var list = SelectedProvider == AllProvidersLabel
-            ? Catalog.OrderBy(m => m.Provider).ThenBy(m => m.Display).ToList()
-            : Catalog.Where(m => m.Provider == SelectedProvider).OrderBy(m => m.Display).ToList();
+            ? AllModels.OrderBy(m => m.Provider).ThenBy(m => m.Display).ToList()
+            : AllModels.Where(m => m.Provider == SelectedProvider).OrderBy(m => m.Display).ToList();
 
         FilteredModels = list;
 
@@ -147,7 +177,7 @@ public partial class GeneratorViewModel : ObservableObject
 
     private void SyncSelectionFromParameters(string modelValue)
     {
-        var match = Catalog.FirstOrDefault(m => m.Value == modelValue);
+        var match = AllModels.FirstOrDefault(m => m.Value == modelValue);
         if (match == null) return;
 
         if (SelectedProvider != AllProvidersLabel && SelectedProvider != match.Provider)
@@ -182,13 +212,11 @@ public partial class GeneratorViewModel : ObservableObject
         StatusKind = kind;
     }
 
-    public GeneratorViewModel(IImageGenerationService imageService)
-        : this(imageService, new ImageFileService(new ImageEncoderProvider())) { }
-
-    public GeneratorViewModel(IImageGenerationService imageService, IImageFileService imageFileService)
+    public GeneratorViewModel(IImageGenerationService imageService, IImageFileService imageFileService, IModelCatalogService catalogService)
     {
         _imageService = imageService ?? throw new ArgumentNullException(nameof(imageService));
         _imageFileService = imageFileService ?? throw new ArgumentNullException(nameof(imageFileService));
+        _catalogService = catalogService ?? throw new ArgumentNullException(nameof(catalogService));
 
         _providers = BuildProviders();
 
@@ -215,6 +243,9 @@ public partial class GeneratorViewModel : ObservableObject
                     UpdateCustomAspectRatio(_parameters.AspectRatio);
                     break;
                 case nameof(ImageGenerationParameters.ApiToken):
+                    ValidateParameters();
+                    PersistApiToken(_parameters.ApiToken);
+                    break;
                 case nameof(ImageGenerationParameters.Prompt):
                     ValidateParameters();
                     break;
@@ -228,12 +259,7 @@ public partial class GeneratorViewModel : ObservableObject
         ValidateParameters();
     }
 
-    private static List<string> BuildProviders()
-    {
-        var list = new List<string> { AllProvidersLabel };
-        list.AddRange(Catalog.Select(m => m.Provider).Distinct().OrderBy(p => p));
-        return list;
-    }
+    private static List<string> BuildProviders() => BuildProvidersFrom(HardcodedCatalogSeed);
 
     [RelayCommand(IncludeCancelCommand = true)]
     private async Task GenerateImageAsync(CancellationToken cancellationToken)
@@ -366,6 +392,109 @@ public partial class GeneratorViewModel : ObservableObject
         {
             SetStatus($"Couldn't open Explorer: {ex.Message}", StatusKind.Error);
         }
+    }
+
+    [RelayCommand]
+    private async Task RefreshModelsAsync(CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(Parameters.ApiToken))
+        {
+            SetStatus("Enter an API token before refreshing models.", StatusKind.Error);
+            return;
+        }
+
+        SetStatus("Fetching model catalogs…", StatusKind.Info);
+        var fetched = await _catalogService.FetchAsync(Parameters.ApiToken, cancellationToken);
+
+        if (fetched.Count == 0)
+        {
+            SetStatus("No models returned. Check your API token or network.", StatusKind.Error);
+            return;
+        }
+
+        ApplyCatalog(fetched);
+        await _catalogService.SaveCachedAsync(fetched, cancellationToken);
+        SetStatus($"Loaded {fetched.Count} models.", StatusKind.Success);
+    }
+
+    private void ApplyCatalog(IReadOnlyList<ModelOption> models)
+    {
+        AllModels = models.ToList();
+        Providers = BuildProvidersFrom(models);
+        RecomputeFilteredModels();
+    }
+
+    private static List<string> BuildProvidersFrom(IEnumerable<ModelOption> models)
+    {
+        var list = new List<string> { AllProvidersLabel };
+        list.AddRange(models.Select(m => m.Provider).Distinct().OrderBy(p => p));
+        return list;
+    }
+
+    public async Task LoadSavedTokenAsync()
+    {
+        try
+        {
+            var saved = await SecureStorage.Default.GetAsync(TokenStorageKey);
+            if (!string.IsNullOrEmpty(saved))
+            {
+                Parameters.ApiToken = saved;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Secure storage read failures aren't actionable by the user — log and continue.
+            Debug.WriteLine($"SecureStorage.Get failed: {ex.Message}");
+        }
+    }
+
+    public async Task LoadCachedCatalogAsync(CancellationToken ct = default)
+    {
+        // OnAppearing can fire more than once in a MAUI page lifecycle; a second hydrate
+        // would stomp a freshly-refreshed in-memory catalog with the older on-disk copy.
+        if (_cachedCatalogLoaded) return;
+        _cachedCatalogLoaded = true;
+
+        try
+        {
+            var cached = await _catalogService.LoadCachedAsync(ct);
+            if (cached is { Count: > 0 })
+            {
+                ApplyCatalog(cached);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Model catalog hydrate failed: {ex.Message}");
+        }
+    }
+
+    private static void PersistApiToken(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return;
+        try
+        {
+            _ = SecureStorage.Default.SetAsync(TokenStorageKey, value);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"SecureStorage.Set failed: {ex.Message}");
+        }
+    }
+
+    [RelayCommand]
+    private void ForgetToken()
+    {
+        try
+        {
+            SecureStorage.Default.Remove(TokenStorageKey);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"SecureStorage.Remove failed: {ex.Message}");
+        }
+        Parameters.ApiToken = string.Empty;
+        SetStatus("API token cleared from secure storage.", StatusKind.Info);
     }
 
     [RelayCommand]

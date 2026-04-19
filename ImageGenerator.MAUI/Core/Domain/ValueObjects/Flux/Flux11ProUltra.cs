@@ -5,8 +5,6 @@ namespace ImageGenerator.MAUI.Core.Domain.ValueObjects.Flux;
 
 public class Flux11ProUltra : FluxBase
 {
-    public override required string ModelName { get; set; } = "black-forest-labs/flux-1.1-pro-ultra";
-
     [JsonPropertyName("raw")]
     public bool Raw { get; set; } = false;
 

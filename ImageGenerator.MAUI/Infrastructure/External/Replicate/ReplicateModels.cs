@@ -1,9 +1,11 @@
 using System.Text.Json.Serialization;
+using ImageGenerator.MAUI.Infrastructure.External.Replicate;
 
 namespace ImageGenerator.MAUI.Models.Replicate;
 
 public class ReplicatePredictionRequest
 {
+    [JsonPropertyName("input")]
     public required object Input { get; set; }
 }
 
@@ -25,7 +27,8 @@ public class ReplicatePredictionResponse
     public string? Logs { get; set; }
 
     [JsonPropertyName("output")]
-    public string? Output { get; set; }
+    [JsonConverter(typeof(ReplicateOutputConverter))]
+    public IReadOnlyList<string>? Output { get; set; }
 
     [JsonPropertyName("data_removed")]
     public bool? DataRemoved { get; set; }
@@ -74,5 +77,23 @@ public class ReplicateResponseUrls
 
     [JsonPropertyName("stream")]
     public string? Stream { get; set; }
+}
+
+public class ReplicateCollectionResponse
+{
+    [JsonPropertyName("models")]
+    public required List<ReplicateModelSummary> Models { get; set; }
+}
+
+public class ReplicateModelSummary
+{
+    [JsonPropertyName("owner")]
+    public string? Owner { get; set; }
+
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
 }
 

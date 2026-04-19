@@ -71,7 +71,12 @@ jobs:
     - name: Install .NET Core
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 9.0.x
+        dotnet-version: 10.0.x
+
+    # Narrow MAUI workload: Windows-only project, installing the full `maui` pack
+    # pulls maui-tizen and fails on NETSDK1147.
+    - name: Install MAUI Windows workload
+      run: dotnet workload install maui-windows --ignore-failed-sources
 
     # Add  MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
     - name: Setup MSBuild.exe

@@ -27,8 +27,7 @@ public class OpenAiImageGenerationServiceTests
             Model = ModelConstants.OpenAI.GptImage1,
             Prompt = "A test image",
             ApiToken = "test-token",
-            Width = 1024,
-            Height = 1024,
+            AspectRatio = "1024x1024",
             OutputFormat = ImageOutputFormat.Png,
             OutputQuality = 90
         };

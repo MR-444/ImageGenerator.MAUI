@@ -5,8 +5,6 @@ namespace ImageGenerator.MAUI.Core.Domain.ValueObjects.Flux;
 
 public class FluxKontextPro : FluxBase
 {
-    public override required string ModelName { get; set; } = "black-forest-labs/flux-kontext-pro";
-
     [JsonPropertyName("input_image")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [Url(ErrorMessage = "Input image must be a valid URL.")]

@@ -42,18 +42,34 @@ public class OpenAiImageGenerationService : IOpenAiImageGenerationService
         {
             return new GeneratedImage
             {
-                Message = $"An error occurred: {ex.Message}",
+                Message = FormatError(ex),
                 FilePath = null,
                 ImageDataBase64 = null
             };
         }
     }
 
+    private static string FormatError(Exception ex)
+    {
+        if (ex is Refit.ApiException api)
+        {
+            var body = string.IsNullOrWhiteSpace(api.Content) ? "(no body)" : api.Content;
+            var head = $"HTTP {(int)api.StatusCode} {api.StatusCode}: {body}";
+            return api.InnerException != null ? $"{head} — inner: {api.InnerException.Message}" : head;
+        }
+        var deepest = ex;
+        while (deepest.InnerException != null) deepest = deepest.InnerException;
+        return deepest.Message == ex.Message
+            ? $"An error occurred: {ex.Message}"
+            : $"An error occurred: {ex.Message} ({deepest.Message})";
+    }
+
     private async Task<OpenAiResponse?> CallOpenAiModelAsync(ImageGenerationParameters parameters, CancellationToken cancellationToken)
     {
         var request = (OpenAiRequest)ImageModelFactory.CreateImageModel(parameters);
 
-        request.Size = $"{parameters.Width}x{parameters.Height}";
+        // Size is set by ImageModelFactory from parameters.AspectRatio
+        // (constrained to 1024x1024 | 1536x1024 | 1024x1536 | auto by the VM picker).
         request.OutputFormat = parameters.OutputFormat.ToString().ToLower();
         request.OutputCompression = parameters.OutputQuality;
         request.ResponseFormat = "b64_json";
