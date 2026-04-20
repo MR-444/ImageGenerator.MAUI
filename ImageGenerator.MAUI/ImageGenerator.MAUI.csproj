@@ -18,8 +18,8 @@
 
 		<ApplicationTitle>AI Image Generator</ApplicationTitle>
 		<ApplicationId>io.github.mr444.imagegenerator.maui</ApplicationId>
-		<ApplicationDisplayVersion>0.3.0</ApplicationDisplayVersion>
-		<ApplicationVersion>3</ApplicationVersion>
+		<ApplicationDisplayVersion>0.3.1</ApplicationDisplayVersion>
+		<ApplicationVersion>4</ApplicationVersion>
 
 		<WindowsPackageType>None</WindowsPackageType>
 		<TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>

@@ -72,17 +72,15 @@ public class ImageFileServiceTests : IDisposable
         File.Exists(second).Should().BeFalse();
     }
 
-    [Theory]
-    [InlineData(ImageOutputFormat.Png)]
-    [InlineData(ImageOutputFormat.Jpg)]
-    public async Task SaveImageWithMetadataAsync_RoundTripsUserComment(ImageOutputFormat format)
+    [Fact]
+    public async Task SaveImageWithMetadataAsync_ForJpg_WritesExifUserCommentOnly()
     {
         var parameters = SampleParameters();
         parameters.Prompt = "a round-trip cat";
         parameters.Seed = 42;
-        parameters.OutputFormat = format;
+        parameters.OutputFormat = ImageOutputFormat.Jpg;
 
-        var bytes = Build1x1Image(format);
+        var bytes = Build1x1Image(ImageOutputFormat.Jpg);
         var path = _sut.GetUniqueSavePath(_tempDir, parameters);
 
         await _sut.SaveImageWithMetadataAsync(path, bytes, parameters);
@@ -92,6 +90,34 @@ public class ImageFileServiceTests : IDisposable
         saved.Metadata.ExifProfile.Should().NotBeNull();
         saved.Metadata.ExifProfile!.TryGetValue(ExifTag.UserComment, out var comment).Should().BeTrue();
         comment!.Value.Text.Should().Contain("Prompt: a round-trip cat").And.Contain("Seed: 42");
+    }
+
+    [Fact]
+    public async Task SaveImageWithMetadataAsync_ForPng_WritesTextChunkAndNoExifUserComment()
+    {
+        var parameters = SampleParameters();
+        parameters.Prompt = "a round-trip cat";
+        parameters.Seed = 42;
+        parameters.OutputFormat = ImageOutputFormat.Png;
+
+        var bytes = Build1x1Image(ImageOutputFormat.Png);
+        var path = _sut.GetUniqueSavePath(_tempDir, parameters);
+
+        await _sut.SaveImageWithMetadataAsync(path, bytes, parameters);
+
+        File.Exists(path).Should().BeTrue();
+        using var saved = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(path);
+
+        var pngMeta = saved.Metadata.GetPngMetadata();
+        pngMeta.TextData.Should().ContainSingle(t => t.Keyword == "Comment");
+        var comment = pngMeta.TextData.Single(t => t.Keyword == "Comment");
+        comment.Value.Should().Contain("Prompt: a round-trip cat").And.Contain("Seed: 42");
+
+        // Viewers must not see a duplicate copy via EXIF.
+        if (saved.Metadata.ExifProfile is not null)
+        {
+            saved.Metadata.ExifProfile.TryGetValue(ExifTag.UserComment, out _).Should().BeFalse();
+        }
     }
 
     private static byte[] Build1x1Image(ImageOutputFormat format)

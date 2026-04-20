@@ -93,7 +93,7 @@ These should produce **actionable** status messages and leave the Generate butto
 | Result thumbnail clickable → opens in OS viewer | ⬜ | |
 | "Use as input for next generation" works | ⬜ | Generated image appears in input strip of next run |
 | "Show in folder" opens Explorer at correct file | ⬜ | |
-| About button shows version + license dialog | ⬜ | |
+| About button shows version + license dialog | ✅ | Dialog opens with version + MIT + repo URL. |
 
 ---
 

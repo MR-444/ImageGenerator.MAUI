@@ -33,17 +33,23 @@ public class ImageFileService : IImageFileService
                             Upsampling: {parameters.PromptUpsampling}
                             """;
 
-        image.Metadata.ExifProfile ??= new ExifProfile();
-        // EncodedString writes the 8-byte UNICODE\0 charset prefix required by the EXIF 2.3 spec
-        // so third-party readers (IrfanView, Explorer Properties) see a proper UTF-16 string.
-        image.Metadata.ExifProfile.SetValue(
-            ExifTag.UserComment,
-            new EncodedString(EncodedString.CharacterCode.Unicode, metadataText));
-
-        // PNG's EXIF support is patchy across viewers; mirror the metadata as a tEXt chunk too.
+        // Use each format's native metadata mechanism and drop anything the API source
+        // may have embedded, so the prompt never shows up twice in a viewer.
         if (parameters.OutputFormat == ImageOutputFormat.Png)
         {
-            image.Metadata.GetPngMetadata().TextData.Add(new PngTextData("Comment", metadataText, "en", string.Empty));
+            image.Metadata.ExifProfile = null;
+            var pngMeta = image.Metadata.GetPngMetadata();
+            pngMeta.TextData.Clear();
+            pngMeta.TextData.Add(new PngTextData("Comment", metadataText, "en", string.Empty));
+        }
+        else
+        {
+            // EncodedString writes the 8-byte UNICODE\0 charset prefix required by the EXIF 2.3 spec
+            // so third-party readers (IrfanView, Explorer Properties) see a proper UTF-16 string.
+            image.Metadata.ExifProfile = new ExifProfile();
+            image.Metadata.ExifProfile.SetValue(
+                ExifTag.UserComment,
+                new EncodedString(EncodedString.CharacterCode.Unicode, metadataText));
         }
 
         var encoder = _encoderProvider.GetImageEncoder(parameters.OutputFormat, parameters.OutputQuality);
