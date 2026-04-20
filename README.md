@@ -133,6 +133,15 @@ If you'd like to contribute code:
 4. Push to the branch (`git push origin feature/your-feature`)
 5. Open a Pull Request
 
+## ⚠️ Known issues
+
+Limitations in the current preview that didn't block shipping but are worth knowing:
+
+- **Error-path UX hasn't been exhaustively audited** — for failures like a bad/revoked token (401), a mid-generation network drop, or rate-limit / quota / 5xx responses from Replicate, the status message may be less actionable than it could be, and the Generate button may stay in the working state until Cancel is clicked. Happy-path generation and explicit Cancel both work as expected.
+- **GPT 1.5 `input_fidelity=high` with an input image** is not regression-tested in this build. The other GPT 1.5 knobs (`quality`, `background`, `moderation`, `input_fidelity=low`) have been verified.
+
+If you hit any of the above, please [open an issue](https://github.com/MR-444/ImageGenerator.MAUI/issues) with the status text and what you were trying to generate — that's the fastest way these get tightened up.
+
 ## 📄 License
 
 MIT — see the LICENSE file for details.
