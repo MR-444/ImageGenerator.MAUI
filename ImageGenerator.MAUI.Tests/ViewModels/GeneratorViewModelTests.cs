@@ -311,7 +311,7 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
-    public async Task RefreshModels_Success_ReplacesAllModelsAndReportsSuccess()
+    public async Task RefreshModels_Success_IngestsFetchedModelsAndReportsSuccess()
     {
         _viewModel.Parameters.ApiToken = "valid-token";
         var fetched = new List<ModelOption>
@@ -325,9 +325,11 @@ public class GeneratorViewModelTests
 
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
 
-        _viewModel.AllModels.Should().HaveCount(2);
-        _viewModel.AllModels.Select(m => m.Value).Should().BeEquivalentTo(
-            ["black-forest-labs/flux-2", "openai/gpt-image-1.5"]);
+        // AllModels is the union of fetched + hardcoded fallback list; assert the fetched
+        // entries made it in rather than exact equality (fallback entries ride along).
+        _viewModel.AllModels.Select(m => m.Value)
+            .Should().Contain("black-forest-labs/flux-2")
+            .And.Contain("openai/gpt-image-1.5");
         _viewModel.StatusKind.Should().Be(StatusKind.Success);
         _mockCatalogService.Verify(
             x => x.SaveCachedAsync(It.IsAny<IReadOnlyList<ModelOption>>(), It.IsAny<CancellationToken>()),
@@ -335,7 +337,7 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
-    public async Task LoadCachedCatalog_WithCachedModels_ReplacesAllModelsAndProviders()
+    public async Task LoadCachedCatalog_WithCachedModels_IngestsCachedModelsAndProviders()
     {
         var cached = new List<ModelOption>
         {
@@ -348,10 +350,35 @@ public class GeneratorViewModelTests
 
         await _viewModel.LoadCachedCatalogAsync();
 
-        _viewModel.AllModels.Select(m => m.Value).Should().BeEquivalentTo(
-            ["black-forest-labs/flux-2-pro", "openai/gpt-image-1.5"]);
+        // Union semantics: cached entries must appear; hardcoded fallback entries
+        // (e.g. gpt-image-2) ride along so newly-added fallback models survive a stale cache.
+        _viewModel.AllModels.Select(m => m.Value)
+            .Should().Contain("black-forest-labs/flux-2-pro")
+            .And.Contain("openai/gpt-image-1.5");
         _viewModel.Providers.Should().Contain("Black Forest Labs")
             .And.Contain("OpenAI (via Replicate)");
+    }
+
+    [Fact]
+    public async Task LoadCachedCatalog_MissingFallbackEntry_IsStillSurfaced()
+    {
+        // A cache written before a new model was added to the hardcoded fallback list must
+        // not hide that new model — otherwise users have to manually delete the cache file
+        // (or Replicate has to catch up) to ever see freshly-added entries.
+        var staleCache = new List<ModelOption>
+        {
+            new("flux-2-pro", "black-forest-labs/flux-2-pro", "Black Forest Labs")
+        };
+        _mockCatalogService
+            .Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(staleCache);
+
+        await _viewModel.LoadCachedCatalogAsync();
+
+        // gpt-image-2 lives only in the hardcoded fallback list; it must survive the cache load.
+        _viewModel.AllModels.Select(m => m.Value)
+            .Should().Contain("openai/gpt-image-2")
+            .And.Contain("black-forest-labs/flux-2-pro");
     }
 
     [Fact]
@@ -403,9 +430,12 @@ public class GeneratorViewModelTests
 
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
 
-        // Regression: FilteredModels must reflect fetched AllModels, not the hardcoded seed.
-        _viewModel.FilteredModels.Select(m => m.Value).Should().BeEquivalentTo(
-            ["black-forest-labs/flux-2-pro", "openai/gpt-image-1.5", "google/nano-banana-2"]);
+        // Regression: FilteredModels must reflect fetched AllModels, not be stuck on the
+        // pre-refresh list. Fetched entries must be present in FilteredModels.
+        _viewModel.FilteredModels.Select(m => m.Value)
+            .Should().Contain("black-forest-labs/flux-2-pro")
+            .And.Contain("openai/gpt-image-1.5")
+            .And.Contain("google/nano-banana-2");
         _viewModel.Providers.Should().Contain("Black Forest Labs")
             .And.Contain("OpenAI (via Replicate)")
             .And.Contain("google");

@@ -69,7 +69,8 @@ public readonly record struct ModelCapabilities(
                 AspectRatioLabel: "Aspect ratio", AspectRatios: Flux2AspectRatios,
                 MaxImageInputs: 1),
 
-        ModelConstants.OpenAI.GptImage15OnReplicate => new(
+        ModelConstants.OpenAI.GptImage15OnReplicate
+            or ModelConstants.OpenAI.GptImage2OnReplicate => new(
             SafetyTolerance: false, PromptUpsampling: false, OutputQuality: true,
             AspectRatio: true, CustomDimensions: false, Seed: false, ImagePrompt: true,
             AspectRatioLabel: "Aspect ratio", AspectRatios: GptImage15AspectRatios,

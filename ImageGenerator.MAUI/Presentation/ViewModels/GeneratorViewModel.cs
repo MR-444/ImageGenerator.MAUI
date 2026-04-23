@@ -32,6 +32,7 @@ public partial class GeneratorViewModel : ObservableObject
     private static readonly IReadOnlyList<ModelOption> HardcodedCatalogSeed =
     [
         new("GPT Image 1.5", ModelConstants.OpenAI.GptImage15OnReplicate, "OpenAI (via Replicate)"),
+        new("GPT Image 2", ModelConstants.OpenAI.GptImage2OnReplicate, "OpenAI (via Replicate)"),
         new("Flux 1.1 Pro", ModelConstants.Flux.Pro11, "Black Forest Labs"),
         new("Flux 1.1 Pro Ultra", ModelConstants.Flux.Pro11Ultra, "Black Forest Labs"),
         new("Flux 2 Klein 4B", ModelConstants.Flux.Klein4b, "Black Forest Labs"),
@@ -523,8 +524,15 @@ public partial class GeneratorViewModel : ObservableObject
 
     private void ApplyCatalog(IReadOnlyList<ModelOption> models)
     {
-        AllModels = models.ToList();
-        Providers = BuildProvidersFrom(models);
+        // Always union the hardcoded fallback list into whatever came from disk/live so
+        // models we've explicitly added to the codebase still appear even when the cached
+        // catalog is stale or Replicate's curated collection hasn't picked them up yet.
+        // Incoming entries win on duplicates (their Display/Provider reflect live data).
+        var seen = new HashSet<string>(models.Select(m => m.Value), StringComparer.OrdinalIgnoreCase);
+        var merged = models.Concat(HardcodedCatalogSeed.Where(m => seen.Add(m.Value))).ToList();
+
+        AllModels = merged;
+        Providers = BuildProvidersFrom(merged);
         RecomputeFilteredModels();
     }
 

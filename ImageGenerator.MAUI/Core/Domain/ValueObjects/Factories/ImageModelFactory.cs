@@ -53,9 +53,12 @@ public static class ImageModelFactory
                     ["images"] = BuildDataUris(parameters.ImagePrompts, maxCount: 1)
                 },
 
-            // Replicate-hosted openai/gpt-image-1.5 — narrow AR enum, its own field names,
-            // input_images accepts up to 10.
-            ModelConstants.OpenAI.GptImage15OnReplicate => new Dictionary<string, object?>
+            // Replicate-hosted openai/gpt-image-{1.5,2} — narrow AR enum, its own field names,
+            // input_images accepts up to 10. gpt-image-2's published schema omits
+            // input_fidelity but the model is believed to accept it regardless; revisit if
+            // Replicate starts 422-ing on that field for gpt-image-2.
+            ModelConstants.OpenAI.GptImage15OnReplicate
+                or ModelConstants.OpenAI.GptImage2OnReplicate => new Dictionary<string, object?>
                 {
                     ["prompt"] = parameters.Prompt,
                     ["aspect_ratio"] = parameters.AspectRatio,
