@@ -91,10 +91,11 @@ public class GeneratorViewModelTests
 
         await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
 
-        _viewModel.StatusMessage.Should().StartWith("Saved to ");
-        _viewModel.StatusKind.Should().Be(StatusKind.Success);
-        _viewModel.GeneratedImagePath.Should().NotBeNull();
-        _viewModel.IsGenerating.Should().BeFalse();
+        _viewModel.Jobs.Should().HaveCount(1);
+        _viewModel.Jobs[0].StatusMessage.Should().StartWith("Saved to ");
+        _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Success);
+        _viewModel.Jobs[0].ResultPath.Should().NotBeNull();
+        _viewModel.Jobs[0].IsRunning.Should().BeFalse();
     }
 
     [Fact]
@@ -108,8 +109,7 @@ public class GeneratorViewModelTests
         _viewModel.StatusMessage.Should().Contain("API Token");
         _viewModel.StatusMessage.Should().Contain("Prompt");
         _viewModel.StatusKind.Should().Be(StatusKind.Error);
-        _viewModel.GeneratedImagePath.Should().BeNull();
-        _viewModel.IsGenerating.Should().BeFalse();
+        _viewModel.Jobs.Should().BeEmpty();
     }
 
     [Fact]
@@ -194,10 +194,11 @@ public class GeneratorViewModelTests
 
         await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
 
-        _viewModel.StatusMessage.Should().Be("Error: Test error");
-        _viewModel.StatusKind.Should().Be(StatusKind.Error);
-        _viewModel.GeneratedImagePath.Should().BeNull();
-        _viewModel.IsGenerating.Should().BeFalse();
+        _viewModel.Jobs.Should().HaveCount(1);
+        _viewModel.Jobs[0].StatusMessage.Should().Be("Error: Test error");
+        _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Error);
+        _viewModel.Jobs[0].ResultPath.Should().BeNull();
+        _viewModel.Jobs[0].IsRunning.Should().BeFalse();
     }
 
     [Theory]
@@ -480,8 +481,9 @@ public class GeneratorViewModelTests
 
         await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
 
-        _viewModel.StatusKind.Should().Be(StatusKind.Canceled);
-        _viewModel.GeneratedImagePath.Should().BeNull();
+        _viewModel.Jobs.Should().HaveCount(1);
+        _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Canceled);
+        _viewModel.Jobs[0].ResultPath.Should().BeNull();
     }
 
     // --- Card title + strength gate state machine ---
@@ -605,5 +607,40 @@ public class GeneratorViewModelTests
 
         _viewModel.SelectedImages.RemoveAt(0);
         _viewModel.Parameters.ImagePrompts.Should().ContainInOrder("b").And.HaveCount(1);
+    }
+
+    [Fact]
+    public async Task GenerateImage_TwoConcurrentCalls_EachJobKeepsItsOwnPromptSnapshot()
+    {
+        // Regression guard for the original bug: "image N ends up with image N+1's prompt".
+        // Two generations must be isolated so that editing Parameters.Prompt between clicks
+        // (or even mid-flight) never bleeds across jobs.
+        _viewModel.Parameters.ApiToken = "valid-token";
+
+        var gate1 = new TaskCompletionSource<GeneratedImage>();
+        var gate2 = new TaskCompletionSource<GeneratedImage>();
+        var call = 0;
+        _mockImageService
+            .Setup(x => x.GenerateImageAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .Returns(() => Interlocked.Increment(ref call) == 1 ? gate1.Task : gate2.Task);
+
+        _viewModel.Parameters.Prompt = "PROMPT_A";
+        var run1 = ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+
+        _viewModel.Parameters.Prompt = "PROMPT_B";
+        var run2 = ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+
+        // Both jobs must already be in the collection with frozen prompt snapshots,
+        // before either service call has completed.
+        _viewModel.Jobs.Should().HaveCount(2);
+        _viewModel.Jobs[0].Prompt.Should().Be("PROMPT_B"); // newest first (Insert at 0)
+        _viewModel.Jobs[1].Prompt.Should().Be("PROMPT_A");
+        _viewModel.Jobs[0].Parameters.Prompt.Should().Be("PROMPT_B");
+        _viewModel.Jobs[1].Parameters.Prompt.Should().Be("PROMPT_A");
+
+        // Release both tasks with a canceled-style message so RunJobAsync exits cleanly.
+        gate1.SetResult(new GeneratedImage { Message = "canceled", ImageDataBase64 = null });
+        gate2.SetResult(new GeneratedImage { Message = "canceled", ImageDataBase64 = null });
+        await Task.WhenAll(run1, run2);
     }
 }

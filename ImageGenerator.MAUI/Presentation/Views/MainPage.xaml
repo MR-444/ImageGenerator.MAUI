@@ -260,56 +260,35 @@
 
                 <VerticalStackLayout Grid.Column="2" Spacing="16">
 
-                <!-- ACTION + RESULT column -->
+                <!-- ACTION column -->
                 <Border Style="{StaticResource Card}"
                         VerticalOptions="Start">
                     <VerticalStackLayout Spacing="12">
                         <Label Text="Run" Style="{StaticResource CardTitle}" />
 
-                        <!-- Idle: Generate -->
-                        <VerticalStackLayout Spacing="6"
-                                             IsVisible="{Binding IsGenerating, Converter={StaticResource InverseBool}}">
-                            <Button Text="Generate Image"
-                                    Style="{StaticResource PrimaryButton}"
-                                    Command="{Binding GenerateImageCommand}"
-                                    HorizontalOptions="Fill"
-                                    SemanticProperties.Description="Start image generation"
-                                    AutomationId="GenerateButton">
-                                <Button.Triggers>
-                                    <DataTrigger TargetType="Button" Binding="{Binding IsValid}" Value="False">
-                                        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}" />
-                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray300}}" />
-                                        <Setter Property="Opacity" Value="0.85" />
-                                    </DataTrigger>
-                                </Button.Triggers>
-                            </Button>
-                            <Label Text="Fill in API Token and a prompt to enable generation."
-                                   Style="{StaticResource HelperText}"
-                                   IsVisible="{Binding IsValid, Converter={StaticResource InverseBool}}" />
-                        </VerticalStackLayout>
+                        <Button Text="Generate Image"
+                                Style="{StaticResource PrimaryButton}"
+                                Command="{Binding GenerateImageCommand}"
+                                IsEnabled="{Binding IsValid}"
+                                HorizontalOptions="Fill"
+                                SemanticProperties.Description="Start image generation"
+                                AutomationId="GenerateButton" />
 
-                        <!-- Generating: spinner + Cancel -->
-                        <Grid ColumnDefinitions="*,Auto"
-                              ColumnSpacing="12"
-                              IsVisible="{Binding IsGenerating}">
-                            <HorizontalStackLayout Grid.Column="0" Spacing="12" VerticalOptions="Center">
-                                <ActivityIndicator IsRunning="{Binding IsGenerating}"
-                                                   VerticalOptions="Center"
-                                                   HeightRequest="20"
-                                                   WidthRequest="20" />
-                                <Label Text="Working…" VerticalOptions="Center" />
-                            </HorizontalStackLayout>
-                            <Button Grid.Column="1"
-                                    Text="Cancel"
-                                    Style="{StaticResource DangerButton}"
-                                    Command="{Binding GenerateImageCancelCommand}"
-                                    SemanticProperties.Description="Cancel in-flight image generation"
-                                    AutomationId="CancelButton" />
-                        </Grid>
+                        <Label Text="Fill in API Token and a prompt to enable generation."
+                               Style="{StaticResource HelperText}"
+                               IsVisible="{Binding IsValid, Converter={StaticResource InverseBool}}" />
 
-                        <!-- Status -->
+                        <Button Text="Open output folder"
+                                Command="{Binding OpenOutputFolderCommand}"
+                                Style="{StaticResource SecondaryButton}"
+                                HorizontalOptions="Start"
+                                SemanticProperties.Description="Open the generated-images folder in Explorer"
+                                AutomationId="OpenFolderButton" />
+
+                        <!-- Status (form-level errors and info) -->
                         <Label Text="{Binding StatusMessage}"
                                Style="{StaticResource StatusLabel}"
+                               IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
                                LineBreakMode="TailTruncation"
                                MaxLines="3"
                                AutomationId="StatusLabel">
@@ -331,46 +310,6 @@
                                 </DataTrigger>
                             </Label.Triggers>
                         </Label>
-
-                        <!-- Result thumbnail (when image exists). Click opens the OS default viewer. -->
-                        <VerticalStackLayout Spacing="8"
-                                             IsVisible="{Binding GeneratedImagePath, Converter={StaticResource NonEmptyStringToBool}}">
-                            <Label Text="Result" Style="{StaticResource FieldLabel}" />
-                            <Border Stroke="{AppThemeBinding Light={StaticResource SurfaceBorderLight}, Dark={StaticResource SurfaceBorderDark}}"
-                                    StrokeThickness="1"
-                                    Padding="0">
-                                <Border.StrokeShape>
-                                    <RoundRectangle CornerRadius="8" />
-                                </Border.StrokeShape>
-                                <Image Source="{Binding GeneratedImagePath}"
-                                       Aspect="AspectFill"
-                                       HeightRequest="260"
-                                       HorizontalOptions="Fill"
-                                       SemanticProperties.Description="Generated image preview. Click to open full size.">
-                                    <Image.GestureRecognizers>
-                                        <TapGestureRecognizer Command="{Binding OpenImageCommand}" />
-                                    </Image.GestureRecognizers>
-                                    <Image.Triggers>
-                                        <DataTrigger TargetType="Image" Binding="{Binding IsGenerating}" Value="True">
-                                            <Setter Property="Opacity" Value="0.5" />
-                                        </DataTrigger>
-                                    </Image.Triggers>
-                                </Image>
-                            </Border>
-                            <Label Text="Click the thumbnail to open full size."
-                                   Style="{StaticResource HelperText}" />
-                            <HorizontalStackLayout Spacing="8">
-                                <Button Text="Use as input for next generation"
-                                        Command="{Binding UseGeneratedImageAsInputCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        AutomationId="UseAsInputButton" />
-                                <Button Text="Show in folder"
-                                        Command="{Binding ShowInFolderCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        SemanticProperties.Description="Open the generated-images folder in Explorer"
-                                        AutomationId="ShowInFolderButton" />
-                            </HorizontalStackLayout>
-                        </VerticalStackLayout>
                     </VerticalStackLayout>
                 </Border>
 
@@ -413,6 +352,98 @@
                     </Grid>
                 </VerticalStackLayout>
             </Border>
+
+            <!-- GENERATION QUEUE -->
+            <Label Text="Generation Queue"
+                   Style="{StaticResource CardTitle}"
+                   Margin="0,8,0,0"
+                   IsVisible="{Binding HasJobs}" />
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Jobs}" Spacing="12">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:GenerationJob">
+                        <Border Style="{StaticResource Card}">
+                            <VerticalStackLayout Spacing="8">
+
+                                <!-- Prompt (full, wrapping) -->
+                                <Label Text="{Binding Prompt}"
+                                       Style="{StaticResource FieldLabel}"
+                                       LineBreakMode="WordWrap" />
+
+                                <!-- Model · AR · seed -->
+                                <Label Text="{Binding MetaLine}" Style="{StaticResource HelperText}" />
+
+                                <!-- Status row: spinner (if running) + status text (always) + Cancel (if running) -->
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                    <ActivityIndicator Grid.Column="0"
+                                                       IsRunning="{Binding IsRunning}"
+                                                       IsVisible="{Binding IsRunning}"
+                                                       HeightRequest="18" WidthRequest="18"
+                                                       VerticalOptions="Center" />
+                                    <Label Grid.Column="1"
+                                           Text="{Binding StatusMessage}"
+                                           VerticalOptions="Center"
+                                           LineBreakMode="TailTruncation"
+                                           MaxLines="2">
+                                        <Label.Triggers>
+                                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
+                                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
+                                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Canceled}">
+                                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusCanceledLight}, Dark={StaticResource StatusCanceledDark}}" />
+                                            </DataTrigger>
+                                        </Label.Triggers>
+                                    </Label>
+                                    <Button Grid.Column="2"
+                                            Text="Cancel"
+                                            Command="{Binding CancelCommand}"
+                                            Style="{StaticResource DangerButton}"
+                                            IsVisible="{Binding IsRunning}"
+                                            AutomationId="JobCancelButton" />
+                                </Grid>
+
+                                <!-- Result thumbnail (tap to open) -->
+                                <Border IsVisible="{Binding ResultPath, Converter={StaticResource NonEmptyStringToBool}}"
+                                        Stroke="{AppThemeBinding Light={StaticResource SurfaceBorderLight}, Dark={StaticResource SurfaceBorderDark}}"
+                                        StrokeThickness="1"
+                                        Padding="0">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="8" />
+                                    </Border.StrokeShape>
+                                    <Image Source="{Binding ResultPath}"
+                                           Aspect="AspectFill"
+                                           HeightRequest="260"
+                                           HorizontalOptions="Fill"
+                                           SemanticProperties.Description="Generated image. Tap to open full size.">
+                                        <Image.GestureRecognizers>
+                                            <TapGestureRecognizer Command="{Binding OpenImageCommand}" />
+                                        </Image.GestureRecognizers>
+                                    </Image>
+                                </Border>
+
+                                <!-- Action buttons (when complete) -->
+                                <HorizontalStackLayout Spacing="8"
+                                                       IsVisible="{Binding ResultPath, Converter={StaticResource NonEmptyStringToBool}}">
+                                    <Label Text="Tap thumbnail to open full size."
+                                           Style="{StaticResource HelperText}"
+                                           VerticalOptions="Center" />
+                                    <Button Text="Use as input"
+                                            Command="{Binding UseAsInputCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            AutomationId="JobUseAsInputButton" />
+                                    <Button Text="Show in folder"
+                                            Command="{Binding ShowInFolderCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            AutomationId="JobShowInFolderButton" />
+                                </HorizontalStackLayout>
+
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
 
             <!-- Footer: version -->
             <Label Text="{Binding AppVersion, StringFormat='v{0}'}"

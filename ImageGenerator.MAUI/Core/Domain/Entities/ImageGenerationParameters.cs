@@ -86,4 +86,32 @@ public partial class ImageGenerationParameters : ObservableObject
 
     [ObservableProperty]
     private string _gptInputFidelity = "low";
+
+    public ImageGenerationParameters Clone()
+    {
+        var copy = new ImageGenerationParameters
+        {
+            ApiToken         = ApiToken,
+            Model            = Model,
+            Prompt           = Prompt,
+            Seed             = Seed,
+            RandomizeSeed    = RandomizeSeed,
+            AspectRatio      = AspectRatio,
+            Width            = Width,
+            Height           = Height,
+            SafetyTolerance  = SafetyTolerance,
+            OutputFormat     = OutputFormat,
+            OutputQuality    = OutputQuality,
+            PromptUpsampling = PromptUpsampling,
+            ImagePromptStrength = ImagePromptStrength,
+            Raw              = Raw,
+            Resolution       = Resolution,
+            GptQuality       = GptQuality,
+            GptBackground    = GptBackground,
+            GptModeration    = GptModeration,
+            GptInputFidelity = GptInputFidelity,
+        };
+        foreach (var p in ImagePrompts) copy.ImagePrompts.Add(p);
+        return copy;
+    }
 }

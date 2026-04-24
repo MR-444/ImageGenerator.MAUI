@@ -48,8 +48,8 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private StatusKind _statusKind = StatusKind.None;
 
-    [ObservableProperty]
-    private string? _generatedImagePath;
+    public ObservableCollection<GenerationJob> Jobs { get; } = [];
+    public bool HasJobs => Jobs.Count > 0;
 
     [ObservableProperty]
     private List<ModelOption> _allModels = HardcodedCatalogSeed.ToList();
@@ -105,12 +105,7 @@ public partial class GeneratorViewModel : ObservableObject
     public string AppVersion => AppInfo.Current.VersionString;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(GenerateImageCommand))]
     private bool _isValid;
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(GenerateImageCommand))]
-    private bool _isGenerating;
 
     private ModelCapabilities _capabilities = ModelCapabilities.For(ModelConstants.Flux.Pro11);
     private bool _cachedCatalogLoaded;
@@ -283,6 +278,7 @@ public partial class GeneratorViewModel : ObservableObject
         _catalogService = catalogService ?? throw new ArgumentNullException(nameof(catalogService));
 
         SelectedImages.CollectionChanged += OnSelectedImagesChanged;
+        Jobs.CollectionChanged += (_, _) => DispatchToUi(() => OnPropertyChanged(nameof(HasJobs)));
 
         _providers = BuildProviders();
 
@@ -327,8 +323,8 @@ public partial class GeneratorViewModel : ObservableObject
 
     private static List<string> BuildProviders() => BuildProvidersFrom(HardcodedCatalogSeed);
 
-    [RelayCommand(IncludeCancelCommand = true)]
-    private async Task GenerateImageAsync(CancellationToken cancellationToken)
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task GenerateImageAsync()
     {
         var missing = new List<string>();
         if (string.IsNullOrWhiteSpace(Parameters.ApiToken)) missing.Add("API Token");
@@ -339,52 +335,87 @@ public partial class GeneratorViewModel : ObservableObject
             return;
         }
 
+        if (Parameters.RandomizeSeed)
+            Parameters.Seed = Random.Shared.NextInt64(0, ValidationConstants.SeedMaxValue);
+
+        var snapshot = Parameters.Clone();
+        var job = new GenerationJob(snapshot, AddAsInputAsync);
+        Jobs.Insert(0, job);
+
+        await RunJobAsync(job);
+    }
+
+    private async Task RunJobAsync(GenerationJob job)
+    {
         try
         {
-            IsGenerating = true;
-            SetStatus("Generating image…", StatusKind.Info);
-
-            if (Parameters.RandomizeSeed)
-            {
-                Parameters.Seed = Random.Shared.NextInt64(0, ValidationConstants.SeedMaxValue);
-            }
-
-            var result = await _imageService.GenerateImageAsync(Parameters, cancellationToken);
+            var result = await _imageService.GenerateImageAsync(job.Parameters, job.Cts.Token);
 
             if (!string.IsNullOrEmpty(result.ImageDataBase64))
             {
                 Directory.CreateDirectory(OutputDirectory);
+                var path = _imageFileService.GetUniqueSavePath(OutputDirectory, job.Parameters);
+                var bytes = Convert.FromBase64String(result.ImageDataBase64);
+                await _imageFileService.SaveImageWithMetadataAsync(path, bytes, job.Parameters);
 
-                var newImagePath = _imageFileService.GetUniqueSavePath(OutputDirectory, Parameters);
-                var imageBytes = Convert.FromBase64String(result.ImageDataBase64);
-
-                await _imageFileService.SaveImageWithMetadataAsync(newImagePath, imageBytes, Parameters);
-
-                GeneratedImagePath = newImagePath;
-                SetStatus($"Saved to {newImagePath}", StatusKind.Success);
+                // HttpClient continuations can land on a ThreadPool thread; MAUI drops
+                // PropertyChanged fired off the UI thread, so marshal the update back.
+                DispatchToUi(() =>
+                {
+                    job.ResultPath = path;
+                    job.StatusMessage = $"Saved to {path}";
+                    job.StatusKind = StatusKind.Success;
+                });
             }
             else
             {
                 var kind = result.Message?.Contains("canceled", StringComparison.OrdinalIgnoreCase) == true
                     ? StatusKind.Canceled
                     : StatusKind.Error;
-                SetStatus(result.Message ?? "Image generation failed.", kind);
-                GeneratedImagePath = null;
+                var msg = result.Message ?? "Image generation failed.";
+                DispatchToUi(() =>
+                {
+                    job.StatusMessage = msg;
+                    job.StatusKind = kind;
+                });
             }
         }
         catch (OperationCanceledException)
         {
-            SetStatus("Image generation was canceled.", StatusKind.Canceled);
-            GeneratedImagePath = null;
+            DispatchToUi(() =>
+            {
+                job.StatusMessage = "Canceled.";
+                job.StatusKind = StatusKind.Canceled;
+            });
         }
         catch (Exception ex)
         {
-            SetStatus($"Error: {ex.Message}", StatusKind.Error);
-            GeneratedImagePath = null;
+            var msg = $"Error: {ex.Message}";
+            DispatchToUi(() =>
+            {
+                job.StatusMessage = msg;
+                job.StatusKind = StatusKind.Error;
+            });
         }
         finally
         {
-            IsGenerating = false;
+            DispatchToUi(() => job.IsRunning = false);
+            job.Cts.Dispose();
+        }
+    }
+
+    private static void DispatchToUi(Action action)
+    {
+        try
+        {
+            if (MainThread.IsMainThread) action();
+            else MainThread.BeginInvokeOnMainThread(action);
+        }
+        catch
+        {
+            // MainThread throws in unit-test contexts where WinRT isn't initialised.
+            // Running synchronously is safe because tests run on a single thread anyway.
+            action();
         }
     }
 
@@ -444,58 +475,21 @@ public partial class GeneratorViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ShowInFolder()
+    private void OpenOutputFolder()
     {
-        var target = !string.IsNullOrEmpty(GeneratedImagePath) && File.Exists(GeneratedImagePath)
-            ? GeneratedImagePath
-            : null;
-
         try
         {
-            if (target != null)
-            {
-                // Windows-only: open Explorer with the file highlighted.
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "explorer.exe",
-                    Arguments = $"/select,\"{target}\"",
-                    UseShellExecute = true
-                });
-            }
-            else
-            {
-                Directory.CreateDirectory(OutputDirectory);
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "explorer.exe",
-                    Arguments = $"\"{OutputDirectory}\"",
-                    UseShellExecute = true
-                });
-            }
-        }
-        catch (Exception ex)
-        {
-            SetStatus($"Couldn't open Explorer: {ex.Message}", StatusKind.Error);
-        }
-    }
-
-    [RelayCommand]
-    private void OpenImage()
-    {
-        if (string.IsNullOrEmpty(GeneratedImagePath) || !File.Exists(GeneratedImagePath))
-            return;
-
-        try
-        {
+            Directory.CreateDirectory(OutputDirectory);
             Process.Start(new ProcessStartInfo
             {
-                FileName = GeneratedImagePath,
+                FileName = "explorer.exe",
+                Arguments = $"\"{OutputDirectory}\"",
                 UseShellExecute = true
             });
         }
         catch (Exception ex)
         {
-            SetStatus($"Couldn't open image: {ex.Message}", StatusKind.Error);
+            SetStatus($"Couldn't open Explorer: {ex.Message}", StatusKind.Error);
         }
     }
 
@@ -609,12 +603,11 @@ public partial class GeneratorViewModel : ObservableObject
         SetStatus("API token cleared from secure storage.", StatusKind.Info);
     }
 
-    [RelayCommand]
-    private async Task UseGeneratedImageAsInputAsync()
+    internal async Task AddAsInputAsync(string filePath)
     {
-        if (string.IsNullOrEmpty(GeneratedImagePath) || !File.Exists(GeneratedImagePath))
+        if (!File.Exists(filePath))
         {
-            SetStatus("No generated image available to use as input.", StatusKind.Error);
+            SetStatus("File not found.", StatusKind.Error);
             return;
         }
         if (!CanAddImage)
@@ -625,18 +618,16 @@ public partial class GeneratorViewModel : ObservableObject
 
         try
         {
-            var imageBytes = await File.ReadAllBytesAsync(GeneratedImagePath);
+            var imageBytes = await File.ReadAllBytesAsync(filePath);
             var base64 = Convert.ToBase64String(imageBytes);
             var preview = ImageSource.FromStream(() => new MemoryStream(imageBytes));
-            var name = Path.GetFileName(GeneratedImagePath);
-
-            SelectedImages.Add(new InputImageItem(base64, preview, name, GeneratedImagePath));
-
-            SetStatus("Generated image added as input.", StatusKind.Success);
+            var name = Path.GetFileName(filePath);
+            SelectedImages.Add(new InputImageItem(base64, preview, name, filePath));
+            SetStatus("Added as input.", StatusKind.Success);
         }
         catch (Exception ex)
         {
-            SetStatus($"Error using generated image as input: {ex.Message}", StatusKind.Error);
+            SetStatus($"Error using image as input: {ex.Message}", StatusKind.Error);
         }
     }
 }
