@@ -19,7 +19,9 @@ public class ImageFileServiceTests : IDisposable
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "imggen-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
-        _sut = new ImageFileService(new ImageEncoderProvider());
+        // Frozen clock so collision-suffix tests don't race the wall-clock second boundary.
+        var frozen = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Local);
+        _sut = new ImageFileService(new ImageEncoderProvider(), () => frozen);
     }
 
     public void Dispose()

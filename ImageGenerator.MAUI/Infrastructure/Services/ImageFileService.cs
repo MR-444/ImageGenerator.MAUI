@@ -12,10 +12,14 @@ namespace ImageGenerator.MAUI.Infrastructure.Services;
 public class ImageFileService : IImageFileService
 {
     private readonly IImageEncoderProvider _encoderProvider;
+    private readonly Func<DateTime> _clock;
 
-    public ImageFileService(IImageEncoderProvider encoderProvider)
+    public ImageFileService(IImageEncoderProvider encoderProvider, Func<DateTime>? clock = null)
     {
         _encoderProvider = encoderProvider;
+        // Injectable so tests can freeze time — BuildFileName uses a second-granularity
+        // timestamp, and wall-clock-driven collision tests are otherwise flaky on slow CI.
+        _clock = clock ?? (() => DateTime.Now);
     }
 
     public async Task SaveImageWithMetadataAsync(string imagePath, byte[] imageBytes, ImageGenerationParameters parameters)
@@ -103,7 +107,7 @@ public class ImageFileService : IImageFileService
 
     public string BuildFileName(ImageGenerationParameters parameters)
     {
-        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        var timestamp = _clock().ToString("yyyyMMdd_HHmmss");
         var invalidChars = Path.GetInvalidFileNameChars();
         var safePrompt = new string(parameters.Prompt.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray())
             .Replace(" ", "_")
