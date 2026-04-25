@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Diagnostics;
+using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Maui.ApplicationModel;
@@ -102,7 +103,14 @@ public partial class GeneratorViewModel : ObservableObject
     public int InputImageCount => SelectedImages.Count;
     public bool CanAddImage => SelectedImages.Count < MaxImageInputs;
 
-    public string AppVersion => AppInfo.Current.VersionString;
+    // Derived from <Version> in the csproj via the SDK-generated AssemblyInformationalVersion
+    // (which on Windows MAUI is the only version source not polluted by ApplicationVersion's
+    // build counter, the way AppInfo.Current.VersionString is). Strip the "+gitSha" suffix.
+    public string AppVersion =>
+        typeof(GeneratorViewModel).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?.Split('+')[0]
+        ?? "0.0.0";
 
     [ObservableProperty]
     private bool _isValid;

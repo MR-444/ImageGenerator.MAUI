@@ -1,5 +1,4 @@
 ﻿using ImageGenerator.MAUI.Presentation.ViewModels;
-using Microsoft.Maui.ApplicationModel;
 
 namespace ImageGenerator.MAUI.Presentation.Views;
 
@@ -33,9 +32,8 @@ public partial class MainPage
 
     private async void OnAboutClicked(object sender, EventArgs e)
     {
-        var version = AppInfo.Current.VersionString;
         var message =
-            $"Version {version}\n\n" +
+            $"Version {_viewModel.AppVersion}\n\n" +
             "A hobby MAUI desktop app for Replicate-based image generation.\n\n" +
             "MIT License\n" +
             "https://github.com/MR-444/ImageGenerator.MAUI";

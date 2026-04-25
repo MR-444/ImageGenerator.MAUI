@@ -18,7 +18,12 @@
 
 		<ApplicationTitle>AI Image Generator</ApplicationTitle>
 		<ApplicationId>io.github.mr444.imagegenerator.maui</ApplicationId>
-		<ApplicationDisplayVersion>0.4.0</ApplicationDisplayVersion>
+		<!-- Single source of truth for the app version. AssemblyVersion / FileVersion /
+		     InformationalVersion auto-derive from <Version>; the UI reads the latter via
+		     reflection. AppInfo.Current.VersionString is avoided because on Windows MAUI
+		     it returns "ApplicationDisplayVersion + ApplicationVersion", not just <Version>. -->
+		<Version>0.4.0</Version>
+		<ApplicationDisplayVersion>$(Version)</ApplicationDisplayVersion>
 		<ApplicationVersion>5</ApplicationVersion>
 
 		<WindowsPackageType>None</WindowsPackageType>
