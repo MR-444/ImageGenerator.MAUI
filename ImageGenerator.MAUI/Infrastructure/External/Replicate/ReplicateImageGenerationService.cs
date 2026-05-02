@@ -1,5 +1,5 @@
+using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
-using ImageGenerator.MAUI.Core.Domain.ValueObjects.Factories;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
 using ImageGenerator.MAUI.Models.Replicate;
 
@@ -10,18 +10,20 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
 {
     private readonly HttpClient _httpClient;
     private readonly IReplicateApi _replicateApi;
+    private readonly IModelDescriptorRegistry _registry;
 
-    public ReplicateImageGenerationService(IReplicateApi replicateApi, HttpClient httpClient)
+    public ReplicateImageGenerationService(IReplicateApi replicateApi, HttpClient httpClient, IModelDescriptorRegistry registry)
     {
         _replicateApi = replicateApi ?? throw new ArgumentNullException(nameof(replicateApi));
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
     }
 
     public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters, CancellationToken cancellationToken = default)
     {
         try
         {
-            var imageModel = ImageModelFactory.CreateImageModel(parameters);
+            var imageModel = _registry.PayloadFor(parameters.Model).Build(parameters);
 
             var finalResponse = await CallReplicateModelAsync(parameters, imageModel, cancellationToken);
             var outputUrl = finalResponse?.Output?.FirstOrDefault();

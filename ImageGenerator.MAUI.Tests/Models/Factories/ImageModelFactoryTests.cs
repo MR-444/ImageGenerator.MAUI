@@ -1,7 +1,7 @@
 using FluentAssertions;
+using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.Enums;
-using ImageGenerator.MAUI.Core.Domain.ValueObjects.Factories;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects.Flux;
 using ImageGenerator.MAUI.Shared.Constants;
 
@@ -9,6 +9,12 @@ namespace ImageGenerator.MAUI.Tests.Models.Factories;
 
 public class ImageModelFactoryTests
 {
+    // Characterization tests against the production descriptor set, routed through the
+    // registry exactly as ReplicateImageGenerationService does at runtime.
+    private readonly IModelDescriptorRegistry _registry = ModelDescriptorRegistry.Default();
+
+    private object Build(ImageGenerationParameters p) => _registry.PayloadFor(p.Model).Build(p);
+
     [Fact]
     public void CreateImageModel_WithFluxPro11_ReturnsCorrectModel()
     {
@@ -27,7 +33,7 @@ public class ImageModelFactoryTests
         };
         parameters.ImagePrompts.Add("test image prompt");
 
-        var result = ImageModelFactory.CreateImageModel(parameters) as Flux11Pro;
+        var result = Build(parameters) as Flux11Pro;
 
         Assert.NotNull(result);
         Assert.Equal(ModelConstants.Flux.Pro11, result.ModelName);
@@ -55,7 +61,7 @@ public class ImageModelFactoryTests
             Height = 1024
         };
 
-        var result = ImageModelFactory.CreateImageModel(parameters) as Flux11Pro;
+        var result = Build(parameters) as Flux11Pro;
 
         Assert.NotNull(result);
         Assert.Null(result.Width);
@@ -79,7 +85,7 @@ public class ImageModelFactoryTests
         };
         parameters.ImagePrompts.Add("test image prompt");
 
-        var result = ImageModelFactory.CreateImageModel(parameters) as Flux11ProUltra;
+        var result = Build(parameters) as Flux11ProUltra;
 
         Assert.NotNull(result);
         Assert.Equal(ModelConstants.Flux.Pro11Ultra, result.ModelName);
@@ -95,7 +101,7 @@ public class ImageModelFactoryTests
     {
         var parameters = new ImageGenerationParameters { Model = "not-a-path", Prompt = "x" };
 
-        var act = () => ImageModelFactory.CreateImageModel(parameters);
+        var act = () => Build(parameters);
 
         act.Should().Throw<ArgumentException>().WithMessage("Unknown model type: not-a-path");
     }
@@ -117,7 +123,7 @@ public class ImageModelFactoryTests
             OutputQuality = 90
         };
 
-        var result = ImageModelFactory.CreateImageModel(parameters);
+        var result = Build(parameters);
 
         var dict = result.Should().BeOfType<Dictionary<string, object?>>().Subject;
         dict.Should().ContainKey("prompt").WhoseValue.Should().Be("a flux 2 test");
@@ -147,7 +153,7 @@ public class ImageModelFactoryTests
             GptInputFidelity = "high"
         };
 
-        var result = ImageModelFactory.CreateImageModel(parameters);
+        var result = Build(parameters);
 
         var dict = result.Should().BeOfType<Dictionary<string, object?>>().Subject;
         dict.Should().ContainKey("prompt").WhoseValue.Should().Be("hello");
@@ -182,7 +188,7 @@ public class ImageModelFactoryTests
             GptInputFidelity = "low"
         };
 
-        var result = ImageModelFactory.CreateImageModel(parameters);
+        var result = Build(parameters);
 
         var dict = result.Should().BeOfType<Dictionary<string, object?>>().Subject;
         dict.Should().ContainKey("prompt").WhoseValue.Should().Be("hello");
@@ -208,7 +214,7 @@ public class ImageModelFactoryTests
             OutputFormat = ImageOutputFormat.Png
         };
 
-        var result = ImageModelFactory.CreateImageModel(parameters);
+        var result = Build(parameters);
 
         var dict = result.Should().BeOfType<Dictionary<string, object?>>().Subject;
         dict.Should().ContainKey("prompt").WhoseValue.Should().Be("a banana");
@@ -234,7 +240,7 @@ public class ImageModelFactoryTests
             OutputFormat = ImageOutputFormat.Webp
         };
 
-        var result = ImageModelFactory.CreateImageModel(parameters);
+        var result = Build(parameters);
 
         var dict = (Dictionary<string, object?>)result;
         // nano-banana-2 schema rejects webp; factory coerces to jpg.
@@ -254,7 +260,7 @@ public class ImageModelFactoryTests
             OutputQuality = 80
         };
 
-        var result = ImageModelFactory.CreateImageModel(parameters);
+        var result = Build(parameters);
 
         var dict = result.Should().BeOfType<Dictionary<string, object?>>().Subject;
         dict.Keys.Should().BeEquivalentTo(["prompt", "seed", "aspect_ratio", "output_format", "output_quality", "images"]);
@@ -270,7 +276,7 @@ public class ImageModelFactoryTests
         parameters.ImagePrompts.Add("first");
         parameters.ImagePrompts.Add("second");
 
-        var result = (Flux11Pro)ImageModelFactory.CreateImageModel(parameters)!;
+        var result = (Flux11Pro)Build(parameters)!;
 
         result.ImagePrompt.Should().Be("first");
     }
@@ -287,7 +293,7 @@ public class ImageModelFactoryTests
         };
         for (var i = 0; i < 15; i++) parameters.ImagePrompts.Add($"img{i}");
 
-        var result = (Dictionary<string, object?>)ImageModelFactory.CreateImageModel(parameters);
+        var result = (Dictionary<string, object?>)Build(parameters);
 
         var arr = (string[])result["input_images"]!;
         arr.Should().HaveCount(10);
@@ -305,7 +311,7 @@ public class ImageModelFactoryTests
         };
         for (var i = 0; i < 20; i++) parameters.ImagePrompts.Add($"img{i}");
 
-        var result = (Dictionary<string, object?>)ImageModelFactory.CreateImageModel(parameters);
+        var result = (Dictionary<string, object?>)Build(parameters);
 
         var arr = (string[])result["image_input"]!;
         arr.Should().HaveCount(14);
@@ -324,7 +330,7 @@ public class ImageModelFactoryTests
         parameters.ImagePrompts.Add("a");
         parameters.ImagePrompts.Add("b");
 
-        var result = (Dictionary<string, object?>)ImageModelFactory.CreateImageModel(parameters);
+        var result = (Dictionary<string, object?>)Build(parameters);
 
         var arr = (string[])result["images"]!;
         arr.Should().HaveCount(1);

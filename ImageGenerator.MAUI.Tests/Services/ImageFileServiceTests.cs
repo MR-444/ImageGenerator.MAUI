@@ -1,4 +1,5 @@
 using FluentAssertions;
+using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Infrastructure.Services;
@@ -21,7 +22,7 @@ public class ImageFileServiceTests : IDisposable
         Directory.CreateDirectory(_tempDir);
         // Frozen clock so collision-suffix tests don't race the wall-clock second boundary.
         var frozen = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Local);
-        _sut = new ImageFileService(new ImageEncoderProvider(), () => frozen);
+        _sut = new ImageFileService(new ImageEncoderProvider(), ModelDescriptorRegistry.Default(), () => frozen);
     }
 
     public void Dispose()

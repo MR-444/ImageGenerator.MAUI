@@ -1,4 +1,5 @@
-﻿using ImageGenerator.MAUI.Core.Application.Interfaces;
+using ImageGenerator.MAUI.Core.Application.Interfaces;
+using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Extensions;
 using ImageGenerator.MAUI.Infrastructure.Diagnostics;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate;
@@ -32,7 +33,23 @@ public static class MauiProgram
         // 1) Add the Refit client
         builder.Services.AddRefitClient<IReplicateApi>("https://api.replicate.com");
 
-        // 2) Register your services and ViewModels
+        // 2) Per-model descriptors. Each registers as itself + every narrow interface it
+        //    implements, forwarded to the same singleton instance. Adding a new model is now
+        //    a single-line edit here plus one new descriptor file.
+        builder.Services
+            .AddModelDescriptor<Flux11ProDescriptor>()
+            .AddModelDescriptor<Flux11ProUltraDescriptor>()
+            .AddModelDescriptor<Flux2Klein4bDescriptor>()
+            .AddModelDescriptor<Flux2Flex2Descriptor>()
+            .AddModelDescriptor<Flux2Pro2Descriptor>()
+            .AddModelDescriptor<Flux2Max2Descriptor>()
+            .AddModelDescriptor<GptImage15Descriptor>()
+            .AddModelDescriptor<GptImage2Descriptor>()
+            .AddModelDescriptor<NanoBanana2Descriptor>();
+
+        builder.Services.AddSingleton<IModelDescriptorRegistry, ModelDescriptorRegistry>();
+
+        // 3) Register your services and ViewModels
         builder.Services.AddSingleton<IImageEncoderProvider, ImageEncoderProvider>();
         builder.Services.AddSingleton<IImageFileService, ImageFileService>();
         builder.Services.AddSingleton<IReplicateImageGenerationService, ReplicateImageGenerationService>();
@@ -40,9 +57,9 @@ public static class MauiProgram
         builder.Services.AddSingleton<IModelCatalogService, ModelCatalogService>();
         builder.Services.AddTransient<GeneratorViewModel>();
 
-        // 3) Register MainPage so it (and its constructor) can be injected
+        // 4) Register MainPage so it (and its constructor) can be injected
         builder.Services.AddTransient<MainPage>();
-		
+
         return builder.Build();
     }
 }

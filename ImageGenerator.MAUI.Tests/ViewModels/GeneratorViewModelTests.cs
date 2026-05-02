@@ -3,6 +3,7 @@ using ImageGenerator.MAUI.Presentation.ViewModels;
 using Moq;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
+using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
@@ -36,7 +37,7 @@ public class GeneratorViewModelTests
             .Setup(x => x.FetchAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<ModelOption>());
 
-        _viewModel = new GeneratorViewModel(_mockImageService.Object, _mockImageFileService.Object, _mockCatalogService.Object);
+        _viewModel = new GeneratorViewModel(_mockImageService.Object, _mockImageFileService.Object, _mockCatalogService.Object, ModelDescriptorRegistry.Default());
     }
 
     [Fact]
@@ -263,7 +264,7 @@ public class GeneratorViewModelTests
     [Fact]
     public void Capabilities_FluxKlein4b_ReturnsTwelveAspectRatios()
     {
-        var caps = ModelCapabilities.For(ModelConstants.Flux.Klein4b);
+        var caps = ModelDescriptorRegistry.Default().CapabilitiesFor(ModelConstants.Flux.Klein4b).Capabilities;
 
         caps.AspectRatios.Should().HaveCount(12).And.Contain("match_input_image");
         caps.SafetyTolerance.Should().BeFalse();
@@ -275,7 +276,7 @@ public class GeneratorViewModelTests
     [Fact]
     public void Capabilities_GptImage15OnReplicate_ReturnsThreeAspectRatios()
     {
-        var caps = ModelCapabilities.For(ModelConstants.OpenAI.GptImage15OnReplicate);
+        var caps = ModelDescriptorRegistry.Default().CapabilitiesFor(ModelConstants.OpenAI.GptImage15OnReplicate).Capabilities;
 
         caps.AspectRatios.Should().BeEquivalentTo(["1:1", "3:2", "2:3"]);
         caps.AspectRatioLabel.Should().Be("Aspect ratio");

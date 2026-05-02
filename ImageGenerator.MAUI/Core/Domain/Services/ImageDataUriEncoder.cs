@@ -13,6 +13,15 @@ public static class ImageDataUriEncoder
         return $"data:{DetectImageMimeType(base64)};base64,{base64}";
     }
 
+    /// <summary>
+    /// Convenience for descriptors that ship a bounded array of data URIs (image-prompt inputs).
+    /// Returns null when the collection is empty so the JSON serializer can omit the field.
+    /// </summary>
+    public static string[]? BuildDataUris(IReadOnlyCollection<string> prompts, int maxCount)
+        => prompts.Count == 0
+            ? null
+            : prompts.Take(maxCount).Select(BuildDataUri).ToArray();
+
     public static string DetectImageMimeType(string base64Data)
     {
         byte[] bytes;

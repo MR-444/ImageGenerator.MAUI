@@ -1,6 +1,6 @@
+using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
-using ImageGenerator.MAUI.Shared.Constants;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Formats.Png.Chunks;
@@ -13,11 +13,13 @@ namespace ImageGenerator.MAUI.Infrastructure.Services;
 public class ImageFileService : IImageFileService
 {
     private readonly IImageEncoderProvider _encoderProvider;
+    private readonly IModelDescriptorRegistry _registry;
     private readonly Func<DateTime> _clock;
 
-    public ImageFileService(IImageEncoderProvider encoderProvider, Func<DateTime>? clock = null)
+    public ImageFileService(IImageEncoderProvider encoderProvider, IModelDescriptorRegistry registry, Func<DateTime>? clock = null)
     {
         _encoderProvider = encoderProvider;
+        _registry = registry;
         // Injectable so tests can freeze time — BuildFileName uses a second-granularity
         // timestamp, and wall-clock-driven collision tests are otherwise flaky on slow CI.
         _clock = clock ?? (() => DateTime.Now);
@@ -25,23 +27,15 @@ public class ImageFileService : IImageFileService
 
     public async Task SaveImageWithMetadataAsync(string imagePath, byte[] imageBytes, ImageGenerationParameters parameters)
     {
-        // Snapshot all parameter reads before the first async yield — defence-in-depth even
-        // though callers now pass a cloned instance (the original race was the user editing
-        // the prompt while image bytes were loading).
+        // Snapshot the few non-model-specific parameter reads we still need locally. The
+        // model-specific extras come from registry.MetadataFor(...).Lines(parameters), which
+        // captures everything else internally.
         var prompt = parameters.Prompt;
         var model = parameters.Model ?? string.Empty;
         var seed = parameters.Seed;
         var aspectRatio = parameters.AspectRatio;
         var outputFormat = parameters.OutputFormat;
         var outputQuality = parameters.OutputQuality;
-        var upsampling = parameters.PromptUpsampling;
-        var gptQuality = parameters.GptQuality;
-        var gptBackground = parameters.GptBackground;
-        var gptModeration = parameters.GptModeration;
-        var gptInputFidelity = parameters.GptInputFidelity;
-        var resolution = parameters.Resolution;
-        var raw = parameters.Raw;
-        var imagePromptStrength = parameters.ImagePromptStrength;
 
         // ImageSharp does not dispose streams it didn't own — wrap explicitly so a 4-15 MB
         // image buffer isn't held until the next GC2 (matters under the concurrent queue).
@@ -63,29 +57,11 @@ public class ImageFileService : IImageFileService
             $"Quality: {outputQuality}",
         };
 
-        // Exact match against ModelConstants — `Contains("flux-1.1-pro")` would also match
-        // `flux-1.1-pro-ultra`, attaching a misleading `Upsampling: false` line to Ultra images.
-        if (model == ModelConstants.Flux.Pro11)
-        {
-            lines.Add($"Upsampling: {upsampling}");
-        }
-        if (model == ModelConstants.Flux.Pro11Ultra)
-        {
-            lines.Add($"Raw: {raw}");
-            lines.Add($"ImagePromptStrength: {imagePromptStrength}");
-        }
-        if (model == ModelConstants.OpenAI.GptImage15OnReplicate
-            || model == ModelConstants.OpenAI.GptImage2OnReplicate)
-        {
-            lines.Add($"GptQuality: {gptQuality}");
-            lines.Add($"GptBackground: {gptBackground}");
-            lines.Add($"GptModeration: {gptModeration}");
-            lines.Add($"GptInputFidelity: {gptInputFidelity}");
-        }
-        if (model == ModelConstants.Google.NanoBanana2)
-        {
-            lines.Add($"Resolution: {resolution}");
-        }
+        // Per-model metadata extras (Upsampling for Flux Pro, Raw/ImagePromptStrength for
+        // Ultra, GPT knobs, NanoBanana resolution, ...) come from each model's IMetadataDescriber.
+        // Unknown models contribute no extras (registry returns null).
+        var extras = _registry.MetadataFor(model)?.Lines(parameters);
+        if (extras != null) lines.AddRange(extras);
 
         var metadataText = string.Join(Environment.NewLine, lines);
 

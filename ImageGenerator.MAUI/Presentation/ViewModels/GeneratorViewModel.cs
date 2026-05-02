@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Storage;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
+using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
@@ -24,24 +25,11 @@ public partial class GeneratorViewModel : ObservableObject
     private readonly IImageGenerationService _imageService;
     private readonly IImageFileService _imageFileService;
     private readonly IModelCatalogService _catalogService;
+    private readonly IModelDescriptorRegistry _registry;
 
     // Save to the user's Pictures folder so images are easy to find and survive app rebuilds.
     private static string OutputDirectory =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), OutputFolderName);
-
-    // Master catalog — first-launch seed before Refresh Models hydrates from the live APIs.
-    // Provider strings come from ProviderConstants so seed labels stay byte-identical to
-    // what ModelCatalogService.FormatProvider emits (the merge dedupes by Value, so a label
-    // drift here would surface duplicate provider entries in the picker).
-    private static readonly IReadOnlyList<ModelOption> HardcodedCatalogSeed =
-    [
-        new("GPT Image 1.5", ModelConstants.OpenAI.GptImage15OnReplicate, ProviderConstants.OpenAIOnReplicate),
-        new("GPT Image 2", ModelConstants.OpenAI.GptImage2OnReplicate, ProviderConstants.OpenAIOnReplicate),
-        new("Flux 1.1 Pro", ModelConstants.Flux.Pro11, ProviderConstants.BlackForestLabs),
-        new("Flux 1.1 Pro Ultra", ModelConstants.Flux.Pro11Ultra, ProviderConstants.BlackForestLabs),
-        new("Flux 2 Klein 4B", ModelConstants.Flux.Klein4b, ProviderConstants.BlackForestLabs),
-        new("Nano Banana 2", ModelConstants.Google.NanoBanana2, ProviderConstants.Google),
-    ];
 
     [ObservableProperty]
     private ImageGenerationParameters _parameters;
@@ -56,7 +44,7 @@ public partial class GeneratorViewModel : ObservableObject
     public bool HasJobs => Jobs.Count > 0;
 
     [ObservableProperty]
-    private List<ModelOption> _allModels = HardcodedCatalogSeed.ToList();
+    private List<ModelOption> _allModels = [];  // hydrated from registry in ctor
 
     [ObservableProperty]
     private List<string> _providers;
@@ -71,7 +59,7 @@ public partial class GeneratorViewModel : ObservableObject
     private ModelOption? _selectedModel;
 
     [ObservableProperty]
-    private List<string> _aspectRatioOptions = ModelCapabilities.For(ModelConstants.Flux.Pro11).AspectRatios.ToList();
+    private List<string> _aspectRatioOptions = [];  // hydrated from registry in ctor
 
     [ObservableProperty]
     private List<string> _resolutionOptions = [];
@@ -118,7 +106,7 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private bool _isValid;
 
-    private ModelCapabilities _capabilities = ModelCapabilities.For(ModelConstants.Flux.Pro11);
+    private ModelCapabilities _capabilities;  // hydrated from registry in ctor
     private bool _cachedCatalogLoaded;
 
     public bool SupportsSafetyTolerance => _capabilities.SafetyTolerance;
@@ -190,7 +178,7 @@ public partial class GeneratorViewModel : ObservableObject
 
     private void RefreshCapabilities(string? modelValue)
     {
-        _capabilities = ModelCapabilities.For(modelValue);
+        _capabilities = _registry.CapabilitiesFor(modelValue ?? string.Empty).Capabilities;
         AspectRatioOptions = _capabilities.AspectRatios.ToList();
         if (!_capabilities.AspectRatios.Contains(Parameters.AspectRatio))
         {
@@ -282,16 +270,26 @@ public partial class GeneratorViewModel : ObservableObject
         StatusKind = kind;
     }
 
-    public GeneratorViewModel(IImageGenerationService imageService, IImageFileService imageFileService, IModelCatalogService catalogService)
+    public GeneratorViewModel(
+        IImageGenerationService imageService,
+        IImageFileService imageFileService,
+        IModelCatalogService catalogService,
+        IModelDescriptorRegistry registry)
     {
         _imageService = imageService ?? throw new ArgumentNullException(nameof(imageService));
         _imageFileService = imageFileService ?? throw new ArgumentNullException(nameof(imageFileService));
         _catalogService = catalogService ?? throw new ArgumentNullException(nameof(catalogService));
+        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
 
         SelectedImages.CollectionChanged += OnSelectedImagesChanged;
         Jobs.CollectionChanged += (_, _) => DispatchToUi(() => OnPropertyChanged(nameof(HasJobs)));
 
-        _providers = BuildProviders();
+        // Hydrate the picker + capabilities from the registry — used to come from a static
+        // HardcodedCatalogSeed and a static ModelCapabilities.For() lookup.
+        _allModels = _registry.Seeds.ToList();
+        _capabilities = _registry.CapabilitiesFor(ModelConstants.Flux.Pro11).Capabilities;
+        _aspectRatioOptions = _capabilities.AspectRatios.ToList();
+        _providers = BuildProvidersFrom(_registry.Seeds);
 
         _parameters = new ImageGenerationParameters
         {
@@ -331,8 +329,6 @@ public partial class GeneratorViewModel : ObservableObject
         RecomputeFilteredModels();
         ValidateParameters();
     }
-
-    private static List<string> BuildProviders() => BuildProvidersFrom(HardcodedCatalogSeed);
 
     [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task GenerateImageAsync()
@@ -539,7 +535,7 @@ public partial class GeneratorViewModel : ObservableObject
         // catalog is stale or Replicate's curated collection hasn't picked them up yet.
         // Incoming entries win on duplicates (their Display/Provider reflect live data).
         var seen = new HashSet<string>(models.Select(m => m.Value), StringComparer.OrdinalIgnoreCase);
-        var merged = models.Concat(HardcodedCatalogSeed.Where(m => seen.Add(m.Value))).ToList();
+        var merged = models.Concat(_registry.Seeds.Where(m => seen.Add(m.Value))).ToList();
 
         AllModels = merged;
         Providers = BuildProvidersFrom(merged);

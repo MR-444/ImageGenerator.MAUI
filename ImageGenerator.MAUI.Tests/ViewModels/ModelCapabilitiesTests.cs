@@ -1,4 +1,5 @@
 using FluentAssertions;
+using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Presentation.ViewModels;
 using ImageGenerator.MAUI.Shared.Constants;
 
@@ -6,6 +7,10 @@ namespace ImageGenerator.MAUI.Tests.ViewModels;
 
 public class ModelCapabilitiesTests
 {
+    private readonly IModelDescriptorRegistry _registry = ModelDescriptorRegistry.Default();
+
+    private ModelCapabilities For(string model) => _registry.CapabilitiesFor(model).Capabilities;
+
     [Theory]
     [InlineData(ModelConstants.Flux.Pro11Ultra, true)]
     [InlineData(ModelConstants.Flux.Pro11,      false)]
@@ -18,7 +23,7 @@ public class ModelCapabilitiesTests
     [InlineData("stability-ai/unknown-dynamic",              false)]
     public void ImagePromptStrength_TrueOnlyForFlux11ProUltra(string model, bool expected)
     {
-        ModelCapabilities.For(model).ImagePromptStrength.Should().Be(expected);
+        For(model).ImagePromptStrength.Should().Be(expected);
     }
 
     [Theory]
@@ -33,7 +38,7 @@ public class ModelCapabilitiesTests
     [InlineData("stability-ai/unknown-dynamic",              1)]
     public void MaxImageInputs_MatchesSchemaCaps(string model, int expected)
     {
-        ModelCapabilities.For(model).MaxImageInputs.Should().Be(expected);
+        For(model).MaxImageInputs.Should().Be(expected);
     }
 
     [Theory]
@@ -44,7 +49,7 @@ public class ModelCapabilitiesTests
     [InlineData(ModelConstants.Google.NanoBanana2)]
     public void MaxImageInputs_IsPositive_WheneverImagePromptSupported(string model)
     {
-        var caps = ModelCapabilities.For(model);
+        var caps = For(model);
         caps.ImagePrompt.Should().BeTrue();
         caps.MaxImageInputs.Should().BeGreaterThan(0);
     }

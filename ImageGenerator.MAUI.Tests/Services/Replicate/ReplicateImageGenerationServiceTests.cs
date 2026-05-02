@@ -2,6 +2,7 @@ using FluentAssertions;
 using Moq;
 using Moq.Protected;
 using System.Net;
+using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
@@ -21,7 +22,7 @@ public class ReplicateImageGenerationServiceTests
         _mockReplicateApi = new Mock<IReplicateApi>();
         _mockHttpMessageHandler = new Mock<HttpMessageHandler>();
         var httpClient = new HttpClient(_mockHttpMessageHandler.Object);
-        _service = new ReplicateImageGenerationService(_mockReplicateApi.Object, httpClient);
+        _service = new ReplicateImageGenerationService(_mockReplicateApi.Object, httpClient, ModelDescriptorRegistry.Default());
     }
 
     [Fact]
