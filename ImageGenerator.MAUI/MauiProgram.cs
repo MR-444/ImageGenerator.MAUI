@@ -55,6 +55,12 @@ public static class MauiProgram
         builder.Services.AddSingleton<IReplicateImageGenerationService, ReplicateImageGenerationService>();
         builder.Services.AddSingleton<IImageGenerationService>(sp => sp.GetRequiredService<IReplicateImageGenerationService>());
         builder.Services.AddSingleton<IModelCatalogService, ModelCatalogService>();
+
+        // 3a) VM collaborators carved out of the original god-class GeneratorViewModel (M1).
+        builder.Services.AddSingleton<IApiTokenStore, ApiTokenStore>();
+        builder.Services.AddSingleton<IJobRunner, JobRunner>();
+        builder.Services.AddSingleton<IModelCatalogCoordinator, ModelCatalogCoordinator>();
+
         builder.Services.AddTransient<GeneratorViewModel>();
 
         // 4) Register MainPage so it (and its constructor) can be injected

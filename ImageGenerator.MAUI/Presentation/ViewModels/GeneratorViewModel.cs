@@ -5,8 +5,6 @@ using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Maui.ApplicationModel;
-using Microsoft.Maui.Storage;
-using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
@@ -19,17 +17,11 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 public partial class GeneratorViewModel : ObservableObject
 {
     private const string AllProvidersLabel = "All providers";
-    private const string OutputFolderName = "ImageGenerator.MAUI";
-    private const string TokenStorageKey = "imggen.api_token";
 
-    private readonly IImageGenerationService _imageService;
-    private readonly IImageFileService _imageFileService;
-    private readonly IModelCatalogService _catalogService;
+    private readonly IJobRunner _jobRunner;
+    private readonly IApiTokenStore _tokenStore;
+    private readonly IModelCatalogCoordinator _catalogCoordinator;
     private readonly IModelDescriptorRegistry _registry;
-
-    // Save to the user's Pictures folder so images are easy to find and survive app rebuilds.
-    private static string OutputDirectory =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), OutputFolderName);
 
     [ObservableProperty]
     private ImageGenerationParameters _parameters;
@@ -271,14 +263,14 @@ public partial class GeneratorViewModel : ObservableObject
     }
 
     public GeneratorViewModel(
-        IImageGenerationService imageService,
-        IImageFileService imageFileService,
-        IModelCatalogService catalogService,
+        IJobRunner jobRunner,
+        IApiTokenStore tokenStore,
+        IModelCatalogCoordinator catalogCoordinator,
         IModelDescriptorRegistry registry)
     {
-        _imageService = imageService ?? throw new ArgumentNullException(nameof(imageService));
-        _imageFileService = imageFileService ?? throw new ArgumentNullException(nameof(imageFileService));
-        _catalogService = catalogService ?? throw new ArgumentNullException(nameof(catalogService));
+        _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
+        _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+        _catalogCoordinator = catalogCoordinator ?? throw new ArgumentNullException(nameof(catalogCoordinator));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
 
         SelectedImages.CollectionChanged += OnSelectedImagesChanged;
@@ -315,7 +307,7 @@ public partial class GeneratorViewModel : ObservableObject
                     break;
                 case nameof(ImageGenerationParameters.ApiToken):
                     ValidateParameters();
-                    PersistApiToken(_parameters.ApiToken);
+                    _tokenStore.Persist(_parameters.ApiToken);
                     break;
                 case nameof(ImageGenerationParameters.Prompt):
                     ValidateParameters();
@@ -356,36 +348,25 @@ public partial class GeneratorViewModel : ObservableObject
     {
         try
         {
-            var result = await _imageService.GenerateImageAsync(job.Parameters, job.Cts.Token);
+            var outcome = await _jobRunner.RunAsync(job.Parameters, job.Cts.Token);
 
-            if (!string.IsNullOrEmpty(result.ImageDataBase64))
+            // HttpClient continuations can land on a ThreadPool thread; MAUI drops
+            // PropertyChanged fired off the UI thread, so marshal the update back.
+            DispatchToUi(() =>
             {
-                Directory.CreateDirectory(OutputDirectory);
-                var path = _imageFileService.GetUniqueSavePath(OutputDirectory, job.Parameters);
-                var bytes = Convert.FromBase64String(result.ImageDataBase64);
-                await _imageFileService.SaveImageWithMetadataAsync(path, bytes, job.Parameters);
-
-                // HttpClient continuations can land on a ThreadPool thread; MAUI drops
-                // PropertyChanged fired off the UI thread, so marshal the update back.
-                DispatchToUi(() =>
+                job.ResultPath = outcome.SavedPath;
+                job.StatusMessage = outcome.Message;
+                job.StatusKind = outcome.Kind switch
                 {
-                    job.ResultPath = path;
-                    job.StatusMessage = $"Saved to {path}";
-                    job.StatusKind = StatusKind.Success;
-                });
-            }
-            else
-            {
-                var kind = result.Message?.Contains("canceled", StringComparison.OrdinalIgnoreCase) == true
-                    ? StatusKind.Canceled
-                    : StatusKind.Error;
-                var msg = result.Message ?? "Image generation failed.";
-                DispatchToUi(() =>
-                {
-                    job.StatusMessage = msg;
-                    job.StatusKind = kind;
-                });
-            }
+                    JobOutcomeKind.Saved => StatusKind.Success,
+                    // The runner wraps "no image data" + canceled-style message into Failed; the
+                    // VM-side check on the message text preserves the canceled-vs-error distinction
+                    // for messages that originated server-side (e.g. user clicked Cancel mid-poll).
+                    _ when outcome.Message.Contains("canceled", StringComparison.OrdinalIgnoreCase)
+                        => StatusKind.Canceled,
+                    _ => StatusKind.Error
+                };
+            });
         }
         catch (OperationCanceledException)
         {
@@ -490,11 +471,11 @@ public partial class GeneratorViewModel : ObservableObject
             // stall the UI on cold/network/OneDrive paths. Push to the thread pool.
             await Task.Run(() =>
             {
-                Directory.CreateDirectory(OutputDirectory);
+                Directory.CreateDirectory(OutputPaths.GeneratedImagesDirectory);
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = "explorer.exe",
-                    Arguments = $"\"{OutputDirectory}\"",
+                    Arguments = $"\"{OutputPaths.GeneratedImagesDirectory}\"",
                     UseShellExecute = true
                 });
             });
@@ -515,30 +496,22 @@ public partial class GeneratorViewModel : ObservableObject
         }
 
         SetStatus("Fetching model catalogs…", StatusKind.Info);
-        var fetched = await _catalogService.FetchAsync(Parameters.ApiToken, cancellationToken);
+        var merged = await _catalogCoordinator.RefreshAsync(Parameters.ApiToken, cancellationToken);
 
-        if (fetched.Count == 0)
+        if (merged is null)
         {
             SetStatus("No models returned. Check your API token or network.", StatusKind.Error);
             return;
         }
 
-        ApplyCatalog(fetched);
-        await _catalogService.SaveCachedAsync(fetched, cancellationToken);
-        SetStatus($"Loaded {fetched.Count} models.", StatusKind.Success);
+        ApplyCatalog(merged);
+        SetStatus($"Loaded {merged.Count} models.", StatusKind.Success);
     }
 
-    private void ApplyCatalog(IReadOnlyList<ModelOption> models)
+    private void ApplyCatalog(IReadOnlyList<ModelOption> mergedModels)
     {
-        // Always union the hardcoded fallback list into whatever came from disk/live so
-        // models we've explicitly added to the codebase still appear even when the cached
-        // catalog is stale or Replicate's curated collection hasn't picked them up yet.
-        // Incoming entries win on duplicates (their Display/Provider reflect live data).
-        var seen = new HashSet<string>(models.Select(m => m.Value), StringComparer.OrdinalIgnoreCase);
-        var merged = models.Concat(_registry.Seeds.Where(m => seen.Add(m.Value))).ToList();
-
-        AllModels = merged;
-        Providers = BuildProvidersFrom(merged);
+        AllModels = mergedModels.ToList();
+        Providers = BuildProvidersFrom(mergedModels);
         RecomputeFilteredModels();
     }
 
@@ -551,18 +524,10 @@ public partial class GeneratorViewModel : ObservableObject
 
     public async Task LoadSavedTokenAsync()
     {
-        try
+        var saved = await _tokenStore.LoadAsync();
+        if (!string.IsNullOrEmpty(saved))
         {
-            var saved = await SecureStorage.Default.GetAsync(TokenStorageKey);
-            if (!string.IsNullOrEmpty(saved))
-            {
-                Parameters.ApiToken = saved;
-            }
-        }
-        catch (Exception ex)
-        {
-            // Secure storage read failures aren't actionable by the user — log and continue.
-            Debug.WriteLine($"SecureStorage.Get failed: {ex.Message}");
+            Parameters.ApiToken = saved;
         }
     }
 
@@ -575,10 +540,10 @@ public partial class GeneratorViewModel : ObservableObject
 
         try
         {
-            var cached = await _catalogService.LoadCachedAsync(ct);
-            if (cached is { Count: > 0 })
+            var merged = await _catalogCoordinator.LoadCachedAsync(ct);
+            if (merged is not null)
             {
-                ApplyCatalog(cached);
+                ApplyCatalog(merged);
             }
         }
         catch (Exception ex)
@@ -587,54 +552,10 @@ public partial class GeneratorViewModel : ObservableObject
         }
     }
 
-    private CancellationTokenSource? _persistTokenCts;
-
-    private void PersistApiToken(string value)
-    {
-        // Called on every keystroke into the API-token Entry. Debounce so a 50-char paste
-        // collapses into a single SecureStorage write instead of 50 racing fire-and-forgets.
-        _persistTokenCts?.Cancel();
-        _persistTokenCts?.Dispose();
-
-        if (string.IsNullOrEmpty(value))
-        {
-            _persistTokenCts = null;
-            return;
-        }
-
-        var cts = new CancellationTokenSource();
-        _persistTokenCts = cts;
-        var token = cts.Token;
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(500, token);
-                await SecureStorage.Default.SetAsync(TokenStorageKey, value);
-            }
-            catch (OperationCanceledException)
-            {
-                // Superseded by a later keystroke — drop silently.
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"SecureStorage.Set failed: {ex.Message}");
-            }
-        }, token);
-    }
-
     [RelayCommand]
     private void ForgetToken()
     {
-        try
-        {
-            SecureStorage.Default.Remove(TokenStorageKey);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"SecureStorage.Remove failed: {ex.Message}");
-        }
+        _tokenStore.Forget();
         Parameters.ApiToken = string.Empty;
         SetStatus("API token cleared from secure storage.", StatusKind.Info);
     }

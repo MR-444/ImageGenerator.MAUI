@@ -2,13 +2,11 @@ using FluentAssertions;
 using ImageGenerator.MAUI.Presentation.ViewModels;
 using Moq;
 using CommunityToolkit.Mvvm.Input;
-using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
-using System.Collections.ObjectModel;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
 
@@ -17,27 +15,21 @@ public class GeneratorViewModelTests
     private const string FakeSavePath = @"C:\fake\generated.png";
 
     private readonly GeneratorViewModel _viewModel;
-    private readonly Mock<IImageGenerationService> _mockImageService;
-    private readonly Mock<IImageFileService> _mockImageFileService;
-    private readonly Mock<IModelCatalogService> _mockCatalogService;
+    private readonly Mock<IJobRunner> _mockJobRunner;
+    private readonly Mock<IApiTokenStore> _mockTokenStore;
+    private readonly Mock<IModelCatalogCoordinator> _mockCatalogCoordinator;
 
     public GeneratorViewModelTests()
     {
-        _mockImageService = new Mock<IImageGenerationService>();
-        _mockImageFileService = new Mock<IImageFileService>();
-        _mockImageFileService
-            .Setup(x => x.GetUniqueSavePath(It.IsAny<string>(), It.IsAny<ImageGenerationParameters>()))
-            .Returns(FakeSavePath);
-        _mockImageFileService
-            .Setup(x => x.SaveImageWithMetadataAsync(It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<ImageGenerationParameters>()))
-            .Returns(Task.CompletedTask);
+        _mockJobRunner = new Mock<IJobRunner>();
+        _mockTokenStore = new Mock<IApiTokenStore>();
+        _mockCatalogCoordinator = new Mock<IModelCatalogCoordinator>();
 
-        _mockCatalogService = new Mock<IModelCatalogService>();
-        _mockCatalogService
-            .Setup(x => x.FetchAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<ModelOption>());
-
-        _viewModel = new GeneratorViewModel(_mockImageService.Object, _mockImageFileService.Object, _mockCatalogService.Object, ModelDescriptorRegistry.Default());
+        _viewModel = new GeneratorViewModel(
+            _mockJobRunner.Object,
+            _mockTokenStore.Object,
+            _mockCatalogCoordinator.Object,
+            ModelDescriptorRegistry.Default());
     }
 
     [Fact]
@@ -82,13 +74,12 @@ public class GeneratorViewModelTests
     [Fact]
     public async Task GenerateImage_WithValidParameters_ShouldGenerateImage()
     {
-        const string expectedImageData = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
         _viewModel.Parameters.ApiToken = "valid-token";
         _viewModel.Parameters.Prompt = "test prompt";
 
-        _mockImageService
-            .Setup(x => x.GenerateImageAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GeneratedImage { ImageDataBase64 = expectedImageData, Message = "ok" });
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
 
         await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
 
@@ -185,12 +176,12 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
-    public async Task GenerateImage_WhenServiceThrowsException_ShouldHandleError()
+    public async Task GenerateImage_WhenJobRunnerThrowsException_ShouldHandleError()
     {
         _viewModel.Parameters.ApiToken = "valid-token";
         _viewModel.Parameters.Prompt = "test prompt";
-        _mockImageService
-            .Setup(x => x.GenerateImageAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("Test error"));
 
         await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
@@ -313,47 +304,40 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
-    public async Task RefreshModels_Success_IngestsFetchedModelsAndReportsSuccess()
+    public async Task RefreshModels_Success_IngestsMergedListAndReportsSuccess()
     {
         _viewModel.Parameters.ApiToken = "valid-token";
-        var fetched = new List<ModelOption>
+        var merged = new List<ModelOption>
         {
             new("flux-2", "black-forest-labs/flux-2", "Black Forest Labs"),
             new("gpt-image-1.5", "openai/gpt-image-1.5", "OpenAI (via Replicate)")
         };
-        _mockCatalogService
-            .Setup(x => x.FetchAsync("valid-token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(fetched);
+        _mockCatalogCoordinator
+            .Setup(x => x.RefreshAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(merged);
 
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
 
-        // AllModels is the union of fetched + hardcoded fallback list; assert the fetched
-        // entries made it in rather than exact equality (fallback entries ride along).
         _viewModel.AllModels.Select(m => m.Value)
             .Should().Contain("black-forest-labs/flux-2")
             .And.Contain("openai/gpt-image-1.5");
         _viewModel.StatusKind.Should().Be(StatusKind.Success);
-        _mockCatalogService.Verify(
-            x => x.SaveCachedAsync(It.IsAny<IReadOnlyList<ModelOption>>(), It.IsAny<CancellationToken>()),
-            Times.Once);
     }
 
     [Fact]
-    public async Task LoadCachedCatalog_WithCachedModels_IngestsCachedModelsAndProviders()
+    public async Task LoadCachedCatalog_WithMergedResult_IngestsModelsAndProviders()
     {
-        var cached = new List<ModelOption>
+        var merged = new List<ModelOption>
         {
             new("flux-2-pro", "black-forest-labs/flux-2-pro", "Black Forest Labs"),
             new("gpt-image-1.5", "openai/gpt-image-1.5", "OpenAI (via Replicate)")
         };
-        _mockCatalogService
+        _mockCatalogCoordinator
             .Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(cached);
+            .ReturnsAsync(merged);
 
         await _viewModel.LoadCachedCatalogAsync();
 
-        // Union semantics: cached entries must appear; hardcoded fallback entries
-        // (e.g. gpt-image-2) ride along so newly-added fallback models survive a stale cache.
         _viewModel.AllModels.Select(m => m.Value)
             .Should().Contain("black-forest-labs/flux-2-pro")
             .And.Contain("openai/gpt-image-1.5");
@@ -362,32 +346,10 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
-    public async Task LoadCachedCatalog_MissingFallbackEntry_IsStillSurfaced()
-    {
-        // A cache written before a new model was added to the hardcoded fallback list must
-        // not hide that new model — otherwise users have to manually delete the cache file
-        // (or Replicate has to catch up) to ever see freshly-added entries.
-        var staleCache = new List<ModelOption>
-        {
-            new("flux-2-pro", "black-forest-labs/flux-2-pro", "Black Forest Labs")
-        };
-        _mockCatalogService
-            .Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(staleCache);
-
-        await _viewModel.LoadCachedCatalogAsync();
-
-        // gpt-image-2 lives only in the hardcoded fallback list; it must survive the cache load.
-        _viewModel.AllModels.Select(m => m.Value)
-            .Should().Contain("openai/gpt-image-2")
-            .And.Contain("black-forest-labs/flux-2-pro");
-    }
-
-    [Fact]
-    public async Task LoadCachedCatalog_WhenCacheEmpty_KeepsHardcodedSeed()
+    public async Task LoadCachedCatalog_WhenCoordinatorReturnsNull_KeepsHardcodedSeed()
     {
         var seed = _viewModel.AllModels.ToList();
-        _mockCatalogService
+        _mockCatalogCoordinator
             .Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<ModelOption>?)null);
 
@@ -399,19 +361,18 @@ public class GeneratorViewModelTests
     [Fact]
     public async Task LoadCachedCatalog_RunningTwice_IgnoresSecondInvocation()
     {
-        // OnAppearing can fire more than once; the second hydrate must not stomp the live list.
-        var cached = new List<ModelOption>
+        var merged = new List<ModelOption>
         {
             new("flux-2", "black-forest-labs/flux-2", "Black Forest Labs")
         };
-        _mockCatalogService
+        _mockCatalogCoordinator
             .Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(cached);
+            .ReturnsAsync(merged);
 
         await _viewModel.LoadCachedCatalogAsync();
         await _viewModel.LoadCachedCatalogAsync();
 
-        _mockCatalogService.Verify(
+        _mockCatalogCoordinator.Verify(
             x => x.LoadCachedAsync(It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -420,27 +381,27 @@ public class GeneratorViewModelTests
     public async Task RefreshModels_Success_UpdatesFilteredModelsFromAllModels()
     {
         _viewModel.Parameters.ApiToken = "valid-token";
-        var fetched = new List<ModelOption>
+        var merged = new List<ModelOption>
         {
             new("flux-2-pro", "black-forest-labs/flux-2-pro", "Black Forest Labs"),
             new("gpt-image-1.5", "openai/gpt-image-1.5", "OpenAI (via Replicate)"),
-            new("nano-banana-2", "google/nano-banana-2", "google")
+            new("nano-banana-2", "google/nano-banana-2", "Google")
         };
-        _mockCatalogService
-            .Setup(x => x.FetchAsync("valid-token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(fetched);
+        _mockCatalogCoordinator
+            .Setup(x => x.RefreshAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(merged);
 
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
 
-        // Regression: FilteredModels must reflect fetched AllModels, not be stuck on the
-        // pre-refresh list. Fetched entries must be present in FilteredModels.
+        // Regression: FilteredModels must reflect freshly-applied AllModels, not be stuck on the
+        // pre-refresh list.
         _viewModel.FilteredModels.Select(m => m.Value)
             .Should().Contain("black-forest-labs/flux-2-pro")
             .And.Contain("openai/gpt-image-1.5")
             .And.Contain("google/nano-banana-2");
         _viewModel.Providers.Should().Contain("Black Forest Labs")
             .And.Contain("OpenAI (via Replicate)")
-            .And.Contain("google");
+            .And.Contain("Google");
     }
 
     [Fact]
@@ -451,19 +412,19 @@ public class GeneratorViewModelTests
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
 
         _viewModel.StatusKind.Should().Be(StatusKind.Error);
-        _mockCatalogService.Verify(
-            x => x.FetchAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+        _mockCatalogCoordinator.Verify(
+            x => x.RefreshAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
     [Fact]
-    public async Task RefreshModels_EmptyResult_KeepsExistingCatalogAndReportsError()
+    public async Task RefreshModels_NullResult_KeepsExistingCatalogAndReportsError()
     {
         _viewModel.Parameters.ApiToken = "valid-token";
         var originalModels = _viewModel.AllModels.ToList();
-        _mockCatalogService
-            .Setup(x => x.FetchAsync("valid-token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<ModelOption>());
+        _mockCatalogCoordinator
+            .Setup(x => x.RefreshAsync("valid-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<ModelOption>?)null);
 
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
 
@@ -472,19 +433,48 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
-    public async Task GenerateImage_WhenServiceReturnsCanceledMessage_ShouldSetCanceledKind()
+    public async Task GenerateImage_WhenJobRunnerReturnsCanceledMessage_ShouldSetCanceledKind()
     {
         _viewModel.Parameters.ApiToken = "valid-token";
         _viewModel.Parameters.Prompt = "test prompt";
-        _mockImageService
-            .Setup(x => x.GenerateImageAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GeneratedImage { Message = "Image generation was canceled.", ImageDataBase64 = null });
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new JobOutcome(JobOutcomeKind.Failed, null, "Image generation was canceled."));
 
         await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
 
         _viewModel.Jobs.Should().HaveCount(1);
         _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Canceled);
         _viewModel.Jobs[0].ResultPath.Should().BeNull();
+    }
+
+    [Fact]
+    public void ApiToken_Change_ForwardsToTokenStorePersist()
+    {
+        _viewModel.Parameters.ApiToken = "fresh-token";
+
+        _mockTokenStore.Verify(x => x.Persist("fresh-token"), Times.Once);
+    }
+
+    [Fact]
+    public void ForgetToken_ClearsParametersAndCallsTokenStoreForget()
+    {
+        _viewModel.Parameters.ApiToken = "some-token";
+
+        _viewModel.ForgetTokenCommand.Execute(null);
+
+        _viewModel.Parameters.ApiToken.Should().BeEmpty();
+        _mockTokenStore.Verify(x => x.Forget(), Times.Once);
+    }
+
+    [Fact]
+    public async Task LoadSavedTokenAsync_PopulatesParametersFromStore()
+    {
+        _mockTokenStore.Setup(x => x.LoadAsync()).ReturnsAsync("saved-token");
+
+        await _viewModel.LoadSavedTokenAsync();
+
+        _viewModel.Parameters.ApiToken.Should().Be("saved-token");
     }
 
     // --- Card title + strength gate state machine ---
@@ -618,11 +608,11 @@ public class GeneratorViewModelTests
         // (or even mid-flight) never bleeds across jobs.
         _viewModel.Parameters.ApiToken = "valid-token";
 
-        var gate1 = new TaskCompletionSource<GeneratedImage>();
-        var gate2 = new TaskCompletionSource<GeneratedImage>();
+        var gate1 = new TaskCompletionSource<JobOutcome>();
+        var gate2 = new TaskCompletionSource<JobOutcome>();
         var call = 0;
-        _mockImageService
-            .Setup(x => x.GenerateImageAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
             .Returns(() => Interlocked.Increment(ref call) == 1 ? gate1.Task : gate2.Task);
 
         _viewModel.Parameters.Prompt = "PROMPT_A";
@@ -632,16 +622,16 @@ public class GeneratorViewModelTests
         var run2 = ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
 
         // Both jobs must already be in the collection with frozen prompt snapshots,
-        // before either service call has completed.
+        // before either runner call has completed.
         _viewModel.Jobs.Should().HaveCount(2);
         _viewModel.Jobs[0].Prompt.Should().Be("PROMPT_B"); // newest first (Insert at 0)
         _viewModel.Jobs[1].Prompt.Should().Be("PROMPT_A");
         _viewModel.Jobs[0].Parameters.Prompt.Should().Be("PROMPT_B");
         _viewModel.Jobs[1].Parameters.Prompt.Should().Be("PROMPT_A");
 
-        // Release both tasks with a canceled-style message so RunJobAsync exits cleanly.
-        gate1.SetResult(new GeneratedImage { Message = "canceled", ImageDataBase64 = null });
-        gate2.SetResult(new GeneratedImage { Message = "canceled", ImageDataBase64 = null });
+        // Release both tasks with a canceled-style outcome so RunJobAsync exits cleanly.
+        gate1.SetResult(new JobOutcome(JobOutcomeKind.Failed, null, "canceled"));
+        gate2.SetResult(new JobOutcome(JobOutcomeKind.Failed, null, "canceled"));
         await Task.WhenAll(run1, run2);
     }
 }
