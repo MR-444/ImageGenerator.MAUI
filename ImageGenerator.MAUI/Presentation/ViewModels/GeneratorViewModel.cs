@@ -483,16 +483,21 @@ public partial class GeneratorViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void OpenOutputFolder()
+    private async Task OpenOutputFolderAsync()
     {
         try
         {
-            Directory.CreateDirectory(OutputDirectory);
-            Process.Start(new ProcessStartInfo
+            // Directory.CreateDirectory + Process.Start are fast on a warm filesystem but can
+            // stall the UI on cold/network/OneDrive paths. Push to the thread pool.
+            await Task.Run(() =>
             {
-                FileName = "explorer.exe",
-                Arguments = $"\"{OutputDirectory}\"",
-                UseShellExecute = true
+                Directory.CreateDirectory(OutputDirectory);
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"\"{OutputDirectory}\"",
+                    UseShellExecute = true
+                });
             });
         }
         catch (Exception ex)
@@ -583,17 +588,41 @@ public partial class GeneratorViewModel : ObservableObject
         }
     }
 
-    private static void PersistApiToken(string value)
+    private CancellationTokenSource? _persistTokenCts;
+
+    private void PersistApiToken(string value)
     {
-        if (string.IsNullOrEmpty(value)) return;
-        try
+        // Called on every keystroke into the API-token Entry. Debounce so a 50-char paste
+        // collapses into a single SecureStorage write instead of 50 racing fire-and-forgets.
+        _persistTokenCts?.Cancel();
+        _persistTokenCts?.Dispose();
+
+        if (string.IsNullOrEmpty(value))
         {
-            _ = SecureStorage.Default.SetAsync(TokenStorageKey, value);
+            _persistTokenCts = null;
+            return;
         }
-        catch (Exception ex)
+
+        var cts = new CancellationTokenSource();
+        _persistTokenCts = cts;
+        var token = cts.Token;
+
+        _ = Task.Run(async () =>
         {
-            Debug.WriteLine($"SecureStorage.Set failed: {ex.Message}");
-        }
+            try
+            {
+                await Task.Delay(500, token);
+                await SecureStorage.Default.SetAsync(TokenStorageKey, value);
+            }
+            catch (OperationCanceledException)
+            {
+                // Superseded by a later keystroke — drop silently.
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"SecureStorage.Set failed: {ex.Message}");
+            }
+        }, token);
     }
 
     [RelayCommand]

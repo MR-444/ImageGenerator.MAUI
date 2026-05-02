@@ -16,8 +16,17 @@ public partial class MainPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await _viewModel.LoadSavedTokenAsync();
-        await _viewModel.LoadCachedCatalogAsync();
+        // async void: callees swallow internally today, but a future refactor that lets one
+        // through would crash via SynchronizationContext. Keep a defensive net here.
+        try
+        {
+            await _viewModel.LoadSavedTokenAsync();
+            await _viewModel.LoadCachedCatalogAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"OnAppearing failed: {ex.Message}");
+        }
     }
 
     // Code-behind because RelativeSource lookups inside a CollectionView.ItemTemplate

@@ -122,6 +122,31 @@ public class ImageFileServiceTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task SaveImageWithMetadataAsync_FluxProUltra_DoesNotEmitUpsamplingLine()
+    {
+        // Regression: a substring `model.Contains("flux-1.1-pro")` would match
+        // `flux-1.1-pro-ultra` too, attaching a misleading `Upsampling:` line to Ultra images.
+        var parameters = SampleParameters();
+        parameters.Model = "black-forest-labs/flux-1.1-pro-ultra";
+        parameters.PromptUpsampling = false;
+        parameters.Raw = true;
+        parameters.OutputFormat = ImageOutputFormat.Png;
+
+        var bytes = Build1x1Image(ImageOutputFormat.Png);
+        var path = _sut.GetUniqueSavePath(_tempDir, parameters);
+
+        await _sut.SaveImageWithMetadataAsync(path, bytes, parameters);
+
+        using var saved = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(path);
+        var pngMeta = saved.Metadata.GetPngMetadata();
+        var comment = pngMeta.TextData.Single(t => t.Keyword == "Comment").Value;
+
+        comment.Should().NotContain("Upsampling:");
+        comment.Should().Contain("Raw:");
+        comment.Should().Contain("ImagePromptStrength:");
+    }
+
     private static byte[] Build1x1Image(ImageOutputFormat format)
     {
         using var image = new SixLabors.ImageSharp.Image<Rgba32>(1, 1);

@@ -54,15 +54,16 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
         {
             return new GeneratedImage
             {
-                Message = FormatError(ex),
+                Message = FormatError(ex, parameters.ApiToken),
                 FilePath = null,
                 ImageDataBase64 = null
             };
         }
     }
 
-    private static string FormatError(Exception ex)
+    private static string FormatError(Exception ex, string apiToken)
     {
+        string result;
         // Refit wraps non-2xx as ApiException with StatusCode + body. Deserialization failures
         // (gzip not decompressed, malformed JSON) also come through as ApiException — with the
         // real cause buried on InnerException while .Content reads empty.
@@ -70,15 +71,27 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
         {
             var body = string.IsNullOrWhiteSpace(api.Content) ? "(no body)" : api.Content;
             var head = $"HTTP {(int)api.StatusCode} {api.StatusCode}: {body}";
-            return api.InnerException != null ? $"{head} — inner: {api.InnerException.Message}" : head;
+            result = api.InnerException != null ? $"{head} — inner: {api.InnerException.Message}" : head;
         }
-        // HttpRequestException.Message is usually "An error occurred while sending a request.";
-        // the actionable detail lives on the inner (SocketException, AuthenticationException, ...).
-        var deepest = ex;
-        while (deepest.InnerException != null) deepest = deepest.InnerException;
-        return deepest.Message == ex.Message
-            ? $"An error occurred: {ex.Message}"
-            : $"An error occurred: {ex.Message} ({deepest.Message})";
+        else
+        {
+            // HttpRequestException.Message is usually "An error occurred while sending a request.";
+            // the actionable detail lives on the inner (SocketException, AuthenticationException, ...).
+            var deepest = ex;
+            while (deepest.InnerException != null) deepest = deepest.InnerException;
+            result = deepest.Message == ex.Message
+                ? $"An error occurred: {ex.Message}"
+                : $"An error occurred: {ex.Message} ({deepest.Message})";
+        }
+
+        // Defense-in-depth: bearer token lives on the Authorization header today, not in the
+        // request body or URL, so it can't reach the surfaced error string. Redact anyway so
+        // a future code change that puts the token on a logged path can't leak it to the UI.
+        if (!string.IsNullOrEmpty(apiToken))
+        {
+            result = result.Replace(apiToken, "[REDACTED]");
+        }
+        return result;
     }
 
     private async Task<ReplicatePredictionResponse?> CallReplicateModelAsync(

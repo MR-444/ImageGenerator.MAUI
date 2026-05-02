@@ -1,5 +1,6 @@
 using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
+using ImageGenerator.MAUI.Shared.Constants;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Formats.Png.Chunks;
@@ -42,7 +43,10 @@ public class ImageFileService : IImageFileService
         var raw = parameters.Raw;
         var imagePromptStrength = parameters.ImagePromptStrength;
 
-        using var image = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(new MemoryStream(imageBytes));
+        // ImageSharp does not dispose streams it didn't own — wrap explicitly so a 4-15 MB
+        // image buffer isn't held until the next GC2 (matters under the concurrent queue).
+        using var ms = new MemoryStream(imageBytes);
+        using var image = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(ms);
 
         // Actual pixel dimensions — Parameters.Width/Height are only meaningful for models
         // that size via explicit width/height (Flux with custom dimensions). For aspect_ratio
@@ -59,23 +63,26 @@ public class ImageFileService : IImageFileService
             $"Quality: {outputQuality}",
         };
 
-        if (model.Contains("flux-1.1-pro", StringComparison.OrdinalIgnoreCase))
+        // Exact match against ModelConstants — `Contains("flux-1.1-pro")` would also match
+        // `flux-1.1-pro-ultra`, attaching a misleading `Upsampling: false` line to Ultra images.
+        if (model == ModelConstants.Flux.Pro11)
         {
             lines.Add($"Upsampling: {upsampling}");
         }
-        if (model.Contains("flux-1.1-pro-ultra", StringComparison.OrdinalIgnoreCase))
+        if (model == ModelConstants.Flux.Pro11Ultra)
         {
             lines.Add($"Raw: {raw}");
             lines.Add($"ImagePromptStrength: {imagePromptStrength}");
         }
-        if (model.Contains("gpt-image", StringComparison.OrdinalIgnoreCase))
+        if (model == ModelConstants.OpenAI.GptImage15OnReplicate
+            || model == ModelConstants.OpenAI.GptImage2OnReplicate)
         {
             lines.Add($"GptQuality: {gptQuality}");
             lines.Add($"GptBackground: {gptBackground}");
             lines.Add($"GptModeration: {gptModeration}");
             lines.Add($"GptInputFidelity: {gptInputFidelity}");
         }
-        if (model.Contains("nano-banana", StringComparison.OrdinalIgnoreCase))
+        if (model == ModelConstants.Google.NanoBanana2)
         {
             lines.Add($"Resolution: {resolution}");
         }
