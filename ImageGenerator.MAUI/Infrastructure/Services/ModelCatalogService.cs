@@ -3,6 +3,7 @@ using System.Text.Json;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
+using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Maui.Storage;
 
 namespace ImageGenerator.MAUI.Infrastructure.Services;
@@ -61,9 +62,9 @@ public class ModelCatalogService : IModelCatalogService
 
     private static string FormatProvider(string owner) => owner switch
     {
-        "black-forest-labs" => "Black Forest Labs",
-        "openai" => "OpenAI (via Replicate)",
-        "google" => "Google",
+        "black-forest-labs" => ProviderConstants.BlackForestLabs,
+        "openai" => ProviderConstants.OpenAIOnReplicate,
+        "google" => ProviderConstants.Google,
         // The allowlist guarantees `owner` is one of the above. Throw if a new entry is ever
         // added without a matching display label — silent fallthrough would ship the raw slug.
         _ => throw new InvalidOperationException($"Unexpected owner past allowlist: {owner}")

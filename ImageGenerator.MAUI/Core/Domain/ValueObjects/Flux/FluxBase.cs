@@ -39,21 +39,15 @@ public abstract class FluxBase
     [Range(1, 6, ErrorMessage = "Safety tolerance must be between 1 and 6.")]
     public int SafetyTolerance { get; set; } = ValidationConstants.SafetyMax;
 
+    // Nullable so models that don't accept output_quality (Flux 1.1 Pro Ultra) can leave it
+    // unset and have the field omitted from the request body. Flux 1.1 Pro assigns it
+    // explicitly in the factory, so its requests still carry the value.
     [JsonPropertyName("output_quality")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [Range(0, 100, ErrorMessage = "Output quality must be between 0 and 100.")]
-    public int OutputQuality { get; set; } = ValidationConstants.OutputQualityMax;
+    public int? OutputQuality { get; set; }
 
     [JsonPropertyName("prompt_upsampling")]
     public bool PromptUpsampling { get; set; }
-
-    [JsonPropertyName("webhook_url")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    [StringLength(2083)]
-    [Url(ErrorMessage = "Webhook URL must be a valid URI.")]
-    public string? WebhookUrl { get; set; }
-
-    [JsonPropertyName("webhook_secret")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? WebhookSecret { get; set; }
 }
 

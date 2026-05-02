@@ -30,14 +30,17 @@ public partial class GeneratorViewModel : ObservableObject
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), OutputFolderName);
 
     // Master catalog — first-launch seed before Refresh Models hydrates from the live APIs.
+    // Provider strings come from ProviderConstants so seed labels stay byte-identical to
+    // what ModelCatalogService.FormatProvider emits (the merge dedupes by Value, so a label
+    // drift here would surface duplicate provider entries in the picker).
     private static readonly IReadOnlyList<ModelOption> HardcodedCatalogSeed =
     [
-        new("GPT Image 1.5", ModelConstants.OpenAI.GptImage15OnReplicate, "OpenAI (via Replicate)"),
-        new("GPT Image 2", ModelConstants.OpenAI.GptImage2OnReplicate, "OpenAI (via Replicate)"),
-        new("Flux 1.1 Pro", ModelConstants.Flux.Pro11, "Black Forest Labs"),
-        new("Flux 1.1 Pro Ultra", ModelConstants.Flux.Pro11Ultra, "Black Forest Labs"),
-        new("Flux 2 Klein 4B", ModelConstants.Flux.Klein4b, "Black Forest Labs"),
-        new("Nano Banana 2", ModelConstants.Google.NanoBanana2, "Google"),
+        new("GPT Image 1.5", ModelConstants.OpenAI.GptImage15OnReplicate, ProviderConstants.OpenAIOnReplicate),
+        new("GPT Image 2", ModelConstants.OpenAI.GptImage2OnReplicate, ProviderConstants.OpenAIOnReplicate),
+        new("Flux 1.1 Pro", ModelConstants.Flux.Pro11, ProviderConstants.BlackForestLabs),
+        new("Flux 1.1 Pro Ultra", ModelConstants.Flux.Pro11Ultra, ProviderConstants.BlackForestLabs),
+        new("Flux 2 Klein 4B", ModelConstants.Flux.Klein4b, ProviderConstants.BlackForestLabs),
+        new("Nano Banana 2", ModelConstants.Google.NanoBanana2, ProviderConstants.Google),
     ];
 
     [ObservableProperty]
