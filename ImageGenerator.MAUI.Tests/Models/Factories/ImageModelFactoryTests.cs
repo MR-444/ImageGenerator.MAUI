@@ -165,6 +165,38 @@ public class ImageModelFactoryTests
     }
 
     [Fact]
+    public void CreateImageModel_GptImage2OnReplicate_BuildsSameDictionaryShapeAsImage15()
+    {
+        // GPT Image 1.5 and 2 share a factory branch — pin 2 explicitly so the M2 refactor
+        // doesn't accidentally diverge their wire payload.
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.OpenAI.GptImage2OnReplicate,
+            Prompt = "hello",
+            AspectRatio = "1:1",
+            OutputFormat = ImageOutputFormat.Png,
+            OutputQuality = 80,
+            GptQuality = "high",
+            GptBackground = "auto",
+            GptModeration = "auto",
+            GptInputFidelity = "low"
+        };
+
+        var result = ImageModelFactory.CreateImageModel(parameters);
+
+        var dict = result.Should().BeOfType<Dictionary<string, object?>>().Subject;
+        dict.Should().ContainKey("prompt").WhoseValue.Should().Be("hello");
+        dict.Should().ContainKey("aspect_ratio").WhoseValue.Should().Be("1:1");
+        dict.Should().ContainKey("output_format").WhoseValue.Should().Be("png");
+        dict.Should().ContainKey("output_compression").WhoseValue.Should().Be(80);
+        dict.Should().ContainKey("quality").WhoseValue.Should().Be("high");
+        dict.Should().ContainKey("background").WhoseValue.Should().Be("auto");
+        dict.Should().ContainKey("moderation").WhoseValue.Should().Be("auto");
+        dict.Should().ContainKey("input_fidelity").WhoseValue.Should().Be("low");
+        dict.Should().ContainKey("input_images");
+    }
+
+    [Fact]
     public void CreateImageModel_NanoBanana2_BuildsDictionaryWithResolutionAndImageInput()
     {
         var parameters = new ImageGenerationParameters
