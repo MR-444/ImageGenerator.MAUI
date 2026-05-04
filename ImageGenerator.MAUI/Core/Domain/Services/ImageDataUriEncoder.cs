@@ -24,26 +24,23 @@ public static class ImageDataUriEncoder
 
     public static string DetectImageMimeType(string base64Data)
     {
-        byte[] bytes;
-        try
-        {
-            bytes = Convert.FromBase64String(base64Data[..Math.Min(base64Data.Length, 20)]);
-        }
-        catch (FormatException)
-        {
-            return "image/png";
-        }
-
-        if (bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
+        // 16 base64 chars decode to 12 bytes — exactly enough for WebP's RIFF...WEBP signature
+        // at offsets 8-11, which is the longest of the four magic-byte checks below.
+        Span<byte> buffer = stackalloc byte[12];
+        var sliceLen = Math.Min(base64Data.Length, 16);
+        if (!Convert.TryFromBase64Chars(base64Data.AsSpan(0, sliceLen), buffer, out var written))
             return "image/png";
 
-        if (bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
+        if (written >= 8 && buffer[0] == 0x89 && buffer[1] == 0x50 && buffer[2] == 0x4E && buffer[3] == 0x47)
+            return "image/png";
+
+        if (written >= 3 && buffer[0] == 0xFF && buffer[1] == 0xD8 && buffer[2] == 0xFF)
             return "image/jpeg";
 
-        if (bytes.Length >= 6 && bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46)
+        if (written >= 6 && buffer[0] == 0x47 && buffer[1] == 0x49 && buffer[2] == 0x46)
             return "image/gif";
 
-        if (bytes.Length >= 12 && bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50)
+        if (written >= 12 && buffer[8] == 0x57 && buffer[9] == 0x45 && buffer[10] == 0x42 && buffer[11] == 0x50)
             return "image/webp";
 
         return "image/png";
