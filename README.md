@@ -22,11 +22,11 @@ A Windows desktop image generation app built on .NET MAUI that drives the Replic
 
 ## 📸 Screenshots
 
-![Initial state — three-column layout: API token + input images, prompt + output settings, run/result column](<documents/Initial_Screenshot 2026-04-19 162057.png>)
+![Initial state — three-column layout: API token + input images, prompt + output settings, run/result column](<documents/Initial_Screenshot 2026-05-04 194431.png>)
 
-![After generation — result thumbnail with "Use as input for next generation" and "Show in folder" actions](<documents/Result_Screenshot 2026-04-19 162259.png>)
+![After generation — completed job card with thumbnail, status, and per-job Use as input / Open / Show in folder actions](<documents/Result_Screenshot 2026-05-04 1941259.png>)
 
-> Note: screenshots above are from v0.3.x. The current 1.0.0 build adds a concurrent queue, persisted prompt + model, and an in-app gallery (separate page, not visible in these shots). Refreshed screenshots will follow.
+![In-app gallery — tile grid with sort modes, live FileSystemWatcher updates, and a detail page with copyable metadata](<documents/Gallery_Screenshot 2026-05-04 193429.png>)
 
 ## 🖥️ Using the app (end users)
 
