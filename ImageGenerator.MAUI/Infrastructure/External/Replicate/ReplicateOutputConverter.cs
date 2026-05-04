@@ -23,10 +23,11 @@ public sealed class ReplicateOutputConverter : JsonConverter<IReadOnlyList<strin
                 var list = new List<string>();
                 while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
                 {
-                    if (reader.TokenType == JsonTokenType.String)
+                    if (reader.TokenType != JsonTokenType.String)
                     {
-                        list.Add(reader.GetString()!);
+                        throw new JsonException($"Unexpected token {reader.TokenType} inside Replicate output array.");
                     }
+                    list.Add(reader.GetString()!);
                 }
                 return list;
 

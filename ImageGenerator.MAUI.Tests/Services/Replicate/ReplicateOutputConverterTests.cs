@@ -64,13 +64,19 @@ public class ReplicateOutputConverterTests
     }
 
     [Fact]
-    public void Read_ArrayContainingNull_PinsCurrentSilentDropBehavior()
+    public void Read_ArrayContainingNull_Throws()
     {
-        // Pinned per audit M7 — current converter drops non-string array items silently.
-        // If M7 is fixed (throw on null), update this test to assert JsonException.
-        var result = JsonSerializer.Deserialize<IReadOnlyList<string>?>("[\"a\",null,\"b\"]", Options);
+        var act = () => JsonSerializer.Deserialize<IReadOnlyList<string>?>("[\"a\",null,\"b\"]", Options);
 
-        result.Should().BeEquivalentTo(new[] { "a", "b" });
+        act.Should().Throw<JsonException>();
+    }
+
+    [Fact]
+    public void Read_ArrayContainingNumber_Throws()
+    {
+        var act = () => JsonSerializer.Deserialize<IReadOnlyList<string>?>("[\"a\",42,\"b\"]", Options);
+
+        act.Should().Throw<JsonException>();
     }
 
     [Fact]
