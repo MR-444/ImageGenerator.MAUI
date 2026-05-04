@@ -35,6 +35,7 @@ public partial class MainPage
         {
             await _viewModel.LoadSavedTokenAsync();
             await _viewModel.LoadCachedCatalogAsync();
+            _viewModel.LoadSavedUiState();
         }
         catch (Exception ex)
         {

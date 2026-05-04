@@ -57,6 +57,7 @@ public static class MauiProgram
 
         // 3a) VM collaborators carved out of the original god-class GeneratorViewModel (M1).
         builder.Services.AddSingleton<IApiTokenStore, ApiTokenStore>();
+        builder.Services.AddSingleton<IUiStateStore, UiStateStore>();
         builder.Services.AddSingleton<IJobRunner, JobRunner>();
         builder.Services.AddSingleton<IModelCatalogCoordinator, ModelCatalogCoordinator>();
 

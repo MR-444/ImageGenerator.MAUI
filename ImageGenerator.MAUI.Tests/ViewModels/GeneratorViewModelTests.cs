@@ -17,17 +17,20 @@ public class GeneratorViewModelTests
     private readonly GeneratorViewModel _viewModel;
     private readonly Mock<IJobRunner> _mockJobRunner;
     private readonly Mock<IApiTokenStore> _mockTokenStore;
+    private readonly Mock<IUiStateStore> _mockUiStateStore;
     private readonly Mock<IModelCatalogCoordinator> _mockCatalogCoordinator;
 
     public GeneratorViewModelTests()
     {
         _mockJobRunner = new Mock<IJobRunner>();
         _mockTokenStore = new Mock<IApiTokenStore>();
+        _mockUiStateStore = new Mock<IUiStateStore>();
         _mockCatalogCoordinator = new Mock<IModelCatalogCoordinator>();
 
         _viewModel = new GeneratorViewModel(
             _mockJobRunner.Object,
             _mockTokenStore.Object,
+            _mockUiStateStore.Object,
             _mockCatalogCoordinator.Object,
             ModelDescriptorRegistry.Default());
     }
@@ -688,5 +691,167 @@ public class GeneratorViewModelTests
 
         // Without sticky logic this would fall back to "1:1" (first non-match-input AR in NanoBanana2).
         _viewModel.Parameters.AspectRatio.Should().Be("16:9", "the user's preferred AR is restored when images are cleared");
+    }
+
+    [Fact]
+    public void Prompt_WhenChanged_PersistsToUiStateStore()
+    {
+        _viewModel.Parameters.Prompt = "a serene mountain landscape";
+
+        _mockUiStateStore.Verify(s => s.PersistPrompt("a serene mountain landscape"), Times.Once);
+    }
+
+    [Fact]
+    public void Model_WhenChanged_PersistsToUiStateStore()
+    {
+        _viewModel.Parameters.Model = ModelConstants.Flux.Pro11;
+
+        _mockUiStateStore.Verify(s => s.PersistModel(ModelConstants.Flux.Pro11), Times.Once);
+    }
+
+    [Fact]
+    public void LoadSavedUiState_RestoresPromptAndModelFromStore()
+    {
+        _mockUiStateStore.Setup(s => s.LoadPrompt()).Returns("restored prompt");
+        _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ModelConstants.Flux.Pro11);
+
+        _viewModel.LoadSavedUiState();
+
+        _viewModel.Parameters.Prompt.Should().Be("restored prompt");
+        _viewModel.Parameters.Model.Should().Be(ModelConstants.Flux.Pro11);
+    }
+
+    [Fact]
+    public void LoadSavedUiState_WhenSavedModelNotInCatalog_LeavesModelUnchanged()
+    {
+        var initialModel = _viewModel.Parameters.Model;
+        _mockUiStateStore.Setup(s => s.LoadPrompt()).Returns((string?)null);
+        _mockUiStateStore.Setup(s => s.LoadModel()).Returns("openai/never-existed");
+
+        _viewModel.LoadSavedUiState();
+
+        _viewModel.Parameters.Model.Should().Be(initialModel);
+    }
+
+    [Fact]
+    public void LoadSavedUiState_WhenStoreReturnsNullOrEmpty_LeavesParametersUntouched()
+    {
+        var initialPrompt = _viewModel.Parameters.Prompt;
+        var initialModel = _viewModel.Parameters.Model;
+        _mockUiStateStore.Setup(s => s.LoadPrompt()).Returns((string?)null);
+        _mockUiStateStore.Setup(s => s.LoadModel()).Returns(string.Empty);
+
+        _viewModel.LoadSavedUiState();
+
+        _viewModel.Parameters.Prompt.Should().Be(initialPrompt);
+        _viewModel.Parameters.Model.Should().Be(initialModel);
+    }
+
+    [Fact]
+    public async Task LoadCachedCatalog_DoesNotPersistModelDuringHydrate()
+    {
+        // Regression for the "always reverts to flux-2-max" bug: ApplyCatalog reassigning
+        // FilteredModels caused MAUI's Picker to reset SelectedItem to the first row, which
+        // round-tripped through SelectedModel → Parameters.Model → PersistModel and clobbered
+        // the user's saved value on every launch. The suppression flag must keep PersistModel
+        // silent for the entire hydrate.
+        var merged = new List<ModelOption>
+        {
+            new("flux-2-max", ModelConstants.Flux.Max2, "Black Forest Labs"),
+            new("flux-1.1-pro", ModelConstants.Flux.Pro11, "Black Forest Labs"),
+            new("gpt-image-2", ModelConstants.OpenAI.GptImage2OnReplicate, "OpenAI (via Replicate)"),
+        };
+        _mockCatalogCoordinator
+            .Setup(c => c.LoadCachedAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(merged);
+
+        await _viewModel.LoadCachedCatalogAsync();
+
+        _mockUiStateStore.Verify(s => s.PersistModel(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public void LoadSavedUiState_DoesNotPersistModel_OnRestoreOfSameValue()
+    {
+        // The redundant re-persist of a value we just read is wasted I/O; the suppression flag
+        // also defends against any UI side-effect during the SelectedModel write.
+        _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ModelConstants.Flux.Pro11);
+
+        _viewModel.LoadSavedUiState();
+
+        _mockUiStateStore.Verify(s => s.PersistModel(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public void Model_UserPickAfterRestore_StillPersists()
+    {
+        // The suppression flag is scoped tightly: a real user pick after boot must still
+        // persist. This is the positive case that complements the two negative cases above.
+        _viewModel.Parameters.Model = ModelConstants.Flux.Pro11;
+
+        _mockUiStateStore.Verify(s => s.PersistModel(ModelConstants.Flux.Pro11), Times.Once);
+    }
+
+    // Repro for the bug "model isn't persisted, always shows flux-2-max" — simulate the full
+    // OnAppearing sequence (catalog hydrate → restore from store) and verify the user's last-
+    // picked model survives a "restart" (a fresh VM instance reading the same store).
+    [Fact]
+    public async Task ModelPersistAndRestore_AcrossSimulatedRestart_PicksRestoredValue()
+    {
+        // Stand-in shared store: behaves like a real Preferences-backed singleton, so the
+        // second VM "restart" sees the value the first VM wrote.
+        string? sharedPrompt = null;
+        string? sharedModel = null;
+        var sharedStore = new Mock<IUiStateStore>();
+        sharedStore.Setup(s => s.PersistPrompt(It.IsAny<string>())).Callback<string>(v => sharedPrompt = v);
+        sharedStore.Setup(s => s.PersistModel(It.IsAny<string>())).Callback<string>(v => sharedModel = v);
+        sharedStore.Setup(s => s.LoadPrompt()).Returns(() => sharedPrompt);
+        sharedStore.Setup(s => s.LoadModel()).Returns(() => sharedModel);
+
+        // Realistic merged catalog (live entries with raw Display, mirrors a real cache hydrate).
+        var merged = new List<ModelOption>
+        {
+            new("flux-1.1-pro", ModelConstants.Flux.Pro11, "Black Forest Labs"),
+            new("flux-2-max", ModelConstants.Flux.Max2, "Black Forest Labs"),
+            new("gpt-image-1.5", ModelConstants.OpenAI.GptImage15OnReplicate, "OpenAI (via Replicate)"),
+            new("gpt-image-2", ModelConstants.OpenAI.GptImage2OnReplicate, "OpenAI (via Replicate)"),
+        };
+        var coordinator1 = new Mock<IModelCatalogCoordinator>();
+        coordinator1.Setup(c => c.LoadCachedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(merged);
+
+        // Session 1: hydrate catalog, user picks gpt-image-2.
+        var vm1 = new GeneratorViewModel(
+            new Mock<IJobRunner>().Object,
+            new Mock<IApiTokenStore>().Object,
+            sharedStore.Object,
+            coordinator1.Object,
+            ModelDescriptorRegistry.Default());
+
+        await vm1.LoadCachedCatalogAsync();
+        vm1.LoadSavedUiState();  // first launch: nothing stored, no-op
+
+        vm1.SelectedModel = vm1.FilteredModels.First(m => m.Value == ModelConstants.OpenAI.GptImage2OnReplicate);
+
+        sharedModel.Should().Be(ModelConstants.OpenAI.GptImage2OnReplicate,
+            "the user's pick must be persisted exactly, not overwritten by a downstream auto-selection");
+
+        // Session 2: fresh VM (simulates app restart). Same store, same catalog.
+        var coordinator2 = new Mock<IModelCatalogCoordinator>();
+        coordinator2.Setup(c => c.LoadCachedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(merged);
+
+        var vm2 = new GeneratorViewModel(
+            new Mock<IJobRunner>().Object,
+            new Mock<IApiTokenStore>().Object,
+            sharedStore.Object,
+            coordinator2.Object,
+            ModelDescriptorRegistry.Default());
+
+        await vm2.LoadCachedCatalogAsync();
+        vm2.LoadSavedUiState();
+
+        vm2.Parameters.Model.Should().Be(ModelConstants.OpenAI.GptImage2OnReplicate);
+        vm2.SelectedModel?.Value.Should().Be(ModelConstants.OpenAI.GptImage2OnReplicate);
+        sharedModel.Should().Be(ModelConstants.OpenAI.GptImage2OnReplicate,
+            "the stored value must still be the user's pick after the simulated restart");
     }
 }

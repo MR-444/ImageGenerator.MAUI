@@ -20,6 +20,7 @@ public partial class GeneratorViewModel : ObservableObject
 
     private readonly IJobRunner _jobRunner;
     private readonly IApiTokenStore _tokenStore;
+    private readonly IUiStateStore _uiStateStore;
     private readonly IModelCatalogCoordinator _catalogCoordinator;
     private readonly IModelDescriptorRegistry _registry;
 
@@ -111,6 +112,14 @@ public partial class GeneratorViewModel : ObservableObject
     // don't pollute it.
     private string? _preferredAspectRatio;
     private bool _suppressPreferredArUpdate;
+
+    // Persisted model: only user-driven Parameters.Model changes should land in Preferences.
+    // Set this true around any code path that writes Parameters.Model as automatic plumbing
+    // — chiefly ApplyCatalog (FilteredModels reassignment makes the Picker reset SelectedItem
+    // to the first row, which round-trips through SelectedModel → Parameters.Model → persist
+    // and clobbers the user's saved value on every launch) and LoadSavedUiState (the value
+    // we're applying just came from the store; persisting it back is wasted I/O).
+    private bool _suppressModelPersist;
 
     public bool SupportsCustomDimensions => Capabilities.CustomDimensions && IsCustomAspectRatio;
     public bool SupportsImagePromptStrength => Capabilities.ImagePromptStrength && SelectedImages.Count > 0;
@@ -275,11 +284,13 @@ public partial class GeneratorViewModel : ObservableObject
     public GeneratorViewModel(
         IJobRunner jobRunner,
         IApiTokenStore tokenStore,
+        IUiStateStore uiStateStore,
         IModelCatalogCoordinator catalogCoordinator,
         IModelDescriptorRegistry registry)
     {
         _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+        _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
         _catalogCoordinator = catalogCoordinator ?? throw new ArgumentNullException(nameof(catalogCoordinator));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
 
@@ -327,9 +338,11 @@ public partial class GeneratorViewModel : ObservableObject
                     break;
                 case nameof(ImageGenerationParameters.Prompt):
                     ValidateParameters();
+                    _uiStateStore.PersistPrompt(_parameters.Prompt);
                     break;
                 case nameof(ImageGenerationParameters.Model):
                     SyncSelectionFromParameters(_parameters.Model);
+                    if (!_suppressModelPersist) _uiStateStore.PersistModel(_parameters.Model);
                     break;
             }
         };
@@ -526,9 +539,17 @@ public partial class GeneratorViewModel : ObservableObject
 
     private void ApplyCatalog(IReadOnlyList<ModelOption> mergedModels)
     {
-        AllModels = mergedModels.ToList();
-        Providers = BuildProvidersFrom(mergedModels);
-        RecomputeFilteredModels();
+        _suppressModelPersist = true;
+        try
+        {
+            AllModels = mergedModels.ToList();
+            Providers = BuildProvidersFrom(mergedModels);
+            RecomputeFilteredModels();
+        }
+        finally
+        {
+            _suppressModelPersist = false;
+        }
     }
 
     private static List<string> BuildProvidersFrom(IEnumerable<ModelOption> models)
@@ -544,6 +565,39 @@ public partial class GeneratorViewModel : ObservableObject
         if (!string.IsNullOrEmpty(saved))
         {
             Parameters.ApiToken = saved;
+        }
+    }
+
+    // Restore last-used prompt + model from Preferences. Call after the catalog has hydrated
+    // so FilteredModels contains every model the user might have last selected. We set
+    // SelectedModel (not Parameters.Model) so the Picker's two-way binding sees a reference
+    // already in FilteredModels — this avoids a class of MAUI binding races where setting
+    // Parameters.Model first would let the Picker reset SelectedItem to the first row before
+    // the SelectedModel re-sync runs. OnSelectedModelChanged then propagates to Parameters.Model
+    // and triggers RefreshCapabilities + the persist hook.
+    public void LoadSavedUiState()
+    {
+        var savedPrompt = _uiStateStore.LoadPrompt();
+        if (!string.IsNullOrEmpty(savedPrompt))
+        {
+            Parameters.Prompt = savedPrompt;
+        }
+
+        var savedModel = _uiStateStore.LoadModel();
+        if (string.IsNullOrEmpty(savedModel)) return;
+
+        var match = FilteredModels.FirstOrDefault(m => m.Value == savedModel)
+                 ?? AllModels.FirstOrDefault(m => m.Value == savedModel);
+        if (match == null) return;
+
+        _suppressModelPersist = true;
+        try
+        {
+            SelectedModel = match;
+        }
+        finally
+        {
+            _suppressModelPersist = false;
         }
     }
 
