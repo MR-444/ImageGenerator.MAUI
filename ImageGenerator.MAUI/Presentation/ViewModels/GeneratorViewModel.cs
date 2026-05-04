@@ -583,6 +583,11 @@ public partial class GeneratorViewModel : ObservableObject
             SetStatus("File not found.", StatusKind.Error);
             return;
         }
+        if (SelectedImages.Any(i => string.Equals(i.SourcePath, filePath, StringComparison.OrdinalIgnoreCase)))
+        {
+            SetStatus($"'{Path.GetFileName(filePath)}' is already in the list.", StatusKind.Warning);
+            return;
+        }
         if (!CanAddImage)
         {
             SetStatus($"Maximum {Capabilities.MaxImageInputs} image(s) for this model.", StatusKind.Error);
