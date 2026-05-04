@@ -69,6 +69,11 @@
                 <Border Style="{StaticResource Card}"
                         VerticalOptions="Start"
                         IsVisible="{Binding Capabilities.ImagePrompt}">
+                    <Border.GestureRecognizers>
+                        <DropGestureRecognizer AllowDrop="True"
+                                               DragOver="OnImageDragOver"
+                                               Drop="OnImageDropped" />
+                    </Border.GestureRecognizers>
                     <VerticalStackLayout Spacing="12">
                         <Label Text="{Binding ImagePromptCardTitle}" Style="{StaticResource CardTitle}" />
                         <Label Text="Optional reference image(s). Max count and payload field vary by model."
