@@ -77,7 +77,10 @@ public static class RefitServiceExtensions
             .ConfigureHttpClient(client =>
             {
                 client.BaseAddress = new Uri(baseAddress);
-                client.Timeout = TotalRequestTimeout;
+                // Polly owns timeouts (per-attempt + total). Opt out of HttpClient's per-request
+                // default (100s) so two ceilings can't compete or surface as TaskCanceledException
+                // instead of Polly's TimeoutRejectedException.
+                client.Timeout = Timeout.InfiniteTimeSpan;
             })
             // Replicate/OpenAI send gzip/brotli-compressed JSON responses. Without automatic
             // decompression on the primary handler, Refit reads raw bytes that fail to
@@ -87,6 +90,10 @@ public static class RefitServiceExtensions
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli
             });
 
+        // Resilience strategies wrap outside-in in registration order: outer TotalRequestTimeout
+        // wraps Retry wraps inner PerAttemptTimeout. Each attempt is bounded by 75s; up to 4
+        // attempts (1 + 3 retries) are bounded by 5 min total. Reordering these silently breaks
+        // the contract — e.g. PerAttempt first would make 75s the only effective ceiling.
         builder.AddResilienceHandler("standard", pipeline =>
         {
             pipeline.AddTimeout(new HttpTimeoutStrategyOptions
