@@ -116,11 +116,11 @@ public class ImageFileService : IImageFileService
             Directory.EnumerateFiles(directory, $"{stem}_*{ext}").Select(Path.GetFileName)!,
             StringComparer.OrdinalIgnoreCase);
 
-        for (var i = 1; i < 10_000; i++)
+        for (var i = 1; i < 100; i++)
         {
             var next = $"{stem}_{i}{ext}";
             if (!taken.Contains(next)) return Path.Combine(directory, next);
         }
-        throw new IOException($"Could not find an unused filename for '{baseName}' in '{directory}' after 10000 attempts.");
+        throw new IOException($"Could not find an unused filename for '{baseName}' in '{directory}' after 100 attempts.");
     }
 }
