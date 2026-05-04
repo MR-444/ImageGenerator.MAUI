@@ -1,0 +1,199 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using ImageGenerator.MAUI.Core.Application.Interfaces;
+using ImageGenerator.MAUI.Infrastructure.Diagnostics;
+using ImageGenerator.MAUI.Infrastructure.Interfaces;
+
+namespace ImageGenerator.MAUI.Presentation.ViewModels;
+
+public partial class GalleryItemDetailViewModel : ObservableObject
+{
+    private readonly IGalleryService _galleryService;
+    private readonly IFileLauncher _fileLauncher;
+    private readonly IClipboardService _clipboard;
+
+    [ObservableProperty]
+    private string? _filePath;
+
+    [ObservableProperty]
+    private string? _fileName;
+
+    // Single-line summary under the filename: e.g. "1.4 MB · 2026-05-04 17:43".
+    [ObservableProperty]
+    private string? _summary;
+
+    // Read-only multi-line text bound to a selectable Editor on the page so the user can
+    // copy any subset by hand even without using the dedicated Copy button.
+    [ObservableProperty]
+    private string? _metadataText;
+
+    [ObservableProperty]
+    private bool _isBusy;
+
+    // Transient feedback shown briefly under the action row (e.g. after Copy). Cleared by
+    // FlashAsync after a short delay so the user gets confirmation without a modal dialog.
+    [ObservableProperty]
+    private string? _flashMessage;
+
+    public GalleryItemDetailViewModel(
+        IGalleryService galleryService,
+        IFileLauncher fileLauncher,
+        IClipboardService clipboard)
+    {
+        _galleryService = galleryService ?? throw new ArgumentNullException(nameof(galleryService));
+        _fileLauncher = fileLauncher ?? throw new ArgumentNullException(nameof(fileLauncher));
+        _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
+    }
+
+    /// <summary>
+    /// Called by the page after the navigation QueryProperty has populated FilePath.
+    /// Loads metadata + computes the summary line.
+    /// </summary>
+    public async Task LoadAsync(CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(FilePath)) return;
+
+        IsBusy = true;
+        try
+        {
+            FileName = Path.GetFileName(FilePath);
+            Summary = BuildSummary(FilePath);
+
+            var meta = await _galleryService.ReadMetadataAsync(FilePath, ct);
+            MetadataText = FormatMetadata(meta);
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.Log("GalleryItemDetailVM.Load", ex);
+            MetadataText = "Couldn't read metadata. See crash.log for details.";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task CopyMetadataAsync()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(MetadataText)) return;
+            await _clipboard.SetTextAsync(MetadataText);
+            _ = FlashAsync("Copied to clipboard");
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.Log("GalleryItemDetailVM.CopyMetadata", ex);
+        }
+    }
+
+    private async Task FlashAsync(string message, int durationMs = 2000)
+    {
+        FlashMessage = message;
+        await Task.Delay(durationMs);
+        // Don't clobber a flash that a later action set in the meantime.
+        if (FlashMessage == message) FlashMessage = null;
+    }
+
+    [RelayCommand]
+    private void OpenInViewer()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(FilePath)) return;
+            _fileLauncher.Launch(FilePath);
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.Log("GalleryItemDetailVM.OpenInViewer", ex);
+        }
+    }
+
+    [RelayCommand]
+    private void ShowInFolder()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(FilePath)) return;
+            _fileLauncher.RevealInFolder(FilePath);
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.Log("GalleryItemDetailVM.ShowInFolder", ex);
+        }
+    }
+
+    [RelayCommand]
+    private async Task UseAsInputAsync()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(FilePath)) return;
+            // Hand the path off to MainPage via the Shell route's QueryProperty. Using the
+            // absolute "//MainPage" form pops the gallery + detail off the stack so the user
+            // lands directly on the generator with the image already attached.
+            var encoded = Uri.EscapeDataString(FilePath);
+            await Shell.Current.GoToAsync($"//MainPage?addInput={encoded}");
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.Log("GalleryItemDetailVM.UseAsInput", ex);
+        }
+    }
+
+    [RelayCommand]
+    private async Task CloseAsync()
+    {
+        // The window's X closes the whole app on Windows; this is the in-page back action.
+        // ".." pops one level, returning to the gallery rather than the main page.
+        try
+        {
+            await Shell.Current.GoToAsync("..");
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.Log("GalleryItemDetailVM.Close", ex);
+        }
+    }
+
+    private static string BuildSummary(string filePath)
+    {
+        try
+        {
+            var info = new FileInfo(filePath);
+            return $"{FormatBytes(info.Length)} · {info.CreationTime:yyyy-MM-dd HH:mm}";
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string FormatMetadata(IReadOnlyDictionary<string, string>? meta)
+    {
+        if (meta is null || meta.Count == 0) return "No embedded metadata found.";
+
+        // Header rows the user typically cares about first; everything else falls under
+        // alphabetical for predictability.
+        var preferredOrder = new[] { "Prompt", "ModelName", "Seed", "AspectRatio", "Dimensions", "Format", "Quality" };
+        var ordered = meta
+            .OrderBy(kv => Array.IndexOf(preferredOrder, kv.Key) is var idx && idx >= 0 ? idx : int.MaxValue)
+            .ThenBy(kv => kv.Key, StringComparer.Ordinal);
+
+        return string.Join(Environment.NewLine, ordered.Select(kv => $"{kv.Key}: {kv.Value}"));
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB"];
+        double size = bytes;
+        var unit = 0;
+        while (size >= 1024 && unit < units.Length - 1)
+        {
+            size /= 1024;
+            unit++;
+        }
+        return $"{size:0.#} {units[unit]}";
+    }
+}

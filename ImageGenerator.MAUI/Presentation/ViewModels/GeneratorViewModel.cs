@@ -33,6 +33,11 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private StatusKind _statusKind = StatusKind.None;
 
+    // Transient confirmation toast (e.g. "Image generated"). Distinct from StatusMessage,
+    // which holds form-level errors / info that shouldn't auto-clear.
+    [ObservableProperty]
+    private string? _flashMessage;
+
     public ObservableCollection<GenerationJob> Jobs { get; } = [];
     public bool HasJobs => Jobs.Count > 0;
 
@@ -370,6 +375,10 @@ public partial class GeneratorViewModel : ObservableObject
         var job = new GenerationJob(snapshot, AddAsInputAsync);
         Jobs.Insert(0, job);
 
+        // Click-time feedback: generation can take minutes, so confirm the click before
+        // the job-row spinner is the only visible signal.
+        _ = FlashAsync("Generation started");
+
         await RunJobAsync(job);
     }
 
@@ -419,6 +428,13 @@ public partial class GeneratorViewModel : ObservableObject
             DispatchToUi(() => job.IsRunning = false);
             job.Cts.Dispose();
         }
+    }
+
+    private async Task FlashAsync(string message, int durationMs = 2500)
+    {
+        FlashMessage = message;
+        await Task.Delay(durationMs);
+        if (FlashMessage == message) FlashMessage = null;
     }
 
     private static void DispatchToUi(Action action)
@@ -512,6 +528,22 @@ public partial class GeneratorViewModel : ObservableObject
         catch (Exception ex)
         {
             SetStatus($"Couldn't open Explorer: {ex.Message}", StatusKind.Error);
+        }
+    }
+
+    [RelayCommand]
+    private async Task OpenGalleryAsync()
+    {
+        // Shell.Current is null in the unit-test harness; the catch keeps tests green if a
+        // future test ever invokes this command, while production paths surface the error
+        // through the existing status surface.
+        try
+        {
+            await Shell.Current.GoToAsync("gallery");
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Couldn't open Gallery: {ex.Message}", StatusKind.Error);
         }
     }
 

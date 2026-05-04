@@ -10,9 +10,26 @@ using WinDataPackageOperation = Windows.ApplicationModel.DataTransfer.DataPackag
 
 namespace ImageGenerator.MAUI.Presentation.Views;
 
+[QueryProperty(nameof(AddInputPath), "addInput")]
 public partial class MainPage
 {
     private readonly GeneratorViewModel _viewModel;
+
+    /// <summary>
+    /// Set by Shell when the user navigates back from the gallery detail page via the
+    /// "Use as input" button (which calls Shell.GoToAsync("//MainPage?addInput=…")).
+    /// </summary>
+    public string? AddInputPath
+    {
+        set
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            var path = Uri.UnescapeDataString(value);
+            // Fire-and-forget: AddAsInputAsync sets a status message internally and never
+            // throws past its own catch. Awaiting from a property setter isn't possible.
+            _ = _viewModel.AddAsInputAsync(path);
+        }
+    }
 
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {

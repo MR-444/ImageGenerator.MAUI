@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:converters="clr-namespace:ImageGenerator.MAUI.Presentation.Converters"
+             xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
+             x:Class="ImageGenerator.MAUI.Presentation.Views.GalleryItemDetailPage"
+             x:DataType="vm:GalleryItemDetailViewModel"
+             Title="Image details"
+             Shell.NavBarIsVisible="True"
+             Padding="0">
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
+            <converters:ShellPreviewConverter x:Key="ShellPreview" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="16">
+
+            <!-- Header row: Back button + filename + summary. The window's X closes the
+                 whole app (it's the OS chrome, not in-app), so we provide an explicit
+                 close action here. -->
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <Button Grid.Column="0"
+                        Text="← Back"
+                        Command="{Binding CloseCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        VerticalOptions="Start"
+                        AutomationId="DetailBackButton" />
+                <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                    <Label Text="{Binding FileName}"
+                           Style="{StaticResource CardTitle}"
+                           LineBreakMode="MiddleTruncation" />
+                    <Label Text="{Binding Summary}"
+                           Style="{StaticResource HelperText}"
+                           IsVisible="{Binding Summary, Converter={StaticResource NonEmptyStringToBool}}" />
+                </VerticalStackLayout>
+            </Grid>
+
+            <!-- Preview via the OS shell at SingleItem mode (~1024 px, aspect preserved).
+                 Direct file-path binding worked but occasionally hard-failed natively when
+                 MAUI's WIC pipeline hit a particular file mid-decode; the OS-rendered
+                 preview is sharper than the 256 px tile thumbnail and avoids that path. -->
+            <Image Source="{Binding FilePath, Converter={StaticResource ShellPreview}}"
+                   Aspect="AspectFit"
+                   HeightRequest="500"
+                   HorizontalOptions="Center"
+                   SemanticProperties.Description="{Binding FileName}" />
+
+            <!-- Read-only but selectable; the Editor lets the user copy partial text by hand. -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Embedded metadata" Style="{StaticResource CardTitle}" />
+                    <Editor Text="{Binding MetadataText}"
+                            IsReadOnly="True"
+                            AutoSize="TextChanges"
+                            FontFamily="OpenSansRegular"
+                            MinimumHeightRequest="120"
+                            AutomationId="DetailMetadataEditor" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Transient toast under the metadata. Hidden when FlashMessage is null/empty. -->
+            <Label Text="{Binding FlashMessage}"
+                   IsVisible="{Binding FlashMessage, Converter={StaticResource NonEmptyStringToBool}}"
+                   TextColor="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}"
+                   FontAttributes="Bold"
+                   HorizontalOptions="Start"
+                   AutomationId="DetailFlashLabel" />
+
+            <!-- Action row. Wraps onto a second line when the window is narrow. -->
+            <FlexLayout Direction="Row" Wrap="Wrap" JustifyContent="Start" AlignItems="Center">
+                <Button Text="Copy metadata"
+                        Command="{Binding CopyMetadataCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        Margin="0,0,8,8"
+                        AutomationId="DetailCopyButton" />
+                <Button Text="Use as input"
+                        Command="{Binding UseAsInputCommand}"
+                        Style="{StaticResource PrimaryButton}"
+                        Margin="0,0,8,8"
+                        AutomationId="DetailUseAsInputButton" />
+                <Button Text="Open in viewer"
+                        Command="{Binding OpenInViewerCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        Margin="0,0,8,8"
+                        AutomationId="DetailOpenButton" />
+                <Button Text="Show in folder"
+                        Command="{Binding ShowInFolderCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        Margin="0,0,8,8"
+                        AutomationId="DetailShowInFolderButton" />
+            </FlexLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

@@ -290,6 +290,21 @@
                                 SemanticProperties.Description="Open the generated-images folder in Explorer"
                                 AutomationId="OpenFolderButton" />
 
+                        <Button Text="Gallery"
+                                Command="{Binding OpenGalleryCommand}"
+                                Style="{StaticResource SecondaryButton}"
+                                HorizontalOptions="Start"
+                                SemanticProperties.Description="Browse previously generated images"
+                                AutomationId="OpenGalleryButton" />
+
+                        <!-- Transient toast — auto-clears after a couple of seconds. Distinct
+                             from the form-level Status label below (which sticks). -->
+                        <Label Text="{Binding FlashMessage}"
+                               IsVisible="{Binding FlashMessage, Converter={StaticResource NonEmptyStringToBool}}"
+                               TextColor="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}"
+                               FontAttributes="Bold"
+                               AutomationId="FlashLabel" />
+
                         <!-- Status (form-level errors and info) -->
                         <Label Text="{Binding StatusMessage}"
                                Style="{StaticResource StatusLabel}"

@@ -16,8 +16,23 @@ public static class MauiProgram
 {
     public static MauiApp CreateMauiApp()
     {
+        // Install before anything else so a DI/builder failure during the rest of this
+        // method has a place to land. The wrapping try/catch below relies on this.
         CrashLogger.Install();
 
+        try
+        {
+            return BuildApp();
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.Log("MauiProgram.CreateMauiApp", ex);
+            throw;
+        }
+    }
+
+    private static MauiApp BuildApp()
+    {
         var builder = MauiApp.CreateBuilder();
         builder
             .UseMauiApp<App>()
@@ -54,6 +69,9 @@ public static class MauiProgram
         builder.Services.AddSingleton<IImageFileService, ImageFileService>();
         builder.Services.AddSingleton<IImageGenerationService, ReplicateImageGenerationService>();
         builder.Services.AddSingleton<IModelCatalogService, ModelCatalogService>();
+        builder.Services.AddSingleton<IGalleryService>(_ => new GalleryService());
+        builder.Services.AddSingleton<IFileLauncher, FileLauncher>();
+        builder.Services.AddSingleton<IClipboardService, ClipboardService>();
 
         // 3a) VM collaborators carved out of the original god-class GeneratorViewModel (M1).
         builder.Services.AddSingleton<IApiTokenStore, ApiTokenStore>();
@@ -62,9 +80,13 @@ public static class MauiProgram
         builder.Services.AddSingleton<IModelCatalogCoordinator, ModelCatalogCoordinator>();
 
         builder.Services.AddTransient<GeneratorViewModel>();
+        builder.Services.AddTransient<GalleryViewModel>();
+        builder.Services.AddTransient<GalleryItemDetailViewModel>();
 
         // 4) Register MainPage so it (and its constructor) can be injected
         builder.Services.AddTransient<MainPage>();
+        builder.Services.AddTransient<GalleryPage>();
+        builder.Services.AddTransient<GalleryItemDetailPage>();
 
         return builder.Build();
     }

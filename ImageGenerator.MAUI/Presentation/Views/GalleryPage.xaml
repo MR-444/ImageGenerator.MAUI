@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:converters="clr-namespace:ImageGenerator.MAUI.Presentation.Converters"
+             xmlns:entities="clr-namespace:ImageGenerator.MAUI.Core.Domain.Entities"
+             xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
+             x:Name="Root"
+             x:Class="ImageGenerator.MAUI.Presentation.Views.GalleryPage"
+             x:DataType="vm:GalleryViewModel"
+             Title="Gallery"
+             Shell.NavBarIsVisible="True"
+             Padding="0">
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:InverseBoolConverter x:Key="InverseBool" />
+            <converters:ShellThumbnailConverter x:Key="ShellThumbnail" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*"
+          Padding="24"
+          RowSpacing="12">
+
+        <!-- Header — Shell's navbar already shows the page Title="Gallery", so no in-page title duplicate. -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+            <VerticalStackLayout Grid.Column="0" Spacing="4" VerticalOptions="Center">
+                <Label Text="Browse generated images. Tap a thumbnail to open in your default viewer."
+                       Style="{StaticResource HelperText}" />
+                <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
+                    <Label Text="Sort by:" Style="{StaticResource FieldLabel}" VerticalOptions="Center" />
+                    <Picker ItemsSource="{Binding SortModes}"
+                            SelectedItem="{Binding SelectedSortMode}"
+                            MinimumWidthRequest="180"
+                            AutomationId="GallerySortPicker" />
+                </HorizontalStackLayout>
+            </VerticalStackLayout>
+            <Button Grid.Column="2"
+                    Text="Refresh"
+                    Command="{Binding RefreshCommand}"
+                    Style="{StaticResource SecondaryButton}"
+                    VerticalOptions="Start"
+                    AutomationId="GalleryRefreshButton" />
+            <Button Grid.Column="3"
+                    Text="Open folder"
+                    Command="{Binding OpenOutputFolderCommand}"
+                    Style="{StaticResource SecondaryButton}"
+                    VerticalOptions="Start"
+                    AutomationId="GalleryOpenFolderButton" />
+        </Grid>
+
+        <!-- Busy + empty hints -->
+        <ActivityIndicator Grid.Row="1"
+                           IsRunning="{Binding IsBusy}"
+                           IsVisible="{Binding IsBusy}"
+                           HorizontalOptions="Center" />
+
+        <Label Grid.Row="1"
+               Text="No images yet — generate something on the Generate page."
+               Style="{StaticResource HelperText}"
+               IsVisible="{Binding IsEmpty}"
+               HorizontalOptions="Center"
+               Padding="0,8" />
+
+        <!-- Tile grid -->
+        <CollectionView Grid.Row="2"
+                        ItemsSource="{Binding Items}"
+                        SelectionMode="None"
+                        AutomationId="GalleryCollection">
+            <CollectionView.ItemsLayout>
+                <GridItemsLayout Orientation="Vertical"
+                                 Span="4"
+                                 HorizontalItemSpacing="12"
+                                 VerticalItemSpacing="12" />
+            </CollectionView.ItemsLayout>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="entities:GalleryItem">
+                    <Border Style="{StaticResource Card}"
+                            Padding="8">
+                        <VerticalStackLayout Spacing="6">
+                            <!-- Code-behind Clicked/Tapped handlers because RelativeSource lookups
+                                 inside a CollectionView.ItemTemplate don't reliably cross the
+                                 DataTemplate scope under MAUI's compiled bindings. -->
+                            <Image Source="{Binding FilePath, Converter={StaticResource ShellThumbnail}}"
+                                   Aspect="AspectFit"
+                                   HeightRequest="200"
+                                   WidthRequest="200"
+                                   HorizontalOptions="Center"
+                                   SemanticProperties.Description="{Binding FileName}">
+                                <Image.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnTileTapped" />
+                                </Image.GestureRecognizers>
+                            </Image>
+                            <Label Text="{Binding FileName}"
+                                   Style="{StaticResource HelperText}"
+                                   LineBreakMode="MiddleTruncation"
+                                   MaxLines="1"
+                                   HorizontalOptions="Center" />
+                            <Button Text="Show metadata"
+                                    Style="{StaticResource SecondaryButton}"
+                                    CommandParameter="{Binding .}"
+                                    Clicked="OnShowMetadataClicked"
+                                    HorizontalOptions="Center"
+                                    AutomationId="GalleryShowMetadataButton" />
+                        </VerticalStackLayout>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>
