@@ -26,12 +26,33 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
             var imageModel = _registry.PayloadFor(parameters.Model).Build(parameters);
 
             var finalResponse = await CallReplicateModelAsync(parameters, imageModel, cancellationToken);
+
+            if (finalResponse?.Status == ReplicateStatus.Failed)
+            {
+                return new GeneratedImage
+                {
+                    Message = $"Image generation failed: {finalResponse.Error ?? "no error message"}.",
+                    FilePath = null,
+                    ImageData = null
+                };
+            }
+
+            if (finalResponse?.Status == ReplicateStatus.Canceled)
+            {
+                return new GeneratedImage
+                {
+                    Message = "Image generation was canceled.",
+                    FilePath = null,
+                    ImageData = null
+                };
+            }
+
             var outputUrl = finalResponse?.Output?.FirstOrDefault();
             if (string.IsNullOrEmpty(outputUrl))
             {
                 var errorMessage = finalResponse?.Error ?? "Unknown error";
                 var status = finalResponse?.Status ?? "Unknown status";
-                throw new InvalidOperationException($"Model prediction failed or returned no result. Status: {status}, Error: {errorMessage}");
+                throw new InvalidOperationException($"Model prediction returned no output. Status: {status}, Error: {errorMessage}");
             }
 
             var imageData = await DownloadImageAsync(outputUrl, cancellationToken);

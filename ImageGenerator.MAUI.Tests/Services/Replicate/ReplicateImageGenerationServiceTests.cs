@@ -136,9 +136,91 @@ public class ReplicateImageGenerationServiceTests
         var result = await _service.GenerateImageAsync(parameters);
 
         result.Should().NotBeNull();
-        result.Message.Should().Be("An error occurred: Model prediction failed or returned no result. Status: succeeded, Error: Unknown error");
+        result.Message.Should().Be("An error occurred: Model prediction returned no output. Status: succeeded, Error: Unknown error");
         result.ImageData.Should().BeNull();
         result.FilePath.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GenerateImageAsync_WhenStatusFailedWithError_ShouldSurfaceCleanFailedMessage()
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.Flux.Klein4b,
+            Prompt = "A test image",
+            ApiToken = "test-token"
+        };
+
+        var initialResponse = new ReplicatePredictionResponse { Id = "test-id", Status = "starting" };
+        var failedResponse = new ReplicatePredictionResponse { Status = "failed", Error = "model went boom" };
+
+        _mockReplicateApi.Setup(x => x.CreatePredictionAsync(
+                It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<ReplicatePredictionRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(initialResponse);
+        _mockReplicateApi.Setup(x => x.GetPredictionAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(failedResponse);
+
+        var result = await _service.GenerateImageAsync(parameters);
+
+        result.Should().NotBeNull();
+        result.Message.Should().Be("Image generation failed: model went boom.");
+        result.ImageData.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GenerateImageAsync_WhenStatusFailedWithoutError_ShouldSurfaceFailedMessageWithFallback()
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.Flux.Klein4b,
+            Prompt = "A test image",
+            ApiToken = "test-token"
+        };
+
+        var initialResponse = new ReplicatePredictionResponse { Id = "test-id", Status = "starting" };
+        var failedResponse = new ReplicatePredictionResponse { Status = "failed", Error = null };
+
+        _mockReplicateApi.Setup(x => x.CreatePredictionAsync(
+                It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<ReplicatePredictionRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(initialResponse);
+        _mockReplicateApi.Setup(x => x.GetPredictionAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(failedResponse);
+
+        var result = await _service.GenerateImageAsync(parameters);
+
+        result.Message.Should().Be("Image generation failed: no error message.");
+        result.ImageData.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GenerateImageAsync_WhenStatusCanceledServerSide_ShouldSurfaceCanceledMessage()
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.Flux.Klein4b,
+            Prompt = "A test image",
+            ApiToken = "test-token"
+        };
+
+        var initialResponse = new ReplicatePredictionResponse { Id = "test-id", Status = "starting" };
+        var canceledResponse = new ReplicatePredictionResponse { Status = "canceled" };
+
+        _mockReplicateApi.Setup(x => x.CreatePredictionAsync(
+                It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<ReplicatePredictionRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(initialResponse);
+        _mockReplicateApi.Setup(x => x.GetPredictionAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(canceledResponse);
+
+        var result = await _service.GenerateImageAsync(parameters);
+
+        result.Message.Should().Be("Image generation was canceled.");
+        result.ImageData.Should().BeNull();
     }
 
     [Fact]

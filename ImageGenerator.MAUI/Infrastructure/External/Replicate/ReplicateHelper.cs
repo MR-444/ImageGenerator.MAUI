@@ -42,13 +42,13 @@ public static class ReplicateHelper
 
             switch (prediction.Status)
             {
-                case "succeeded":
-                case "failed":
-                case "canceled":
+                case ReplicateStatus.Succeeded:
+                case ReplicateStatus.Failed:
+                case ReplicateStatus.Canceled:
                     return prediction;
 
-                case "starting":
-                case "processing":
+                case ReplicateStatus.Starting:
+                case ReplicateStatus.Processing:
                 case null:
                 case "":
                     await Task.Delay(delay, cancellationToken);
