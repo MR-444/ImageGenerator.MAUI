@@ -103,7 +103,7 @@ public class ReplicateImageGenerationServiceTests
 
         result.Should().NotBeNull();
         result.Message.Should().Be("An error occurred: API Error");
-        result.ImageDataBase64.Should().BeNull();
+        result.ImageData.Should().BeNull();
         result.FilePath.Should().BeNull();
     }
 
@@ -137,7 +137,7 @@ public class ReplicateImageGenerationServiceTests
 
         result.Should().NotBeNull();
         result.Message.Should().Be("An error occurred: Model prediction failed or returned no result. Status: succeeded, Error: Unknown error");
-        result.ImageDataBase64.Should().BeNull();
+        result.ImageData.Should().BeNull();
         result.FilePath.Should().BeNull();
     }
 
@@ -162,7 +162,7 @@ public class ReplicateImageGenerationServiceTests
 
         result.Should().NotBeNull();
         result.Message.Should().Be("Image generation was canceled.");
-        result.ImageDataBase64.Should().BeNull();
+        result.ImageData.Should().BeNull();
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public class ReplicateImageGenerationServiceTests
 
         result.Should().NotBeNull();
         result.Message.Should().StartWith("An error occurred: Unexpected Replicate prediction status");
-        result.ImageDataBase64.Should().BeNull();
+        result.ImageData.Should().BeNull();
     }
 
     private void StubHappyPath()

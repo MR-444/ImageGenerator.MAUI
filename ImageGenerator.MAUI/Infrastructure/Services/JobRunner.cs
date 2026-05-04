@@ -20,7 +20,7 @@ public sealed class JobRunner : IJobRunner
     {
         var result = await _imageService.GenerateImageAsync(parameters, ct);
 
-        if (string.IsNullOrEmpty(result.ImageDataBase64))
+        if (result.ImageData is null or { Length: 0 })
         {
             // Service returned a structured error/canceled message instead of image data.
             return new JobOutcome(JobOutcomeKind.Failed, null, result.Message ?? "Image generation failed.");
@@ -28,8 +28,7 @@ public sealed class JobRunner : IJobRunner
 
         Directory.CreateDirectory(OutputPaths.GeneratedImagesDirectory);
         var path = _imageFileService.GetUniqueSavePath(OutputPaths.GeneratedImagesDirectory, parameters);
-        var bytes = Convert.FromBase64String(result.ImageDataBase64);
-        await _imageFileService.SaveImageWithMetadataAsync(path, bytes, parameters);
+        await _imageFileService.SaveImageWithMetadataAsync(path, result.ImageData, parameters);
 
         return new JobOutcome(JobOutcomeKind.Saved, path, $"Saved to {path}");
     }

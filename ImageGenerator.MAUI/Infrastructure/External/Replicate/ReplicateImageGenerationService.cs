@@ -34,13 +34,13 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
                 throw new InvalidOperationException($"Model prediction failed or returned no result. Status: {status}, Error: {errorMessage}");
             }
 
-            var imageDataBase64 = await DownloadImageAsBase64Async(outputUrl, cancellationToken);
+            var imageData = await DownloadImageAsync(outputUrl, cancellationToken);
 
             return new GeneratedImage
             {
                 Message = $"Image generated successfully with model {parameters.Model}.",
                 FilePath = null,
-                ImageDataBase64 = imageDataBase64
+                ImageData = imageData
             };
         }
         catch (OperationCanceledException)
@@ -49,7 +49,7 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
             {
                 Message = "Image generation was canceled.",
                 FilePath = null,
-                ImageDataBase64 = null
+                ImageData = null
             };
         }
         catch (Exception ex)
@@ -58,7 +58,7 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
             {
                 Message = FormatError(ex, parameters.ApiToken),
                 FilePath = null,
-                ImageDataBase64 = null
+                ImageData = null
             };
         }
     }
@@ -119,7 +119,7 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
         );
     }
 
-    protected virtual async Task<string> DownloadImageAsBase64Async(string imageUrl, CancellationToken cancellationToken)
+    protected virtual async Task<byte[]> DownloadImageAsync(string imageUrl, CancellationToken cancellationToken)
     {
         // The injected HttpClient is the default unnamed factory client, so it doesn't share
         // the Refit pipeline's timeouts. Put a concrete ceiling on the CDN download here.
@@ -130,8 +130,7 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
             using var response = await _httpClient.GetAsync(imageUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
             response.EnsureSuccessStatusCode();
 
-            var bytes = await response.Content.ReadAsByteArrayAsync(cts.Token);
-            return Convert.ToBase64String(bytes);
+            return await response.Content.ReadAsByteArrayAsync(cts.Token);
         }
         catch (HttpRequestException ex)
         {
