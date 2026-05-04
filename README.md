@@ -6,6 +6,8 @@ A Windows desktop image generation app built on .NET MAUI that drives the Replic
 
 - Windows 10/11 desktop (MAUI Windows target, `net10.0-windows10.0.22621.0`)
 - **Concurrent generation queue** — click Generate while a previous job is still running; each click snapshots the current parameters into its own in-flight job. A scrollable queue below the form shows per-job prompt, status, spinner, thumbnail, and independent Cancel / Open / Show-in-folder / Use-as-input actions.
+- **In-app gallery** — browse previously generated images without leaving the app. Tile grid with sortable order (newest/oldest, name A→Z / Z→A, largest/smallest), live updates via `FileSystemWatcher` when new images are saved or removed, and a detail page with a larger preview, copyable metadata, and one-click **Use as input**, **Open in viewer**, and **Show in folder** actions. Thumbnails come from the Windows shell cache so a directory of multi-megabyte PNGs doesn't blow process memory.
+- **Persisted UI state** — the last prompt and selected model are restored on next launch (per-user `Preferences`). Pick up where you left off.
 - **Dynamic model catalog** — "Refresh Models" queries Replicate's `text-to-image` collection (filtered to `black-forest-labs`, `openai`, and `google` owners) so new models surface without recompiling. The catalog is cached to `FileSystem.AppDataDirectory/model-catalog.json` and restored on launch.
 - **Flux 2 family** — `flux-2-klein-4b`, `flux-2-flex`, `flux-2-pro`, `flux-2-max` with per-model payload shaping and optional `images` input
 - **OpenAI** — `openai/gpt-image-1.5` and `openai/gpt-image-2` (via Replicate). The UI exposes the model-specific knobs: `quality`, `background` (incl. transparent PNGs), `moderation`, `input_fidelity`.
@@ -15,6 +17,7 @@ A Windows desktop image generation app built on .NET MAUI that drives the Replic
 - Per-job cancellation with retry/backoff (Polly via `Microsoft.Extensions.Http.Resilience`)
 - Images saved to `%USERPROFILE%\Pictures\ImageGenerator.MAUI\` with collision-safe filenames
 - Prompt + generation parameters embedded in the file — PNG `Comment` text chunk, or EXIF `UserComment` for JPG/WebP. Includes the actual pixel dimensions and model-specific fields (GPT options, resolution, etc.) so every image carries a complete reproducible recipe.
+- **Diagnostics log** — `app.log` next to the saved images captures startup confirmation and any caught exception. Easy to find, no spelunking through `%LocalAppData%\Packages\…`.
 - MVVM via CommunityToolkit.Mvvm (`[RelayCommand]`, `[ObservableProperty]`)
 
 ## 📸 Screenshots
@@ -23,7 +26,7 @@ A Windows desktop image generation app built on .NET MAUI that drives the Replic
 
 ![After generation — result thumbnail with "Use as input for next generation" and "Show in folder" actions](<documents/Result_Screenshot 2026-04-19 162259.png>)
 
-> Note: screenshots above are from v0.3.x. v0.4.0 replaced the single-result card with a concurrent queue; screenshots will be refreshed in a future release.
+> Note: screenshots above are from v0.3.x. The current 1.0.0 build adds a concurrent queue, persisted prompt + model, and an in-app gallery (separate page, not visible in these shots). Refreshed screenshots will follow.
 
 ## 🖥️ Using the app (end users)
 
@@ -54,11 +57,15 @@ Replicate pay-as-you-go means no monthly commitment — you only get charged for
 
 ### Where images are saved
 
-Generated images land in `%USERPROFILE%\Pictures\ImageGenerator.MAUI\` with collision-safe filenames (timestamp + truncated prompt + seed). Each completed job card has its own **Show in folder** button that opens Explorer with that specific file highlighted; the Run card also has an **Open output folder** shortcut.
+Generated images land in `%USERPROFILE%\Pictures\ImageGenerator.MAUI\` with collision-safe filenames (timestamp + truncated prompt + seed). Each completed job card has its own **Show in folder** button that opens Explorer with that specific file highlighted; the Run card also has an **Open output folder** shortcut and a **Gallery** button that opens the in-app browser.
+
+### Browsing past images (gallery)
+
+The **Gallery** button on the main page opens an in-app grid of every image in the output folder, sorted however you like (newest first by default). Click a tile to open the image in your default OS viewer; click **Show metadata** to open the detail page with a larger preview, the parsed metadata as selectable text, and one-click actions: **Copy metadata** to clipboard, **Use as input** (sends the image back to the generator as an input-image attachment), **Open in viewer**, **Show in folder**. The gallery uses the OS shell thumbnail cache, so opening a folder with many large PNGs is instant.
 
 ### Reading back the embedded metadata
 
-The app embeds the full prompt and generation parameters into the saved file so you can recover the recipe months later. For **PNG** the metadata lives in the standard `Comment` text chunk; for **JPG/WebP** it's written as EXIF `UserComment`. To inspect the metadata the recommended tool is **[MediaInfo](https://mediaarea.net/en/MediaInfo)** — cross-platform, free, with both GUI and CLI — or `exiftool` on the CLI. Besides the prompt and seed you'll see the actual pixel dimensions produced by the API and the model-specific options (GPT quality/background/moderation/input-fidelity, nano-banana resolution, Flux Ultra raw/image-prompt-strength) so two people with the metadata can reproduce the same image.
+The app embeds the full prompt and generation parameters into the saved file so you can recover the recipe months later. For **PNG** the metadata lives in the standard `Comment` text chunk; for **JPG/WebP** it's written as EXIF `UserComment`. The fastest way to inspect it is the in-app gallery's **Show metadata** button (also lets you copy it to the clipboard); externally, **[MediaInfo](https://mediaarea.net/en/MediaInfo)** (GUI + CLI, cross-platform, free) or `exiftool` work too. Besides the prompt and seed you'll see the actual pixel dimensions produced by the API and the model-specific options (GPT quality/background/moderation/input-fidelity, nano-banana resolution, Flux Ultra raw/image-prompt-strength) so two people with the metadata can reproduce the same image.
 
 ## 🛠️ Technologies
 
@@ -94,21 +101,24 @@ git clone https://github.com/MR-444/ImageGenerator.MAUI.git
 ```
 ImageGenerator.MAUI/
 ├── Core/
-│   ├── Application/          # IImageGenerationService, IModelCatalogService, factory
-│   └── Domain/               # Entities, value objects (Flux model payloads, ModelCapabilities)
+│   ├── Application/          # IImageGenerationService, IModelCatalogService, IGalleryService
+│   └── Domain/               # Entities (incl. GalleryItem), value objects, ModelCapabilities
 ├── Infrastructure/
+│   ├── Diagnostics/          # CrashLogger (app.log + WinUI dispatcher hook)
 │   ├── External/
 │   │   ├── OpenAi/           # Refit client + DTOs + service
 │   │   └── Replicate/        # Refit client + DTOs + service + image encoding helpers
-│   └── Services/             # ImageFileService, ModelCatalogService (fetch + disk cache)
+│   └── Services/             # ImageFileService, ModelCatalogService, GalleryService,
+│                             # FileLauncher, ClipboardService
 ├── Presentation/
-│   ├── ViewModels/           # GeneratorViewModel, ModelCapabilities
-│   ├── Views/                # MainPage.xaml
+│   ├── ViewModels/           # GeneratorViewModel, GalleryViewModel, GalleryItemDetailViewModel
+│   ├── Views/                # MainPage, GalleryPage, GalleryItemDetailPage (.xaml + .cs)
 │   ├── Behaviors/            # NumericOnlyBehavior
-│   └── Converters/           # StringToBool / Inverse / StringToEnum
-├── Shared/Constants/         # ModelConstants, ValidationConstants
+│   └── Converters/           # ShellThumbnail / ShellPreview / StringToEnum / Inverse / NonEmptyString
+├── Shared/Constants/         # ModelConstants, ValidationConstants, OutputPaths
 ├── Resources/                # Styles, Colors, Fonts, Images
 ├── Extensions/               # RefitServiceExtensions (serializer + resilience pipeline)
+├── AppShell.xaml             # Shell + route registration (gallery, detail)
 └── MauiProgram.cs            # DI registration + app bootstrap
 ```
 
@@ -118,7 +128,7 @@ ImageGenerator.MAUI/
 dotnet test
 ```
 
-Covers the model factory payload shapes, Replicate + OpenAI service HTTP flows (via Refit mocks), the `NullSkippingDictionaryConverter`, model catalog filtering, image file naming + EXIF, and the GeneratorViewModel commands.
+229 tests covering: model factory payload shapes, Replicate service HTTP flows (via Refit mocks), the `NullSkippingDictionaryConverter`, model catalog filtering and persistence, image file naming + EXIF round-trip, GeneratorViewModel commands and state machine, GalleryService enumeration + metadata reads + partial-write guard, GalleryViewModel sort modes + watcher debounce, GalleryItemDetailViewModel actions, and CrashLogger smoke + concurrency.
 
 ## 📱 Supported Platforms
 
@@ -138,13 +148,14 @@ If you'd like to contribute code:
 
 ## ⚠️ Known issues
 
-Limitations in the current preview that didn't block shipping but are worth knowing:
+Limitations that didn't block shipping but are worth knowing:
 
-- **Error-path UX hasn't been exhaustively audited** — for failures like a bad/revoked token (401), a mid-generation network drop, or rate-limit / quota / 5xx responses from Replicate, the status message on the affected job card may be less actionable than it could be. Happy-path generation, explicit Cancel, and concurrent generations all work as expected; the Generate button is no longer blocked by a stuck in-flight job.
+- **Error-path UX hasn't been exhaustively audited** — for failures like a bad/revoked token (401), a mid-generation network drop, or rate-limit / quota / 5xx responses from Replicate, the status message on the affected job card may be less actionable than it could be. Happy-path generation, explicit Cancel, and concurrent generations all work as expected.
 - **GPT 1.5 `input_fidelity=high` with an input image** is not regression-tested in this build. The other GPT options (`quality`, `background`, `moderation`, `input_fidelity=low`) have been verified.
-- **Job queue has no eviction policy** — finished job cards accumulate until the app is closed. For long sessions this is a cosmetic issue only, but a "Clear finished" control will come in a future release.
+- **Job queue has no eviction policy** — finished job cards accumulate until the app is closed. Cosmetic for short sessions; a "Clear finished" control is a candidate for v1.x.
+- **Gallery is read-only in 1.0** — delete / rename / search / multi-select are not yet implemented (you can still delete or rename in Explorer; the gallery picks up the change via `FileSystemWatcher` within ~1 s).
 
-If you hit any of the above, please [open an issue](https://github.com/MR-444/ImageGenerator.MAUI/issues) with the status text and what you were trying to generate — that's the fastest way these get tightened up.
+If you hit any of the above, please [open an issue](https://github.com/MR-444/ImageGenerator.MAUI/issues) with the status text from `Pictures\ImageGenerator.MAUI\app.log` and what you were trying to generate — that's the fastest way these get tightened up.
 
 ## 📄 License
 
