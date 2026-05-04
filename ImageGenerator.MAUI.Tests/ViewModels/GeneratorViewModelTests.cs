@@ -634,4 +634,59 @@ public class GeneratorViewModelTests
         gate2.SetResult(new JobOutcome(JobOutcomeKind.Failed, null, "canceled"));
         await Task.WhenAll(run1, run2);
     }
+
+    [Fact]
+    public void AspectRatio_SwitchingToCompatibleModel_StaysPut()
+    {
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11Ultra);
+        _viewModel.Parameters.AspectRatio = "21:9";
+
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+
+        _viewModel.Parameters.AspectRatio.Should().Be("21:9");
+    }
+
+    [Fact]
+    public void AspectRatio_SwitchingToIncompatibleModelThenBack_RestoresPreferred()
+    {
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.Parameters.AspectRatio = "21:9";
+
+        // GPT 1.5's AR list is just ["1:1", "3:2", "2:3"] — 21:9 is rejected, AR falls back.
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage15OnReplicate);
+        _viewModel.Parameters.AspectRatio.Should().NotBe("21:9");
+
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+
+        _viewModel.Parameters.AspectRatio.Should().Be("21:9", "the preferred AR is restored when the new model supports it again");
+    }
+
+    [Fact]
+    public void AspectRatio_UserPickOverridesInitialDefault()
+    {
+        // Constructor seeds the initial AR (16:9) as the preferred. A user pick replaces it.
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.Parameters.AspectRatio = "1:1";
+
+        // GPT 1.5 supports both 16:9 (no, actually only 1:1 / 3:2 / 2:3) and 1:1 — 1:1 must win.
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage15OnReplicate);
+
+        _viewModel.Parameters.AspectRatio.Should().Be("1:1");
+    }
+
+    [Fact]
+    public void AspectRatio_RemoveAllImages_FallsBackToPreferredWhenValid()
+    {
+        // Start on NanoBanana2 which supports both "16:9" and "match_input_image".
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Google.NanoBanana2);
+        _viewModel.Parameters.AspectRatio = "16:9";
+
+        _viewModel.SelectedImages.Add(FakeImage("a"));
+        _viewModel.Parameters.AspectRatio.Should().Be("match_input_image", "auto-select on 0→1 with a model that supports it");
+
+        _viewModel.SelectedImages.Clear();
+
+        // Without sticky logic this would fall back to "1:1" (first non-match-input AR in NanoBanana2).
+        _viewModel.Parameters.AspectRatio.Should().Be("16:9", "the user's preferred AR is restored when images are cleared");
+    }
 }

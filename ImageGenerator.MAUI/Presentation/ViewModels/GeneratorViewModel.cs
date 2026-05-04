@@ -104,6 +104,14 @@ public partial class GeneratorViewModel : ObservableObject
     private ModelCapabilities _capabilities;  // hydrated from registry in ctor
     private bool _cachedCatalogLoaded;
 
+    // Sticky aspect ratio across model swaps: capture the user's last explicit AR pick so
+    // we can restore it whenever a model switch lands on a model that supports it. Updated
+    // only via the Parameters.PropertyChanged event when _suppressPreferredArUpdate is false,
+    // so automatic writes (model fallback, image-add auto-select, image-remove fallback)
+    // don't pollute it.
+    private string? _preferredAspectRatio;
+    private bool _suppressPreferredArUpdate;
+
     public bool SupportsCustomDimensions => Capabilities.CustomDimensions && IsCustomAspectRatio;
     public bool SupportsImagePromptStrength => Capabilities.ImagePromptStrength && SelectedImages.Count > 0;
     public string ImagePromptCardTitle => Capabilities.MaxImageInputs > 1
@@ -128,16 +136,28 @@ public partial class GeneratorViewModel : ObservableObject
         foreach (var item in SelectedImages) Parameters.ImagePrompts.Add(item.Base64);
 
         // Auto-select match_input_image on 0→1, fall back on 1→0. Models without the option
-        // in their AR list (Flux 1.1 Pro/Pro Ultra) no-op the first branch.
+        // in their AR list (Flux 1.1 Pro/Pro Ultra) no-op the first branch. Both writes are
+        // automatic and must not pollute _preferredAspectRatio.
         var count = SelectedImages.Count;
         if (_lastImageCount == 0 && count > 0 && AspectRatioOptions.Contains("match_input_image"))
         {
+            _suppressPreferredArUpdate = true;
             Parameters.AspectRatio = "match_input_image";
+            _suppressPreferredArUpdate = false;
         }
         else if (_lastImageCount > 0 && count == 0 && Parameters.AspectRatio == "match_input_image")
         {
-            var fallback = Capabilities.AspectRatios.FirstOrDefault(r => r != "match_input_image");
-            if (fallback != null) Parameters.AspectRatio = fallback;
+            // Prefer the user's last explicit AR if it's still valid for the current model
+            // and isn't itself "match_input_image"; otherwise fall back to the first concrete AR.
+            var preferred = _preferredAspectRatio is { } pref && pref != "match_input_image"
+                            && Capabilities.AspectRatios.Contains(pref) ? pref : null;
+            var fallback = preferred ?? Capabilities.AspectRatios.FirstOrDefault(r => r != "match_input_image");
+            if (fallback != null)
+            {
+                _suppressPreferredArUpdate = true;
+                Parameters.AspectRatio = fallback;
+                _suppressPreferredArUpdate = false;
+            }
         }
         _lastImageCount = count;
 
@@ -168,9 +188,19 @@ public partial class GeneratorViewModel : ObservableObject
         // cascade (NotifyPropertyChangedFor + path-based bindings on Capabilities.X),
         // every consumer sees consistent state.
         AspectRatioOptions = caps.AspectRatios.ToList();
-        if (!caps.AspectRatios.Contains(Parameters.AspectRatio))
+        // Sticky AR: prefer the user's last explicit pick if the new model supports it,
+        // otherwise keep the current AR if still valid (covers initial-state edge cases),
+        // otherwise fall back to the model's first AR.
+        var current = Parameters.AspectRatio;
+        var target =
+            (_preferredAspectRatio is { } pref && caps.AspectRatios.Contains(pref)) ? pref :
+            caps.AspectRatios.Contains(current) ? current :
+            caps.AspectRatios[0];
+        if (!string.Equals(target, current, StringComparison.Ordinal))
         {
-            Parameters.AspectRatio = caps.AspectRatios[0];
+            _suppressPreferredArUpdate = true;
+            Parameters.AspectRatio = target;
+            _suppressPreferredArUpdate = false;
         }
 
         ResolutionOptions = caps.Resolutions?.ToList() ?? [];
@@ -278,12 +308,18 @@ public partial class GeneratorViewModel : ObservableObject
             RandomizeSeed = true
         };
 
+        // Seed the preferred AR with the constructor default so first-launch model swaps
+        // already prefer "16:9" instead of slamming to caps.AspectRatios[0].
+        _preferredAspectRatio = _parameters.AspectRatio;
+
         _parameters.PropertyChanged += (_, e) =>
         {
             switch (e.PropertyName)
             {
                 case nameof(ImageGenerationParameters.AspectRatio):
                     UpdateCustomAspectRatio(_parameters.AspectRatio);
+                    if (!_suppressPreferredArUpdate)
+                        _preferredAspectRatio = _parameters.AspectRatio;
                     break;
                 case nameof(ImageGenerationParameters.ApiToken):
                     ValidateParameters();
