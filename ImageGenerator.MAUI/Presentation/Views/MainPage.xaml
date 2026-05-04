@@ -68,7 +68,7 @@
                 <!-- CARD: Input Image (optional) -->
                 <Border Style="{StaticResource Card}"
                         VerticalOptions="Start"
-                        IsVisible="{Binding SupportsImagePrompt}">
+                        IsVisible="{Binding Capabilities.ImagePrompt}">
                     <VerticalStackLayout Spacing="12">
                         <Label Text="{Binding ImagePromptCardTitle}" Style="{StaticResource CardTitle}" />
                         <Label Text="Optional reference image(s). Max count and payload field vary by model."
@@ -158,7 +158,7 @@
                                 MinimumHeightRequest="90"
                                 AutomationId="PromptEditor" />
 
-                        <HorizontalStackLayout Spacing="8" IsVisible="{Binding SupportsPromptUpsampling}">
+                        <HorizontalStackLayout Spacing="8" IsVisible="{Binding Capabilities.PromptUpsampling}">
                             <CheckBox IsChecked="{Binding Parameters.PromptUpsampling}" VerticalOptions="Center" />
                             <Label Text="Prompt upsampling" VerticalOptions="Center" />
                         </HorizontalStackLayout>
@@ -171,8 +171,8 @@
                     <VerticalStackLayout Spacing="12">
                         <Label Text="Output" Style="{StaticResource CardTitle}" />
 
-                        <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsAspectRatio}">
-                            <Label Text="{Binding AspectRatioLabel}" Style="{StaticResource FieldLabel}" />
+                        <VerticalStackLayout Spacing="4" IsVisible="{Binding Capabilities.AspectRatio}">
+                            <Label Text="{Binding Capabilities.AspectRatioLabel}" Style="{StaticResource FieldLabel}" />
                             <Picker ItemsSource="{Binding AspectRatioOptions}"
                                     SelectedItem="{Binding Parameters.AspectRatio}"
                                     MaximumWidthRequest="220"
@@ -221,7 +221,7 @@
                                     HorizontalOptions="Start" />
                         </VerticalStackLayout>
 
-                        <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsOutputQuality}">
+                        <VerticalStackLayout Spacing="4" IsVisible="{Binding Capabilities.OutputQuality}">
                             <Label Text="{Binding Parameters.OutputQuality, StringFormat='Output quality: {0:F0}%'}"
                                    Style="{StaticResource FieldLabel}" />
                             <Slider Minimum="1" Maximum="100"
@@ -229,7 +229,7 @@
                                     HorizontalOptions="Fill" />
                         </VerticalStackLayout>
 
-                        <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsSafetyTolerance}">
+                        <VerticalStackLayout Spacing="4" IsVisible="{Binding Capabilities.SafetyTolerance}">
                             <Label Text="{Binding Parameters.SafetyTolerance, StringFormat='Safety tolerance: {0:F0} (1 strictest — 6 loosest)'}"
                                    Style="{StaticResource FieldLabel}" />
                             <Slider Minimum="1" Maximum="6"
@@ -237,7 +237,7 @@
                                     HorizontalOptions="Fill" />
                         </VerticalStackLayout>
 
-                        <VerticalStackLayout Spacing="8" IsVisible="{Binding SupportsSeed}">
+                        <VerticalStackLayout Spacing="8" IsVisible="{Binding Capabilities.Seed}">
                             <Label Text="Seed" Style="{StaticResource FieldLabel}" />
                             <Label Text="Fixing the seed makes regeneration deterministic for the same prompt."
                                    Style="{StaticResource HelperText}" />

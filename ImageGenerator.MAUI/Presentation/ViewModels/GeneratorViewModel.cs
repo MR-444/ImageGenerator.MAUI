@@ -72,19 +72,15 @@ public partial class GeneratorViewModel : ObservableObject
     private List<string> _outputFormats = [nameof(ImageOutputFormat.Png).ToLower(), nameof(ImageOutputFormat.Jpg).ToLower(), nameof(ImageOutputFormat.Webp).ToLower()];
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SupportsCustomDimensions))]
     private bool _isCustomAspectRatio;
-
-    partial void OnIsCustomAspectRatioChanged(bool value)
-    {
-        OnPropertyChanged(nameof(SupportsCustomDimensions));
-    }
 
     public sealed record InputImageItem(string Base64, ImageSource? Preview, string FileName, string? SourcePath = null);
 
     public ObservableCollection<InputImageItem> SelectedImages { get; } = [];
 
     public int InputImageCount => SelectedImages.Count;
-    public bool CanAddImage => SelectedImages.Count < MaxImageInputs;
+    public bool CanAddImage => SelectedImages.Count < Capabilities.MaxImageInputs;
 
     // Derived from <Version> in the csproj via the SDK-generated AssemblyInformationalVersion
     // (which on Windows MAUI is the only version source not polluted by ApplicationVersion's
@@ -98,27 +94,23 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private bool _isValid;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SupportsCustomDimensions))]
+    [NotifyPropertyChangedFor(nameof(SupportsImagePromptStrength))]
+    [NotifyPropertyChangedFor(nameof(SupportsResolution))]
+    [NotifyPropertyChangedFor(nameof(SupportsGptQuality))]
+    [NotifyPropertyChangedFor(nameof(ImagePromptCardTitle))]
+    [NotifyPropertyChangedFor(nameof(CanAddImage))]
     private ModelCapabilities _capabilities;  // hydrated from registry in ctor
     private bool _cachedCatalogLoaded;
 
-    public bool SupportsSafetyTolerance => _capabilities.SafetyTolerance;
-    public bool SupportsPromptUpsampling => _capabilities.PromptUpsampling;
-    public bool SupportsOutputQuality => _capabilities.OutputQuality;
-    public bool SupportsAspectRatio => _capabilities.AspectRatio;
-    public bool SupportsCustomDimensions => _capabilities.CustomDimensions && IsCustomAspectRatio;
-    public bool SupportsSeed => _capabilities.Seed;
-    public bool SupportsImagePrompt => _capabilities.ImagePrompt;
-    public bool SupportsImagePromptStrength => _capabilities.ImagePromptStrength && SelectedImages.Count > 0;
-    public int MaxImageInputs => _capabilities.MaxImageInputs;
-    public string ImagePromptCardTitle => _capabilities.MaxImageInputs > 1
-        ? $"Input Images (optional, up to {_capabilities.MaxImageInputs})"
+    public bool SupportsCustomDimensions => Capabilities.CustomDimensions && IsCustomAspectRatio;
+    public bool SupportsImagePromptStrength => Capabilities.ImagePromptStrength && SelectedImages.Count > 0;
+    public string ImagePromptCardTitle => Capabilities.MaxImageInputs > 1
+        ? $"Input Images (optional, up to {Capabilities.MaxImageInputs})"
         : "Input Image (optional)";
-    public bool SupportsResolution => _capabilities.Resolutions is not null;
-    public bool SupportsGptQuality => _capabilities.GptQualityOptions is not null;
-    public bool SupportsGptBackground => _capabilities.GptBackgroundOptions is not null;
-    public bool SupportsGptModeration => _capabilities.GptModerationOptions is not null;
-    public bool SupportsGptInputFidelity => _capabilities.GptInputFidelityOptions is not null;
-    public string AspectRatioLabel => _capabilities.AspectRatioLabel;
+    public bool SupportsResolution => Capabilities.Resolutions is not null;
+    public bool SupportsGptQuality => Capabilities.GptQualityOptions is not null;
 
     partial void OnParametersChanged(ImageGenerationParameters value)
     {
@@ -144,7 +136,7 @@ public partial class GeneratorViewModel : ObservableObject
         }
         else if (_lastImageCount > 0 && count == 0 && Parameters.AspectRatio == "match_input_image")
         {
-            var fallback = _capabilities.AspectRatios.FirstOrDefault(r => r != "match_input_image");
+            var fallback = Capabilities.AspectRatios.FirstOrDefault(r => r != "match_input_image");
             if (fallback != null) Parameters.AspectRatio = fallback;
         }
         _lastImageCount = count;
@@ -170,45 +162,33 @@ public partial class GeneratorViewModel : ObservableObject
 
     private void RefreshCapabilities(string? modelValue)
     {
-        _capabilities = _registry.CapabilitiesFor(modelValue ?? string.Empty).Capabilities;
-        AspectRatioOptions = _capabilities.AspectRatios.ToList();
-        if (!_capabilities.AspectRatios.Contains(Parameters.AspectRatio))
+        var caps = _registry.CapabilitiesFor(modelValue ?? string.Empty).Capabilities;
+
+        // Update derived lists first so when the Capabilities setter fires the binding
+        // cascade (NotifyPropertyChangedFor + path-based bindings on Capabilities.X),
+        // every consumer sees consistent state.
+        AspectRatioOptions = caps.AspectRatios.ToList();
+        if (!caps.AspectRatios.Contains(Parameters.AspectRatio))
         {
-            Parameters.AspectRatio = _capabilities.AspectRatios[0];
+            Parameters.AspectRatio = caps.AspectRatios[0];
         }
 
-        ResolutionOptions = _capabilities.Resolutions?.ToList() ?? [];
+        ResolutionOptions = caps.Resolutions?.ToList() ?? [];
         if (ResolutionOptions.Count > 0 && !ResolutionOptions.Contains(Parameters.Resolution))
         {
             Parameters.Resolution = ResolutionOptions[0];
         }
 
-        GptQualityOptions = _capabilities.GptQualityOptions?.ToList() ?? [];
-        GptBackgroundOptions = _capabilities.GptBackgroundOptions?.ToList() ?? [];
-        GptModerationOptions = _capabilities.GptModerationOptions?.ToList() ?? [];
-        GptInputFidelityOptions = _capabilities.GptInputFidelityOptions?.ToList() ?? [];
+        GptQualityOptions = caps.GptQualityOptions?.ToList() ?? [];
+        GptBackgroundOptions = caps.GptBackgroundOptions?.ToList() ?? [];
+        GptModerationOptions = caps.GptModerationOptions?.ToList() ?? [];
+        GptInputFidelityOptions = caps.GptInputFidelityOptions?.ToList() ?? [];
 
         // Truncate attached images to the new model's cap so users don't silently lose excess
         // images at generation time. The CollectionChanged handler raises CanAddImage etc.
-        while (SelectedImages.Count > _capabilities.MaxImageInputs) SelectedImages.RemoveAt(SelectedImages.Count - 1);
+        while (SelectedImages.Count > caps.MaxImageInputs) SelectedImages.RemoveAt(SelectedImages.Count - 1);
 
-        OnPropertyChanged(nameof(SupportsSafetyTolerance));
-        OnPropertyChanged(nameof(SupportsPromptUpsampling));
-        OnPropertyChanged(nameof(SupportsOutputQuality));
-        OnPropertyChanged(nameof(SupportsAspectRatio));
-        OnPropertyChanged(nameof(SupportsCustomDimensions));
-        OnPropertyChanged(nameof(SupportsSeed));
-        OnPropertyChanged(nameof(SupportsImagePrompt));
-        OnPropertyChanged(nameof(SupportsImagePromptStrength));
-        OnPropertyChanged(nameof(MaxImageInputs));
-        OnPropertyChanged(nameof(CanAddImage));
-        OnPropertyChanged(nameof(ImagePromptCardTitle));
-        OnPropertyChanged(nameof(SupportsResolution));
-        OnPropertyChanged(nameof(SupportsGptQuality));
-        OnPropertyChanged(nameof(SupportsGptBackground));
-        OnPropertyChanged(nameof(SupportsGptModeration));
-        OnPropertyChanged(nameof(SupportsGptInputFidelity));
-        OnPropertyChanged(nameof(AspectRatioLabel));
+        Capabilities = caps;
     }
 
     private void RecomputeFilteredModels()
@@ -412,7 +392,7 @@ public partial class GeneratorViewModel : ObservableObject
     {
         if (!CanAddImage)
         {
-            SetStatus($"Maximum {MaxImageInputs} image(s) for this model.", StatusKind.Error);
+            SetStatus($"Maximum {Capabilities.MaxImageInputs} image(s) for this model.", StatusKind.Error);
             return;
         }
 
@@ -444,7 +424,7 @@ public partial class GeneratorViewModel : ObservableObject
         var preview = ImageSource.FromStream(() => new MemoryStream(imageBytes));
 
         SelectedImages.Add(new InputImageItem(base64, preview, result.FileName, result.FullPath));
-        SetStatus($"Added image: {result.FileName} ({SelectedImages.Count}/{MaxImageInputs})", StatusKind.Info);
+        SetStatus($"Added image: {result.FileName} ({SelectedImages.Count}/{Capabilities.MaxImageInputs})", StatusKind.Info);
     }
 
     [RelayCommand]
@@ -569,7 +549,7 @@ public partial class GeneratorViewModel : ObservableObject
         }
         if (!CanAddImage)
         {
-            SetStatus($"Maximum {MaxImageInputs} image(s) for this model.", StatusKind.Error);
+            SetStatus($"Maximum {Capabilities.MaxImageInputs} image(s) for this model.", StatusKind.Error);
             return;
         }
 

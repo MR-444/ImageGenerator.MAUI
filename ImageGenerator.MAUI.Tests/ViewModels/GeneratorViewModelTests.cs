@@ -210,12 +210,12 @@ public class GeneratorViewModelTests
     {
         _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == modelValue);
 
-        _viewModel.SupportsSafetyTolerance.Should().Be(safety);
-        _viewModel.SupportsPromptUpsampling.Should().Be(upsampling);
-        _viewModel.SupportsOutputQuality.Should().Be(outputQuality);
-        _viewModel.SupportsAspectRatio.Should().Be(aspectRatio);
-        _viewModel.SupportsSeed.Should().Be(seed);
-        _viewModel.SupportsImagePrompt.Should().Be(imagePrompt);
+        _viewModel.Capabilities.SafetyTolerance.Should().Be(safety);
+        _viewModel.Capabilities.PromptUpsampling.Should().Be(upsampling);
+        _viewModel.Capabilities.OutputQuality.Should().Be(outputQuality);
+        _viewModel.Capabilities.AspectRatio.Should().Be(aspectRatio);
+        _viewModel.Capabilities.Seed.Should().Be(seed);
+        _viewModel.Capabilities.ImagePrompt.Should().Be(imagePrompt);
     }
 
     [Fact]
@@ -233,9 +233,9 @@ public class GeneratorViewModelTests
         _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage15OnReplicate);
 
         _viewModel.SupportsGptQuality.Should().BeTrue();
-        _viewModel.SupportsGptBackground.Should().BeTrue();
-        _viewModel.SupportsGptModeration.Should().BeTrue();
-        _viewModel.SupportsGptInputFidelity.Should().BeTrue();
+        _viewModel.Capabilities.GptBackgroundOptions.Should().NotBeNull();
+        _viewModel.Capabilities.GptModerationOptions.Should().NotBeNull();
+        _viewModel.Capabilities.GptInputFidelityOptions.Should().NotBeNull();
         _viewModel.GptQualityOptions.Should().BeEquivalentTo("auto", "low", "medium", "high");
         _viewModel.GptBackgroundOptions.Should().BeEquivalentTo("auto", "transparent", "opaque");
         _viewModel.GptModerationOptions.Should().BeEquivalentTo("auto", "low");
@@ -248,7 +248,7 @@ public class GeneratorViewModelTests
         _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
 
         _viewModel.SupportsGptQuality.Should().BeFalse();
-        _viewModel.SupportsGptBackground.Should().BeFalse();
+        _viewModel.Capabilities.GptBackgroundOptions.Should().BeNull();
         _viewModel.SupportsResolution.Should().BeFalse();
     }
 
