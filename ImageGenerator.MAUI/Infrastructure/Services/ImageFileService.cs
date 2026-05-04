@@ -108,10 +108,18 @@ public class ImageFileService : IImageFileService
 
         var stem = Path.GetFileNameWithoutExtension(baseName);
         var ext = Path.GetExtension(baseName);
+
+        // One directory enumeration vs. up to 10k File.Exists syscalls. BuildFileName strips
+        // invalid filename chars and only keeps timestamp digits / sanitised prompt / seed digits,
+        // so the stem is glob-safe (no `*` or `?`).
+        var taken = new HashSet<string>(
+            Directory.EnumerateFiles(directory, $"{stem}_*{ext}").Select(Path.GetFileName)!,
+            StringComparer.OrdinalIgnoreCase);
+
         for (var i = 1; i < 10_000; i++)
         {
-            var next = Path.Combine(directory, $"{stem}_{i}{ext}");
-            if (!File.Exists(next)) return next;
+            var next = $"{stem}_{i}{ext}";
+            if (!taken.Contains(next)) return Path.Combine(directory, next);
         }
         throw new IOException($"Could not find an unused filename for '{baseName}' in '{directory}' after 10000 attempts.");
     }

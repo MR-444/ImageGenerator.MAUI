@@ -76,6 +76,25 @@ public class ImageFileServiceTests : IDisposable
     }
 
     [Fact]
+    public void GetUniqueSavePath_WhenSeveralSuffixesTaken_ReturnsNextFreeIndex()
+    {
+        var parameters = SampleParameters();
+        var baseName = _sut.BuildFileName(parameters);
+        var stem = Path.GetFileNameWithoutExtension(baseName);
+        var ext = Path.GetExtension(baseName);
+
+        File.WriteAllBytes(Path.Combine(_tempDir, baseName), [1]);
+        File.WriteAllBytes(Path.Combine(_tempDir, $"{stem}_1{ext}"), [1]);
+        File.WriteAllBytes(Path.Combine(_tempDir, $"{stem}_2{ext}"), [1]);
+        File.WriteAllBytes(Path.Combine(_tempDir, $"{stem}_3{ext}"), [1]);
+
+        var next = _sut.GetUniqueSavePath(_tempDir, parameters);
+
+        Path.GetFileNameWithoutExtension(next).Should().EndWith("_4");
+        File.Exists(next).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task SaveImageWithMetadataAsync_ForJpg_WritesExifUserCommentOnly()
     {
         var parameters = SampleParameters();
