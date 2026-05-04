@@ -23,14 +23,14 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
         return MergeWithSeeds(cached);
     }
 
-    public async Task<IReadOnlyList<ModelOption>?> RefreshAsync(string apiToken, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ModelOption>?> RefreshAsync(string apiToken)
     {
-        var fetched = await _catalogService.FetchAsync(apiToken, ct);
+        var fetched = await _catalogService.FetchAsync(apiToken);
         if (fetched.Count == 0) return null;
 
         // Cache the raw fetched list (not the merged one) — load-time merge keeps any
         // freshly-added seed entries surfacing even when the cache was written before they existed.
-        await _catalogService.SaveCachedAsync(fetched, ct);
+        await _catalogService.SaveCachedAsync(fetched);
         return MergeWithSeeds(fetched);
     }
 

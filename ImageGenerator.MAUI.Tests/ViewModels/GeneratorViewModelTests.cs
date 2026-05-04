@@ -313,7 +313,7 @@ public class GeneratorViewModelTests
             new("gpt-image-1.5", "openai/gpt-image-1.5", "OpenAI (via Replicate)")
         };
         _mockCatalogCoordinator
-            .Setup(x => x.RefreshAsync("valid-token", It.IsAny<CancellationToken>()))
+            .Setup(x => x.RefreshAsync("valid-token"))
             .ReturnsAsync(merged);
 
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
@@ -388,7 +388,7 @@ public class GeneratorViewModelTests
             new("nano-banana-2", "google/nano-banana-2", "Google")
         };
         _mockCatalogCoordinator
-            .Setup(x => x.RefreshAsync("valid-token", It.IsAny<CancellationToken>()))
+            .Setup(x => x.RefreshAsync("valid-token"))
             .ReturnsAsync(merged);
 
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
@@ -413,7 +413,7 @@ public class GeneratorViewModelTests
 
         _viewModel.StatusKind.Should().Be(StatusKind.Error);
         _mockCatalogCoordinator.Verify(
-            x => x.RefreshAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            x => x.RefreshAsync(It.IsAny<string>()),
             Times.Never);
     }
 
@@ -423,7 +423,7 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.ApiToken = "valid-token";
         var originalModels = _viewModel.AllModels.ToList();
         _mockCatalogCoordinator
-            .Setup(x => x.RefreshAsync("valid-token", It.IsAny<CancellationToken>()))
+            .Setup(x => x.RefreshAsync("valid-token"))
             .ReturnsAsync((IReadOnlyList<ModelOption>?)null);
 
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);

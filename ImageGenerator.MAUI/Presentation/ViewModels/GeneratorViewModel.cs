@@ -467,7 +467,7 @@ public partial class GeneratorViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task RefreshModelsAsync(CancellationToken cancellationToken)
+    private async Task RefreshModelsAsync()
     {
         if (string.IsNullOrWhiteSpace(Parameters.ApiToken))
         {
@@ -476,7 +476,7 @@ public partial class GeneratorViewModel : ObservableObject
         }
 
         SetStatus("Fetching model catalogs…", StatusKind.Info);
-        var merged = await _catalogCoordinator.RefreshAsync(Parameters.ApiToken, cancellationToken);
+        var merged = await _catalogCoordinator.RefreshAsync(Parameters.ApiToken);
 
         if (merged is null)
         {

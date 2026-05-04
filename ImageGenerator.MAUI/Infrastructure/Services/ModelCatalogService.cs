@@ -30,19 +30,19 @@ public class ModelCatalogService : IModelCatalogService
         _cacheDirectory = cacheDirectoryOverride ?? FileSystem.AppDataDirectory;
     }
 
-    public async Task<IReadOnlyList<ModelOption>> FetchAsync(string apiToken, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ModelOption>> FetchAsync(string apiToken)
     {
         if (string.IsNullOrWhiteSpace(apiToken)) return [];
 
         var bearer = $"Bearer {apiToken}";
-        return await SafeFetchReplicateAsync(bearer, ct);
+        return await SafeFetchReplicateAsync(bearer);
     }
 
-    private async Task<IReadOnlyList<ModelOption>> SafeFetchReplicateAsync(string bearer, CancellationToken ct)
+    private async Task<IReadOnlyList<ModelOption>> SafeFetchReplicateAsync(string bearer)
     {
         try
         {
-            var coll = await _replicateApi.GetTextToImageCollectionAsync(bearer, ct);
+            var coll = await _replicateApi.GetTextToImageCollectionAsync(bearer);
             // Scope the catalog to Flux + OpenAI owners only. The curated text-to-image
             // collection hosts many other owners (stability-ai, google, bytedance, etc.)
             // that this app doesn't support — including them clutters the picker.
@@ -88,7 +88,7 @@ public class ModelCatalogService : IModelCatalogService
         }
     }
 
-    public async Task SaveCachedAsync(IReadOnlyList<ModelOption> models, CancellationToken ct = default)
+    public async Task SaveCachedAsync(IReadOnlyList<ModelOption> models)
     {
         try
         {
@@ -98,7 +98,7 @@ public class ModelCatalogService : IModelCatalogService
 
             await using (var stream = File.Create(tempPath))
             {
-                await JsonSerializer.SerializeAsync(stream, models, CacheJsonOptions, ct);
+                await JsonSerializer.SerializeAsync(stream, models, CacheJsonOptions);
             }
 
             // File.Move(overwrite: true) is atomic on NTFS and avoids File.Replace's

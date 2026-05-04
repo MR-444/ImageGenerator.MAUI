@@ -83,14 +83,14 @@ public class ModelCatalogCoordinatorTests
     [Fact]
     public async Task RefreshAsync_EmptyResult_ReturnsNull_AndDoesNotSave()
     {
-        _catalogService.Setup(x => x.FetchAsync("token", It.IsAny<CancellationToken>()))
+        _catalogService.Setup(x => x.FetchAsync("token"))
             .ReturnsAsync(Array.Empty<ModelOption>());
 
         var result = await _sut.RefreshAsync("token");
 
         result.Should().BeNull();
         _catalogService.Verify(
-            x => x.SaveCachedAsync(It.IsAny<IReadOnlyList<ModelOption>>(), It.IsAny<CancellationToken>()),
+            x => x.SaveCachedAsync(It.IsAny<IReadOnlyList<ModelOption>>()),
             Times.Never);
     }
 
@@ -101,7 +101,7 @@ public class ModelCatalogCoordinatorTests
         {
             new("flux-2", "black-forest-labs/flux-2", ProviderConstants.BlackForestLabs)
         };
-        _catalogService.Setup(x => x.FetchAsync("token", It.IsAny<CancellationToken>()))
+        _catalogService.Setup(x => x.FetchAsync("token"))
             .ReturnsAsync(fetched);
 
         var merged = await _sut.RefreshAsync("token");
@@ -115,8 +115,7 @@ public class ModelCatalogCoordinatorTests
         // surface freshly-added seeds even when this cache was written earlier).
         _catalogService.Verify(
             x => x.SaveCachedAsync(
-                It.Is<IReadOnlyList<ModelOption>>(l => l.SequenceEqual(fetched)),
-                It.IsAny<CancellationToken>()),
+                It.Is<IReadOnlyList<ModelOption>>(l => l.SequenceEqual(fetched))),
             Times.Once);
     }
 }
