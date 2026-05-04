@@ -70,6 +70,19 @@ public class GenerationJobTests
     }
 
     [Fact]
+    public void Cancel_AfterCtsDisposed_DoesNotThrow()
+    {
+        // The ViewModel disposes Cts in RunJobAsync's finally; binding-update lag could
+        // briefly allow the Cancel button to remain clickable post-completion.
+        var job = new GenerationJob(MakeParameters());
+        job.Cts.Dispose();
+
+        var act = () => job.CancelCommand.Execute(null);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
     public void OpenImage_WhenResultPathNull_IsNoOpAndDoesNotThrow()
     {
         var job = new GenerationJob(MakeParameters());

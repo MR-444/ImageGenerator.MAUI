@@ -25,7 +25,6 @@ public sealed class Flux11ProUltraDescriptor : IPayloadBuilder, ICapabilityProvi
 
     public object Build(ImageGenerationParameters p) => new Flux11ProUltra
     {
-        ModelName = p.Model,
         Prompt = p.Prompt,
         Seed = p.Seed,
         AspectRatio = p.AspectRatio,

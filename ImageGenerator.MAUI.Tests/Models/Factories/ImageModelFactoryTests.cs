@@ -36,7 +36,6 @@ public class ImageModelFactoryTests
         var result = Build(parameters) as Flux11Pro;
 
         Assert.NotNull(result);
-        Assert.Equal(ModelConstants.Flux.Pro11, result.ModelName);
         Assert.Equal("test prompt", result.Prompt);
         Assert.Equal(123, result.Seed);
         Assert.Equal(1024, result.Width);
@@ -88,7 +87,6 @@ public class ImageModelFactoryTests
         var result = Build(parameters) as Flux11ProUltra;
 
         Assert.NotNull(result);
-        Assert.Equal(ModelConstants.Flux.Pro11Ultra, result.ModelName);
         Assert.Equal(123, result.Seed);
         Assert.Equal("1:1", result.AspectRatio);
         Assert.Equal("test image prompt", result.ImagePrompt);

@@ -104,7 +104,6 @@ public class ReplicateImageGenerationServiceTests
         result.Should().NotBeNull();
         result.Message.Should().Be("An error occurred: API Error");
         result.ImageData.Should().BeNull();
-        result.FilePath.Should().BeNull();
     }
 
     [Fact]
@@ -138,7 +137,6 @@ public class ReplicateImageGenerationServiceTests
         result.Should().NotBeNull();
         result.Message.Should().Be("An error occurred: Model prediction returned no output. Status: succeeded, Error: Unknown error");
         result.ImageData.Should().BeNull();
-        result.FilePath.Should().BeNull();
     }
 
     [Fact]

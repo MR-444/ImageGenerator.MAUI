@@ -1,3 +1,4 @@
+using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
@@ -6,7 +7,7 @@ using ImageGenerator.MAUI.Models.Replicate;
 
 namespace ImageGenerator.MAUI.Infrastructure.External.Replicate;
 
-public class ReplicateImageGenerationService : IReplicateImageGenerationService
+public class ReplicateImageGenerationService : IImageGenerationService
 {
     private readonly HttpClient _httpClient;
     private readonly IReplicateApi _replicateApi;
@@ -32,7 +33,6 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
                 return new GeneratedImage
                 {
                     Message = $"Image generation failed: {finalResponse.Error ?? "no error message"}.",
-                    FilePath = null,
                     ImageData = null
                 };
             }
@@ -42,7 +42,6 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
                 return new GeneratedImage
                 {
                     Message = "Image generation was canceled.",
-                    FilePath = null,
                     ImageData = null
                 };
             }
@@ -60,7 +59,6 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
             return new GeneratedImage
             {
                 Message = $"Image generated successfully with model {parameters.Model}.",
-                FilePath = null,
                 ImageData = imageData
             };
         }
@@ -69,7 +67,6 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
             return new GeneratedImage
             {
                 Message = "Image generation was canceled.",
-                FilePath = null,
                 ImageData = null
             };
         }
@@ -78,7 +75,6 @@ public class ReplicateImageGenerationService : IReplicateImageGenerationService
             return new GeneratedImage
             {
                 Message = FormatError(ex, parameters.ApiToken),
-                FilePath = null,
                 ImageData = null
             };
         }

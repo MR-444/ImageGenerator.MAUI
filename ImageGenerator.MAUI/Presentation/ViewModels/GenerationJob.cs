@@ -32,7 +32,13 @@ public partial class GenerationJob : ObservableObject
     }
 
     [RelayCommand]
-    private void Cancel() => Cts.Cancel();
+    private void Cancel()
+    {
+        // The owning ViewModel disposes Cts in RunJobAsync's finally; if the user clicks Cancel
+        // after completion (binding-update lag could allow it briefly), Cancel() throws ODE.
+        try { Cts.Cancel(); }
+        catch (ObjectDisposedException) { }
+    }
 
     [RelayCommand]
     private void OpenImage()

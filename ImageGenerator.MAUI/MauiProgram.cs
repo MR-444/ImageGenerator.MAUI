@@ -52,8 +52,7 @@ public static class MauiProgram
         // 3) Register your services and ViewModels
         builder.Services.AddSingleton<IImageEncoderProvider, ImageEncoderProvider>();
         builder.Services.AddSingleton<IImageFileService, ImageFileService>();
-        builder.Services.AddSingleton<IReplicateImageGenerationService, ReplicateImageGenerationService>();
-        builder.Services.AddSingleton<IImageGenerationService>(sp => sp.GetRequiredService<IReplicateImageGenerationService>());
+        builder.Services.AddSingleton<IImageGenerationService, ReplicateImageGenerationService>();
         builder.Services.AddSingleton<IModelCatalogService, ModelCatalogService>();
 
         // 3a) VM collaborators carved out of the original god-class GeneratorViewModel (M1).

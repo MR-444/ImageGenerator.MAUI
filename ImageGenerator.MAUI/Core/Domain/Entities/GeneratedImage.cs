@@ -5,17 +5,6 @@ namespace ImageGenerator.MAUI.Core.Domain.Entities;
 /// </summary>
 public class GeneratedImage
 {
-    /// Gets or sets the message indicating the status or result of the image generation process.
-    /// This property typically contains information such as success confirmation or error details.
     public string? Message { get; set; }
-
-    /// <summary>
-    /// Gets or sets the file path of the generated image.
-    /// This property may store the local file system path where the generated image
-    /// is saved after processing by the relevant image generation service.
-    /// It can be null if the file path is not available or the image is not saved to disk.
-    /// </summary>
-    public string? FilePath { get; set; }
-
     public byte[]? ImageData { get; set; }
 }

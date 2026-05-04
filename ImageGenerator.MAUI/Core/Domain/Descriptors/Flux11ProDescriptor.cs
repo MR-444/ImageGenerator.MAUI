@@ -25,7 +25,6 @@ public sealed class Flux11ProDescriptor : IPayloadBuilder, ICapabilityProvider, 
 
     public object Build(ImageGenerationParameters p) => new Flux11Pro
     {
-        ModelName = p.Model,
         Prompt = p.Prompt,
         PromptUpsampling = p.PromptUpsampling,
         Seed = p.Seed,

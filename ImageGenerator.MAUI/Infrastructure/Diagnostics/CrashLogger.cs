@@ -28,7 +28,7 @@ public static class CrashLogger
         {
             File.AppendAllText(
                 _logPath,
-                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {source}\n{ex}\n\n");
+                $"[{DateTimeOffset.UtcNow:yyyy-MM-ddTHH:mm:ssZ}] {source}\n{ex}\n\n");
         }
         catch
         {

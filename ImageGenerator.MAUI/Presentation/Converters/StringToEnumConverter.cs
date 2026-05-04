@@ -17,7 +17,7 @@ public class StringToEnumConverter : IValueConverter
     {
         if (value is Enum enumValue)
         {
-            return enumValue.ToString().ToLower();
+            return enumValue.ToString().ToLowerInvariant();
         }
         return value;
     }

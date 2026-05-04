@@ -6,10 +6,6 @@ namespace ImageGenerator.MAUI.Core.Domain.ValueObjects.Flux;
 
 public abstract class FluxBase
 {
-    [JsonIgnore] // Not part of the Flux request body; combining [JsonIgnore] with `required`
-    // trips STJ metadata validation in .NET 10, so we rely on the factory setting this explicitly.
-    public string ModelName { get; set; } = string.Empty;
-
     [JsonPropertyName("prompt")]
     [Required(ErrorMessage = "Prompt is mandatory for every Flux request.")]
     [StringLength(2000, ErrorMessage = "Prompt cannot exceed 2000 characters.")]
