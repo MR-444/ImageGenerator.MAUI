@@ -6,6 +6,7 @@ A Windows desktop image generation app built on .NET MAUI that drives the Replic
 
 - Windows 10/11 desktop (MAUI Windows target, `net10.0-windows10.0.22621.0`)
 - **Concurrent generation queue** — click Generate while a previous job is still running; each click snapshots the current parameters into its own in-flight job. A scrollable queue below the form shows per-job prompt, status, spinner, thumbnail, and independent Cancel / Open / Show-in-folder / Use-as-input actions.
+- **Batch from textfile** — point **Import prompts…** at a `.txt` of prompts separated by lines containing only `---`. Lines starting with `#` are ignored, so you can label or disable prompts without deleting them. The batch runs sequentially with the currently-selected model and parameters; failed prompts don't abort the queue. **Cancel batch** drains the remaining queue but lets the in-flight job finish — once a Replicate prediction is created, you're paying for it either way. 100-prompt hard cap.
 - **In-app gallery** — browse previously generated images without leaving the app. Tile grid with sortable order (newest/oldest, name A→Z / Z→A, largest/smallest), live updates via `FileSystemWatcher` when new images are saved or removed, and a detail page with a larger preview, copyable metadata, and one-click **Use as input**, **Open in viewer**, and **Show in folder** actions. Thumbnails come from the Windows shell cache so a directory of multi-megabyte PNGs doesn't blow process memory.
 - **Persisted UI state** — the last prompt and selected model are restored on next launch (per-user `Preferences`). Pick up where you left off.
 - **Dynamic model catalog** — "Refresh Models" queries Replicate's `text-to-image` collection (filtered to `black-forest-labs`, `openai`, and `google` owners) so new models surface without recompiling. The catalog is cached to `FileSystem.AppDataDirectory/model-catalog.json` and restored on launch.
@@ -63,6 +64,27 @@ Generated images land in `%USERPROFILE%\Pictures\ImageGenerator.MAUI\` with coll
 
 The **Gallery** button on the main page opens an in-app grid of every image in the output folder, sorted however you like (newest first by default). Click a tile to open the image in your default OS viewer; click **Show metadata** to open the detail page with a larger preview, the parsed metadata as selectable text, and one-click actions: **Copy metadata** to clipboard, **Use as input** (sends the image back to the generator as an input-image attachment), **Open in viewer**, **Show in folder**. The gallery uses the OS shell thumbnail cache, so opening a folder with many large PNGs is instant.
 
+### Running a batch from a textfile
+
+Pick a model and configure the parameters you want to apply to the batch (aspect ratio, output format, seed mode, and so on), then click **Import prompts…** in the Run column. Choose a `.txt` file shaped like this:
+
+```
+A young woman holding a bouquet,
+standing in a sunlit meadow,
+cinematic lighting
+---
+# disabled — skip this one
+Mountain range at golden hour, ultra-wide
+---
+Portrait of an elderly fisherman, 85mm
+```
+
+Rules: a line containing only `---` separates prompts; multi-line prompts are fine; lines starting with `#` are comments and are skipped; empty chunks are ignored. The picker confirms the count (e.g. *"Run 12 prompts using Flux 1.1 Pro?"*) before anything submits. Hard cap is 100 prompts per file.
+
+The batch runs **strictly sequentially** — one job at a time — and reuses the existing queue, so each prompt becomes its own card with status, thumbnail, and per-job actions. Failures don't abort the run; the end-of-batch status reads e.g. *"Batch complete — 11 ok, 1 failed, 0 canceled."*
+
+Click **Cancel batch** at any time to stop the queue from starting any further prompts. The currently-running job is allowed to finish — once a Replicate prediction has been submitted you're paying for it whether you keep the image or not.
+
 ### Reading back the embedded metadata
 
 The app embeds the full prompt and generation parameters into the saved file so you can recover the recipe months later. For **PNG** the metadata lives in the standard `Comment` text chunk; for **JPG/WebP** it's written as EXIF `UserComment`. The fastest way to inspect it is the in-app gallery's **Show metadata** button (also lets you copy it to the clipboard); externally, **[MediaInfo](https://mediaarea.net/en/MediaInfo)** (GUI + CLI, cross-platform, free) or `exiftool` work too. Besides the prompt and seed you'll see the actual pixel dimensions produced by the API and the model-specific options (GPT quality/background/moderation/input-fidelity, nano-banana resolution, Flux Ultra raw/image-prompt-strength) so two people with the metadata can reproduce the same image.
@@ -101,7 +123,8 @@ git clone https://github.com/MR-444/ImageGenerator.MAUI.git
 ```
 ImageGenerator.MAUI/
 ├── Core/
-│   ├── Application/          # IImageGenerationService, IModelCatalogService, IGalleryService
+│   ├── Application/          # IImageGenerationService, IModelCatalogService, IGalleryService,
+│   │                         # IPromptBatchParser (+ PromptBatchParser implementation)
 │   └── Domain/               # Entities (incl. GalleryItem), value objects, ModelCapabilities
 ├── Infrastructure/
 │   ├── Diagnostics/          # CrashLogger (app.log + WinUI dispatcher hook)
@@ -128,7 +151,7 @@ ImageGenerator.MAUI/
 dotnet test
 ```
 
-229 tests covering: model factory payload shapes, Replicate service HTTP flows (via Refit mocks), the `NullSkippingDictionaryConverter`, model catalog filtering and persistence, image file naming + EXIF round-trip, GeneratorViewModel commands and state machine, GalleryService enumeration + metadata reads + partial-write guard, GalleryViewModel sort modes + watcher debounce, GalleryItemDetailViewModel actions, and CrashLogger smoke + concurrency.
+248 tests covering: model factory payload shapes, Replicate service HTTP flows (via Refit mocks), the `NullSkippingDictionaryConverter`, model catalog filtering and persistence, image file naming + EXIF round-trip, GeneratorViewModel commands and state machine (including batch order, partial failure, distinct seeds, and Cancel-batch leaves the in-flight job alone), prompt batch parser (delimiter, comments, multi-line, BOM, CRLF, hard-cap), GalleryService enumeration + metadata reads + partial-write guard, GalleryViewModel sort modes + watcher debounce, GalleryItemDetailViewModel actions, and CrashLogger smoke + concurrency.
 
 ## 📱 Supported Platforms
 
