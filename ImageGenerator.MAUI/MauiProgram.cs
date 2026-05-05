@@ -1,4 +1,5 @@
 using ImageGenerator.MAUI.Core.Application.Interfaces;
+using ImageGenerator.MAUI.Core.Application.Services;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Extensions;
 using ImageGenerator.MAUI.Infrastructure.Diagnostics;
@@ -78,6 +79,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IUiStateStore, UiStateStore>();
         builder.Services.AddSingleton<IJobRunner, JobRunner>();
         builder.Services.AddSingleton<IModelCatalogCoordinator, ModelCatalogCoordinator>();
+        builder.Services.AddSingleton<IPromptBatchParser, PromptBatchParser>();
 
         builder.Services.AddTransient<GeneratorViewModel>();
         builder.Services.AddTransient<GalleryViewModel>();

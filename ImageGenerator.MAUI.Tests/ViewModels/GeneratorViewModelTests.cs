@@ -2,6 +2,8 @@ using FluentAssertions;
 using ImageGenerator.MAUI.Presentation.ViewModels;
 using Moq;
 using CommunityToolkit.Mvvm.Input;
+using ImageGenerator.MAUI.Core.Application.Interfaces;
+using ImageGenerator.MAUI.Core.Application.Services;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
@@ -19,6 +21,7 @@ public class GeneratorViewModelTests
     private readonly Mock<IApiTokenStore> _mockTokenStore;
     private readonly Mock<IUiStateStore> _mockUiStateStore;
     private readonly Mock<IModelCatalogCoordinator> _mockCatalogCoordinator;
+    private readonly Mock<IPromptBatchParser> _mockPromptBatchParser;
 
     public GeneratorViewModelTests()
     {
@@ -26,13 +29,15 @@ public class GeneratorViewModelTests
         _mockTokenStore = new Mock<IApiTokenStore>();
         _mockUiStateStore = new Mock<IUiStateStore>();
         _mockCatalogCoordinator = new Mock<IModelCatalogCoordinator>();
+        _mockPromptBatchParser = new Mock<IPromptBatchParser>();
 
         _viewModel = new GeneratorViewModel(
             _mockJobRunner.Object,
             _mockTokenStore.Object,
             _mockUiStateStore.Object,
             _mockCatalogCoordinator.Object,
-            ModelDescriptorRegistry.Default());
+            ModelDescriptorRegistry.Default(),
+            _mockPromptBatchParser.Object);
     }
 
     [Fact]
@@ -825,7 +830,8 @@ public class GeneratorViewModelTests
             new Mock<IApiTokenStore>().Object,
             sharedStore.Object,
             coordinator1.Object,
-            ModelDescriptorRegistry.Default());
+            ModelDescriptorRegistry.Default(),
+            new Mock<IPromptBatchParser>().Object);
 
         await vm1.LoadCachedCatalogAsync();
         vm1.LoadSavedUiState();  // first launch: nothing stored, no-op
@@ -844,7 +850,8 @@ public class GeneratorViewModelTests
             new Mock<IApiTokenStore>().Object,
             sharedStore.Object,
             coordinator2.Object,
-            ModelDescriptorRegistry.Default());
+            ModelDescriptorRegistry.Default(),
+            new Mock<IPromptBatchParser>().Object);
 
         await vm2.LoadCachedCatalogAsync();
         vm2.LoadSavedUiState();
@@ -853,5 +860,133 @@ public class GeneratorViewModelTests
         vm2.SelectedModel?.Value.Should().Be(ModelConstants.OpenAI.GptImage2OnReplicate);
         sharedModel.Should().Be(ModelConstants.OpenAI.GptImage2OnReplicate,
             "the stored value must still be the user's pick after the simulated restart");
+    }
+
+    // --- Batch (textfile) ---
+
+    [Fact]
+    public async Task RunBatchAsync_PreservesFileOrder_TopJobIsFirstPrompt()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
+
+        await _viewModel.RunBatchAsync(new[] { "P1", "P2", "P3" });
+
+        _viewModel.Jobs.Should().HaveCount(3);
+        _viewModel.Jobs[0].Prompt.Should().Be("P1");
+        _viewModel.Jobs[1].Prompt.Should().Be("P2");
+        _viewModel.Jobs[2].Prompt.Should().Be("P3");
+        _viewModel.Jobs.Should().AllSatisfy(j =>
+        {
+            j.StatusKind.Should().Be(StatusKind.Success);
+            j.IsRunning.Should().BeFalse();
+        });
+        _viewModel.IsBatchRunning.Should().BeFalse();
+        _viewModel.StatusMessage.Should().Contain("3 ok").And.Contain("0 failed");
+    }
+
+    [Fact]
+    public async Task RunBatchAsync_OneJobFails_OthersStillRunAndSummaryFlagsFailure()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        var call = 0;
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() =>
+            {
+                Interlocked.Increment(ref call);
+                // Middle prompt fails; others succeed.
+                return call == 2
+                    ? new JobOutcome(JobOutcomeKind.Failed, null, "boom")
+                    : new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}");
+            });
+
+        await _viewModel.RunBatchAsync(new[] { "A", "B", "C" });
+
+        _viewModel.Jobs.Should().HaveCount(3);
+        _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Success); // A
+        _viewModel.Jobs[1].StatusKind.Should().Be(StatusKind.Error);   // B
+        _viewModel.Jobs[2].StatusKind.Should().Be(StatusKind.Success); // C
+        _viewModel.StatusMessage.Should().Contain("2 ok").And.Contain("1 failed");
+        _viewModel.StatusKind.Should().Be(StatusKind.Warning);
+    }
+
+    [Fact]
+    public async Task RunBatchAsync_RandomizeSeed_GivesEachJobADistinctSeed()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        // Pick a model that supports seed so RandomizeSeed actually matters.
+        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.Parameters.RandomizeSeed = true;
+
+        var capturedSeeds = new List<long>();
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ImageGenerationParameters p, CancellationToken _) =>
+            {
+                capturedSeeds.Add(p.Seed);
+                return new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, "ok");
+            });
+
+        await _viewModel.RunBatchAsync(new[] { "p1", "p2", "p3" });
+
+        capturedSeeds.Should().HaveCount(3);
+        capturedSeeds.Distinct().Should().HaveCount(3,
+            "each prompt should get its own randomized seed when RandomizeSeed is true");
+    }
+
+    [Fact]
+    public async Task RunBatchAsync_EmptyList_NoJobsAddedAndIsBatchRunningStaysFalse()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+
+        await _viewModel.RunBatchAsync(Array.Empty<string>());
+
+        _viewModel.Jobs.Should().BeEmpty();
+        _viewModel.IsBatchRunning.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CancelBatch_LetsInFlightJobFinish_AndDrainsQueue()
+    {
+        // Replicate predictions are already paid for once they're submitted — the user's
+        // explicit constraint is that CancelBatch must not abort the in-flight job, only
+        // stop the queue from starting any further jobs.
+        _viewModel.Parameters.ApiToken = "valid-token";
+
+        var firstJobGate = new TaskCompletionSource<JobOutcome>();
+        var firstJobStarted = new TaskCompletionSource<bool>();
+        var runAsyncCalls = 0;
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .Returns((ImageGenerationParameters _, CancellationToken __) =>
+            {
+                if (Interlocked.Increment(ref runAsyncCalls) == 1)
+                {
+                    firstJobStarted.TrySetResult(true);
+                    return firstJobGate.Task;
+                }
+                // If the loop ever reaches a second call, the test fails — the queue
+                // should have been drained without invoking the runner again.
+                throw new InvalidOperationException("Runner should not be called for canceled-queued jobs.");
+            });
+
+        var batchTask = _viewModel.RunBatchAsync(new[] { "first", "second", "third" });
+
+        await firstJobStarted.Task; // wait until the first job is actually running
+        _viewModel.CancelBatchCommand.Execute(null);
+
+        // Let the in-flight job finish naturally (success).
+        firstJobGate.SetResult(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
+        await batchTask;
+
+        _viewModel.Jobs.Should().HaveCount(3);
+        _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Success, "the in-flight job should finish, not be canceled");
+        _viewModel.Jobs[1].StatusKind.Should().Be(StatusKind.Canceled);
+        _viewModel.Jobs[2].StatusKind.Should().Be(StatusKind.Canceled);
+        runAsyncCalls.Should().Be(1, "queued jobs after the cancel must not be submitted to the runner");
+        _viewModel.StatusMessage.Should().Contain("1 ok").And.Contain("2 canceled");
     }
 }

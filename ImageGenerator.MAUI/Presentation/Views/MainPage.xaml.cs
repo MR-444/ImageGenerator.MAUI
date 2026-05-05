@@ -70,6 +70,33 @@ public partial class MainPage
         }
     }
 
+    // Batch-from-textfile entry point. Code-behind orchestrates because DisplayAlertAsync
+    // belongs to the Page (the VM owns the FilePicker call and the parser, both of which
+    // are independently testable).
+    private async void OnImportPromptsClicked(object sender, EventArgs e)
+    {
+        try
+        {
+            var prompts = await _viewModel.PickAndParsePromptsAsync();
+            if (prompts is null || prompts.Count == 0) return;
+
+            var modelName = _viewModel.SelectedModel?.Display ?? _viewModel.Parameters.Model;
+            var confirm = await DisplayAlertAsync(
+                "Run batch?",
+                $"Submit {prompts.Count} prompts using {modelName}?\n\nCurrent settings (aspect ratio, format, etc.) will apply to every prompt.",
+                "Run", "Cancel");
+            if (!confirm) return;
+
+            await _viewModel.RunBatchAsync(prompts);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"OnImportPromptsClicked failed: {ex.Message}");
+            _viewModel.StatusMessage = $"Batch failed: {ex.Message}";
+            _viewModel.StatusKind = StatusKind.Error;
+        }
+    }
+
     private async void OnAboutClicked(object sender, EventArgs e)
     {
         var message =

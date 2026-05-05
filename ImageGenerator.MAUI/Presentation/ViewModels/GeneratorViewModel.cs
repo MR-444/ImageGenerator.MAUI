@@ -5,6 +5,7 @@ using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Maui.ApplicationModel;
+using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
@@ -23,6 +24,11 @@ public partial class GeneratorViewModel : ObservableObject
     private readonly IUiStateStore _uiStateStore;
     private readonly IModelCatalogCoordinator _catalogCoordinator;
     private readonly IModelDescriptorRegistry _registry;
+    private readonly IPromptBatchParser _promptBatchParser;
+
+    // Non-null only while a batch is actively running. CancelBatch flips it; RunBatchAsync
+    // disposes and clears it in a finally so a second batch always starts with a fresh CTS.
+    private CancellationTokenSource? _batchCts;
 
     [ObservableProperty]
     private ImageGenerationParameters _parameters;
@@ -37,6 +43,11 @@ public partial class GeneratorViewModel : ObservableObject
     // which holds form-level errors / info that shouldn't auto-clear.
     [ObservableProperty]
     private string? _flashMessage;
+
+    // True while RunBatchAsync is iterating. Drives the "Cancel batch" button visibility
+    // and lets the View hide "Import prompts…" while a batch is in flight.
+    [ObservableProperty]
+    private bool _isBatchRunning;
 
     public ObservableCollection<GenerationJob> Jobs { get; } = [];
     public bool HasJobs => Jobs.Count > 0;
@@ -291,13 +302,15 @@ public partial class GeneratorViewModel : ObservableObject
         IApiTokenStore tokenStore,
         IUiStateStore uiStateStore,
         IModelCatalogCoordinator catalogCoordinator,
-        IModelDescriptorRegistry registry)
+        IModelDescriptorRegistry registry,
+        IPromptBatchParser promptBatchParser)
     {
         _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
         _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
         _catalogCoordinator = catalogCoordinator ?? throw new ArgumentNullException(nameof(catalogCoordinator));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+        _promptBatchParser = promptBatchParser ?? throw new ArgumentNullException(nameof(promptBatchParser));
 
         SelectedImages.CollectionChanged += OnSelectedImagesChanged;
         Jobs.CollectionChanged += (_, _) => DispatchToUi(() => OnPropertyChanged(nameof(HasJobs)));
@@ -660,6 +673,170 @@ public partial class GeneratorViewModel : ObservableObject
         _tokenStore.Forget();
         Parameters.ApiToken = string.Empty;
         SetStatus("API token cleared from secure storage.", StatusKind.Info);
+    }
+
+    /// <summary>
+    /// Opens a file picker for a .txt prompt file, parses it, and returns the prompts.
+    /// Returns null on cancel, on empty parse, or on read/cap errors (status surface set
+    /// in those cases). Public for the View to call from its button click handler.
+    /// </summary>
+    public async Task<IReadOnlyList<string>?> PickAndParsePromptsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Parameters.ApiToken))
+        {
+            SetStatus("Enter an API token before running a batch.", StatusKind.Error);
+            return null;
+        }
+
+        SetStatus("Opening file picker…", StatusKind.Info);
+
+        FileResult? result;
+        try
+        {
+            result = await FilePicker.PickAsync(new PickOptions
+            {
+                PickerTitle = "Pick a prompt textfile",
+                FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
+                {
+                    { DevicePlatform.WinUI, new[] { ".txt" } },
+                }),
+            });
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Couldn't open file picker: {ex.Message}", StatusKind.Error);
+            return null;
+        }
+
+        if (result == null)
+        {
+            SetStatus(string.Empty, StatusKind.None);
+            return null;
+        }
+
+        try
+        {
+            var text = await File.ReadAllTextAsync(result.FullPath);
+            var prompts = _promptBatchParser.Parse(text);
+            if (prompts.Count == 0)
+            {
+                SetStatus("No prompts found in file.", StatusKind.Warning);
+                return null;
+            }
+            SetStatus($"Loaded {prompts.Count} prompts from {result.FileName}.", StatusKind.Info);
+            return prompts;
+        }
+        catch (PromptBatchTooLargeException ex)
+        {
+            SetStatus($"File contains {ex.PromptCount} prompts; cap is {ex.MaxAllowed}.", StatusKind.Error);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Couldn't read prompt file: {ex.Message}", StatusKind.Error);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Runs the supplied prompts as a sequential batch using the currently-selected model
+    /// and parameters. Each prompt becomes its own <see cref="GenerationJob"/> queued at the
+    /// top of <see cref="Jobs"/> in original file order. Failures don't abort the batch.
+    /// </summary>
+    public async Task RunBatchAsync(IReadOnlyList<string> prompts)
+    {
+        if (prompts is null || prompts.Count == 0) return;
+        if (IsBatchRunning) return; // re-entrancy guard
+
+        _batchCts = new CancellationTokenSource();
+        IsBatchRunning = true;
+
+        try
+        {
+            // Build all jobs as Queued, freezing per-prompt parameter snapshots up-front
+            // so a model swap mid-batch can't bleed into pending jobs.
+            var batch = new List<GenerationJob>(prompts.Count);
+            for (var i = 0; i < prompts.Count; i++)
+            {
+                if (Parameters.RandomizeSeed)
+                    Parameters.Seed = Random.Shared.NextInt64(0, ValidationConstants.SeedMaxValue);
+
+                var snapshot = Parameters.Clone();
+                snapshot.Prompt = prompts[i];
+
+                var job = new GenerationJob(snapshot, AddAsInputAsync)
+                {
+                    IsRunning = false,
+                    StatusKind = StatusKind.Info,
+                    StatusMessage = $"Queued ({i + 1}/{prompts.Count})"
+                };
+                batch.Add(job);
+            }
+
+            // Insert reverse so the FIRST prompt sits at the top of the Jobs list, matching
+            // single-prompt mode's "newest first via Insert(0, …)" convention.
+            for (var i = batch.Count - 1; i >= 0; i--)
+            {
+                var jobToInsert = batch[i];
+                DispatchToUi(() => Jobs.Insert(0, jobToInsert));
+            }
+
+            var succeeded = 0;
+            var failed = 0;
+            var canceled = 0;
+
+            foreach (var job in batch)
+            {
+                if (_batchCts.IsCancellationRequested)
+                {
+                    DispatchToUi(() =>
+                    {
+                        job.IsRunning = false;
+                        job.StatusKind = StatusKind.Canceled;
+                        job.StatusMessage = "Canceled.";
+                    });
+                    canceled++;
+                    continue;
+                }
+
+                // CancelBatch drains the queue but lets the in-flight job finish — the
+                // Replicate prediction is already paid for and the image would be wasted
+                // if we killed mid-poll. The per-card Cancel button still aborts a single
+                // running job if the user really wants to.
+                DispatchToUi(() =>
+                {
+                    job.IsRunning = true;
+                    job.StatusKind = StatusKind.Info;
+                    job.StatusMessage = "Generating image…";
+                });
+
+                await RunJobAsync(job);
+
+                switch (job.StatusKind)
+                {
+                    case StatusKind.Success: succeeded++; break;
+                    case StatusKind.Canceled: canceled++; break;
+                    default: failed++; break;
+                }
+            }
+
+            var summary = $"Batch complete — {succeeded} ok, {failed} failed, {canceled} canceled.";
+            var kind = (failed > 0 || canceled > 0) ? StatusKind.Warning : StatusKind.Success;
+            SetStatus(summary, kind);
+        }
+        finally
+        {
+            _batchCts?.Dispose();
+            _batchCts = null;
+            IsBatchRunning = false;
+        }
+    }
+
+    [RelayCommand]
+    private void CancelBatch()
+    {
+        try { _batchCts?.Cancel(); }
+        catch (ObjectDisposedException) { /* race with RunBatchAsync's finally */ }
     }
 
     internal async Task AddAsInputAsync(string filePath)

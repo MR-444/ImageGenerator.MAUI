@@ -283,6 +283,26 @@
                                Style="{StaticResource HelperText}"
                                IsVisible="{Binding IsValid, Converter={StaticResource InverseBool}}" />
 
+                        <Button Text="Import prompts…"
+                                Style="{StaticResource SecondaryButton}"
+                                Clicked="OnImportPromptsClicked"
+                                IsVisible="{Binding IsBatchRunning, Converter={StaticResource InverseBool}}"
+                                HorizontalOptions="Fill"
+                                SemanticProperties.Description="Pick a textfile of prompts (separated by --- lines) and run them sequentially with the current model and settings"
+                                AutomationId="ImportPromptsButton" />
+
+                        <Label Text="Pick a .txt file. Separate prompts with a line containing only ---. Lines starting with # are ignored."
+                               Style="{StaticResource HelperText}"
+                               IsVisible="{Binding IsBatchRunning, Converter={StaticResource InverseBool}}" />
+
+                        <Button Text="Cancel batch"
+                                Style="{StaticResource SecondaryButton}"
+                                Command="{Binding CancelBatchCommand}"
+                                IsVisible="{Binding IsBatchRunning}"
+                                HorizontalOptions="Fill"
+                                SemanticProperties.Description="Stop the running batch and cancel queued prompts"
+                                AutomationId="CancelBatchButton" />
+
                         <Button Text="Open output folder"
                                 Command="{Binding OpenOutputFolderCommand}"
                                 Style="{StaticResource SecondaryButton}"
