@@ -76,9 +76,10 @@ public static class CrashLogger
 
         if (_logPath is null) return;
 
-        // KeepFileOpen=false + ConcurrentWrites=true matches the original File.AppendAllText
-        // semantics — each write opens/appends/closes — so external observers (and the
-        // CrashLoggerTests' direct File.ReadAllText) see writes immediately without a flush.
+        // KeepFileOpen=false matches the original File.AppendAllText semantics — each write
+        // opens/appends/closes — so external observers (and the CrashLoggerTests' direct
+        // File.ReadAllText) see writes immediately without a flush. NLog 6 dropped the
+        // ConcurrentWrites flag; the new default handles intra/cross-process locking safely.
         var fileTarget = new FileTarget("file")
         {
             FileName = _logPath,
@@ -86,7 +87,6 @@ public static class CrashLogger
             ArchiveAboveSize = 5_000_000,
             MaxArchiveFiles = 5,
             KeepFileOpen = false,
-            ConcurrentWrites = true,
         };
         var debugTarget = new DebuggerTarget("debugger") { Layout = LayoutFormat };
 
