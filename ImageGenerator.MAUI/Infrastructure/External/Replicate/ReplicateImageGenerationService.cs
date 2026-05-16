@@ -3,6 +3,7 @@ using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
 using ImageGenerator.MAUI.Models.Replicate;
+using Microsoft.Extensions.Logging;
 
 
 namespace ImageGenerator.MAUI.Infrastructure.External.Replicate;
@@ -12,12 +13,18 @@ public class ReplicateImageGenerationService : IImageGenerationService
     private readonly HttpClient _httpClient;
     private readonly IReplicateApi _replicateApi;
     private readonly IModelDescriptorRegistry _registry;
+    private readonly ILogger<ReplicateImageGenerationService> _logger;
 
-    public ReplicateImageGenerationService(IReplicateApi replicateApi, HttpClient httpClient, IModelDescriptorRegistry registry)
+    public ReplicateImageGenerationService(
+        IReplicateApi replicateApi,
+        HttpClient httpClient,
+        IModelDescriptorRegistry registry,
+        ILogger<ReplicateImageGenerationService> logger)
     {
         _replicateApi = replicateApi ?? throw new ArgumentNullException(nameof(replicateApi));
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters, CancellationToken cancellationToken = default)
@@ -30,6 +37,10 @@ public class ReplicateImageGenerationService : IImageGenerationService
 
             if (finalResponse?.Status == ReplicateStatus.Failed)
             {
+                _logger.LogError(
+                    "Replicate prediction failed Model={Model} Error={Error}",
+                    parameters.Model,
+                    finalResponse.Error ?? "no error message");
                 return new GeneratedImage
                 {
                     Message = $"Image generation failed: {finalResponse.Error ?? "no error message"}.",
@@ -72,6 +83,7 @@ public class ReplicateImageGenerationService : IImageGenerationService
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "ReplicateImageGenerationService.GenerateImageAsync threw Model={Model}", parameters.Model);
             return new GeneratedImage
             {
                 Message = FormatError(ex, parameters.ApiToken),

@@ -1,4 +1,5 @@
 ﻿using ImageGenerator.MAUI.Presentation.ViewModels;
+using Microsoft.Extensions.Logging;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 
@@ -14,6 +15,7 @@ namespace ImageGenerator.MAUI.Presentation.Views;
 public partial class MainPage
 {
     private readonly GeneratorViewModel _viewModel;
+    private readonly ILogger<MainPage> _logger;
 
     /// <summary>
     /// Set by Shell when the user navigates back from the gallery detail page via the
@@ -36,10 +38,11 @@ public partial class MainPage
         ".png", ".jpg", ".jpeg", ".webp", ".gif"
     };
 
-    public MainPage(GeneratorViewModel viewModel)
+    public MainPage(GeneratorViewModel viewModel, ILogger<MainPage> logger)
     {
         InitializeComponent();
         _viewModel = viewModel;
+        _logger = logger;
         BindingContext = viewModel;
     }
 
@@ -56,7 +59,7 @@ public partial class MainPage
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"OnAppearing failed: {ex.Message}");
+            _logger.LogWarning(ex, "MainPage.{Op} failed", "OnAppearing");
         }
     }
 
@@ -91,7 +94,7 @@ public partial class MainPage
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"OnImportPromptsClicked failed: {ex.Message}");
+            _logger.LogWarning(ex, "MainPage.{Op} failed", "OnImportPromptsClicked");
             _viewModel.StatusMessage = $"Batch failed: {ex.Message}";
             _viewModel.StatusKind = StatusKind.Error;
         }
@@ -150,7 +153,7 @@ public partial class MainPage
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"OnImageDropped failed: {ex.Message}");
+            _logger.LogWarning(ex, "MainPage.{Op} failed", "OnImageDropped");
         }
     }
 }

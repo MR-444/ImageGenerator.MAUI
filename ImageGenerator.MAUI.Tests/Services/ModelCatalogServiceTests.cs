@@ -3,6 +3,7 @@ using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.Services;
 using ImageGenerator.MAUI.Models.Replicate;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace ImageGenerator.MAUI.Tests.Services;
@@ -16,7 +17,7 @@ public class ModelCatalogServiceTests : IDisposable
     public ModelCatalogServiceTests()
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "ImageGenerator.MAUI.Tests", Guid.NewGuid().ToString("N"));
-        _sut = new ModelCatalogService(_replicate.Object, _tempDir);
+        _sut = new ModelCatalogService(_replicate.Object, NullLogger<ModelCatalogService>.Instance, _tempDir);
     }
 
     public void Dispose()

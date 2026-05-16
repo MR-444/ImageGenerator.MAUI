@@ -1,8 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
-using ImageGenerator.MAUI.Infrastructure.Diagnostics;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace ImageGenerator.MAUI.Presentation.ViewModels;
 
@@ -11,6 +11,7 @@ public partial class GalleryItemDetailViewModel : ObservableObject
     private readonly IGalleryService _galleryService;
     private readonly IFileLauncher _fileLauncher;
     private readonly IClipboardService _clipboard;
+    private readonly ILogger<GalleryItemDetailViewModel> _logger;
 
     [ObservableProperty]
     private string? _filePath;
@@ -38,11 +39,13 @@ public partial class GalleryItemDetailViewModel : ObservableObject
     public GalleryItemDetailViewModel(
         IGalleryService galleryService,
         IFileLauncher fileLauncher,
-        IClipboardService clipboard)
+        IClipboardService clipboard,
+        ILogger<GalleryItemDetailViewModel> logger)
     {
         _galleryService = galleryService ?? throw new ArgumentNullException(nameof(galleryService));
         _fileLauncher = fileLauncher ?? throw new ArgumentNullException(nameof(fileLauncher));
         _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>
@@ -64,8 +67,8 @@ public partial class GalleryItemDetailViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            CrashLogger.Log("GalleryItemDetailVM.Load", ex);
-            MetadataText = "Couldn't read metadata. See crash.log for details.";
+            _logger.LogError(ex, "GalleryItemDetailVM.{Op}", "Load");
+            MetadataText = "Couldn't read metadata. See app.log for details.";
         }
         finally
         {
@@ -84,7 +87,7 @@ public partial class GalleryItemDetailViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            CrashLogger.Log("GalleryItemDetailVM.CopyMetadata", ex);
+            _logger.LogError(ex, "GalleryItemDetailVM.{Op}", "CopyMetadata");
         }
     }
 
@@ -106,7 +109,7 @@ public partial class GalleryItemDetailViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            CrashLogger.Log("GalleryItemDetailVM.OpenInViewer", ex);
+            _logger.LogError(ex, "GalleryItemDetailVM.{Op}", "OpenInViewer");
         }
     }
 
@@ -120,7 +123,7 @@ public partial class GalleryItemDetailViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            CrashLogger.Log("GalleryItemDetailVM.ShowInFolder", ex);
+            _logger.LogError(ex, "GalleryItemDetailVM.{Op}", "ShowInFolder");
         }
     }
 
@@ -138,7 +141,7 @@ public partial class GalleryItemDetailViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            CrashLogger.Log("GalleryItemDetailVM.UseAsInput", ex);
+            _logger.LogError(ex, "GalleryItemDetailVM.{Op}", "UseAsInput");
         }
     }
 
@@ -153,7 +156,7 @@ public partial class GalleryItemDetailViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            CrashLogger.Log("GalleryItemDetailVM.Close", ex);
+            _logger.LogError(ex, "GalleryItemDetailVM.{Op}", "Close");
         }
     }
 

@@ -1,17 +1,19 @@
 using ImageGenerator.MAUI.Core.Domain.Entities;
-using ImageGenerator.MAUI.Infrastructure.Diagnostics;
 using ImageGenerator.MAUI.Presentation.ViewModels;
+using Microsoft.Extensions.Logging;
 
 namespace ImageGenerator.MAUI.Presentation.Views;
 
 public partial class GalleryPage
 {
     private readonly GalleryViewModel _viewModel;
+    private readonly ILogger<GalleryPage> _logger;
 
-    public GalleryPage(GalleryViewModel viewModel)
+    public GalleryPage(GalleryViewModel viewModel, ILogger<GalleryPage> logger)
     {
         InitializeComponent();
         _viewModel = viewModel;
+        _logger = logger;
         BindingContext = viewModel;
     }
 
@@ -26,7 +28,7 @@ public partial class GalleryPage
         {
             // async void: any escape here would crash the dispatcher with no managed
             // exception entry on disk. Log explicitly.
-            CrashLogger.Log("GalleryPage.OnAppearing", ex);
+            _logger.LogError(ex, "GalleryPage.{Op}", "OnAppearing");
         }
     }
 
@@ -39,7 +41,7 @@ public partial class GalleryPage
         }
         catch (Exception ex)
         {
-            CrashLogger.Log("GalleryPage.OnDisappearing", ex);
+            _logger.LogError(ex, "GalleryPage.{Op}", "OnDisappearing");
         }
     }
 
@@ -56,7 +58,7 @@ public partial class GalleryPage
         }
         catch (Exception ex)
         {
-            CrashLogger.Log("GalleryPage.OnTileTapped", ex);
+            _logger.LogError(ex, "GalleryPage.{Op}", "OnTileTapped");
         }
     }
 
@@ -74,7 +76,7 @@ public partial class GalleryPage
         }
         catch (Exception ex)
         {
-            CrashLogger.Log("GalleryPage.OnShowMetadataClicked", ex);
+            _logger.LogError(ex, "GalleryPage.{Op}", "OnShowMetadataClicked");
         }
     }
 }

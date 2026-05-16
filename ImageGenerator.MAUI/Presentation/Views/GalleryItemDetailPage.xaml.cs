@@ -1,5 +1,5 @@
-using ImageGenerator.MAUI.Infrastructure.Diagnostics;
 using ImageGenerator.MAUI.Presentation.ViewModels;
+using Microsoft.Extensions.Logging;
 
 namespace ImageGenerator.MAUI.Presentation.Views;
 
@@ -7,11 +7,13 @@ namespace ImageGenerator.MAUI.Presentation.Views;
 public partial class GalleryItemDetailPage
 {
     private readonly GalleryItemDetailViewModel _viewModel;
+    private readonly ILogger<GalleryItemDetailPage> _logger;
 
-    public GalleryItemDetailPage(GalleryItemDetailViewModel viewModel)
+    public GalleryItemDetailPage(GalleryItemDetailViewModel viewModel, ILogger<GalleryItemDetailPage> logger)
     {
         InitializeComponent();
         _viewModel = viewModel;
+        _logger = logger;
         BindingContext = viewModel;
     }
 
@@ -31,7 +33,7 @@ public partial class GalleryItemDetailPage
             }
             catch (Exception ex)
             {
-                CrashLogger.Log("GalleryItemDetailPage.NavPath", ex);
+                _logger.LogError(ex, "GalleryItemDetailPage.{Op}", "NavPath");
             }
         }
     }
@@ -45,7 +47,7 @@ public partial class GalleryItemDetailPage
         }
         catch (Exception ex)
         {
-            CrashLogger.Log("GalleryItemDetailPage.OnAppearing", ex);
+            _logger.LogError(ex, "GalleryItemDetailPage.{Op}", "OnAppearing");
         }
     }
 }

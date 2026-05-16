@@ -1,10 +1,10 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Shared.Constants;
+using Microsoft.Extensions.Logging;
 
 namespace ImageGenerator.MAUI.Infrastructure.External.Pollinations;
 
@@ -16,10 +16,12 @@ public sealed class PollinationsCatalogService : IPollinationsCatalogService
     private const string ModelsEndpoint = "https://gen.pollinations.ai/models";
 
     private readonly HttpClient _httpClient;
+    private readonly ILogger<PollinationsCatalogService> _logger;
 
-    public PollinationsCatalogService(HttpClient httpClient)
+    public PollinationsCatalogService(HttpClient httpClient, ILogger<PollinationsCatalogService> logger)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<IReadOnlyList<ModelOption>> FetchAsync(CancellationToken ct = default)
@@ -43,7 +45,7 @@ public sealed class PollinationsCatalogService : IPollinationsCatalogService
         {
             // Mirror ModelCatalogService.SafeFetchReplicateAsync: swallow + log so a transient
             // network failure during Refresh doesn't take down the whole catalog refresh.
-            Debug.WriteLine($"Pollinations catalog fetch failed: {ex.Message}");
+            _logger.LogWarning(ex, "Pollinations catalog fetch failed");
             return [];
         }
     }

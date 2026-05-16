@@ -3,6 +3,7 @@ using FluentAssertions;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
@@ -14,7 +15,7 @@ public class GalleryItemDetailViewModelTests
     private readonly Mock<IClipboardService> _clipboard = new();
 
     private GalleryItemDetailViewModel CreateSut() =>
-        new(_galleryService.Object, _fileLauncher.Object, _clipboard.Object);
+        new(_galleryService.Object, _fileLauncher.Object, _clipboard.Object, NullLogger<GalleryItemDetailViewModel>.Instance);
 
     [Fact]
     public async Task LoadAsync_PopulatesFileNameAndMetadataText()

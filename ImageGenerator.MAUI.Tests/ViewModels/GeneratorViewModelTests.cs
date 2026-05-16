@@ -9,6 +9,7 @@ using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
 
@@ -40,7 +41,8 @@ public class GeneratorViewModelTests
             _mockUiStateStore.Object,
             _mockCatalogCoordinator.Object,
             ModelDescriptorRegistry.Default(),
-            _mockPromptBatchParser.Object);
+            _mockPromptBatchParser.Object,
+            NullLogger<GeneratorViewModel>.Instance);
     }
 
     [Fact]
@@ -869,7 +871,8 @@ public class GeneratorViewModelTests
             sharedStore.Object,
             coordinator1.Object,
             ModelDescriptorRegistry.Default(),
-            new Mock<IPromptBatchParser>().Object);
+            new Mock<IPromptBatchParser>().Object,
+            NullLogger<GeneratorViewModel>.Instance);
 
         await vm1.LoadCachedCatalogAsync();
         vm1.LoadSavedUiState();  // first launch: nothing stored, no-op
@@ -890,7 +893,8 @@ public class GeneratorViewModelTests
             sharedStore.Object,
             coordinator2.Object,
             ModelDescriptorRegistry.Default(),
-            new Mock<IPromptBatchParser>().Object);
+            new Mock<IPromptBatchParser>().Object,
+            NullLogger<GeneratorViewModel>.Instance);
 
         await vm2.LoadCachedCatalogAsync();
         vm2.LoadSavedUiState();

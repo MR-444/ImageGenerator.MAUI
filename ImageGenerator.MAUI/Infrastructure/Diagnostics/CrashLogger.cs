@@ -1,36 +1,57 @@
-using System.Diagnostics;
 using System.Reflection;
 using ImageGenerator.MAUI.Shared.Constants;
+using NLog;
+using NLog.Config;
+using NLog.Targets;
 
 namespace ImageGenerator.MAUI.Infrastructure.Diagnostics;
 
+/// <summary>
+/// Process-wide event/crash logger. The body delegates to NLog so that DI-injected
+/// <see cref="Microsoft.Extensions.Logging.ILogger{T}"/> calls and these static fallbacks
+/// share one physical log file. The static API is preserved for pre-DI / static callers
+/// (e.g. <c>MauiProgram.CreateMauiApp</c> catch) that have no DI context.
+/// </summary>
 public static class CrashLogger
 {
-    private static string? _logPath;
-
-    // File.AppendAllText opens-and-closes per call, but two threads racing can still produce
-    // interleaved bytes. The lock is cheap and the only contention point — gallery doesn't
-    // log on hot paths.
-    private static readonly object WriteGate = new();
-
-    // The file holds startup markers + any caught exception, so it's an app event log,
-    // not just a crash dump. Keeping the class name (CrashLogger) for source-level callers
-    // — its job is still "capture anything that should never have happened".
     private const string LogFileName = "app.log";
+    private const string LayoutFormat =
+        "${longdate}|${level:uppercase=true}|${logger}|${message} ${exception:format=ToString}";
+
+    private static readonly Logger Logger = LogManager.GetLogger("CrashLogger");
+    private static string? _logPath;
+    private static bool _hooksInstalled;
 
     /// <summary>
-    /// Installs the event/crash logger using the user's Pictures\ImageGenerator.MAUI folder
-    /// as the log destination, falling back to FileSystem.AppDataDirectory if Pictures is
-    /// unavailable. Writes a "startup OK" line so an empty file is unambiguously
-    /// distinguishable from "the logger never ran".
+    /// Installs NLog targets at the user's <c>Pictures\ImageGenerator.MAUI</c> folder
+    /// (fallback: <c>FileSystem.AppDataDirectory</c>) and registers process-wide
+    /// unhandled-exception hooks. Writes a "startup OK" line so an empty file unambiguously
+    /// means "the logger never ran" rather than "nothing crashed".
     /// </summary>
     public static void Install() => Install(rootDir: null);
 
     /// <summary>
-    /// Test/diagnostic overload that lets callers pin the log root to a specific directory
-    /// (e.g. a temp dir in a unit test) without depending on MAUI's Essentials.
+    /// Test/diagnostic overload that pins the log root to a specific directory without
+    /// depending on MAUI's <c>FileSystem</c>. Safe to call multiple times — reconfigures
+    /// NLog each time; unhandled-exception hooks are registered exactly once per process.
     /// </summary>
     public static void Install(string? rootDir)
+    {
+        ConfigureNLog(rootDir);
+        InstallUnhandledExceptionHooks();
+        WriteStartupLine();
+    }
+
+    /// <summary>Public entry-point for explicit catches in static / pre-DI contexts.</summary>
+    public static void Log(string source, Exception ex) => Logger.Error(ex, source);
+
+    /// <summary>
+    /// For non-exception operational events worth logging where there's no Exception to attach.
+    /// </summary>
+    public static void Log(string source, string message)
+        => Logger.Error("{Source}\n{Message}", source, message);
+
+    private static void ConfigureNLog(string? rootDir)
     {
         try
         {
@@ -48,27 +69,65 @@ public static class CrashLogger
             }
             catch
             {
-                // FileSystem isn't available in pure-test contexts. Bail; subsequent Log
-                // calls become no-ops, which is the right behaviour.
+                // FileSystem isn't available in pure-test contexts without a rootDir override.
                 _logPath = null;
             }
         }
-        Debug.WriteLine($"[CrashLogger] Writing to {_logPath}");
+
+        if (_logPath is null) return;
+
+        // KeepFileOpen=false + ConcurrentWrites=true matches the original File.AppendAllText
+        // semantics — each write opens/appends/closes — so external observers (and the
+        // CrashLoggerTests' direct File.ReadAllText) see writes immediately without a flush.
+        var fileTarget = new FileTarget("file")
+        {
+            FileName = _logPath,
+            Layout = LayoutFormat,
+            ArchiveAboveSize = 5_000_000,
+            MaxArchiveFiles = 5,
+            KeepFileOpen = false,
+            ConcurrentWrites = true,
+        };
+        var debugTarget = new DebuggerTarget("debugger") { Layout = LayoutFormat };
+
+        var config = new LoggingConfiguration();
+        config.AddTarget(fileTarget);
+        config.AddTarget(debugTarget);
+
+        // Default rule: Info+ to file + debugger.
+        config.AddRule(NLog.LogLevel.Info, NLog.LogLevel.Fatal, fileTarget, "*");
+        config.AddRule(NLog.LogLevel.Info, NLog.LogLevel.Fatal, debugTarget, "*");
+
+        // Bump Infrastructure.External.* (HTTP request/response details) to Debug so
+        // wire-level diagnostics surface without flipping the global level.
+        config.AddRule(
+            NLog.LogLevel.Debug, NLog.LogLevel.Info,
+            fileTarget,
+            "ImageGenerator.MAUI.Infrastructure.External.*",
+            final: false);
+
+        LogManager.Configuration = config;
+    }
+
+    private static void InstallUnhandledExceptionHooks()
+    {
+        if (_hooksInstalled) return;
+        _hooksInstalled = true;
 
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
-            Write("AppDomain.UnhandledException", e.ExceptionObject as Exception);
+            Logger.Error(e.ExceptionObject as Exception, "AppDomain.UnhandledException");
 
         TaskScheduler.UnobservedTaskException += (_, e) =>
         {
-            Write("TaskScheduler.UnobservedTaskException", e.Exception);
+            Logger.Error(e.Exception, "TaskScheduler.UnobservedTaskException");
             e.SetObserved();
         };
 
 #if WINDOWS
         // WinUI 3 surfaces XAML parse errors and dispatcher exceptions through
-        // Microsoft.UI.Xaml.Application.UnhandledException, which is *not* the same channel
-        // as AppDomain.UnhandledException — registering separately here keeps the crash log
-        // useful when a navigation push fails while constructing a page.
+        // Microsoft.UI.Xaml.Application.UnhandledException — a separate channel from
+        // AppDomain.UnhandledException — so we hook it explicitly to keep the log useful
+        // when a navigation push fails while constructing a page.
         try
         {
             var app = Microsoft.UI.Xaml.Application.Current;
@@ -76,79 +135,25 @@ public static class CrashLogger
             {
                 app.UnhandledException += (_, e) =>
                 {
-                    Write($"WinUI Application.UnhandledException (Message=\"{e.Message}\")", e.Exception);
-                    // Mark as handled so the WER dialog doesn't replace our log entry with a
-                    // hard crash before the file flush completes. Tracing the bug is more
-                    // important than failing fast.
+                    Logger.Error(e.Exception, $"WinUI Application.UnhandledException (Message=\"{e.Message}\")");
+                    // Mark as handled so the WER dialog doesn't replace our log entry with
+                    // a hard crash before the flush completes. Tracing the bug matters more
+                    // than failing fast here.
                     e.Handled = true;
                 };
             }
         }
         catch (Exception ex)
         {
-            Write("CrashLogger.Install (WinUI hook failed)", ex);
+            Logger.Error(ex, "CrashLogger.Install (WinUI hook failed)");
         }
 #endif
+    }
 
-        // Confirms end-to-end: hooks registered AND the log file is writable. An empty
-        // crash.log on a subsequent run means Install never ran — distinct from "ran but
-        // nothing crashed".
+    private static void WriteStartupLine()
+    {
         var version = Assembly.GetExecutingAssembly()
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0] ?? "unknown";
-        WriteRaw($"[{Now()}] startup OK pid={Environment.ProcessId} version={version}");
+        Logger.Info("startup OK pid={Pid} version={Version}", Environment.ProcessId, version);
     }
-
-    /// <summary>
-    /// Public entry-point for explicit catches in VMs / pages. Always non-throwing.
-    /// </summary>
-    public static void Log(string source, Exception ex) => Write(source, ex);
-
-    /// <summary>
-    /// For non-exception operational events worth logging (HTTP 4xx/5xx with a body,
-    /// dropped-on-the-floor service responses, etc.) where there's no Exception to attach.
-    /// Always non-throwing.
-    /// </summary>
-    public static void Log(string source, string message)
-    {
-        if (_logPath is null) return;
-        try
-        {
-            WriteRaw($"[{Now()}] {source}\n{message}\n");
-        }
-        catch
-        {
-            // Logging must never throw.
-        }
-    }
-
-    private static void Write(string source, Exception? ex)
-    {
-        if (_logPath is null) return;
-        try
-        {
-            WriteRaw($"[{Now()}] {source}\n{ex}\n");
-        }
-        catch
-        {
-            // Logging must never throw.
-        }
-    }
-
-    private static void WriteRaw(string line)
-    {
-        if (_logPath is null) return;
-        try
-        {
-            lock (WriteGate)
-            {
-                File.AppendAllText(_logPath, line + Environment.NewLine);
-            }
-        }
-        catch
-        {
-            // Logging must never throw.
-        }
-    }
-
-    private static string Now() => DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
 }

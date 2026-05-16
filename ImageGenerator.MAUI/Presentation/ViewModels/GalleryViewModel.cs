@@ -3,9 +3,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
-using ImageGenerator.MAUI.Infrastructure.Diagnostics;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
+using Microsoft.Extensions.Logging;
 using Microsoft.Maui.ApplicationModel;
 
 namespace ImageGenerator.MAUI.Presentation.ViewModels;
@@ -18,6 +18,7 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
 
     private readonly IGalleryService _galleryService;
     private readonly IFileLauncher _fileLauncher;
+    private readonly ILogger<GalleryViewModel> _logger;
     private readonly string _watchDirectory;
 
     private FileSystemWatcher? _watcher;
@@ -57,10 +58,14 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
     // without paying the I/O cost of re-walking the directory.
     private List<GalleryItem> _lastSnapshot = [];
 
-    public GalleryViewModel(IGalleryService galleryService, IFileLauncher fileLauncher)
+    public GalleryViewModel(
+        IGalleryService galleryService,
+        IFileLauncher fileLauncher,
+        ILogger<GalleryViewModel> logger)
     {
         _galleryService = galleryService ?? throw new ArgumentNullException(nameof(galleryService));
         _fileLauncher = fileLauncher ?? throw new ArgumentNullException(nameof(fileLauncher));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _watchDirectory = OutputPaths.GeneratedImagesDirectory;
 
         Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsEmpty));
@@ -75,7 +80,7 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            CrashLogger.Log("GalleryVM.OnAppearing", ex);
+            _logger.LogError(ex, "GalleryVM.{Op}", "OnAppearing");
         }
     }
 
@@ -88,7 +93,7 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            CrashLogger.Log("GalleryVM.OnDisappearing", ex);
+            _logger.LogError(ex, "GalleryVM.{Op}", "OnDisappearing");
         }
     }
 
@@ -113,7 +118,7 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            CrashLogger.Log("GalleryVM.Refresh", ex);
+            _logger.LogError(ex, "GalleryVM.{Op}", "Refresh");
         }
         finally
         {
@@ -165,7 +170,7 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
             // Process.Start can throw if the file was deleted between watcher tick and click,
             // or if no shell association exists. Log so we can see a pattern, but don't
             // surface to the user — the missing tile will disappear on the next refresh.
-            CrashLogger.Log("GalleryVM.OpenInViewer", ex);
+            _logger.LogError(ex, "GalleryVM.{Op}", "OpenInViewer");
         }
     }
 
@@ -182,7 +187,7 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            CrashLogger.Log("GalleryVM.OpenOutputFolder", ex);
+            _logger.LogError(ex, "GalleryVM.{Op}", "OpenOutputFolder");
         }
     }
 
@@ -242,7 +247,7 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
     private void OnWatcherEvent(object sender, FileSystemEventArgs e)
     {
         try { TriggerDebouncedRefresh(); }
-        catch (Exception ex) { CrashLogger.Log("GalleryVM.OnWatcherEvent", ex); }
+        catch (Exception ex) { _logger.LogError(ex, "GalleryVM.{Op}", "OnWatcherEvent"); }
     }
 
     private void OnWatcherError(object sender, ErrorEventArgs e)
@@ -250,7 +255,7 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
         // The watcher itself raised an Error event (buffer overflow, access denied). Refresh
         // anyway so the UI reflects current state instead of stalling on stale data.
         try { TriggerDebouncedRefresh(); }
-        catch (Exception ex) { CrashLogger.Log("GalleryVM.OnWatcherError", ex); }
+        catch (Exception ex) { _logger.LogError(ex, "GalleryVM.{Op}", "OnWatcherError"); }
     }
 
     private void TriggerDebouncedRefresh()
@@ -281,7 +286,7 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
-                CrashLogger.Log("GalleryVM.DebouncedRefresh", ex);
+                _logger.LogError(ex, "GalleryVM.{Op}", "DebouncedRefresh");
             }
         });
     }

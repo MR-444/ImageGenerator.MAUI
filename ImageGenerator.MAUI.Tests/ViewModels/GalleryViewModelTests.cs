@@ -4,6 +4,7 @@ using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
@@ -13,7 +14,7 @@ public class GalleryViewModelTests
     private readonly Mock<IGalleryService> _galleryService = new();
     private readonly Mock<IFileLauncher> _fileLauncher = new();
 
-    private GalleryViewModel CreateSut() => new(_galleryService.Object, _fileLauncher.Object);
+    private GalleryViewModel CreateSut() => new(_galleryService.Object, _fileLauncher.Object, NullLogger<GalleryViewModel>.Instance);
 
     private static GalleryItem MakeItem(string fileName, long size = 1234L, DateTime? createdAt = null) => new(
         FilePath: Path.Combine("C:", "fake", fileName),

@@ -1,11 +1,12 @@
 using FluentAssertions;
 using ImageGenerator.MAUI.Infrastructure.Diagnostics;
+using NLog;
 
 namespace ImageGenerator.MAUI.Tests.Diagnostics;
 
 // CrashLogger is static and process-wide, so the tests share a single root dir per-class
 // fixture: parallel test runs across xUnit collections would otherwise race the file. We
-// install once with a temp dir and read crash.log between tests via simple substring asserts.
+// install once with a temp dir and read app.log between tests via simple substring asserts.
 [Collection(nameof(CrashLoggerCollection))]
 public class CrashLoggerTests : IDisposable
 {
@@ -22,6 +23,11 @@ public class CrashLoggerTests : IDisposable
 
     public void Dispose()
     {
+        // Flush + drop the NLog target so its file handle (if any) releases before we
+        // try to delete the temp dir, otherwise Windows holds the lock and the cleanup
+        // catch below swallows a "file in use" error.
+        try { LogManager.Flush(TimeSpan.FromSeconds(1)); } catch { /* best-effort */ }
+
         if (Directory.Exists(_tempDir))
         {
             try { Directory.Delete(_tempDir, recursive: true); } catch { /* swallow on Windows file-lock races */ }
@@ -32,7 +38,8 @@ public class CrashLoggerTests : IDisposable
     public void Install_WritesStartupOkLine()
     {
         // Install ran in the ctor; the file must already contain the marker so an empty
-        // crash.log on a real run unambiguously means "Install never ran".
+        // app.log on a real run unambiguously means "Install never ran".
+        LogManager.Flush(TimeSpan.FromSeconds(1));
         File.Exists(_logPath).Should().BeTrue();
         var content = File.ReadAllText(_logPath);
         content.Should().Contain("startup OK");
@@ -44,6 +51,7 @@ public class CrashLoggerTests : IDisposable
     {
         CrashLogger.Log("TestSource", new InvalidOperationException("hello-from-test"));
 
+        LogManager.Flush(TimeSpan.FromSeconds(1));
         var content = File.ReadAllText(_logPath);
         content.Should().Contain("TestSource");
         content.Should().Contain("hello-from-test");
@@ -53,14 +61,14 @@ public class CrashLoggerTests : IDisposable
     [Fact]
     public async Task Log_FromFourThreadsConcurrently_AllMessagesLand()
     {
-        // Regression: without the WriteGate lock, two threads racing File.AppendAllText can
-        // interleave bytes or drop a write under contention. The lock is cheap because the
-        // gallery doesn't log on hot paths.
+        // Regression: NLog's FileTarget with ConcurrentWrites=true + KeepFileOpen=false
+        // serialises concurrent appends so bytes don't interleave and writes don't drop.
         var tasks = Enumerable.Range(0, 4)
             .Select(i => Task.Run(() => CrashLogger.Log($"Race{i}", new Exception($"msg-{i}"))))
             .ToArray();
         await Task.WhenAll(tasks);
 
+        LogManager.Flush(TimeSpan.FromSeconds(1));
         var content = File.ReadAllText(_logPath);
         for (var i = 0; i < 4; i++)
         {

@@ -8,6 +8,7 @@ using ImageGenerator.MAUI.Infrastructure.External.Replicate;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
 using ImageGenerator.MAUI.Models.Replicate;
 using ImageGenerator.MAUI.Shared.Constants;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ImageGenerator.MAUI.Tests.Services.Replicate;
 
@@ -22,7 +23,11 @@ public class ReplicateImageGenerationServiceTests
         _mockReplicateApi = new Mock<IReplicateApi>();
         _mockHttpMessageHandler = new Mock<HttpMessageHandler>();
         var httpClient = new HttpClient(_mockHttpMessageHandler.Object);
-        _service = new ReplicateImageGenerationService(_mockReplicateApi.Object, httpClient, ModelDescriptorRegistry.Default());
+        _service = new ReplicateImageGenerationService(
+            _mockReplicateApi.Object,
+            httpClient,
+            ModelDescriptorRegistry.Default(),
+            NullLogger<ReplicateImageGenerationService>.Instance);
     }
 
     [Fact]

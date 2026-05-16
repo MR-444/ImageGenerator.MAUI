@@ -12,6 +12,7 @@ using ImageGenerator.MAUI.Infrastructure.Services;
 using ImageGenerator.MAUI.Presentation.ViewModels;
 using ImageGenerator.MAUI.Presentation.Views;
 using Microsoft.Extensions.Logging;
+using NLog.Extensions.Logging;
 
 namespace ImageGenerator.MAUI;
 
@@ -45,9 +46,10 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
-#if DEBUG
-        builder.Logging.AddDebug();
-#endif
+        // NLog config (file target + Infrastructure.External.* Debug rule) was set up by
+        // CrashLogger.Install() above; here we just route MEL through NLog so every
+        // ILogger<T> resolved from DI lands in the same physical app.log.
+        builder.Logging.ClearProviders().AddNLog();
         // 1) Add the Refit client
         builder.Services.AddRefitClient<IReplicateApi>("https://api.replicate.com");
 

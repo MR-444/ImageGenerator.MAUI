@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
+using Microsoft.Extensions.Logging;
 using Microsoft.Maui.Storage;
 
 namespace ImageGenerator.MAUI.Infrastructure.Services;
@@ -9,35 +9,42 @@ public sealed class UiStateStore : IUiStateStore
     private const string PromptKey = "imggen.last_prompt";
     private const string ModelKey = "imggen.last_model";
 
+    private readonly ILogger<UiStateStore> _logger;
+
+    public UiStateStore(ILogger<UiStateStore> logger)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
     public string? LoadPrompt()
     {
         var v = SafeGet(PromptKey);
-        Debug.WriteLine($"UiStateStore.LoadPrompt -> {Quote(v)}");
+        _logger.LogDebug("UiStateStore.LoadPrompt -> {Value}", Quote(v));
         return v;
     }
 
     public string? LoadModel()
     {
         var v = SafeGet(ModelKey);
-        Debug.WriteLine($"UiStateStore.LoadModel -> {Quote(v)}");
+        _logger.LogDebug("UiStateStore.LoadModel -> {Value}", Quote(v));
         return v;
     }
 
     public void PersistPrompt(string value)
     {
-        Debug.WriteLine($"UiStateStore.PersistPrompt({Quote(value)})");
+        _logger.LogDebug("UiStateStore.PersistPrompt({Value})", Quote(value));
         SafeSet(PromptKey, value);
     }
 
     public void PersistModel(string value)
     {
-        Debug.WriteLine($"UiStateStore.PersistModel({Quote(value)})");
+        _logger.LogDebug("UiStateStore.PersistModel({Value})", Quote(value));
         SafeSet(ModelKey, value);
     }
 
     private static string Quote(string? v) => v is null ? "<null>" : $"\"{v}\"";
 
-    private static string? SafeGet(string key)
+    private string? SafeGet(string key)
     {
         try
         {
@@ -50,12 +57,12 @@ public sealed class UiStateStore : IUiStateStore
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Preferences.Get({key}) failed: {ex.Message}");
+            _logger.LogWarning(ex, "Preferences.Get({Key}) failed", key);
             return null;
         }
     }
 
-    private static void SafeSet(string key, string value)
+    private void SafeSet(string key, string value)
     {
         try
         {
@@ -63,7 +70,7 @@ public sealed class UiStateStore : IUiStateStore
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Preferences.Set({key}) failed: {ex.Message}");
+            _logger.LogWarning(ex, "Preferences.Set({Key}) failed", key);
         }
     }
 }

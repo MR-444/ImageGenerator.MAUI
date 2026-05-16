@@ -1,9 +1,9 @@
-using System.Diagnostics;
 using System.Text.Json;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
+using Microsoft.Extensions.Logging;
 using Microsoft.Maui.Storage;
 
 namespace ImageGenerator.MAUI.Infrastructure.Services;
@@ -20,12 +20,15 @@ public class ModelCatalogService : IModelCatalogService
 
     private readonly IReplicateApi _replicateApi;
     private readonly string _cacheDirectory;
+    private readonly ILogger<ModelCatalogService> _logger;
 
     public ModelCatalogService(
         IReplicateApi replicateApi,
+        ILogger<ModelCatalogService> logger,
         string? cacheDirectoryOverride = null)
     {
         _replicateApi = replicateApi ?? throw new ArgumentNullException(nameof(replicateApi));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         // Tests override this with a temp path; production resolves the MAUI app-data dir.
         _cacheDirectory = cacheDirectoryOverride ?? FileSystem.AppDataDirectory;
     }
@@ -55,7 +58,7 @@ public class ModelCatalogService : IModelCatalogService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Replicate catalog fetch failed: {ex.Message}");
+            _logger.LogWarning(ex, "Replicate catalog fetch failed");
             return [];
         }
     }
@@ -83,7 +86,7 @@ public class ModelCatalogService : IModelCatalogService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Model catalog cache load failed: {ex.Message}");
+            _logger.LogWarning(ex, "Model catalog cache load failed");
             return null;
         }
     }
@@ -107,7 +110,7 @@ public class ModelCatalogService : IModelCatalogService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Model catalog cache save failed: {ex.Message}");
+            _logger.LogWarning(ex, "Model catalog cache save failed");
         }
     }
 

@@ -11,6 +11,7 @@ using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
+using Microsoft.Extensions.Logging;
 using ImageGenerationParameters = ImageGenerator.MAUI.Core.Domain.Entities.ImageGenerationParameters;
 
 namespace ImageGenerator.MAUI.Presentation.ViewModels;
@@ -26,6 +27,7 @@ public partial class GeneratorViewModel : ObservableObject
     private readonly IModelCatalogCoordinator _catalogCoordinator;
     private readonly IModelDescriptorRegistry _registry;
     private readonly IPromptBatchParser _promptBatchParser;
+    private readonly ILogger<GeneratorViewModel> _logger;
 
     // Non-null only while a batch is actively running. CancelBatch flips it; RunBatchAsync
     // disposes and clears it in a finally so a second batch always starts with a fresh CTS.
@@ -322,7 +324,8 @@ public partial class GeneratorViewModel : ObservableObject
         IUiStateStore uiStateStore,
         IModelCatalogCoordinator catalogCoordinator,
         IModelDescriptorRegistry registry,
-        IPromptBatchParser promptBatchParser)
+        IPromptBatchParser promptBatchParser,
+        ILogger<GeneratorViewModel> logger)
     {
         _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
@@ -331,6 +334,7 @@ public partial class GeneratorViewModel : ObservableObject
         _catalogCoordinator = catalogCoordinator ?? throw new ArgumentNullException(nameof(catalogCoordinator));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _promptBatchParser = promptBatchParser ?? throw new ArgumentNullException(nameof(promptBatchParser));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         SelectedImages.CollectionChanged += OnSelectedImagesChanged;
         Jobs.CollectionChanged += (_, _) => DispatchToUi(() => OnPropertyChanged(nameof(HasJobs)));
@@ -712,7 +716,7 @@ public partial class GeneratorViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Model catalog hydrate failed: {ex.Message}");
+            _logger.LogWarning(ex, "Model catalog hydrate failed");
         }
     }
 

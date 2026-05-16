@@ -4,7 +4,7 @@ using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects.Pollinations;
-using ImageGenerator.MAUI.Infrastructure.Diagnostics;
+using Microsoft.Extensions.Logging;
 
 namespace ImageGenerator.MAUI.Infrastructure.External.Pollinations;
 
@@ -24,11 +24,16 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
 
     private readonly HttpClient _httpClient;
     private readonly IModelDescriptorRegistry _registry;
+    private readonly ILogger<PollinationsImageGenerationService> _logger;
 
-    public PollinationsImageGenerationService(HttpClient httpClient, IModelDescriptorRegistry registry)
+    public PollinationsImageGenerationService(
+        HttpClient httpClient,
+        IModelDescriptorRegistry registry,
+        ILogger<PollinationsImageGenerationService> logger)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters, CancellationToken cancellationToken = default)
@@ -38,7 +43,7 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
             if (_registry.PayloadFor(parameters.Model).Build(parameters) is not PollinationsRequest request)
             {
                 var msg = $"Pollinations descriptor for '{parameters.Model}' did not return a PollinationsRequest payload.";
-                CrashLogger.Log("PollinationsImageGenerationService.GenerateImageAsync", msg);
+                _logger.LogError("Pollinations descriptor mismatch Model={Model}", parameters.Model);
                 return new GeneratedImage
                 {
                     Message = msg,
@@ -79,11 +84,12 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
                 // app.log gets the full body + URL so the user can see whatever Pollinations
                 // actually complained about; the UI status line is truncated to keep the
                 // job-row label readable. URL is included so the failed request is reproducible.
-                CrashLogger.Log(
-                    "PollinationsImageGenerationService.GenerateImageAsync",
-                    Redact(
-                        $"HTTP {(int)response.StatusCode} {response.StatusCode}\nURL: {url}\nBody: {fullBody}",
-                        parameters.PollinationsApiToken));
+                _logger.LogError(
+                    "Pollinations HTTP {StatusCode} {Status} Url={Url} Body={Body}",
+                    (int)response.StatusCode,
+                    response.StatusCode,
+                    Redact(url, parameters.PollinationsApiToken),
+                    Redact(fullBody, parameters.PollinationsApiToken));
 
                 var shortBody = fullBody.Length > 500 ? fullBody[..500] + "…" : fullBody;
                 return new GeneratedImage
@@ -98,9 +104,10 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
             var bytes = await response.Content.ReadAsByteArrayAsync(cts.Token);
             if (bytes.Length < MinValidImageBytes)
             {
-                CrashLogger.Log(
-                    "PollinationsImageGenerationService.GenerateImageAsync",
-                    Redact($"Undersized response ({bytes.Length} bytes)\nURL: {url}", parameters.PollinationsApiToken));
+                _logger.LogError(
+                    "Pollinations undersized response Bytes={Bytes} Url={Url}",
+                    bytes.Length,
+                    Redact(url, parameters.PollinationsApiToken));
                 return new GeneratedImage
                 {
                     Message = $"Pollinations returned an undersized response ({bytes.Length} bytes) — likely an error page rather than an image.",
@@ -124,7 +131,7 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
         }
         catch (Exception ex)
         {
-            CrashLogger.Log("PollinationsImageGenerationService.GenerateImageAsync", ex);
+            _logger.LogError(ex, "PollinationsImageGenerationService.GenerateImageAsync threw Model={Model}", parameters.Model);
             return new GeneratedImage
             {
                 Message = FormatError(ex, parameters.PollinationsApiToken),

@@ -55,6 +55,8 @@
 		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.60" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.7" />
 		<PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.5.0" />
+		<PackageReference Include="NLog" Version="5.3.4" />
+		<PackageReference Include="NLog.Extensions.Logging" Version="5.3.15" />
 		<PackageReference Include="Refit" Version="10.1.6" />
 		<PackageReference Include="Refit.HttpClientFactory" Version="10.1.6" />
 		<PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />

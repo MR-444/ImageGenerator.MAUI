@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
+using Microsoft.Extensions.Logging;
 using Microsoft.Maui.Storage;
 
 namespace ImageGenerator.MAUI.Infrastructure.Services;
@@ -9,7 +9,13 @@ public sealed class ApiTokenStore : IApiTokenStore
     private const string TokenStorageKey = "imggen.api_token";
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(500);
 
+    private readonly ILogger<ApiTokenStore> _logger;
     private CancellationTokenSource? _persistCts;
+
+    public ApiTokenStore(ILogger<ApiTokenStore> logger)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
 
     public async Task<string?> LoadAsync()
     {
@@ -20,7 +26,7 @@ public sealed class ApiTokenStore : IApiTokenStore
         catch (Exception ex)
         {
             // Secure storage read failures aren't actionable by the user — log and continue.
-            Debug.WriteLine($"SecureStorage.Get failed: {ex.Message}");
+            _logger.LogWarning(ex, "SecureStorage.{Op} failed", "Get");
             return null;
         }
     }
@@ -55,7 +61,7 @@ public sealed class ApiTokenStore : IApiTokenStore
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"SecureStorage.Set failed: {ex.Message}");
+                _logger.LogWarning(ex, "SecureStorage.{Op} failed", "Set");
             }
         }, token);
     }
@@ -68,7 +74,7 @@ public sealed class ApiTokenStore : IApiTokenStore
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"SecureStorage.Remove failed: {ex.Message}");
+            _logger.LogWarning(ex, "SecureStorage.{Op} failed", "Remove");
         }
     }
 }
