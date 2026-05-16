@@ -1,24 +1,26 @@
 # 🎨 Image Generator MAUI
 
-A Windows desktop image generation app built on .NET MAUI that drives the Replicate API. Generates images through the Flux family, Replicate-hosted OpenAI, and Google models, then saves them locally with the prompt and generation parameters embedded as EXIF metadata.
+A Windows desktop image generation app built on .NET MAUI with two image providers — **Replicate** (Flux, Replicate-hosted OpenAI, Google) and **Pollinations.ai** (Flux, Zimage, Qwen Image, plus any free image model their `/models` endpoint surfaces). Switch providers in-app via a tabbed token picker; saved images carry the full prompt and generation parameters as EXIF / PNG-Comment metadata so every output is reproducible.
 
 ## 🌟 Features
 
 - Windows 10/11 desktop (MAUI Windows target, `net10.0-windows10.0.22621.0`)
+- **Two providers, one app** — switch between Replicate and Pollinations.ai via a tabbed token picker. Each provider's token persists independently in OS secure storage; anonymous Pollinations also works (just rate-limited). The active provider is inferred from the selected model, so picking a `pollinations/...` model routes to Pollinations without further clicks. Extensible: adding a third provider is one entry in the `TokenProviders` collection — no XAML changes.
+  - **Pollinations.ai** — `flux`, `zimage`, `qwen-image` seeded offline; **Refresh Models** fetches `gen.pollinations.ai/models` and surfaces any additional free image models (`output_modalities` includes `image` AND not `paid_only`). Optional Bearer token from [auth.pollinations.ai](https://auth.pollinations.ai) raises the rate limit from 1 req / 15 s anonymous → 1 req / 5 s on the Seed tier. Seeds and pixel parameters are clamped to the documented bounds (e.g. seed ≤ `2147483647`, the positive int32 max — Replicate's wider uint32 range still works unaffected).
 - **Concurrent generation queue** — click Generate while a previous job is still running; each click snapshots the current parameters into its own in-flight job. A scrollable queue below the form shows per-job prompt, status, spinner, thumbnail, and independent Cancel / Open / Show-in-folder / Use-as-input actions.
 - **Batch from textfile** — point **Import prompts…** at a `.txt` of prompts separated by lines containing only `---`. Lines starting with `#` are ignored, so you can label or disable prompts without deleting them. The batch runs sequentially with the currently-selected model and parameters; failed prompts don't abort the queue. **Cancel batch** drains the remaining queue but lets the in-flight job finish — once a Replicate prediction is created, you're paying for it either way. 100-prompt hard cap.
 - **In-app gallery** — browse previously generated images without leaving the app. Tile grid with sortable order (newest/oldest, name A→Z / Z→A, largest/smallest), live updates via `FileSystemWatcher` when new images are saved or removed, and a detail page with a larger preview, copyable metadata, and one-click **Use as input**, **Open in viewer**, and **Show in folder** actions. Thumbnails come from the Windows shell cache so a directory of multi-megabyte PNGs doesn't blow process memory.
 - **Persisted UI state** — the last prompt and selected model are restored on next launch (per-user `Preferences`). Pick up where you left off.
-- **Dynamic model catalog** — "Refresh Models" queries Replicate's `text-to-image` collection (filtered to `black-forest-labs`, `openai`, and `google` owners) so new models surface without recompiling. The catalog is cached to `FileSystem.AppDataDirectory/model-catalog.json` and restored on launch.
+- **Dynamic model catalog** — "Refresh Models" queries Replicate's `text-to-image` collection (filtered to `black-forest-labs`, `openai`, and `google` owners) **and** Pollinations' `/models` endpoint (image-only, free-tier) in parallel, then merges with the hardcoded seed entries. New models surface without recompiling. The catalog is cached to `FileSystem.AppDataDirectory/model-catalog.json` and restored on launch.
 - **Flux 2 family** — `flux-2-klein-4b`, `flux-2-flex`, `flux-2-pro`, `flux-2-max` with per-model payload shaping and optional `images` input
 - **OpenAI** — `openai/gpt-image-1.5` and `openai/gpt-image-2` (via Replicate). The UI exposes the model-specific knobs: `quality`, `background` (incl. transparent PNGs), `moderation`, `input_fidelity`.
 - **Google nano-banana-2** — `google/nano-banana-2` with its 15-value aspect enum, a resolution picker (1K / 2K / 4K), and image-input support. `webp` is auto-coerced to `jpg` (the model doesn't accept webp).
 - **Flux classic** — 1.1 Pro / 1.1 Pro Ultra
-- API tokens persisted via `SecureStorage` (Windows DPAPI under the hood)
+- API tokens persisted via `SecureStorage` (Windows DPAPI under the hood) — independent slots per provider
 - Per-job cancellation with retry/backoff (Polly via `Microsoft.Extensions.Http.Resilience`)
 - Images saved to `%USERPROFILE%\Pictures\ImageGenerator.MAUI\` with collision-safe filenames
 - Prompt + generation parameters embedded in the file — PNG `Comment` text chunk, or EXIF `UserComment` for JPG/WebP. Includes the actual pixel dimensions and model-specific fields (GPT options, resolution, etc.) so every image carries a complete reproducible recipe.
-- **Diagnostics log** — `app.log` next to the saved images captures startup confirmation and any caught exception. Easy to find, no spelunking through `%LocalAppData%\Packages\…`.
+- **Diagnostics log** — `app.log` next to the saved images captures startup confirmation, every failed generation (Replicate or Pollinations) with model name and reason, and any caught exception. Centralized at the `JobRunner` boundary so a provider's silent error can't escape the file. Easy to find, no spelunking through `%LocalAppData%\Packages\…`.
 - MVVM via CommunityToolkit.Mvvm (`[RelayCommand]`, `[ObservableProperty]`)
 
 ## 📸 Screenshots
@@ -41,20 +43,34 @@ The exe ships unsigned — buying a code-signing certificate is expensive for a 
 
 If you'd rather not click through a SmartScreen warning, you can always [build from source](#-building-from-source).
 
+### Picking a provider
+
+The **API Tokens** card at the top of the form has a provider dropdown — switch between **Replicate** and **Pollinations** to edit each token in its own slot. Both tokens are stored separately, so you can keep both active and just flip the selected model to route requests one way or the other.
+
 ### Getting a Replicate API token
 
-The app calls Replicate under the hood — including the OpenAI-hosted `gpt-image-1.5` and Google's `nano-banana-2`, which are accessible through Replicate's catalog.
+The Replicate branch covers the Flux family, the OpenAI-hosted `gpt-image-1.5` / `gpt-image-2`, and Google's `nano-banana-2`.
 
 1. Sign up at [replicate.com](https://replicate.com).
 2. Go to **Account → API tokens** (or directly [replicate.com/account/api-tokens](https://replicate.com/account/api-tokens)).
 3. Create a token, copy it.
-4. Paste it into the **API Token** field in the app. It's stored locally with Windows `SecureStorage` (DPAPI, per-user) — never leaves your machine except to call the Replicate endpoint.
+4. With "Replicate" selected in the API Tokens picker, paste it into the **API Token** field. It's stored locally with Windows `SecureStorage` (DPAPI, per-user) — never leaves your machine except to call Replicate.
+
+### Getting a Pollinations token (optional)
+
+Pollinations works anonymously — pick a `pollinations/...` model in the picker, type a prompt, and hit Generate. The anonymous tier is rate-limited to 1 request every 15 seconds. With a free Seed-tier account that goes to 1 request every 5 seconds.
+
+1. Sign up at [auth.pollinations.ai](https://auth.pollinations.ai).
+2. Generate a token in your account dashboard.
+3. With "Pollinations" selected in the API Tokens picker, paste it into the field. Same DPAPI-backed secure storage as the Replicate slot, just keyed independently.
+
+Note on reproducibility: per Pollinations' own spec, the `seed` parameter is honored only by `flux`, `zimage`, `seedream`, `klein`, `seedance`, `nova-reel`. Other models silently ignore it, so re-running the same prompt+seed pair won't produce the same image on `qwen-image` etc.
 
 ### Costs
 
-Each generation costs roughly **$0.003 – $0.05** depending on the model. Flux Pro is on the cheaper end; `gpt-image-1.5` at high quality and `nano-banana-2` at 4K land on the higher end. See [replicate.com/pricing](https://replicate.com/pricing) for current per-model rates.
+**Replicate**: roughly **$0.003 – $0.05** per generation depending on the model — Flux Pro is on the cheaper end; `gpt-image-1.5` at high quality and `nano-banana-2` at 4K land on the higher end. See [replicate.com/pricing](https://replicate.com/pricing) for current per-model rates. Pay-as-you-go — no monthly commitment.
 
-Replicate pay-as-you-go means no monthly commitment — you only get charged for successful calls.
+**Pollinations**: the seeded models (`flux`, `zimage`, `qwen-image`) and every other model the catalog returns are **free** at both anonymous and Seed tiers. Paid-tier models (Pollinations marks them `paid_only` in `/models`) are filtered out and never appear in the picker.
 
 ### Where images are saved
 
@@ -125,13 +141,17 @@ ImageGenerator.MAUI/
 ├── Core/
 │   ├── Application/          # IImageGenerationService, IModelCatalogService, IGalleryService,
 │   │                         # IPromptBatchParser (+ PromptBatchParser implementation)
-│   └── Domain/               # Entities (incl. GalleryItem), value objects, ModelCapabilities
+│   └── Domain/               # Entities (incl. GalleryItem), value objects (Flux/Pollinations
+│                             # request shapes), ModelCapabilities, Descriptors/Pollinations/
+│                             # (seed + fallback descriptors mirroring the Replicate pattern)
 ├── Infrastructure/
 │   ├── Diagnostics/          # CrashLogger (app.log + WinUI dispatcher hook)
 │   ├── External/
 │   │   ├── OpenAi/           # Refit client + DTOs + service
+│   │   ├── Pollinations/     # PollinationsImageGenerationService, PollinationsCatalogService
 │   │   └── Replicate/        # Refit client + DTOs + service + image encoding helpers
 │   └── Services/             # ImageFileService, ModelCatalogService, GalleryService,
+│                             # ImageGenerationDispatcher (routes by model-id prefix),
 │                             # FileLauncher, ClipboardService
 ├── Presentation/
 │   ├── ViewModels/           # GeneratorViewModel, GalleryViewModel, GalleryItemDetailViewModel
@@ -151,7 +171,7 @@ ImageGenerator.MAUI/
 dotnet test
 ```
 
-248 tests covering: model factory payload shapes, Replicate service HTTP flows (via Refit mocks), the `NullSkippingDictionaryConverter`, model catalog filtering and persistence, image file naming + EXIF round-trip, GeneratorViewModel commands and state machine (including batch order, partial failure, distinct seeds, and Cancel-batch leaves the in-flight job alone), prompt batch parser (delimiter, comments, multi-line, BOM, CRLF, hard-cap), GalleryService enumeration + metadata reads + partial-write guard, GalleryViewModel sort modes + watcher debounce, GalleryItemDetailViewModel actions, and CrashLogger smoke + concurrency.
+249 tests covering: model factory payload shapes, Replicate service HTTP flows (via Refit mocks), the `NullSkippingDictionaryConverter`, model catalog filtering and persistence (both Replicate + Pollinations branches), image file naming + EXIF round-trip, GeneratorViewModel commands and state machine (including batch order, partial failure, distinct seeds, Cancel-batch leaves the in-flight job alone, and the tabbed token slots stay independent across providers), prompt batch parser (delimiter, comments, multi-line, BOM, CRLF, hard-cap), GalleryService enumeration + metadata reads + partial-write guard, GalleryViewModel sort modes + watcher debounce, GalleryItemDetailViewModel actions, and CrashLogger smoke + concurrency.
 
 ## 📱 Supported Platforms
 
@@ -177,6 +197,8 @@ Limitations that didn't block shipping but are worth knowing:
 - **GPT 1.5 `input_fidelity=high` with an input image** is not regression-tested in this build. The other GPT options (`quality`, `background`, `moderation`, `input_fidelity=low`) have been verified.
 - **Job queue has no eviction policy** — finished job cards accumulate until the app is closed. Cosmetic for short sessions; a "Clear finished" control is a candidate for v1.x.
 - **Gallery is read-only in 1.0** — delete / rename / search / multi-select are not yet implemented (you can still delete or rename in Explorer; the gallery picks up the change via `FileSystemWatcher` within ~1 s).
+- **Pollinations `kontext` (image-to-image) isn't supported in this build** — the Pollinations route has no input-image plumbing yet, so the `kontext` model surfaces in the catalog but won't accept reference images. Use a Replicate Flux model for image-prompted edits today.
+- **Logging is hand-rolled** — `CrashLogger` is the only file sink today. A migration to NLog behind `Microsoft.Extensions.Logging.ILogger<T>` is planned for v1.3 so per-service errors land in `app.log` automatically without needing explicit log calls at every catch site.
 
 If you hit any of the above, please [open an issue](https://github.com/MR-444/ImageGenerator.MAUI/issues) with the status text from `Pictures\ImageGenerator.MAUI\app.log` and what you were trying to generate — that's the fastest way these get tightened up.
 
