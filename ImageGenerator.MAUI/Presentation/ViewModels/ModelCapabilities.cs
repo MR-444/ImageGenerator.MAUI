@@ -21,4 +21,6 @@ public readonly record struct ModelCapabilities(
     IReadOnlyList<string>? GptModerationOptions = null,
     IReadOnlyList<string>? GptInputFidelityOptions = null,
     bool ImagePromptStrength = false,
-    int MaxImageInputs = 0);
+    int MaxImageInputs = 0,
+    bool Safe = false,
+    bool OutputFormatSelectable = true);

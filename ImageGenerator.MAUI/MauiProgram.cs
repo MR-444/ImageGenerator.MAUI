@@ -1,8 +1,10 @@
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Application.Services;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
+using ImageGenerator.MAUI.Core.Domain.Descriptors.Pollinations;
 using ImageGenerator.MAUI.Extensions;
 using ImageGenerator.MAUI.Infrastructure.Diagnostics;
+using ImageGenerator.MAUI.Infrastructure.External.Pollinations;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
@@ -61,21 +63,31 @@ public static class MauiProgram
             .AddModelDescriptor<Flux2Max2Descriptor>()
             .AddModelDescriptor<GptImage15Descriptor>()
             .AddModelDescriptor<GptImage2Descriptor>()
-            .AddModelDescriptor<NanoBanana2Descriptor>();
+            .AddModelDescriptor<NanoBanana2Descriptor>()
+            .AddModelDescriptor<PollinationsFluxDescriptor>()
+            .AddModelDescriptor<PollinationsZimageDescriptor>()
+            .AddModelDescriptor<PollinationsQwenImageDescriptor>();
 
         builder.Services.AddSingleton<IModelDescriptorRegistry, ModelDescriptorRegistry>();
 
         // 3) Register your services and ViewModels
         builder.Services.AddSingleton<IImageEncoderProvider, ImageEncoderProvider>();
         builder.Services.AddSingleton<IImageFileService, ImageFileService>();
-        builder.Services.AddSingleton<IImageGenerationService, ReplicateImageGenerationService>();
+        // Per-provider concrete services are registered as themselves so the dispatcher can
+        // take both via ctor and route per-call. The dispatcher is what IImageGenerationService
+        // resolves to.
+        builder.Services.AddSingleton<ReplicateImageGenerationService>();
+        builder.Services.AddSingleton<PollinationsImageGenerationService>();
+        builder.Services.AddSingleton<IImageGenerationService, ImageGenerationDispatcher>();
         builder.Services.AddSingleton<IModelCatalogService, ModelCatalogService>();
+        builder.Services.AddSingleton<IPollinationsCatalogService, PollinationsCatalogService>();
         builder.Services.AddSingleton<IGalleryService>(_ => new GalleryService());
         builder.Services.AddSingleton<IFileLauncher, FileLauncher>();
         builder.Services.AddSingleton<IClipboardService, ClipboardService>();
 
         // 3a) VM collaborators carved out of the original god-class GeneratorViewModel (M1).
         builder.Services.AddSingleton<IApiTokenStore, ApiTokenStore>();
+        builder.Services.AddSingleton<IPollinationsTokenStore, PollinationsTokenStore>();
         builder.Services.AddSingleton<IUiStateStore, UiStateStore>();
         builder.Services.AddSingleton<IJobRunner, JobRunner>();
         builder.Services.AddSingleton<IModelCatalogCoordinator, ModelCatalogCoordinator>();

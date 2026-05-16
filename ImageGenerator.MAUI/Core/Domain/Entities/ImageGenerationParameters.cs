@@ -87,6 +87,15 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private string _gptInputFidelity = "low";
 
+    // Pollinations-specific. Token stored on parameters so PollinationsImageGenerationService
+    // can read it directly without taking a SecureStorage dependency, mirroring how ApiToken
+    // works for Replicate. VM keeps both fields synced with their respective stores.
+    [ObservableProperty]
+    private string _pollinationsApiToken = string.Empty;
+
+    [ObservableProperty]
+    private bool _safe;
+
     public ImageGenerationParameters Clone()
     {
         var copy = new ImageGenerationParameters
@@ -110,6 +119,8 @@ public partial class ImageGenerationParameters : ObservableObject
             GptBackground    = GptBackground,
             GptModeration    = GptModeration,
             GptInputFidelity = GptInputFidelity,
+            PollinationsApiToken = PollinationsApiToken,
+            Safe             = Safe,
         };
         foreach (var p in ImagePrompts) copy.ImagePrompts.Add(p);
         return copy;

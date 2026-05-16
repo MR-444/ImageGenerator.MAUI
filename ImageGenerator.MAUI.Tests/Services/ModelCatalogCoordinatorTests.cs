@@ -11,11 +11,22 @@ namespace ImageGenerator.MAUI.Tests.Services;
 public class ModelCatalogCoordinatorTests
 {
     private readonly Mock<IModelCatalogService> _catalogService = new();
+    private readonly Mock<IPollinationsCatalogService> _pollinationsCatalogService = new();
     private readonly ModelCatalogCoordinator _sut;
 
     public ModelCatalogCoordinatorTests()
     {
-        _sut = new ModelCatalogCoordinator(_catalogService.Object, ModelDescriptorRegistry.Default());
+        // Default Pollinations catalog to empty so the existing assertions (which only know
+        // about the Replicate path) keep matching exactly. Tests that exercise the merge can
+        // override this setup.
+        _pollinationsCatalogService
+            .Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ModelOption>());
+
+        _sut = new ModelCatalogCoordinator(
+            _catalogService.Object,
+            _pollinationsCatalogService.Object,
+            ModelDescriptorRegistry.Default());
     }
 
     [Fact]

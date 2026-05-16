@@ -8,11 +8,16 @@ namespace ImageGenerator.MAUI.Infrastructure.Services;
 public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
 {
     private readonly IModelCatalogService _catalogService;
+    private readonly IPollinationsCatalogService _pollinationsCatalogService;
     private readonly IModelDescriptorRegistry _registry;
 
-    public ModelCatalogCoordinator(IModelCatalogService catalogService, IModelDescriptorRegistry registry)
+    public ModelCatalogCoordinator(
+        IModelCatalogService catalogService,
+        IPollinationsCatalogService pollinationsCatalogService,
+        IModelDescriptorRegistry registry)
     {
         _catalogService = catalogService;
+        _pollinationsCatalogService = pollinationsCatalogService;
         _registry = registry;
     }
 
@@ -25,10 +30,16 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
 
     public async Task<IReadOnlyList<ModelOption>?> RefreshAsync(string apiToken)
     {
-        var fetched = await _catalogService.FetchAsync(apiToken);
+        // Fan out to both providers in parallel — the Pollinations call is anonymous and
+        // independent of the Replicate token, so it shouldn't be gated by Replicate's auth.
+        var replicateTask = _catalogService.FetchAsync(apiToken);
+        var pollinationsTask = _pollinationsCatalogService.FetchAsync();
+        await Task.WhenAll(replicateTask, pollinationsTask);
+
+        var fetched = replicateTask.Result.Concat(pollinationsTask.Result).ToList();
         if (fetched.Count == 0) return null;
 
-        // Cache the raw fetched list (not the merged one) — load-time merge keeps any
+        // Cache the raw merged-fetched list (not seeds) — load-time merge keeps any
         // freshly-added seed entries surfacing even when the cache was written before they existed.
         await _catalogService.SaveCachedAsync(fetched);
         return MergeWithSeeds(fetched);

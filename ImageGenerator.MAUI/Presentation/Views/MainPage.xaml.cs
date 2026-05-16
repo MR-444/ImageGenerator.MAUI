@@ -50,7 +50,7 @@ public partial class MainPage
         // through would crash via SynchronizationContext. Keep a defensive net here.
         try
         {
-            await _viewModel.LoadSavedTokenAsync();
+            await _viewModel.LoadAllTokensAsync();
             await _viewModel.LoadCachedCatalogAsync();
             _viewModel.LoadSavedUiState();
         }

@@ -1,5 +1,6 @@
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Infrastructure.Diagnostics;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
 
@@ -23,7 +24,18 @@ public sealed class JobRunner : IJobRunner
         if (result.ImageData is null or { Length: 0 })
         {
             // Service returned a structured error/canceled message instead of image data.
-            return new JobOutcome(JobOutcomeKind.Failed, null, result.Message ?? "Image generation failed.");
+            // Centralized failure logging: image services follow a swallow-and-return-Message
+            // pattern (so the UI gets a clean string instead of an exception), but that means
+            // a caught error never trips the unhandled-exception hooks in CrashLogger. Logging
+            // here at the architectural boundary guarantees every failure lands in app.log
+            // even if a service's catch block forgot an explicit CrashLogger call. Services
+            // that have richer context (URL, body, stack trace) still log it earlier; this is
+            // the safety net.
+            var msg = result.Message ?? "Image generation failed.";
+            CrashLogger.Log(
+                "JobRunner.RunAsync",
+                $"Model={parameters.Model}; Result={msg}");
+            return new JobOutcome(JobOutcomeKind.Failed, null, msg);
         }
 
         Directory.CreateDirectory(OutputPaths.GeneratedImagesDirectory);

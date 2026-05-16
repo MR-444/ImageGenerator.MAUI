@@ -21,6 +21,7 @@ public partial class GeneratorViewModel : ObservableObject
 
     private readonly IJobRunner _jobRunner;
     private readonly IApiTokenStore _tokenStore;
+    private readonly IPollinationsTokenStore _pollinationsTokenStore;
     private readonly IUiStateStore _uiStateStore;
     private readonly IModelCatalogCoordinator _catalogCoordinator;
     private readonly IModelDescriptorRegistry _registry;
@@ -87,6 +88,13 @@ public partial class GeneratorViewModel : ObservableObject
 
     [ObservableProperty]
     private List<string> _outputFormats = [nameof(ImageOutputFormat.Png).ToLower(), nameof(ImageOutputFormat.Jpg).ToLower(), nameof(ImageOutputFormat.Webp).ToLower()];
+
+    // Each provider's token Entry is rendered from this collection — adding a third / fourth
+    // provider is a single extra item built in the ctor below, no XAML changes.
+    public ObservableCollection<TokenProviderViewModel> TokenProviders { get; } = [];
+
+    [ObservableProperty]
+    private TokenProviderViewModel? _selectedTokenProvider;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SupportsCustomDimensions))]
@@ -287,9 +295,19 @@ public partial class GeneratorViewModel : ObservableObject
 
     private void ValidateParameters()
     {
-        IsValid = !string.IsNullOrWhiteSpace(Parameters.ApiToken)
-               && !string.IsNullOrWhiteSpace(Parameters.Prompt);
+        // Pollinations works anonymously, so its token is optional. Replicate requires its own
+        // Bearer token. Prompt is required for both.
+        var tokenOk = IsPollinationsModel(Parameters.Model)
+            ? true
+            : !string.IsNullOrWhiteSpace(Parameters.ApiToken);
+        IsValid = tokenOk && !string.IsNullOrWhiteSpace(Parameters.Prompt);
     }
+
+    private static bool IsPollinationsModel(string modelId) =>
+        !string.IsNullOrEmpty(modelId)
+        && modelId.StartsWith(ModelConstants.Pollinations.PrefixSlash, StringComparison.Ordinal);
+
+    public bool IsPollinationsSelected => IsPollinationsModel(Parameters.Model);
 
     private void SetStatus(string message, StatusKind kind)
     {
@@ -300,6 +318,7 @@ public partial class GeneratorViewModel : ObservableObject
     public GeneratorViewModel(
         IJobRunner jobRunner,
         IApiTokenStore tokenStore,
+        IPollinationsTokenStore pollinationsTokenStore,
         IUiStateStore uiStateStore,
         IModelCatalogCoordinator catalogCoordinator,
         IModelDescriptorRegistry registry,
@@ -307,6 +326,7 @@ public partial class GeneratorViewModel : ObservableObject
     {
         _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+        _pollinationsTokenStore = pollinationsTokenStore ?? throw new ArgumentNullException(nameof(pollinationsTokenStore));
         _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
         _catalogCoordinator = catalogCoordinator ?? throw new ArgumentNullException(nameof(catalogCoordinator));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
@@ -351,8 +371,11 @@ public partial class GeneratorViewModel : ObservableObject
                         _preferredAspectRatio = _parameters.AspectRatio;
                     break;
                 case nameof(ImageGenerationParameters.ApiToken):
+                    // Persistence lives on TokenProviderViewModel now — only revalidate here.
                     ValidateParameters();
-                    _tokenStore.Persist(_parameters.ApiToken);
+                    break;
+                case nameof(ImageGenerationParameters.PollinationsApiToken):
+                    ValidateParameters();
                     break;
                 case nameof(ImageGenerationParameters.Prompt):
                     ValidateParameters();
@@ -361,12 +384,37 @@ public partial class GeneratorViewModel : ObservableObject
                 case nameof(ImageGenerationParameters.Model):
                     SyncSelectionFromParameters(_parameters.Model);
                     if (!_suppressModelPersist) _uiStateStore.PersistModel(_parameters.Model);
+                    // Switching to or from a Pollinations model changes the token-required rule
+                    // and toggles the Pollinations-only UI sections.
+                    ValidateParameters();
+                    OnPropertyChanged(nameof(IsPollinationsSelected));
                     break;
             }
         };
 
         RecomputeFilteredModels();
         ValidateParameters();
+
+        // Build the tabbed token list. Order = display order in the Picker. Each entry's
+        // syncToParameters callback writes to the right parameters field so service code
+        // (ReplicateImageGenerationService.parameters.ApiToken,
+        // PollinationsImageGenerationService.parameters.PollinationsApiToken) keeps reading
+        // its own slot.
+        TokenProviders.Add(new TokenProviderViewModel(
+            key: "replicate",
+            displayName: "Replicate",
+            placeholder: "Paste your Replicate API token…",
+            helperText: "Required for Replicate-hosted models (Flux, GPT, Nano Banana). Stored in OS secure storage.",
+            store: _tokenStore,
+            syncToParameters: v => _parameters.ApiToken = v));
+        TokenProviders.Add(new TokenProviderViewModel(
+            key: "pollinations",
+            displayName: "Pollinations",
+            placeholder: "Paste your Pollinations token (optional)…",
+            helperText: "Optional. Anonymous mode is rate-limited (1 req / 15 s). Register at auth.pollinations.ai for higher limits.",
+            store: _pollinationsTokenStore,
+            syncToParameters: v => _parameters.PollinationsApiToken = v));
+        _selectedTokenProvider = TokenProviders[0];
     }
 
     [RelayCommand(AllowConcurrentExecutions = true)]
@@ -563,18 +611,16 @@ public partial class GeneratorViewModel : ObservableObject
     [RelayCommand]
     private async Task RefreshModelsAsync()
     {
-        if (string.IsNullOrWhiteSpace(Parameters.ApiToken))
-        {
-            SetStatus("Enter an API token before refreshing models.", StatusKind.Error);
-            return;
-        }
-
+        // Pollinations refresh is anonymous and doesn't need the Replicate token, so don't
+        // gate the whole refresh on Replicate auth. ModelCatalogService.FetchAsync already
+        // returns an empty list when the token is blank, so the coordinator yields
+        // Pollinations-only results in that case.
         SetStatus("Fetching model catalogs…", StatusKind.Info);
         var merged = await _catalogCoordinator.RefreshAsync(Parameters.ApiToken);
 
         if (merged is null)
         {
-            SetStatus("No models returned. Check your API token or network.", StatusKind.Error);
+            SetStatus("No models returned. Check your API tokens or network.", StatusKind.Error);
             return;
         }
 
@@ -604,12 +650,15 @@ public partial class GeneratorViewModel : ObservableObject
         return list;
     }
 
-    public async Task LoadSavedTokenAsync()
+    /// <summary>
+    /// Hydrate every provider token from secure storage. One pass per provider; each
+    /// TokenProviderViewModel knows its own store and pushes through to Parameters internally.
+    /// </summary>
+    public async Task LoadAllTokensAsync()
     {
-        var saved = await _tokenStore.LoadAsync();
-        if (!string.IsNullOrEmpty(saved))
+        foreach (var provider in TokenProviders)
         {
-            Parameters.ApiToken = saved;
+            await provider.LoadAsync();
         }
     }
 
@@ -668,11 +717,12 @@ public partial class GeneratorViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ForgetToken()
+    private void ForgetSelectedToken()
     {
-        _tokenStore.Forget();
-        Parameters.ApiToken = string.Empty;
-        SetStatus("API token cleared from secure storage.", StatusKind.Info);
+        if (SelectedTokenProvider is null) return;
+        var name = SelectedTokenProvider.DisplayName;
+        SelectedTokenProvider.Forget();
+        SetStatus($"{name} token cleared from secure storage.", StatusKind.Info);
     }
 
     /// <summary>
@@ -682,7 +732,9 @@ public partial class GeneratorViewModel : ObservableObject
     /// </summary>
     public async Task<IReadOnlyList<string>?> PickAndParsePromptsAsync()
     {
-        if (string.IsNullOrWhiteSpace(Parameters.ApiToken))
+        // Pollinations models can run anonymously; only require the Replicate token when the
+        // currently-selected model actually needs it.
+        if (!IsPollinationsModel(Parameters.Model) && string.IsNullOrWhiteSpace(Parameters.ApiToken))
         {
             SetStatus("Enter an API token before running a batch.", StatusKind.Error);
             return null;

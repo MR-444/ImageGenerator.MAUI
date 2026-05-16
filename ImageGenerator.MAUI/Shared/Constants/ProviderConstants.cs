@@ -9,4 +9,5 @@ public static class ProviderConstants
     public const string BlackForestLabs = "Black Forest Labs";
     public const string OpenAIOnReplicate = "OpenAI (via Replicate)";
     public const string Google = "Google";
+    public const string Pollinations = "Pollinations";
 }

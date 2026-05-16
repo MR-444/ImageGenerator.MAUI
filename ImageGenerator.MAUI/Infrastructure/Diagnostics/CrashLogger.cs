@@ -103,6 +103,24 @@ public static class CrashLogger
     /// </summary>
     public static void Log(string source, Exception ex) => Write(source, ex);
 
+    /// <summary>
+    /// For non-exception operational events worth logging (HTTP 4xx/5xx with a body,
+    /// dropped-on-the-floor service responses, etc.) where there's no Exception to attach.
+    /// Always non-throwing.
+    /// </summary>
+    public static void Log(string source, string message)
+    {
+        if (_logPath is null) return;
+        try
+        {
+            WriteRaw($"[{Now()}] {source}\n{message}\n");
+        }
+        catch
+        {
+            // Logging must never throw.
+        }
+    }
+
     private static void Write(string source, Exception? ex)
     {
         if (_logPath is null) return;

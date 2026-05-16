@@ -19,6 +19,7 @@ public class GeneratorViewModelTests
     private readonly GeneratorViewModel _viewModel;
     private readonly Mock<IJobRunner> _mockJobRunner;
     private readonly Mock<IApiTokenStore> _mockTokenStore;
+    private readonly Mock<IPollinationsTokenStore> _mockPollinationsTokenStore;
     private readonly Mock<IUiStateStore> _mockUiStateStore;
     private readonly Mock<IModelCatalogCoordinator> _mockCatalogCoordinator;
     private readonly Mock<IPromptBatchParser> _mockPromptBatchParser;
@@ -27,6 +28,7 @@ public class GeneratorViewModelTests
     {
         _mockJobRunner = new Mock<IJobRunner>();
         _mockTokenStore = new Mock<IApiTokenStore>();
+        _mockPollinationsTokenStore = new Mock<IPollinationsTokenStore>();
         _mockUiStateStore = new Mock<IUiStateStore>();
         _mockCatalogCoordinator = new Mock<IModelCatalogCoordinator>();
         _mockPromptBatchParser = new Mock<IPromptBatchParser>();
@@ -34,6 +36,7 @@ public class GeneratorViewModelTests
         _viewModel = new GeneratorViewModel(
             _mockJobRunner.Object,
             _mockTokenStore.Object,
+            _mockPollinationsTokenStore.Object,
             _mockUiStateStore.Object,
             _mockCatalogCoordinator.Object,
             ModelDescriptorRegistry.Default(),
@@ -413,16 +416,25 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
-    public async Task RefreshModels_EmptyToken_SetsErrorStatusWithoutFetching()
+    public async Task RefreshModels_EmptyToken_StillFetchesForPollinations()
     {
+        // Pollinations' /models endpoint is anonymous, so an empty Replicate token no longer
+        // gates a refresh: the coordinator is still called, Replicate yields nothing, and
+        // any Pollinations result still hydrates the catalog.
         _viewModel.Parameters.ApiToken = "";
+        var pollinationsOnly = new List<ModelOption>
+        {
+            new("Flux (Pollinations)", ModelConstants.Pollinations.Flux, ProviderConstants.Pollinations)
+        };
+        _mockCatalogCoordinator
+            .Setup(x => x.RefreshAsync(""))
+            .ReturnsAsync(pollinationsOnly);
 
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
 
-        _viewModel.StatusKind.Should().Be(StatusKind.Error);
-        _mockCatalogCoordinator.Verify(
-            x => x.RefreshAsync(It.IsAny<string>()),
-            Times.Never);
+        _mockCatalogCoordinator.Verify(x => x.RefreshAsync(""), Times.Once);
+        _viewModel.StatusKind.Should().Be(StatusKind.Success);
+        _viewModel.AllModels.Select(m => m.Value).Should().Contain(ModelConstants.Pollinations.Flux);
     }
 
     [Fact]
@@ -457,32 +469,57 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
-    public void ApiToken_Change_ForwardsToTokenStorePersist()
+    public void TokenProvider_ValueChange_PersistsAndForwardsToParameters()
     {
-        _viewModel.Parameters.ApiToken = "fresh-token";
+        var replicate = _viewModel.TokenProviders.Single(p => p.Key == "replicate");
+
+        replicate.Value = "fresh-token";
 
         _mockTokenStore.Verify(x => x.Persist("fresh-token"), Times.Once);
+        _viewModel.Parameters.ApiToken.Should().Be("fresh-token");
     }
 
     [Fact]
-    public void ForgetToken_ClearsParametersAndCallsTokenStoreForget()
+    public void TokenProvider_PollinationsValueChange_PersistsToPollinationsStore()
     {
-        _viewModel.Parameters.ApiToken = "some-token";
+        var pollinations = _viewModel.TokenProviders.Single(p => p.Key == "pollinations");
 
-        _viewModel.ForgetTokenCommand.Execute(null);
+        pollinations.Value = "poll-token";
+
+        _mockPollinationsTokenStore.Verify(x => x.Persist("poll-token"), Times.Once);
+        _viewModel.Parameters.PollinationsApiToken.Should().Be("poll-token");
+        // Replicate store must stay untouched — token slots are independent.
+        _mockTokenStore.Verify(x => x.Persist("poll-token"), Times.Never);
+    }
+
+    [Fact]
+    public void ForgetSelectedToken_ClearsActiveProviderOnly()
+    {
+        // Default selected provider is "replicate" — set both tokens, forget Replicate,
+        // and assert the Pollinations slot is untouched.
+        _viewModel.TokenProviders.Single(p => p.Key == "replicate").Value = "some-token";
+        _viewModel.TokenProviders.Single(p => p.Key == "pollinations").Value = "poll-token";
+
+        _viewModel.ForgetSelectedTokenCommand.Execute(null);
 
         _viewModel.Parameters.ApiToken.Should().BeEmpty();
+        _viewModel.Parameters.PollinationsApiToken.Should().Be("poll-token");
         _mockTokenStore.Verify(x => x.Forget(), Times.Once);
+        _mockPollinationsTokenStore.Verify(x => x.Forget(), Times.Never);
     }
 
     [Fact]
-    public async Task LoadSavedTokenAsync_PopulatesParametersFromStore()
+    public async Task LoadAllTokensAsync_PopulatesEveryProviderFromItsOwnStore()
     {
-        _mockTokenStore.Setup(x => x.LoadAsync()).ReturnsAsync("saved-token");
+        _mockTokenStore.Setup(x => x.LoadAsync()).ReturnsAsync("saved-replicate");
+        _mockPollinationsTokenStore.Setup(x => x.LoadAsync()).ReturnsAsync("saved-pollinations");
 
-        await _viewModel.LoadSavedTokenAsync();
+        await _viewModel.LoadAllTokensAsync();
 
-        _viewModel.Parameters.ApiToken.Should().Be("saved-token");
+        _viewModel.Parameters.ApiToken.Should().Be("saved-replicate");
+        _viewModel.Parameters.PollinationsApiToken.Should().Be("saved-pollinations");
+        _viewModel.TokenProviders.Single(p => p.Key == "replicate").Value.Should().Be("saved-replicate");
+        _viewModel.TokenProviders.Single(p => p.Key == "pollinations").Value.Should().Be("saved-pollinations");
     }
 
     // --- Card title + strength gate state machine ---
@@ -828,6 +865,7 @@ public class GeneratorViewModelTests
         var vm1 = new GeneratorViewModel(
             new Mock<IJobRunner>().Object,
             new Mock<IApiTokenStore>().Object,
+            new Mock<IPollinationsTokenStore>().Object,
             sharedStore.Object,
             coordinator1.Object,
             ModelDescriptorRegistry.Default(),
@@ -848,6 +886,7 @@ public class GeneratorViewModelTests
         var vm2 = new GeneratorViewModel(
             new Mock<IJobRunner>().Object,
             new Mock<IApiTokenStore>().Object,
+            new Mock<IPollinationsTokenStore>().Object,
             sharedStore.Object,
             coordinator2.Object,
             ModelDescriptorRegistry.Default(),

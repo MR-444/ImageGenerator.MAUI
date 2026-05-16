@@ -23,4 +23,15 @@ public static class ModelConstants
     {
         public const string NanoBanana2 = "google/nano-banana-2";
     }
+
+    public static class Pollinations
+    {
+        public const string PrefixSlash = "pollinations/";
+
+        // Seed list: the free image-producing models on gen.pollinations.ai/models that the
+        // user actually generates with. Live catalog fetch surfaces any additional free models.
+        public const string Flux = "pollinations/flux";
+        public const string Zimage = "pollinations/zimage";
+        public const string QwenImage = "pollinations/qwen-image";
+    }
 }
