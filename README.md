@@ -20,7 +20,7 @@ A Windows desktop image generation app built on .NET MAUI with two image provide
 - Per-job cancellation with retry/backoff (Polly via `Microsoft.Extensions.Http.Resilience`)
 - Images saved to `%USERPROFILE%\Pictures\ImageGenerator.MAUI\` with collision-safe filenames
 - Prompt + generation parameters embedded in the file — PNG `Comment` text chunk, or EXIF `UserComment` for JPG/WebP. Includes the actual pixel dimensions and model-specific fields (GPT options, resolution, etc.) so every image carries a complete reproducible recipe.
-- **Diagnostics log** — `app.log` next to the saved images captures startup confirmation, every failed generation (Replicate or Pollinations) with model name and reason, and any caught exception. Centralized at the `JobRunner` boundary so a provider's silent error can't escape the file. Easy to find, no spelunking through `%LocalAppData%\Packages\…`.
+- **Diagnostics log** — `app.log` next to the saved images captures startup confirmation, every failed generation (Replicate or Pollinations) with model name and reason, and any caught exception. NLog rolls the file at 5 MB and keeps 5 archives. Services log through injected `ILogger<T>` so a provider's silent error can't escape the file, with `Infrastructure.External.*` bumped to `Debug` so HTTP request/response details land without flipping the global level. Easy to find, no spelunking through `%LocalAppData%\Packages\…`.
 - MVVM via CommunityToolkit.Mvvm (`[RelayCommand]`, `[ObservableProperty]`)
 
 ## 📸 Screenshots
@@ -145,7 +145,7 @@ ImageGenerator.MAUI/
 │                             # request shapes), ModelCapabilities, Descriptors/Pollinations/
 │                             # (seed + fallback descriptors mirroring the Replicate pattern)
 ├── Infrastructure/
-│   ├── Diagnostics/          # CrashLogger (app.log + WinUI dispatcher hook)
+│   ├── Diagnostics/          # CrashLogger (NLog backend, app.log + WinUI dispatcher hook)
 │   ├── External/
 │   │   ├── OpenAi/           # Refit client + DTOs + service
 │   │   ├── Pollinations/     # PollinationsImageGenerationService, PollinationsCatalogService
@@ -198,7 +198,6 @@ Limitations that didn't block shipping but are worth knowing:
 - **Job queue has no eviction policy** — finished job cards accumulate until the app is closed. Cosmetic for short sessions; a "Clear finished" control is a candidate for v1.x.
 - **Gallery is read-only in 1.0** — delete / rename / search / multi-select are not yet implemented (you can still delete or rename in Explorer; the gallery picks up the change via `FileSystemWatcher` within ~1 s).
 - **Pollinations `kontext` (image-to-image) isn't supported in this build** — the Pollinations route has no input-image plumbing yet, so the `kontext` model surfaces in the catalog but won't accept reference images. Use a Replicate Flux model for image-prompted edits today.
-- **Logging is hand-rolled** — `CrashLogger` is the only file sink today. A migration to NLog behind `Microsoft.Extensions.Logging.ILogger<T>` is planned for v1.3 so per-service errors land in `app.log` automatically without needing explicit log calls at every catch site.
 
 If you hit any of the above, please [open an issue](https://github.com/MR-444/ImageGenerator.MAUI/issues) with the status text from `Pictures\ImageGenerator.MAUI\app.log` and what you were trying to generate — that's the fastest way these get tightened up.
 
