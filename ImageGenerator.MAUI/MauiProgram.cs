@@ -95,12 +95,19 @@ public static class MauiProgram
         builder.Services.AddSingleton<IModelCatalogCoordinator, ModelCatalogCoordinator>();
         builder.Services.AddSingleton<IPromptBatchParser, PromptBatchParser>();
 
-        builder.Services.AddTransient<GeneratorViewModel>();
+        // GeneratorViewModel is registered as Singleton because it owns session state
+        // (Jobs collection, SelectedImages, IsBatchRunning) that must survive
+        // Shell.GoToAsync("//MainPage?addInput=…") navigations from the gallery detail
+        // page. Without Singleton, "Use as input" rebuilds the VM and drops the
+        // in-flight batch + history. MainPage matches the VM lifetime; it's the root
+        // ShellContent (not a pushable route), so Shell never instantiates it twice.
+        builder.Services.AddSingleton<GeneratorViewModel>();
         builder.Services.AddTransient<GalleryViewModel>();
         builder.Services.AddTransient<GalleryItemDetailViewModel>();
 
-        // 4) Register MainPage so it (and its constructor) can be injected
-        builder.Services.AddTransient<MainPage>();
+        // 4) Register MainPage so it (and its constructor) can be injected. See the
+        //    Singleton rationale above the GeneratorViewModel registration.
+        builder.Services.AddSingleton<MainPage>();
         builder.Services.AddTransient<GalleryPage>();
         builder.Services.AddTransient<GalleryItemDetailPage>();
 

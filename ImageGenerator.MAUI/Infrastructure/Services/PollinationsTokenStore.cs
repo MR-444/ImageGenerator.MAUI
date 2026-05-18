@@ -10,11 +10,12 @@ public sealed class PollinationsTokenStore : IPollinationsTokenStore
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(500);
 
     private readonly ILogger<PollinationsTokenStore> _logger;
-    private CancellationTokenSource? _persistCts;
+    private readonly DebouncedSecureStorageWriter _writer;
 
     public PollinationsTokenStore(ILogger<PollinationsTokenStore> logger)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _writer = new DebouncedSecureStorageWriter(TokenStorageKey, DebounceDelay, _logger);
     }
 
     public async Task<string?> LoadAsync()
@@ -30,37 +31,7 @@ public sealed class PollinationsTokenStore : IPollinationsTokenStore
         }
     }
 
-    public void Persist(string value)
-    {
-        _persistCts?.Cancel();
-        _persistCts?.Dispose();
-
-        if (string.IsNullOrEmpty(value))
-        {
-            _persistCts = null;
-            return;
-        }
-
-        var cts = new CancellationTokenSource();
-        _persistCts = cts;
-        var token = cts.Token;
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(DebounceDelay, token);
-                await SecureStorage.Default.SetAsync(TokenStorageKey, value);
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Pollinations SecureStorage.{Op} failed", "Set");
-            }
-        }, token);
-    }
+    public void Persist(string value) => _writer.Schedule(value);
 
     public void Forget()
     {
