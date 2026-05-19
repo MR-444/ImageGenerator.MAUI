@@ -51,6 +51,16 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
                 };
             }
 
+            // Pollinations documents seed as `min: -1, max: 2147483647` (positive int32) and
+            // rejects anything outside that with HTTP 400. The app's global SeedMaxValue is
+            // uint32 max because Replicate Flux accepts the wider range, so we clamp at the
+            // wire boundary rather than constraining the entity. Idempotent for seeds already
+            // in range; -1 (Pollinations' "random" sentinel) is left alone.
+            if (request.Seed > int.MaxValue)
+            {
+                request = request with { Seed = request.Seed & int.MaxValue };
+            }
+
             var url = BuildUrl(request);
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

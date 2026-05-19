@@ -29,18 +29,6 @@ public sealed class ImageGenerationDispatcher : IImageGenerationService
     {
         if (IsPollinations(parameters.Model))
         {
-            // Pollinations documents the seed param as `min: -1, max: 2147483647` (positive
-            // int32), and -1 is the special "random" sentinel. The app's global SeedMaxValue
-            // is uint32 max (4_294_967_295) because Replicate Flux accepts the wider range,
-            // so without this clamp roughly half of randomized seeds would 400 against
-            // Pollinations. Clamp into positive int32 on parameters itself so the same value
-            // is sent to Pollinations AND embedded as metadata when JobRunner saves the
-            // file — reproducing a generation by re-entering the displayed seed still works.
-            // Idempotent for seeds already in range.
-            if (parameters.Seed > int.MaxValue)
-            {
-                parameters.Seed &= int.MaxValue;
-            }
             return _pollinations.GenerateImageAsync(parameters, cancellationToken);
         }
         return _replicate.GenerateImageAsync(parameters, cancellationToken);
