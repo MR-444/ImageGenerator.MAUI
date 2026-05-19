@@ -45,43 +45,8 @@ CORRECTNESS — open
 COSMETIC / QUICK WINS — open
 ----------------------------
 
-[ ] F9 (Minor) — .ToLower() vs .ToLowerInvariant()
-    One-line fix; the only violation of the project's otherwise-
-    consistent ToLowerInvariant pattern.
-    File: Presentation/ViewModels/GeneratorViewModel.cs:92
-
-[ ] F10 (Minor) — Seal concretes + drop unused protected virtual
-    Seal ReplicateImageGenerationService and ImageFileService.
-    Remove the unused `protected virtual DownloadImageAsync` (test
-    overrides now stub HttpMessageHandler instead).
-    Files: Infrastructure/External/Replicate/ReplicateImageGenerationService.cs:11,151
-           Infrastructure/Services/ImageFileService.cs:13
-
-[ ] Layering — Move ModelCapabilities to Core/Domain/ValueObjects/
-    Pure data record currently lives in Presentation/ViewModels/ and
-    is imported by every descriptor under Core/Domain/Descriptors —
-    an outward dependency that should flow inward. Mechanical move
-    plus updating all `using` directives.
-    File: Presentation/ViewModels/ModelCapabilities.cs (+ descriptor usings)
-
-[ ] QW6 — Centralize the "pollinations/" prefix check
-    The same six-line IsPollinations check appears three times. Make
-    it a single static helper, e.g. ModelConstants.Pollinations.IsId.
-    Files: Infrastructure/Services/ImageGenerationDispatcher.cs:49-51,
-           Core/Domain/Descriptors/ModelDescriptorRegistry.cs:46-48,
-           Presentation/ViewModels/GeneratorViewModel.cs:308-310
-
-[ ] QW5 — FileLauncher argument-injection hardening
-    Switch the /select,"<path>" shell-out to ProcessStartInfo.ArgumentList.
-    Today's BuildFileName strips invalid chars so the path is safe;
-    this is belt-and-suspenders.
-    File: Infrastructure/Services/FileLauncher.cs:20-30
-
-[ ] QW4 — Tighten ReplicatePredictionResponse.Input typing
-    `Dictionary<string, object?>` instead of `Dictionary<string, object>?`
-    so the type matches the converter (avoids a runtime cast surprise
-    if anyone ever reads this field).
-    File: Infrastructure/External/Replicate/ReplicateModels.cs:24
+(All previously-tracked cosmetic items shipped together in commit
+8551d31 — see RECENTLY COMPLETED below.)
 
 
 MISSING TESTS — open (audit §9)
@@ -127,6 +92,21 @@ TRACKED-OPEN BUT NOT NEW (per audit + project memory)
 RECENTLY COMPLETED (for context — already on master)
 ----------------------------------------------------
 
+[x] Cosmetic bundle — F9 + F10 + ModelCapabilities move + QW6 + QW5 + QW4
+    Commit: 8551d31 (2026-05-20)
+    F9:  ToLower() -> ToLowerInvariant() (GeneratorViewModel.cs:92).
+    F10: sealed ReplicateImageGenerationService and ImageFileService;
+         protected virtual DownloadImageAsync is now private.
+    Layering: ModelCapabilities moved from Presentation/ViewModels/
+         to Core/Domain/ValueObjects/; usings updated in interface +
+         7 descriptors; test file relocated to mirror the new layout.
+    QW6: ModelConstants.Pollinations.IsId(string?) added; three
+         duplicate locals deleted from dispatcher / registry / VM.
+    QW5: FileLauncher.RevealInFolder now uses ProcessStartInfo.ArgumentList.
+    QW4: ReplicatePredictionResponse.Input widened to
+         Dictionary<string, object?>?.
+    Zero behavior change; 268/268 tests still pass.
+
 [x] F1 (Major) — Dispatcher seed mutation
     Commit: d77d180 (2026-05-20)
     Fix: moved int32 clamp to PollinationsImageGenerationService as
@@ -151,9 +131,7 @@ HOW TO PICK THE NEXT ITEM
 
 1. Prefer Correctness over Cosmetic over Missing-tests.
 2. Within Correctness, prefer smaller-scope first (F8 < F4 < F6).
-3. The cosmetic bundle (F9 + F10 + ModelCapabilities move + QW4 + QW5
-   + QW6) is small enough to ship as one PR.
-4. ST3 + PollinationsCatalogService tests pair well: same testing
+3. ST3 + PollinationsCatalogService tests pair well: same testing
    helpers (FakeHttpMessageHandler), one PR.
-5. Update this file when you start (set [~]) and when you finish
+4. Update this file when you start (set [~]) and when you finish
    (set [x] + commit hash).
