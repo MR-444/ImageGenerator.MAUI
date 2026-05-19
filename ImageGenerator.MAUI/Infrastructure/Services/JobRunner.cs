@@ -42,7 +42,29 @@ public sealed class JobRunner : IJobRunner
 
         Directory.CreateDirectory(OutputPaths.GeneratedImagesDirectory);
         var path = _imageFileService.GetUniqueSavePath(OutputPaths.GeneratedImagesDirectory, parameters);
-        await _imageFileService.SaveImageWithMetadataAsync(path, result.ImageData, parameters);
+
+        try
+        {
+            await _imageFileService.SaveImageWithMetadataAsync(path, result.ImageData, parameters);
+        }
+        catch (Exception ex)
+        {
+            // ImageSharp.SaveAsync writes directly to the final path with no temp+move, so
+            // a mid-write failure (disk full, AV lock, IO race) can leave a partial image
+            // orphaned in the gallery. Best-effort cleanup; a cleanup failure is swallowed
+            // so the user-facing outcome stays focused on the original save error.
+            try
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch (Exception cleanupEx)
+            {
+                _logger.LogWarning(cleanupEx, "Failed to delete partial image after save error Path={Path}", path);
+            }
+
+            _logger.LogError(ex, "Image save failed Path={Path} Model={Model}", path, parameters.Model);
+            return new JobOutcome(JobOutcomeKind.Failed, null, $"Image save failed: {ex.Message}");
+        }
 
         return new JobOutcome(JobOutcomeKind.Saved, path, $"Saved to {path}");
     }
