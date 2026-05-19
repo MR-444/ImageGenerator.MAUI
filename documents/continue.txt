@@ -1,0 +1,159 @@
+ImageGenerator.MAUI — Open Work Queue
+=====================================
+
+Source of truth: AUDIT_REPORT.md (audit dated 2026-05-19, v1.3.0).
+Last updated: 2026-05-20.
+
+Format: each item has a status box, severity, a one-line hook, and
+file:line citations. Pick the top open item; keep this file in sync
+when you finish or split work.
+
+  [ ] = open      [~] = in progress (commit not yet on master)
+  [x] = done      [-] = won't fix / superseded
+
+
+CORRECTNESS — open
+------------------
+
+[ ] F4 (Moderate) — Plain HttpClient injection, no IHttpClientFactory
+    Replicate + Pollinations services take a raw HttpClient ctor
+    param; only the Refit-managed IReplicateApi gets the resilience
+    pipeline. CDN downloads run on an inline CancelAfter(60s) with no
+    retry. Functionally acceptable today; asymmetric with the rest.
+    Files: MauiProgram.cs:81-83,
+           Infrastructure/External/Replicate/ReplicateImageGenerationService.cs:13-28,151-167,
+           Infrastructure/External/Pollinations/PollinationsImageGenerationService.cs:25-37,65-66
+    Scope: medium (~1 day). Named clients + per-client policies.
+
+[ ] F6 (Moderate, known-on-roadmap) — Carve up GeneratorViewModel (930 lines)
+    Eight responsibilities. Carve-up candidates:
+      - BatchCoordinator    (RunBatchAsync, CancelBatch, IsBatchRunning)
+      - InputImagesCoordinator (SelectedImages mirror, AR sticky, image-add cmds)
+      - ProviderFilterCoordinator (SelectedProvider, FilteredModels)
+    File: Presentation/ViewModels/GeneratorViewModel.cs
+    Scope: large. M1 carve-up note already in MauiProgram.cs:90.
+
+[ ] F8 (Minor) — MainPage.OnAppearing re-runs token + UI-state loads on every appearance
+    Only the catalog load has a guard (_cachedCatalogLoaded);
+    LoadAllTokensAsync + LoadSavedUiState run again every time the
+    page appears. Harmless today; latent race if those loads ever
+    get expensive.
+    Files: Presentation/Views/MainPage.xaml.cs:49-64,
+           Presentation/ViewModels/GeneratorViewModel.cs:702-721
+
+
+COSMETIC / QUICK WINS — open
+----------------------------
+
+[ ] F9 (Minor) — .ToLower() vs .ToLowerInvariant()
+    One-line fix; the only violation of the project's otherwise-
+    consistent ToLowerInvariant pattern.
+    File: Presentation/ViewModels/GeneratorViewModel.cs:92
+
+[ ] F10 (Minor) — Seal concretes + drop unused protected virtual
+    Seal ReplicateImageGenerationService and ImageFileService.
+    Remove the unused `protected virtual DownloadImageAsync` (test
+    overrides now stub HttpMessageHandler instead).
+    Files: Infrastructure/External/Replicate/ReplicateImageGenerationService.cs:11,151
+           Infrastructure/Services/ImageFileService.cs:13
+
+[ ] Layering — Move ModelCapabilities to Core/Domain/ValueObjects/
+    Pure data record currently lives in Presentation/ViewModels/ and
+    is imported by every descriptor under Core/Domain/Descriptors —
+    an outward dependency that should flow inward. Mechanical move
+    plus updating all `using` directives.
+    File: Presentation/ViewModels/ModelCapabilities.cs (+ descriptor usings)
+
+[ ] QW6 — Centralize the "pollinations/" prefix check
+    The same six-line IsPollinations check appears three times. Make
+    it a single static helper, e.g. ModelConstants.Pollinations.IsId.
+    Files: Infrastructure/Services/ImageGenerationDispatcher.cs:49-51,
+           Core/Domain/Descriptors/ModelDescriptorRegistry.cs:46-48,
+           Presentation/ViewModels/GeneratorViewModel.cs:308-310
+
+[ ] QW5 — FileLauncher argument-injection hardening
+    Switch the /select,"<path>" shell-out to ProcessStartInfo.ArgumentList.
+    Today's BuildFileName strips invalid chars so the path is safe;
+    this is belt-and-suspenders.
+    File: Infrastructure/Services/FileLauncher.cs:20-30
+
+[ ] QW4 — Tighten ReplicatePredictionResponse.Input typing
+    `Dictionary<string, object?>` instead of `Dictionary<string, object>?`
+    so the type matches the converter (avoids a runtime cast surprise
+    if anyone ever reads this field).
+    File: Infrastructure/External/Replicate/ReplicateModels.cs:24
+
+
+MISSING TESTS — open (audit §9)
+-------------------------------
+
+[ ] ST3 — Broader PollinationsImageGenerationService tests
+    The F1 follow-up file (PollinationsImageGenerationServiceTests.cs)
+    is intentionally minimal: only seed-clamp coverage. Still missing:
+      - HTTP 4xx/5xx with body → status message contains body
+      - Undersized response (<1000 bytes) → returns undersized message
+      - Token redaction in error strings
+      - URL construction (safe=nsfw on/off)
+      - Authorization header attached only when token non-empty
+      - Cancellation via cancellationToken
+
+[ ] PollinationsCatalogService tests
+    Zero direct tests. Cover:
+      - Filter to output_modalities=image + paid_only!=true
+      - Display-name extraction from description prefix
+      - HTTP failure swallow-and-return-empty
+
+[ ] UiStateStore exception-path tests
+    SafeGet/SafeSet swallow exceptions; worth a test for the
+    SecureStorage-throws path.
+
+[ ] ApiTokenStore / PollinationsTokenStore direct tests
+    DebouncedSecureStorageWriter is covered, but the store wrappers
+    themselves have no direct tests (load/persist/forget surface).
+
+
+TRACKED-OPEN BUT NOT NEW (per audit + project memory)
+-----------------------------------------------------
+
+[ ] x:DataType build warning at MainPage.xaml:97
+    Tracked open issue per project memory.
+
+[ ] Feature: kontext (image-prompt for kontext models)
+[ ] Feature: negative_prompt
+    Both flagged in project memory's next-up list. Use the existing
+    descriptor pattern; near-zero structural impact.
+
+
+RECENTLY COMPLETED (for context — already on master)
+----------------------------------------------------
+
+[x] F1 (Major) — Dispatcher seed mutation
+    Commit: d77d180 (2026-05-20)
+    Fix: moved int32 clamp to PollinationsImageGenerationService as
+    a `request with { Seed = ... }` on the immutable PollinationsRequest.
+    Tests: ImageGenerationDispatcherTests (4), PollinationsImageGenerationServiceTests (2).
+
+[x] F7 (Moderate) — JobRunner partial-file cleanup
+    Commit: 50317a1 (2026-05-20)
+    Fix: wrap SaveImageWithMetadataAsync in try/catch; best-effort
+    File.Delete the partial file; return JobOutcome(Failed, ...).
+    New tests: JobRunnerTests (6). 268/268 green.
+
+[x] F2 (Major) — Token-store CTS race
+[x] F3 (Major) — MainPage state loss on Shell GoToAsync
+[x] F5 (Moderate) — Token-store duplication
+    Commit: c446d35 — extracted DebouncedSecureStorageWriter,
+    promoted GeneratorViewModel to Singleton, query-prop on MainPage.
+
+
+HOW TO PICK THE NEXT ITEM
+-------------------------
+
+1. Prefer Correctness over Cosmetic over Missing-tests.
+2. Within Correctness, prefer smaller-scope first (F8 < F4 < F6).
+3. The cosmetic bundle (F9 + F10 + ModelCapabilities move + QW4 + QW5
+   + QW6) is small enough to ship as one PR.
+4. ST3 + PollinationsCatalogService tests pair well: same testing
+   helpers (FakeHttpMessageHandler), one PR.
+5. Update this file when you start (set [~]) and when you finish
+   (set [x] + commit hash).
