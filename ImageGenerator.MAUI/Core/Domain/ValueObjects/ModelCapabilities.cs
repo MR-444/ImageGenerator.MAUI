@@ -1,4 +1,4 @@
-namespace ImageGenerator.MAUI.Presentation.ViewModels;
+namespace ImageGenerator.MAUI.Core.Domain.ValueObjects;
 
 /// <summary>
 /// Pure data shape declaring which UI knobs a model exposes. The per-model values now live

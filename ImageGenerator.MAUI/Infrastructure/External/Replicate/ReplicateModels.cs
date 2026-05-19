@@ -21,7 +21,7 @@ public class ReplicatePredictionResponse
     public string? Version { get; set; }
 
     [JsonPropertyName("input")]
-    public Dictionary<string, object>? Input { get; set; }
+    public Dictionary<string, object?>? Input { get; set; }
 
     [JsonPropertyName("logs")]
     public string? Logs { get; set; }

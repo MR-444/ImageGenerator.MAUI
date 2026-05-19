@@ -33,5 +33,9 @@ public static class ModelConstants
         public const string Flux = "pollinations/flux";
         public const string Zimage = "pollinations/zimage";
         public const string QwenImage = "pollinations/qwen-image";
+
+        public static bool IsId(string? modelId) =>
+            !string.IsNullOrEmpty(modelId)
+            && modelId.StartsWith(PrefixSlash, StringComparison.Ordinal);
     }
 }

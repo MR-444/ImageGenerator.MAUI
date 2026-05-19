@@ -1,7 +1,7 @@
 using ImageGenerator.MAUI.Core.Domain.Descriptors.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.Services;
-using ImageGenerator.MAUI.Presentation.ViewModels;
+using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 
 namespace ImageGenerator.MAUI.Core.Domain.Descriptors;
 

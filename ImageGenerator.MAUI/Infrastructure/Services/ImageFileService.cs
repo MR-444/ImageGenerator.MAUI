@@ -10,7 +10,7 @@ using ImageGenerationParameters = ImageGenerator.MAUI.Core.Domain.Entities.Image
 
 namespace ImageGenerator.MAUI.Infrastructure.Services;
 
-public class ImageFileService : IImageFileService
+public sealed class ImageFileService : IImageFileService
 {
     private readonly IImageEncoderProvider _encoderProvider;
     private readonly IModelDescriptorRegistry _registry;

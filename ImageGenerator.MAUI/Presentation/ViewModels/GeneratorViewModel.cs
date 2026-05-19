@@ -89,7 +89,7 @@ public partial class GeneratorViewModel : ObservableObject
     private List<string> _gptInputFidelityOptions = [];
 
     [ObservableProperty]
-    private List<string> _outputFormats = [nameof(ImageOutputFormat.Png).ToLower(), nameof(ImageOutputFormat.Jpg).ToLower(), nameof(ImageOutputFormat.Webp).ToLower()];
+    private List<string> _outputFormats = [nameof(ImageOutputFormat.Png).ToLowerInvariant(), nameof(ImageOutputFormat.Jpg).ToLowerInvariant(), nameof(ImageOutputFormat.Webp).ToLowerInvariant()];
 
     // Each provider's token Entry is rendered from this collection — adding a third / fourth
     // provider is a single extra item built in the ctor below, no XAML changes.
@@ -299,17 +299,13 @@ public partial class GeneratorViewModel : ObservableObject
     {
         // Pollinations works anonymously, so its token is optional. Replicate requires its own
         // Bearer token. Prompt is required for both.
-        var tokenOk = IsPollinationsModel(Parameters.Model)
+        var tokenOk = ModelConstants.Pollinations.IsId(Parameters.Model)
             ? true
             : !string.IsNullOrWhiteSpace(Parameters.ApiToken);
         IsValid = tokenOk && !string.IsNullOrWhiteSpace(Parameters.Prompt);
     }
 
-    private static bool IsPollinationsModel(string modelId) =>
-        !string.IsNullOrEmpty(modelId)
-        && modelId.StartsWith(ModelConstants.Pollinations.PrefixSlash, StringComparison.Ordinal);
-
-    public bool IsPollinationsSelected => IsPollinationsModel(Parameters.Model);
+    public bool IsPollinationsSelected => ModelConstants.Pollinations.IsId(Parameters.Model);
 
     private void SetStatus(string message, StatusKind kind)
     {
@@ -738,7 +734,7 @@ public partial class GeneratorViewModel : ObservableObject
     {
         // Pollinations models can run anonymously; only require the Replicate token when the
         // currently-selected model actually needs it.
-        if (!IsPollinationsModel(Parameters.Model) && string.IsNullOrWhiteSpace(Parameters.ApiToken))
+        if (!ModelConstants.Pollinations.IsId(Parameters.Model) && string.IsNullOrWhiteSpace(Parameters.ApiToken))
         {
             SetStatus("Enter an API token before running a batch.", StatusKind.Error);
             return null;

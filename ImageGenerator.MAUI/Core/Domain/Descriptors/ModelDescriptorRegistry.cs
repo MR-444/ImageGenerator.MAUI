@@ -34,18 +34,14 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
         // Pollinations check runs before LooksLikeReplicatePath because "pollinations/foo"
         // also satisfies the owner/name heuristic — without this branch we'd hand Pollinations
         // requests to the Replicate-shaped fallback and the service would reject the payload.
-        : IsPollinations(modelId) ? _pollinationsFallback
+        : ModelConstants.Pollinations.IsId(modelId) ? _pollinationsFallback
         : LooksLikeReplicatePath(modelId) ? _replicateFallback
         : throw new ArgumentException($"Unknown model type: {modelId}");
 
     public ICapabilityProvider CapabilitiesFor(string modelId) =>
         _capabilities.TryGetValue(modelId, out var c) ? c
-        : IsPollinations(modelId) ? _pollinationsFallback
+        : ModelConstants.Pollinations.IsId(modelId) ? _pollinationsFallback
         : _replicateFallback;
-
-    private static bool IsPollinations(string modelId) =>
-        !string.IsNullOrEmpty(modelId)
-        && modelId.StartsWith(ModelConstants.Pollinations.PrefixSlash, StringComparison.Ordinal);
 
     public IMetadataDescriber? MetadataFor(string modelId) =>
         _metadata.TryGetValue(modelId, out var m) ? m : null;

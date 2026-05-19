@@ -27,14 +27,10 @@ public sealed class ImageGenerationDispatcher : IImageGenerationService
 
     public Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters, CancellationToken cancellationToken = default)
     {
-        if (IsPollinations(parameters.Model))
+        if (ModelConstants.Pollinations.IsId(parameters.Model))
         {
             return _pollinations.GenerateImageAsync(parameters, cancellationToken);
         }
         return _replicate.GenerateImageAsync(parameters, cancellationToken);
     }
-
-    private static bool IsPollinations(string modelId) =>
-        !string.IsNullOrEmpty(modelId)
-        && modelId.StartsWith(ModelConstants.Pollinations.PrefixSlash, StringComparison.Ordinal);
 }

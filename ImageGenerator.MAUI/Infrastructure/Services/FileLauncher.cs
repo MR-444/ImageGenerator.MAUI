@@ -19,13 +19,15 @@ public class FileLauncher : IFileLauncher
 
     public void RevealInFolder(string path)
     {
-        // explorer.exe /select,"<path>" opens the parent folder with the file highlighted.
-        // The /select switch needs the path quoted as a single argument.
-        Process.Start(new ProcessStartInfo
+        // explorer.exe /select,<path> opens the parent folder with the file highlighted.
+        // ArgumentList handles quoting/escaping internally, so a future filename containing
+        // a quote can't break out of the argument.
+        var psi = new ProcessStartInfo
         {
             FileName = "explorer.exe",
-            Arguments = $"/select,\"{path}\"",
             UseShellExecute = true
-        });
+        };
+        psi.ArgumentList.Add($"/select,{path}");
+        Process.Start(psi);
     }
 }

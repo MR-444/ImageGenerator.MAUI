@@ -1,9 +1,9 @@
 using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
-using ImageGenerator.MAUI.Presentation.ViewModels;
+using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Shared.Constants;
 
-namespace ImageGenerator.MAUI.Tests.ViewModels;
+namespace ImageGenerator.MAUI.Tests.Core.Domain.ValueObjects;
 
 public class ModelCapabilitiesTests
 {

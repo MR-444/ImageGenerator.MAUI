@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace ImageGenerator.MAUI.Infrastructure.External.Replicate;
 
-public class ReplicateImageGenerationService : IImageGenerationService
+public sealed class ReplicateImageGenerationService : IImageGenerationService
 {
     private readonly HttpClient _httpClient;
     private readonly IReplicateApi _replicateApi;
@@ -148,7 +148,7 @@ public class ReplicateImageGenerationService : IImageGenerationService
         );
     }
 
-    protected virtual async Task<byte[]> DownloadImageAsync(string imageUrl, CancellationToken cancellationToken)
+    private async Task<byte[]> DownloadImageAsync(string imageUrl, CancellationToken cancellationToken)
     {
         // The injected HttpClient is the default unnamed factory client, so it doesn't share
         // the Refit pipeline's timeouts. Put a concrete ceiling on the CDN download here.
