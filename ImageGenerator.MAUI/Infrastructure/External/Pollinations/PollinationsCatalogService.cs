@@ -15,12 +15,12 @@ public sealed class PollinationsCatalogService : IPollinationsCatalogService
     // model objects; we filter to image-producing free-tier ones only.
     private const string ModelsEndpoint = "https://gen.pollinations.ai/models";
 
-    private readonly HttpClient _httpClient;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<PollinationsCatalogService> _logger;
 
-    public PollinationsCatalogService(HttpClient httpClient, ILogger<PollinationsCatalogService> logger)
+    public PollinationsCatalogService(IHttpClientFactory httpClientFactory, ILogger<PollinationsCatalogService> logger)
     {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -28,7 +28,8 @@ public sealed class PollinationsCatalogService : IPollinationsCatalogService
     {
         try
         {
-            var entries = await _httpClient.GetFromJsonAsync<List<PollinationsModelEntry>>(ModelsEndpoint, ct);
+            using var httpClient = _httpClientFactory.CreateClient(PollinationsImageGenerationService.HttpClientName);
+            var entries = await httpClient.GetFromJsonAsync<List<PollinationsModelEntry>>(ModelsEndpoint, ct);
             if (entries is null) return [];
 
             return entries

@@ -10,6 +10,8 @@ namespace ImageGenerator.MAUI.Infrastructure.External.Pollinations;
 
 public sealed class PollinationsImageGenerationService : IImageGenerationService
 {
+    internal const string HttpClientName = "pollinations";
+
     // gen.pollinations.ai is the active host (matches the Python reference). The legacy
     // image.pollinations.ai /models endpoint now only returns ["sana"], so it's effectively
     // dead for our purposes.
@@ -20,18 +22,16 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
     // same guard, since a real generated JPEG is always 5-200+ KB.
     private const int MinValidImageBytes = 1000;
 
-    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(60);
-
-    private readonly HttpClient _httpClient;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly IModelDescriptorRegistry _registry;
     private readonly ILogger<PollinationsImageGenerationService> _logger;
 
     public PollinationsImageGenerationService(
-        HttpClient httpClient,
+        IHttpClientFactory httpClientFactory,
         IModelDescriptorRegistry registry,
         ILogger<PollinationsImageGenerationService> logger)
     {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -63,16 +63,14 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
 
             var url = BuildUrl(request);
 
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(RequestTimeout);
-
+            using var httpClient = _httpClientFactory.CreateClient(HttpClientName);
             using var httpRequest = new HttpRequestMessage(HttpMethod.Get, url);
             if (!string.IsNullOrWhiteSpace(parameters.PollinationsApiToken))
             {
                 httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer {parameters.PollinationsApiToken}");
             }
 
-            using var response = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+            using var response = await httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -83,7 +81,7 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
                 string fullBody;
                 try
                 {
-                    fullBody = await response.Content.ReadAsStringAsync(cts.Token);
+                    fullBody = await response.Content.ReadAsStringAsync(cancellationToken);
                 }
                 catch (Exception readEx)
                 {
@@ -111,7 +109,7 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
                 };
             }
 
-            var bytes = await response.Content.ReadAsByteArrayAsync(cts.Token);
+            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
             if (bytes.Length < MinValidImageBytes)
             {
                 _logger.LogError(

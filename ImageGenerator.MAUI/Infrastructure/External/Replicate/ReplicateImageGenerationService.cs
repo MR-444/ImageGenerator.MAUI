@@ -10,19 +10,21 @@ namespace ImageGenerator.MAUI.Infrastructure.External.Replicate;
 
 public sealed class ReplicateImageGenerationService : IImageGenerationService
 {
-    private readonly HttpClient _httpClient;
+    internal const string HttpClientName = "replicate-download";
+
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly IReplicateApi _replicateApi;
     private readonly IModelDescriptorRegistry _registry;
     private readonly ILogger<ReplicateImageGenerationService> _logger;
 
     public ReplicateImageGenerationService(
         IReplicateApi replicateApi,
-        HttpClient httpClient,
+        IHttpClientFactory httpClientFactory,
         IModelDescriptorRegistry registry,
         ILogger<ReplicateImageGenerationService> logger)
     {
         _replicateApi = replicateApi ?? throw new ArgumentNullException(nameof(replicateApi));
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -150,16 +152,16 @@ public sealed class ReplicateImageGenerationService : IImageGenerationService
 
     private async Task<byte[]> DownloadImageAsync(string imageUrl, CancellationToken cancellationToken)
     {
-        // The injected HttpClient is the default unnamed factory client, so it doesn't share
-        // the Refit pipeline's timeouts. Put a concrete ceiling on the CDN download here.
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(TimeSpan.FromSeconds(60));
+        // The named client carries the standard resilience pipeline (Polly retry + per-attempt /
+        // total timeouts). The factory hands out a lightweight wrapper around a pooled handler;
+        // dispose it per call.
+        using var httpClient = _httpClientFactory.CreateClient(HttpClientName);
         try
         {
-            using var response = await _httpClient.GetAsync(imageUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+            using var response = await httpClient.GetAsync(imageUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
 
-            return await response.Content.ReadAsByteArrayAsync(cts.Token);
+            return await response.Content.ReadAsByteArrayAsync(cancellationToken);
         }
         catch (HttpRequestException ex)
         {

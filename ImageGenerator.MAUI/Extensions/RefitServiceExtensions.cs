@@ -12,8 +12,8 @@ public static class RefitServiceExtensions
 {
     // Replicate holds connections up to ~60s on `Prefer: wait`; OpenAI generations are typically <30s
     // but occasionally slow. Pick attempt/total timeouts that accommodate the longer of the two.
-    private static readonly TimeSpan PerAttemptTimeout = TimeSpan.FromSeconds(75);
-    private static readonly TimeSpan TotalRequestTimeout = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan RefitPerAttemptTimeout = TimeSpan.FromSeconds(75);
+    private static readonly TimeSpan RefitTotalRequestTimeout = TimeSpan.FromMinutes(5);
 
     // Replicate rejects payloads that send optional fields as `null` (HTTP 422 "expected string, given null").
     // Skip nulls globally so every DTO's optional properties drop out of the wire format.
@@ -70,13 +70,28 @@ public static class RefitServiceExtensions
         string baseAddress,
         TimeSpan? retryDelay = null) where T : class
     {
+        return services
+            .AddRefitClient<T>(SharedRefitSettings)
+            .ConfigureHttpClient(client => client.BaseAddress = new Uri(baseAddress))
+            .ConfigureStandardResilience(RefitPerAttemptTimeout, RefitTotalRequestTimeout, retryDelay);
+    }
+
+    /// <summary>
+    /// Apply the project's standard outbound-HTTP pipeline to a named or typed client:
+    /// auto-decompression on the primary handler, Polly-owned timeouts (HttpClient.Timeout
+    /// opts out), and a TotalTimeout → Retry → PerAttemptTimeout resilience stack.
+    /// </summary>
+    public static IHttpClientBuilder ConfigureStandardResilience(
+        this IHttpClientBuilder builder,
+        TimeSpan perAttemptTimeout,
+        TimeSpan totalTimeout,
+        TimeSpan? retryDelay = null)
+    {
         var delay = retryDelay ?? TimeSpan.FromSeconds(2);
 
-        var builder = services
-            .AddRefitClient<T>(SharedRefitSettings)
+        builder
             .ConfigureHttpClient(client =>
             {
-                client.BaseAddress = new Uri(baseAddress);
                 // Polly owns timeouts (per-attempt + total). Opt out of HttpClient's per-request
                 // default (100s) so two ceilings can't compete or surface as TaskCanceledException
                 // instead of Polly's TimeoutRejectedException.
@@ -84,21 +99,22 @@ public static class RefitServiceExtensions
             })
             // Replicate/OpenAI send gzip/brotli-compressed JSON responses. Without automatic
             // decompression on the primary handler, Refit reads raw bytes that fail to
-            // deserialize, surfacing as "HTTP 2xx: (no body)" ApiExceptions.
+            // deserialize, surfacing as "HTTP 2xx: (no body)" ApiExceptions. Harmless on
+            // non-compressed responses (Pollinations image bytes, CDN downloads).
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
             {
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli
             });
 
-        // Resilience strategies wrap outside-in in registration order: outer TotalRequestTimeout
-        // wraps Retry wraps inner PerAttemptTimeout. Each attempt is bounded by 75s; up to 4
-        // attempts (1 + 3 retries) are bounded by 5 min total. Reordering these silently breaks
-        // the contract — e.g. PerAttempt first would make 75s the only effective ceiling.
+        // Resilience strategies wrap outside-in in registration order: outer TotalTimeout
+        // wraps Retry wraps inner PerAttemptTimeout. Up to 4 attempts (1 + 3 retries) are
+        // bounded by the total; each attempt is bounded by per-attempt. Reordering silently
+        // breaks the contract — e.g. PerAttempt first would make it the only effective ceiling.
         builder.AddResilienceHandler("standard", pipeline =>
         {
             pipeline.AddTimeout(new HttpTimeoutStrategyOptions
             {
-                Timeout = TotalRequestTimeout,
+                Timeout = totalTimeout,
                 Name = "TotalRequestTimeout"
             });
 
@@ -119,7 +135,7 @@ public static class RefitServiceExtensions
 
             pipeline.AddTimeout(new HttpTimeoutStrategyOptions
             {
-                Timeout = PerAttemptTimeout,
+                Timeout = perAttemptTimeout,
                 Name = "PerAttemptTimeout"
             });
         });

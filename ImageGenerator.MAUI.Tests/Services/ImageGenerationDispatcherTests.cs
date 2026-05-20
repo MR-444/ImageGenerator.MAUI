@@ -8,6 +8,7 @@ using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.Services;
 using ImageGenerator.MAUI.Models.Replicate;
 using ImageGenerator.MAUI.Shared.Constants;
+using ImageGenerator.MAUI.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Moq.Protected;
@@ -28,12 +29,12 @@ public class ImageGenerationDispatcherTests
 
         var replicate = new ReplicateImageGenerationService(
             _replicateApi.Object,
-            new HttpClient(_replicateHandler.Object),
+            new StubHttpClientFactory(new HttpClient(_replicateHandler.Object)),
             registry,
             NullLogger<ReplicateImageGenerationService>.Instance);
 
         var pollinations = new PollinationsImageGenerationService(
-            new HttpClient(_pollinationsHandler.Object),
+            new StubHttpClientFactory(new HttpClient(_pollinationsHandler.Object)),
             registry,
             NullLogger<PollinationsImageGenerationService>.Instance);
 

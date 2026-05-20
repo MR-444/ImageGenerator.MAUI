@@ -5,6 +5,7 @@ using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Infrastructure.External.Pollinations;
 using ImageGenerator.MAUI.Shared.Constants;
+using ImageGenerator.MAUI.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Moq.Protected;
@@ -33,7 +34,7 @@ public class PollinationsImageGenerationServiceTests
             });
 
         _service = new PollinationsImageGenerationService(
-            new HttpClient(_handler.Object),
+            new StubHttpClientFactory(new HttpClient(_handler.Object)),
             ModelDescriptorRegistry.Default(),
             NullLogger<PollinationsImageGenerationService>.Instance);
     }

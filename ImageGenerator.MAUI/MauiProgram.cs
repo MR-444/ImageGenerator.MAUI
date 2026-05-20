@@ -53,6 +53,21 @@ public static class MauiProgram
         // 1) Add the Refit client
         builder.Services.AddRefitClient<IReplicateApi>("https://api.replicate.com");
 
+        // 1a) Named HttpClients for the non-Refit outbound paths. Both reuse the project's
+        //     standard resilience pipeline (retry on 5xx/408/429, Polly-owned timeouts) so the
+        //     CDN download and Pollinations calls are no longer asymmetric with Refit.
+        //     "pollinations" is shared by gen + catalog (same host, same retry budget).
+        builder.Services.AddHttpClient("replicate-download")
+            .ConfigureStandardResilience(
+                perAttemptTimeout: TimeSpan.FromSeconds(60),
+                totalTimeout: TimeSpan.FromMinutes(3));
+
+        builder.Services.AddHttpClient("pollinations", client =>
+                client.BaseAddress = new Uri("https://gen.pollinations.ai"))
+            .ConfigureStandardResilience(
+                perAttemptTimeout: TimeSpan.FromSeconds(60),
+                totalTimeout: TimeSpan.FromMinutes(3));
+
         // 2) Per-model descriptors. Each registers as itself + every narrow interface it
         //    implements, forwarded to the same singleton instance. Adding a new model is now
         //    a single-line edit here plus one new descriptor file.
