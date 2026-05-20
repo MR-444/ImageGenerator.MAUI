@@ -25,13 +25,8 @@ COSMETIC / QUICK WINS — open
 MISSING TESTS — open (audit §9)
 -------------------------------
 
-[ ] UiStateStore exception-path tests
-    SafeGet/SafeSet swallow exceptions; worth a test for the
-    SecureStorage-throws path.
-
-[ ] ApiTokenStore / PollinationsTokenStore direct tests
-    DebouncedSecureStorageWriter is covered, but the store wrappers
-    themselves have no direct tests (load/persist/forget surface).
+(All audit §9 missing-test items shipped together in commit 82cc571 —
+see RECENTLY COMPLETED below. ST3 + catalog shipped in a74ba00.)
 
 
 TRACKED-OPEN BUT NOT NEW (per audit + project memory)
@@ -69,6 +64,26 @@ TRACKED-OPEN BUT NOT NEW (per audit + project memory)
 
 RECENTLY COMPLETED (for context — already on master)
 ----------------------------------------------------
+
+[x] Store wrappers — UiStateStore + Api/Pollinations token stores
+    Commit: 82cc571 (2026-05-20)
+    Closed the last two MISSING TESTS items. Each store reaches a static
+    MAUI handler (SecureStorage.Default / Preferences.Default) that
+    throws outside an app-container context, so they had no direct tests
+    until now. Added an optional ISecureStorage / IPreferences ctor
+    parameter to each (defaulting to the platform static) — mirrors the
+    existing DebouncedSecureStorageWriter writer-Func seam, and MS.DI
+    honors the default when the interface isn't registered, so
+    MauiProgram.cs is unchanged.
+    Two ConcurrentDictionary-backed stubs land in Tests/TestSupport/
+    (StubSecureStorage, StubPreferences) with throw-on-X hooks for
+    catch-path assertions (the debounced writer fires from background
+    Task.Run, so the concurrent backing matters).
+    New fixtures: UiStateStoreTests (11), ApiTokenStoreTests (7),
+    PollinationsTokenStoreTests (7). Persist tests wait 700ms (200ms
+    above the SUT's hard-coded 500ms debounce); fixtures run in
+    parallel so the wall-time impact is bounded.
+    314 → 339 tests green.
 
 [x] ST3 + PollinationsCatalogService tests — broader Pollinations coverage
     Commit: a74ba00 (2026-05-20)
