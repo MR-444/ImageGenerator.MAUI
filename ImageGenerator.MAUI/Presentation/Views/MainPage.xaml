@@ -4,6 +4,7 @@
              xmlns:behaviors="clr-namespace:ImageGenerator.MAUI.Presentation.Behaviors"
              xmlns:converters="clr-namespace:ImageGenerator.MAUI.Presentation.Converters"
              xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
+             xmlns:vo="clr-namespace:ImageGenerator.MAUI.Core.Domain.ValueObjects"
              x:Name="Root"
              x:Class="ImageGenerator.MAUI.Presentation.Views.MainPage"
              x:DataType="vm:GeneratorViewModel"
@@ -52,9 +53,12 @@
                                Style="{StaticResource HelperText}" />
 
                         <Picker ItemsSource="{Binding TokenProviders}"
-                                ItemDisplayBinding="{Binding DisplayName}"
                                 SelectedItem="{Binding SelectedTokenProvider}"
-                                AutomationId="TokenProviderPicker" />
+                                AutomationId="TokenProviderPicker">
+                            <Picker.ItemDisplayBinding>
+                                <Binding Path="DisplayName" x:DataType="vm:TokenProviderViewModel" />
+                            </Picker.ItemDisplayBinding>
+                        </Picker>
 
                         <Label Text="{Binding SelectedTokenProvider.HelperText}"
                                Style="{StaticResource HelperText}" />
@@ -154,9 +158,12 @@
                             <Label Grid.Row="0" Grid.Column="1" Text="Model" Style="{StaticResource FieldLabel}" />
                             <Picker Grid.Row="1" Grid.Column="1"
                                     ItemsSource="{Binding ProviderFilter.FilteredModels}"
-                                    ItemDisplayBinding="{Binding Display}"
                                     SelectedItem="{Binding ProviderFilter.SelectedModel}"
-                                    AutomationId="ModelPicker" />
+                                    AutomationId="ModelPicker">
+                                <Picker.ItemDisplayBinding>
+                                    <Binding Path="Display" x:DataType="vo:ModelOption" />
+                                </Picker.ItemDisplayBinding>
+                            </Picker>
                         </Grid>
 
                         <Button Text="Refresh Models"
