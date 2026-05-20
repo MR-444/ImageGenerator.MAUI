@@ -16,14 +16,7 @@ when you finish or split work.
 CORRECTNESS — open
 ------------------
 
-[ ] (Moderate) .Result after Task.WhenAll — idiomatic await refactor
-    Infrastructure/Services/ModelCatalogCoordinator.cs:37-39
-    `replicateTask.Result.Concat(pollinationsTask.Result)` runs only
-    after `await Task.WhenAll(replicateTask, pollinationsTask)` — both
-    tasks have completed by then so the access is functionally safe,
-    but it reads like sync-over-async to anyone scanning the file and
-    is the only .Result access left in the codebase. Replace with:
-      var (rep, pol) = (await replicateTask, await pollinationsTask);
+(Empty — .Result refactor shipped in 2d96a6d, see RECENTLY COMPLETED.)
 
 
 COSMETIC / QUICK WINS — open
@@ -137,6 +130,17 @@ TRACKED-OPEN BUT NOT NEW (per audit + project memory)
 
 RECENTLY COMPLETED (for context — already on master)
 ----------------------------------------------------
+
+[x] (Moderate) .Result after Task.WhenAll — tuple-await refactor
+    Commit: 2d96a6d (2026-05-20)
+    The only .Result access in the codebase. After
+    `await Task.WhenAll(replicateTask, pollinationsTask)` the reads
+    were functionally safe (both tasks complete) but read as
+    sync-over-async at a glance. Replaced with
+    `var (replicate, pollinations) = (await replicateTask, await
+    pollinationsTask);` — both fetches still start concurrently
+    (no await until the tuple), parallelism preserved, .Result gone.
+    339/339 green.
 
 [x] XamlC XC0022 — type the two ItemDisplayBinding paths
     Commit: 65e27b9 (2026-05-20)
