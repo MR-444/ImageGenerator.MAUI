@@ -1,8 +1,9 @@
 ImageGenerator.MAUI — Open Work Queue
 =====================================
 
-Source of truth: AUDIT_REPORT.md (audit dated 2026-05-19, v1.3.0).
-Last updated: 2026-05-20.
+Source of truth: AUDIT_REPORT.md (audit dated 2026-05-20, v1.3.0+).
+Last updated: 2026-05-20 (post-refresh audit; F1–F10 round all in RECENTLY
+COMPLETED below, new findings populated here).
 
 Format: each item has a status box, severity, a one-line hook, and
 file:line citations. Pick the top open item; keep this file in sync
@@ -15,18 +16,93 @@ when you finish or split work.
 CORRECTNESS — open
 ------------------
 
+[ ] (Moderate) .Result after Task.WhenAll — idiomatic await refactor
+    Infrastructure/Services/ModelCatalogCoordinator.cs:37-39
+    `replicateTask.Result.Concat(pollinationsTask.Result)` runs only
+    after `await Task.WhenAll(replicateTask, pollinationsTask)` — both
+    tasks have completed by then so the access is functionally safe,
+    but it reads like sync-over-async to anyone scanning the file and
+    is the only .Result access left in the codebase. Replace with:
+      var (rep, pol) = (await replicateTask, await pollinationsTask);
+
+
 COSMETIC / QUICK WINS — open
 ----------------------------
 
-(All previously-tracked cosmetic items shipped together in commit
-8551d31 — see RECENTLY COMPLETED below.)
+[ ] (Minor) Second `/select,…` call site missed by QW5
+    Presentation/ViewModels/GenerationJob.cs:62-68
+    `FileLauncher.RevealInFolder` was migrated to
+    `ProcessStartInfo.ArgumentList` in 8551d31 but this second
+    explorer-select call site was missed. BuildFileName strips invalid
+    filename chars today so there is no current exploit; consistency
+    + defense-in-depth says either route through IFileLauncher
+    (already injected at the launcher level for other callers) or
+    switch to ArgumentList here too.
+
+[ ] (Minor) Asymmetric suppression-flag ownership across F6 carve-up
+    Presentation/ViewModels/GeneratorViewModel.cs:106,166-169,275-276
+    Presentation/ViewModels/ProviderFilterCoordinator.cs:34,73-83,100-108
+    `_suppressPreferredArUpdate` is host-owned + host-read while
+    `SuppressModelPersist` is coordinator-owned + host-read. Same
+    architectural question answered two ways. AR flag belongs on
+    InputImagesCoordinator because the relevant write path
+    (setAspectRatioProgrammatically callback) already lives there.
+
+[ ] (Minor) DispatchToUi triplicated — extract to one shared static
+    Presentation/ViewModels/GeneratorViewModel.cs:405-418
+    Presentation/ViewModels/BatchCoordinator.cs:222-235
+    Presentation/ViewModels/GalleryViewModel.cs:304-317
+    Same six-line static across three VMs. Extract to
+    Presentation/Common/UiDispatcher.cs (or similar) and call from all
+    three. ~15min mechanical edit.
+
+[ ] (Minor) Named-client constants declared but not used at registration
+    MauiProgram.cs:60,65
+    Infrastructure/External/Replicate/ReplicateImageGenerationService.cs:13
+    Infrastructure/External/Pollinations/PollinationsImageGenerationService.cs:13
+    `HttpClientName` const exists on both services and is consumed
+    correctly at PollinationsCatalogService.cs:31, but MauiProgram
+    still hard-codes the same strings as literals in the two
+    AddHttpClient(…) calls. Wire the constants so a rename can't
+    silently desync the registration from the consumer.
+
+[ ] (Minor) Five unsealed concretes left over from QW1 (8551d31)
+    Infrastructure/Services/FileLauncher.cs:6
+    Infrastructure/Services/ClipboardService.cs:6
+    Infrastructure/Services/GalleryService.cs:15
+    Infrastructure/Services/ImageEncoderProvider.cs:18
+    Infrastructure/Services/ModelCatalogService.cs:11
+    `8551d31` sealed ReplicateImageGenerationService + ImageFileService;
+    these five matching concretes were not. None has subclasses, none
+    has protected virtual members. Mechanical 5× `public class` →
+    `public sealed class` edit.
+
+[ ] (Nit) Mirror fires per-item during TruncateToMaxInputs
+    Presentation/ViewModels/InputImagesCoordinator.cs:82-91,93-125
+    OnSelectedImagesChanged calls _mirrorImagePromptsToParameters on
+    every CollectionChanged, including each programmatic remove from
+    TruncateToMaxInputs. Cap is ≤14 and ImagePrompts is a tiny
+    ObservableCollection<string>, so the cost is negligible. Logged
+    for completeness; only matters if MaxImageInputs ever grows past
+    ~50.
 
 
 MISSING TESTS — open (audit §9)
 -------------------------------
 
-(All audit §9 missing-test items shipped together in commit 82cc571 —
-see RECENTLY COMPLETED below. ST3 + catalog shipped in a74ba00.)
+[ ] (Minor) Default() registers 9 descriptors; production registers 12
+    Core/Domain/Descriptors/ModelDescriptorRegistry.cs:76-87
+    MauiProgram.cs:75-86
+    ProductionDescriptors() lists nine Replicate descriptors and omits
+    the three Pollinations descriptors (PollinationsFlux,
+    PollinationsZimage, PollinationsQwenImage). Tests that rely on
+    Default() therefore route Pollinations IDs through
+    FallbackPollinationsDescriptor instead of the concrete-typed
+    descriptor under test, so specific-descriptor Pollinations
+    behavior is currently tested only indirectly via the service
+    fixtures. Add the three descriptors to ProductionDescriptors() and
+    add Default_RegistersAllProductionDescriptors_AndCountMatchesMauiProgram
+    pinning the count.
 
 
 TRACKED-OPEN BUT NOT NEW (per audit + project memory)
@@ -195,8 +271,15 @@ HOW TO PICK THE NEXT ITEM
 -------------------------
 
 1. Prefer Correctness over Cosmetic over Missing-tests.
-2. Within Correctness, prefer smaller-scope first (F8 < F4 < F6).
-3. ST3 + PollinationsCatalogService tests pair well: same testing
-   helpers (FakeHttpMessageHandler), one PR.
-4. Update this file when you start (set [~]) and when you finish
+2. The single Correctness item (.Result refactor) is the smallest
+   commit in the queue — do it first.
+3. Within Cosmetic, smaller-scope first: seal-bundle (one ~5min
+   commit), constant-wire (one ~5min commit), and the second
+   /select, fix (one ~5min commit) are all mechanical. DispatchToUi
+   extract is ~15min. Suppression-flag move is the largest cosmetic
+   and ripples through GeneratorViewModel + InputImagesCoordinator.
+4. The Missing-Tests item (Default() registry completeness) pairs
+   naturally with the seal-bundle commit since both touch the
+   descriptor surface.
+5. Update this file when you start (set [~]) and when you finish
    (set [x] + commit hash).
