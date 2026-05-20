@@ -15,16 +15,6 @@ when you finish or split work.
 CORRECTNESS — open
 ------------------
 
-[ ] F4 (Moderate) — Plain HttpClient injection, no IHttpClientFactory
-    Replicate + Pollinations services take a raw HttpClient ctor
-    param; only the Refit-managed IReplicateApi gets the resilience
-    pipeline. CDN downloads run on an inline CancelAfter(60s) with no
-    retry. Functionally acceptable today; asymmetric with the rest.
-    Files: MauiProgram.cs:81-83,
-           Infrastructure/External/Replicate/ReplicateImageGenerationService.cs:13-28,151-167,
-           Infrastructure/External/Pollinations/PollinationsImageGenerationService.cs:25-37,65-66
-    Scope: medium (~1 day). Named clients + per-client policies.
-
 [ ] F6 (Moderate, known-on-roadmap) — Carve up GeneratorViewModel (930 lines)
     Eight responsibilities. Carve-up candidates:
       - BatchCoordinator    (RunBatchAsync, CancelBatch, IsBatchRunning)
@@ -82,6 +72,20 @@ TRACKED-OPEN BUT NOT NEW (per audit + project memory)
 
 RECENTLY COMPLETED (for context — already on master)
 ----------------------------------------------------
+
+[x] F4 (Moderate) — IHttpClientFactory migration for raw HttpClient consumers
+    Commit: 49f68a7 (2026-05-20)
+    Fix: extracted ConfigureStandardResilience as a reusable
+    IHttpClientBuilder extension; AddRefitClient<T> delegates to it
+    (behavior unchanged). Registered two named clients —
+    "replicate-download" (60s/3min) and "pollinations" (BaseAddress
+    gen.pollinations.ai, 60s/3min, shared by gen + catalog). Refactored
+    ReplicateImageGenerationService, PollinationsImageGenerationService,
+    and PollinationsCatalogService to take IHttpClientFactory and
+    CreateClient(name) per request. Dropped inline CancelAfter blocks —
+    Polly's per-attempt timeout is now the ceiling.
+    Tests: new StubHttpClientFactory under Tests/TestSupport/; three
+    fixtures updated (Replicate, Pollinations, dispatcher). 270/270 green.
 
 [x] F8 (Minor) — Idempotent LoadAllTokens + LoadSavedUiState on OnAppearing
     Commit: 29fd6d1 (2026-05-20)
