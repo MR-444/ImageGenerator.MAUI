@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -18,20 +17,13 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 
 public partial class GeneratorViewModel : ObservableObject
 {
-    private const string AllProvidersLabel = "All providers";
-
     private readonly IJobRunner _jobRunner;
     private readonly IApiTokenStore _tokenStore;
     private readonly IPollinationsTokenStore _pollinationsTokenStore;
     private readonly IUiStateStore _uiStateStore;
     private readonly IModelCatalogCoordinator _catalogCoordinator;
     private readonly IModelDescriptorRegistry _registry;
-    private readonly IPromptBatchParser _promptBatchParser;
     private readonly ILogger<GeneratorViewModel> _logger;
-
-    // Non-null only while a batch is actively running. CancelBatch flips it; RunBatchAsync
-    // disposes and clears it in a finally so a second batch always starts with a fresh CTS.
-    private CancellationTokenSource? _batchCts;
 
     [ObservableProperty]
     private ImageGenerationParameters _parameters;
@@ -47,28 +39,11 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private string? _flashMessage;
 
-    // True while RunBatchAsync is iterating. Drives the "Cancel batch" button visibility
-    // and lets the View hide "Import prompts…" while a batch is in flight.
-    [ObservableProperty]
-    private bool _isBatchRunning;
-
     public ObservableCollection<GenerationJob> Jobs { get; } = [];
     public bool HasJobs => Jobs.Count > 0;
 
-    [ObservableProperty]
-    private List<ModelOption> _allModels = [];  // hydrated from registry in ctor
-
-    [ObservableProperty]
-    private List<string> _providers;
-
-    [ObservableProperty]
-    private string _selectedProvider = AllProvidersLabel;
-
-    [ObservableProperty]
-    private List<ModelOption> _filteredModels = [];
-
-    [ObservableProperty]
-    private ModelOption? _selectedModel;
+    public ProviderFilterCoordinator ProviderFilter { get; }
+    public BatchCoordinator Batch { get; }
 
     [ObservableProperty]
     private List<string> _aspectRatioOptions = [];  // hydrated from registry in ctor
@@ -102,12 +77,7 @@ public partial class GeneratorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(SupportsCustomDimensions))]
     private bool _isCustomAspectRatio;
 
-    public sealed record InputImageItem(string Base64, ImageSource? Preview, string FileName, string? SourcePath = null);
-
-    public ObservableCollection<InputImageItem> SelectedImages { get; } = [];
-
-    public int InputImageCount => SelectedImages.Count;
-    public bool CanAddImage => SelectedImages.Count < Capabilities.MaxImageInputs;
+    public InputImagesCoordinator InputImages { get; }
 
     // Derived from <Version> in the csproj via the SDK-generated AssemblyInformationalVersion
     // (which on Windows MAUI is the only version source not polluted by ApplicationVersion's
@@ -123,37 +93,24 @@ public partial class GeneratorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SupportsCustomDimensions))]
-    [NotifyPropertyChangedFor(nameof(SupportsImagePromptStrength))]
     [NotifyPropertyChangedFor(nameof(SupportsResolution))]
     [NotifyPropertyChangedFor(nameof(SupportsGptQuality))]
-    [NotifyPropertyChangedFor(nameof(ImagePromptCardTitle))]
-    [NotifyPropertyChangedFor(nameof(CanAddImage))]
     private ModelCapabilities _capabilities;  // hydrated from registry in ctor
     private bool _cachedCatalogLoaded;
     private bool _tokensLoaded;
     private bool _uiStateLoaded;
 
-    // Sticky aspect ratio across model swaps: capture the user's last explicit AR pick so
-    // we can restore it whenever a model switch lands on a model that supports it. Updated
-    // only via the Parameters.PropertyChanged event when _suppressPreferredArUpdate is false,
-    // so automatic writes (model fallback, image-add auto-select, image-remove fallback)
-    // don't pollute it.
-    private string? _preferredAspectRatio;
+    // Suppresses InputImagesCoordinator.RecordExplicitAspectRatioPick during programmatic AR
+    // writes (model fallback in RefreshCapabilities, image-add/remove auto-AR in the
+    // coordinator) so only genuine user picks accumulate as the sticky preference.
     private bool _suppressPreferredArUpdate;
 
-    // Persisted model: only user-driven Parameters.Model changes should land in Preferences.
-    // Set this true around any code path that writes Parameters.Model as automatic plumbing
-    // — chiefly ApplyCatalog (FilteredModels reassignment makes the Picker reset SelectedItem
-    // to the first row, which round-trips through SelectedModel → Parameters.Model → persist
-    // and clobbers the user's saved value on every launch) and LoadSavedUiState (the value
-    // we're applying just came from the store; persisting it back is wasted I/O).
-    private bool _suppressModelPersist;
+    // Persist suppression for Parameters.Model writes now lives on ProviderFilterCoordinator —
+    // see ProviderFilter.SuppressModelPersist, set during ApplyCatalog / RestoreSelectedModel.
+
+    partial void OnCapabilitiesChanged(ModelCapabilities value) => InputImages.OnCapabilitiesChanged();
 
     public bool SupportsCustomDimensions => Capabilities.CustomDimensions && IsCustomAspectRatio;
-    public bool SupportsImagePromptStrength => Capabilities.ImagePromptStrength && SelectedImages.Count > 0;
-    public string ImagePromptCardTitle => Capabilities.MaxImageInputs > 1
-        ? $"Input Images (optional, up to {Capabilities.MaxImageInputs})"
-        : "Input Image (optional)";
     public bool SupportsResolution => Capabilities.Resolutions is not null;
     public bool SupportsGptQuality => Capabilities.GptQualityOptions is not null;
 
@@ -161,60 +118,7 @@ public partial class GeneratorViewModel : ObservableObject
     {
         UpdateCustomAspectRatio(value.AspectRatio);
         ValidateParameters();
-        SyncSelectionFromParameters(value.Model);
-    }
-
-    private int _lastImageCount;
-
-    private void OnSelectedImagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        // Mirror into the domain-layer entity so the factory sees the same list.
-        Parameters.ImagePrompts.Clear();
-        foreach (var item in SelectedImages) Parameters.ImagePrompts.Add(item.Base64);
-
-        // Auto-select match_input_image on 0→1, fall back on 1→0. Models without the option
-        // in their AR list (Flux 1.1 Pro/Pro Ultra) no-op the first branch. Both writes are
-        // automatic and must not pollute _preferredAspectRatio.
-        var count = SelectedImages.Count;
-        if (_lastImageCount == 0 && count > 0 && AspectRatioOptions.Contains("match_input_image"))
-        {
-            _suppressPreferredArUpdate = true;
-            Parameters.AspectRatio = "match_input_image";
-            _suppressPreferredArUpdate = false;
-        }
-        else if (_lastImageCount > 0 && count == 0 && Parameters.AspectRatio == "match_input_image")
-        {
-            // Prefer the user's last explicit AR if it's still valid for the current model
-            // and isn't itself "match_input_image"; otherwise fall back to the first concrete AR.
-            var preferred = _preferredAspectRatio is { } pref && pref != "match_input_image"
-                            && Capabilities.AspectRatios.Contains(pref) ? pref : null;
-            var fallback = preferred ?? Capabilities.AspectRatios.FirstOrDefault(r => r != "match_input_image");
-            if (fallback != null)
-            {
-                _suppressPreferredArUpdate = true;
-                Parameters.AspectRatio = fallback;
-                _suppressPreferredArUpdate = false;
-            }
-        }
-        _lastImageCount = count;
-
-        OnPropertyChanged(nameof(InputImageCount));
-        OnPropertyChanged(nameof(CanAddImage));
-        OnPropertyChanged(nameof(SupportsImagePromptStrength));
-    }
-
-    partial void OnSelectedProviderChanged(string value)
-    {
-        RecomputeFilteredModels();
-    }
-
-    partial void OnSelectedModelChanged(ModelOption? value)
-    {
-        if (value != null && Parameters.Model != value.Value)
-        {
-            Parameters.Model = value.Value;
-        }
-        RefreshCapabilities(value?.Value);
+        ProviderFilter.SyncSelectionFromParameters(value.Model);
     }
 
     private void RefreshCapabilities(string? modelValue)
@@ -230,14 +134,12 @@ public partial class GeneratorViewModel : ObservableObject
         // otherwise fall back to the model's first AR.
         var current = Parameters.AspectRatio;
         var target =
-            (_preferredAspectRatio is { } pref && caps.AspectRatios.Contains(pref)) ? pref :
+            (InputImages.PreferredAspectRatio is { } pref && caps.AspectRatios.Contains(pref)) ? pref :
             caps.AspectRatios.Contains(current) ? current :
             caps.AspectRatios[0];
         if (!string.Equals(target, current, StringComparison.Ordinal))
         {
-            _suppressPreferredArUpdate = true;
-            Parameters.AspectRatio = target;
-            _suppressPreferredArUpdate = false;
+            SetAspectRatioProgrammatically(target);
         }
 
         ResolutionOptions = caps.Resolutions?.ToList() ?? [];
@@ -252,39 +154,24 @@ public partial class GeneratorViewModel : ObservableObject
         GptInputFidelityOptions = caps.GptInputFidelityOptions?.ToList() ?? [];
 
         // Truncate attached images to the new model's cap so users don't silently lose excess
-        // images at generation time. The CollectionChanged handler raises CanAddImage etc.
-        while (SelectedImages.Count > caps.MaxImageInputs) SelectedImages.RemoveAt(SelectedImages.Count - 1);
+        // images at generation time. The coordinator's CollectionChanged handler raises
+        // CanAddImage etc. on the coordinator surface.
+        InputImages.TruncateToMaxInputs(caps.MaxImageInputs);
 
         Capabilities = caps;
     }
 
-    private void RecomputeFilteredModels()
+    private void SetAspectRatioProgrammatically(string aspectRatio)
     {
-        var list = SelectedProvider == AllProvidersLabel
-            ? AllModels.OrderBy(m => m.Provider).ThenBy(m => m.Display).ToList()
-            : AllModels.Where(m => m.Provider == SelectedProvider).OrderBy(m => m.Display).ToList();
-
-        FilteredModels = list;
-
-        if (SelectedModel is null || !list.Contains(SelectedModel))
-        {
-            SelectedModel = list.FirstOrDefault(m => m.Value == Parameters.Model) ?? list.FirstOrDefault();
-        }
+        _suppressPreferredArUpdate = true;
+        try { Parameters.AspectRatio = aspectRatio; }
+        finally { _suppressPreferredArUpdate = false; }
     }
 
-    private void SyncSelectionFromParameters(string modelValue)
+    private void MirrorImagePromptsToParameters()
     {
-        var match = AllModels.FirstOrDefault(m => m.Value == modelValue);
-        if (match == null) return;
-
-        if (SelectedProvider != AllProvidersLabel && SelectedProvider != match.Provider)
-        {
-            SelectedProvider = match.Provider;
-        }
-        if (SelectedModel?.Value != match.Value)
-        {
-            SelectedModel = FilteredModels.FirstOrDefault(m => m.Value == match.Value) ?? match;
-        }
+        Parameters.ImagePrompts.Clear();
+        foreach (var item in InputImages.SelectedImages) Parameters.ImagePrompts.Add(item.Base64);
     }
 
     private void UpdateCustomAspectRatio(string aspectRatio)
@@ -331,18 +218,15 @@ public partial class GeneratorViewModel : ObservableObject
         _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
         _catalogCoordinator = catalogCoordinator ?? throw new ArgumentNullException(nameof(catalogCoordinator));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
-        _promptBatchParser = promptBatchParser ?? throw new ArgumentNullException(nameof(promptBatchParser));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        if (promptBatchParser is null) throw new ArgumentNullException(nameof(promptBatchParser));
 
-        SelectedImages.CollectionChanged += OnSelectedImagesChanged;
         Jobs.CollectionChanged += (_, _) => DispatchToUi(() => OnPropertyChanged(nameof(HasJobs)));
 
-        // Hydrate the picker + capabilities from the registry — used to come from a static
-        // HardcodedCatalogSeed and a static ModelCapabilities.For() lookup.
-        _allModels = _registry.Seeds.ToList();
+        // Hydrate capabilities + AR options from the registry. The model catalog itself lives
+        // on ProviderFilterCoordinator (constructed below).
         _capabilities = _registry.CapabilitiesFor(ModelConstants.Flux.Pro11).Capabilities;
         _aspectRatioOptions = _capabilities.AspectRatios.ToList();
-        _providers = BuildProvidersFrom(_registry.Seeds);
 
         _parameters = new ImageGenerationParameters
         {
@@ -361,7 +245,26 @@ public partial class GeneratorViewModel : ObservableObject
 
         // Seed the preferred AR with the constructor default so first-launch model swaps
         // already prefer "16:9" instead of slamming to caps.AspectRatios[0].
-        _preferredAspectRatio = _parameters.AspectRatio;
+        InputImages = new InputImagesCoordinator(
+            capsAccessor: () => Capabilities,
+            setAspectRatioProgrammatically: SetAspectRatioProgrammatically,
+            mirrorImagePromptsToParameters: MirrorImagePromptsToParameters,
+            setStatus: SetStatus,
+            initialPreferredAspectRatio: _parameters.AspectRatio);
+
+        ProviderFilter = new ProviderFilterCoordinator(
+            initialSeeds: _registry.Seeds,
+            currentModelAccessor: () => Parameters.Model,
+            setParametersModel: model => Parameters.Model = model,
+            refreshCapabilities: RefreshCapabilities);
+
+        Batch = new BatchCoordinator(
+            promptBatchParser: promptBatchParser,
+            parametersAccessor: () => Parameters,
+            enqueueJob: job => DispatchToUi(() => Jobs.Insert(0, job)),
+            runJob: RunJobAsync,
+            setStatus: SetStatus,
+            addAsInputAsync: InputImages.AddAsInputAsync);
 
         _parameters.PropertyChanged += (_, e) =>
         {
@@ -370,7 +273,7 @@ public partial class GeneratorViewModel : ObservableObject
                 case nameof(ImageGenerationParameters.AspectRatio):
                     UpdateCustomAspectRatio(_parameters.AspectRatio);
                     if (!_suppressPreferredArUpdate)
-                        _preferredAspectRatio = _parameters.AspectRatio;
+                        InputImages.RecordExplicitAspectRatioPick(_parameters.AspectRatio);
                     break;
                 case nameof(ImageGenerationParameters.ApiToken):
                     // Persistence lives on TokenProviderViewModel now — only revalidate here.
@@ -384,8 +287,8 @@ public partial class GeneratorViewModel : ObservableObject
                     _uiStateStore.PersistPrompt(_parameters.Prompt);
                     break;
                 case nameof(ImageGenerationParameters.Model):
-                    SyncSelectionFromParameters(_parameters.Model);
-                    if (!_suppressModelPersist) _uiStateStore.PersistModel(_parameters.Model);
+                    ProviderFilter.SyncSelectionFromParameters(_parameters.Model);
+                    if (!ProviderFilter.SuppressModelPersist) _uiStateStore.PersistModel(_parameters.Model);
                     // Switching to or from a Pollinations model changes the token-required rule
                     // and toggles the Pollinations-only UI sections.
                     ValidateParameters();
@@ -394,7 +297,6 @@ public partial class GeneratorViewModel : ObservableObject
             }
         };
 
-        RecomputeFilteredModels();
         ValidateParameters();
 
         // Build the tabbed token list. Order = display order in the Picker. Each entry's
@@ -516,61 +418,6 @@ public partial class GeneratorViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task AddImageAsync()
-    {
-        if (!CanAddImage)
-        {
-            SetStatus($"Maximum {Capabilities.MaxImageInputs} image(s) for this model.", StatusKind.Error);
-            return;
-        }
-
-        SetStatus("Opening file picker…", StatusKind.Info);
-
-        var result = await FilePicker.PickAsync(new PickOptions
-        {
-            PickerTitle = "Pick an image",
-            FileTypes = FilePickerFileType.Images
-        });
-
-        if (result == null)
-        {
-            SetStatus(string.Empty, StatusKind.None);
-            return;
-        }
-
-        if (SelectedImages.Any(i => string.Equals(i.SourcePath, result.FullPath, StringComparison.OrdinalIgnoreCase)))
-        {
-            SetStatus($"'{result.FileName}' is already in the list.", StatusKind.Warning);
-            return;
-        }
-
-        await using var stream = await result.OpenReadAsync();
-        using var memoryStream = new MemoryStream();
-        await stream.CopyToAsync(memoryStream);
-        var imageBytes = memoryStream.ToArray();
-        var base64 = Convert.ToBase64String(imageBytes);
-        var preview = ImageSource.FromStream(() => new MemoryStream(imageBytes));
-
-        SelectedImages.Add(new InputImageItem(base64, preview, result.FileName, result.FullPath));
-        SetStatus($"Added image: {result.FileName} ({SelectedImages.Count}/{Capabilities.MaxImageInputs})", StatusKind.Info);
-    }
-
-    [RelayCommand]
-    private void RemoveImage(InputImageItem? item)
-    {
-        if (item is null) return;
-        SelectedImages.Remove(item);
-        SetStatus(string.Empty, StatusKind.None);
-    }
-
-    [RelayCommand]
-    private void ClearImages()
-    {
-        SelectedImages.Clear();
-        SetStatus(string.Empty, StatusKind.None);
-    }
-
-    [RelayCommand]
     private async Task OpenOutputFolderAsync()
     {
         try
@@ -626,30 +473,8 @@ public partial class GeneratorViewModel : ObservableObject
             return;
         }
 
-        ApplyCatalog(merged);
+        ProviderFilter.ApplyCatalog(merged);
         SetStatus($"Loaded {merged.Count} models.", StatusKind.Success);
-    }
-
-    private void ApplyCatalog(IReadOnlyList<ModelOption> mergedModels)
-    {
-        _suppressModelPersist = true;
-        try
-        {
-            AllModels = mergedModels.ToList();
-            Providers = BuildProvidersFrom(mergedModels);
-            RecomputeFilteredModels();
-        }
-        finally
-        {
-            _suppressModelPersist = false;
-        }
-    }
-
-    private static List<string> BuildProvidersFrom(IEnumerable<ModelOption> models)
-    {
-        var list = new List<string> { AllProvidersLabel };
-        list.AddRange(models.Select(m => m.Provider).Distinct().OrderBy(p => p));
-        return list;
     }
 
     /// <summary>
@@ -686,20 +511,9 @@ public partial class GeneratorViewModel : ObservableObject
         }
 
         var savedModel = _uiStateStore.LoadModel();
-        if (string.IsNullOrEmpty(savedModel)) return;
-
-        var match = FilteredModels.FirstOrDefault(m => m.Value == savedModel)
-                 ?? AllModels.FirstOrDefault(m => m.Value == savedModel);
-        if (match == null) return;
-
-        _suppressModelPersist = true;
-        try
+        if (!string.IsNullOrEmpty(savedModel))
         {
-            SelectedModel = match;
-        }
-        finally
-        {
-            _suppressModelPersist = false;
+            ProviderFilter.RestoreSelectedModel(savedModel);
         }
     }
 
@@ -715,7 +529,7 @@ public partial class GeneratorViewModel : ObservableObject
             var merged = await _catalogCoordinator.LoadCachedAsync(ct);
             if (merged is not null)
             {
-                ApplyCatalog(merged);
+                ProviderFilter.ApplyCatalog(merged);
             }
         }
         catch (Exception ex)
@@ -733,202 +547,7 @@ public partial class GeneratorViewModel : ObservableObject
         SetStatus($"{name} token cleared from secure storage.", StatusKind.Info);
     }
 
-    /// <summary>
-    /// Opens a file picker for a .txt prompt file, parses it, and returns the prompts.
-    /// Returns null on cancel, on empty parse, or on read/cap errors (status surface set
-    /// in those cases). Public for the View to call from its button click handler.
-    /// </summary>
-    public async Task<IReadOnlyList<string>?> PickAndParsePromptsAsync()
-    {
-        // Pollinations models can run anonymously; only require the Replicate token when the
-        // currently-selected model actually needs it.
-        if (!ModelConstants.Pollinations.IsId(Parameters.Model) && string.IsNullOrWhiteSpace(Parameters.ApiToken))
-        {
-            SetStatus("Enter an API token before running a batch.", StatusKind.Error);
-            return null;
-        }
-
-        SetStatus("Opening file picker…", StatusKind.Info);
-
-        FileResult? result;
-        try
-        {
-            result = await FilePicker.PickAsync(new PickOptions
-            {
-                PickerTitle = "Pick a prompt textfile",
-                FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
-                {
-                    { DevicePlatform.WinUI, new[] { ".txt" } },
-                }),
-            });
-        }
-        catch (Exception ex)
-        {
-            SetStatus($"Couldn't open file picker: {ex.Message}", StatusKind.Error);
-            return null;
-        }
-
-        if (result == null)
-        {
-            SetStatus(string.Empty, StatusKind.None);
-            return null;
-        }
-
-        try
-        {
-            var text = await File.ReadAllTextAsync(result.FullPath);
-            var prompts = _promptBatchParser.Parse(text);
-            if (prompts.Count == 0)
-            {
-                SetStatus("No prompts found in file.", StatusKind.Warning);
-                return null;
-            }
-            SetStatus($"Loaded {prompts.Count} prompts from {result.FileName}.", StatusKind.Info);
-            return prompts;
-        }
-        catch (PromptBatchTooLargeException ex)
-        {
-            SetStatus($"File contains {ex.PromptCount} prompts; cap is {ex.MaxAllowed}.", StatusKind.Error);
-            return null;
-        }
-        catch (Exception ex)
-        {
-            SetStatus($"Couldn't read prompt file: {ex.Message}", StatusKind.Error);
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Runs the supplied prompts as a sequential batch using the currently-selected model
-    /// and parameters. Each prompt becomes its own <see cref="GenerationJob"/> queued at the
-    /// top of <see cref="Jobs"/> in original file order. Failures don't abort the batch.
-    /// </summary>
-    public async Task RunBatchAsync(IReadOnlyList<string> prompts)
-    {
-        if (prompts is null || prompts.Count == 0) return;
-        if (IsBatchRunning) return; // re-entrancy guard
-
-        _batchCts = new CancellationTokenSource();
-        IsBatchRunning = true;
-
-        try
-        {
-            // Build all jobs as Queued, freezing per-prompt parameter snapshots up-front
-            // so a model swap mid-batch can't bleed into pending jobs.
-            var batch = new List<GenerationJob>(prompts.Count);
-            for (var i = 0; i < prompts.Count; i++)
-            {
-                if (Parameters.RandomizeSeed)
-                    Parameters.Seed = Random.Shared.NextInt64(0, ValidationConstants.SeedMaxValue);
-
-                var snapshot = Parameters.Clone();
-                snapshot.Prompt = prompts[i];
-
-                var job = new GenerationJob(snapshot, AddAsInputAsync)
-                {
-                    IsRunning = false,
-                    StatusKind = StatusKind.Info,
-                    StatusMessage = $"Queued ({i + 1}/{prompts.Count})"
-                };
-                batch.Add(job);
-            }
-
-            // Insert reverse so the FIRST prompt sits at the top of the Jobs list, matching
-            // single-prompt mode's "newest first via Insert(0, …)" convention.
-            for (var i = batch.Count - 1; i >= 0; i--)
-            {
-                var jobToInsert = batch[i];
-                DispatchToUi(() => Jobs.Insert(0, jobToInsert));
-            }
-
-            var succeeded = 0;
-            var failed = 0;
-            var canceled = 0;
-
-            foreach (var job in batch)
-            {
-                if (_batchCts.IsCancellationRequested)
-                {
-                    DispatchToUi(() =>
-                    {
-                        job.IsRunning = false;
-                        job.StatusKind = StatusKind.Canceled;
-                        job.StatusMessage = "Canceled.";
-                    });
-                    canceled++;
-                    continue;
-                }
-
-                // CancelBatch drains the queue but lets the in-flight job finish — the
-                // Replicate prediction is already paid for and the image would be wasted
-                // if we killed mid-poll. The per-card Cancel button still aborts a single
-                // running job if the user really wants to.
-                DispatchToUi(() =>
-                {
-                    job.IsRunning = true;
-                    job.StatusKind = StatusKind.Info;
-                    job.StatusMessage = "Generating image…";
-                });
-
-                await RunJobAsync(job);
-
-                switch (job.StatusKind)
-                {
-                    case StatusKind.Success: succeeded++; break;
-                    case StatusKind.Canceled: canceled++; break;
-                    default: failed++; break;
-                }
-            }
-
-            var summary = $"Batch complete — {succeeded} ok, {failed} failed, {canceled} canceled.";
-            var kind = (failed > 0 || canceled > 0) ? StatusKind.Warning : StatusKind.Success;
-            SetStatus(summary, kind);
-        }
-        finally
-        {
-            _batchCts?.Dispose();
-            _batchCts = null;
-            IsBatchRunning = false;
-        }
-    }
-
-    [RelayCommand]
-    private void CancelBatch()
-    {
-        try { _batchCts?.Cancel(); }
-        catch (ObjectDisposedException) { /* race with RunBatchAsync's finally */ }
-    }
-
-    internal async Task AddAsInputAsync(string filePath)
-    {
-        if (!File.Exists(filePath))
-        {
-            SetStatus("File not found.", StatusKind.Error);
-            return;
-        }
-        if (SelectedImages.Any(i => string.Equals(i.SourcePath, filePath, StringComparison.OrdinalIgnoreCase)))
-        {
-            SetStatus($"'{Path.GetFileName(filePath)}' is already in the list.", StatusKind.Warning);
-            return;
-        }
-        if (!CanAddImage)
-        {
-            SetStatus($"Maximum {Capabilities.MaxImageInputs} image(s) for this model.", StatusKind.Error);
-            return;
-        }
-
-        try
-        {
-            var imageBytes = await File.ReadAllBytesAsync(filePath);
-            var base64 = Convert.ToBase64String(imageBytes);
-            var preview = ImageSource.FromStream(() => new MemoryStream(imageBytes));
-            var name = Path.GetFileName(filePath);
-            SelectedImages.Add(new InputImageItem(base64, preview, name, filePath));
-            SetStatus("Added as input.", StatusKind.Success);
-        }
-        catch (Exception ex)
-        {
-            SetStatus($"Error using image as input: {ex.Message}", StatusKind.Error);
-        }
-    }
+    // GenerationJob's "Use as input" delegate keeps targeting the VM-level method name; route
+    // it into the coordinator.
+    internal Task AddAsInputAsync(string filePath) => InputImages.AddAsInputAsync(filePath);
 }

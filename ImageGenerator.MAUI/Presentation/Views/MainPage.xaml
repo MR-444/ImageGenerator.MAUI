@@ -85,16 +85,16 @@
                                                Drop="OnImageDropped" />
                     </Border.GestureRecognizers>
                     <VerticalStackLayout Spacing="12">
-                        <Label Text="{Binding ImagePromptCardTitle}" Style="{StaticResource CardTitle}" />
+                        <Label Text="{Binding InputImages.ImagePromptCardTitle}" Style="{StaticResource CardTitle}" />
                         <Label Text="Optional reference image(s). Max count and payload field vary by model."
                                Style="{StaticResource HelperText}" />
 
-                        <CollectionView ItemsSource="{Binding SelectedImages}"
+                        <CollectionView ItemsSource="{Binding InputImages.SelectedImages}"
                                         ItemsLayout="HorizontalList"
                                         HeightRequest="140"
-                                        IsVisible="{Binding InputImageCount, Converter={StaticResource IntGreaterThanZero}}">
+                                        IsVisible="{Binding InputImages.InputImageCount, Converter={StaticResource IntGreaterThanZero}}">
                             <CollectionView.ItemTemplate>
-                                <DataTemplate x:DataType="vm:GeneratorViewModel+InputImageItem">
+                                <DataTemplate x:DataType="vm:InputImagesCoordinator+InputImageItem">
                                     <Grid Padding="4" WidthRequest="140" HeightRequest="140">
                                         <Image Source="{Binding Preview}" Aspect="AspectFill"
                                                SemanticProperties.Description="{Binding FileName}" />
@@ -111,24 +111,24 @@
 
                         <HorizontalStackLayout Spacing="8">
                             <Button Text="Add image"
-                                    Command="{Binding AddImageCommand}"
-                                    IsEnabled="{Binding CanAddImage}"
+                                    Command="{Binding InputImages.AddImageCommand}"
+                                    IsEnabled="{Binding InputImages.CanAddImage}"
                                     Style="{StaticResource SecondaryButton}"
                                     AutomationId="AddImageButton" />
                             <Button Text="Clear all"
-                                    Command="{Binding ClearImagesCommand}"
-                                    IsVisible="{Binding InputImageCount, Converter={StaticResource IntGreaterThanZero}}"
+                                    Command="{Binding InputImages.ClearImagesCommand}"
+                                    IsVisible="{Binding InputImages.InputImageCount, Converter={StaticResource IntGreaterThanZero}}"
                                     Style="{StaticResource SecondaryButton}"
                                     AutomationId="ClearImagesButton" />
                         </HorizontalStackLayout>
 
                         <Label Text="{Binding Parameters.ImagePromptStrength, StringFormat='Image prompt strength: {0:F2}'}"
                                Style="{StaticResource FieldLabel}"
-                               IsVisible="{Binding SupportsImagePromptStrength}" />
+                               IsVisible="{Binding InputImages.SupportsImagePromptStrength}" />
                         <Slider Minimum="0" Maximum="1"
                                 Value="{Binding Parameters.ImagePromptStrength, Mode=TwoWay}"
                                 HorizontalOptions="Fill"
-                                IsVisible="{Binding SupportsImagePromptStrength}" />
+                                IsVisible="{Binding InputImages.SupportsImagePromptStrength}" />
                     </VerticalStackLayout>
                 </Border>
 
@@ -148,14 +148,14 @@
                               RowSpacing="4">
                             <Label Grid.Row="0" Grid.Column="0" Text="Provider" Style="{StaticResource FieldLabel}" />
                             <Picker Grid.Row="1" Grid.Column="0"
-                                    ItemsSource="{Binding Providers}"
-                                    SelectedItem="{Binding SelectedProvider}"
+                                    ItemsSource="{Binding ProviderFilter.Providers}"
+                                    SelectedItem="{Binding ProviderFilter.SelectedProvider}"
                                     AutomationId="ProviderPicker" />
                             <Label Grid.Row="0" Grid.Column="1" Text="Model" Style="{StaticResource FieldLabel}" />
                             <Picker Grid.Row="1" Grid.Column="1"
-                                    ItemsSource="{Binding FilteredModels}"
+                                    ItemsSource="{Binding ProviderFilter.FilteredModels}"
                                     ItemDisplayBinding="{Binding Display}"
-                                    SelectedItem="{Binding SelectedModel}"
+                                    SelectedItem="{Binding ProviderFilter.SelectedModel}"
                                     AutomationId="ModelPicker" />
                         </Grid>
 
@@ -301,19 +301,19 @@
                         <Button Text="Import prompts…"
                                 Style="{StaticResource SecondaryButton}"
                                 Clicked="OnImportPromptsClicked"
-                                IsVisible="{Binding IsBatchRunning, Converter={StaticResource InverseBool}}"
+                                IsVisible="{Binding Batch.IsBatchRunning, Converter={StaticResource InverseBool}}"
                                 HorizontalOptions="Fill"
                                 SemanticProperties.Description="Pick a textfile of prompts (separated by --- lines) and run them sequentially with the current model and settings"
                                 AutomationId="ImportPromptsButton" />
 
                         <Label Text="Pick a .txt file. Separate prompts with a line containing only ---. Lines starting with # are ignored."
                                Style="{StaticResource HelperText}"
-                               IsVisible="{Binding IsBatchRunning, Converter={StaticResource InverseBool}}" />
+                               IsVisible="{Binding Batch.IsBatchRunning, Converter={StaticResource InverseBool}}" />
 
                         <Button Text="Cancel batch"
                                 Style="{StaticResource SecondaryButton}"
-                                Command="{Binding CancelBatchCommand}"
-                                IsVisible="{Binding IsBatchRunning}"
+                                Command="{Binding Batch.CancelBatchCommand}"
+                                IsVisible="{Binding Batch.IsBatchRunning}"
                                 HorizontalOptions="Fill"
                                 SemanticProperties.Description="Stop the running batch and cancel queued prompts"
                                 AutomationId="CancelBatchButton" />

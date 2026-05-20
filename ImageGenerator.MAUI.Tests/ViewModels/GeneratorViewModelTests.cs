@@ -48,7 +48,7 @@ public class GeneratorViewModelTests
     [Fact]
     public void AllModels_ShouldContainExpectedSeed()
     {
-        var values = _viewModel.AllModels.Select(m => m.Value).ToList();
+        var values = _viewModel.ProviderFilter.AllModels.Select(m => m.Value).ToList();
         values.Should().Contain(ModelConstants.OpenAI.GptImage15OnReplicate);
         values.Should().Contain(ModelConstants.Flux.Pro11);
         values.Should().Contain(ModelConstants.Flux.Pro11Ultra);
@@ -59,27 +59,27 @@ public class GeneratorViewModelTests
     [Fact]
     public void Providers_ShouldIncludeAllAndDistinctProviders()
     {
-        _viewModel.Providers.Should().Contain("All providers");
-        _viewModel.Providers.Should().Contain("OpenAI (via Replicate)");
-        _viewModel.Providers.Should().Contain("Black Forest Labs");
-        _viewModel.Providers.Should().Contain("Google");
+        _viewModel.ProviderFilter.Providers.Should().Contain("All providers");
+        _viewModel.ProviderFilter.Providers.Should().Contain("OpenAI (via Replicate)");
+        _viewModel.ProviderFilter.Providers.Should().Contain("Black Forest Labs");
+        _viewModel.ProviderFilter.Providers.Should().Contain("Google");
     }
 
     [Fact]
     public void SelectedProvider_WhenSet_FiltersModels()
     {
-        _viewModel.SelectedProvider = "Google";
+        _viewModel.ProviderFilter.SelectedProvider = "Google";
 
-        _viewModel.FilteredModels.Should().OnlyContain(m => m.Provider == "Google");
-        _viewModel.FilteredModels.Should().HaveCount(1);
+        _viewModel.ProviderFilter.FilteredModels.Should().OnlyContain(m => m.Provider == "Google");
+        _viewModel.ProviderFilter.FilteredModels.Should().HaveCount(1);
     }
 
     [Fact]
     public void SelectedModel_WhenChanged_UpdatesParametersModel()
     {
-        var target = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
+        var target = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
 
-        _viewModel.SelectedModel = target;
+        _viewModel.ProviderFilter.SelectedModel = target;
 
         _viewModel.Parameters.Model.Should().Be(ModelConstants.Flux.Klein4b);
     }
@@ -155,10 +155,10 @@ public class GeneratorViewModelTests
     [Fact]
     public void AddImage_OnFlux2Model_AutoSelectsMatchInputImage()
     {
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
         _viewModel.AspectRatioOptions.Should().Contain("match_input_image");
 
-        _viewModel.SelectedImages.Add(FakeImage("a"));
+        _viewModel.InputImages.SelectedImages.Add(FakeImage("a"));
 
         _viewModel.Parameters.AspectRatio.Should().Be("match_input_image");
     }
@@ -166,23 +166,23 @@ public class GeneratorViewModelTests
     [Fact]
     public void RemoveLastImage_OnFlux2Model_FallsBackToFirstAspectRatio()
     {
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
-        _viewModel.SelectedImages.Add(FakeImage("a"));
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
+        _viewModel.InputImages.SelectedImages.Add(FakeImage("a"));
         _viewModel.Parameters.AspectRatio.Should().Be("match_input_image");
 
-        _viewModel.SelectedImages.Clear();
+        _viewModel.InputImages.SelectedImages.Clear();
 
         _viewModel.Parameters.AspectRatio.Should().NotBe("match_input_image");
     }
 
-    private static GeneratorViewModel.InputImageItem FakeImage(string base64 = "abc", string name = "test.png") =>
+    private static InputImagesCoordinator.InputImageItem FakeImage(string base64 = "abc", string name = "test.png") =>
         new(base64, null, name);
 
     [Fact]
     public void SelectedModel_Changed_AdjustsAspectRatioOptionsToSupportedList()
     {
         // Switching from Flux 1.1 Pro (has "custom") to Klein 4B (no "custom") must narrow the list.
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
 
         _viewModel.AspectRatioOptions.Should().NotContain("custom");
         _viewModel.AspectRatioOptions.Should().Contain("1:1");
@@ -221,7 +221,7 @@ public class GeneratorViewModelTests
         bool seed,
         bool imagePrompt)
     {
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == modelValue);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == modelValue);
 
         _viewModel.Capabilities.SafetyTolerance.Should().Be(safety);
         _viewModel.Capabilities.PromptUpsampling.Should().Be(upsampling);
@@ -234,7 +234,7 @@ public class GeneratorViewModelTests
     [Fact]
     public void Capabilities_NanoBanana2_ExposesResolution()
     {
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Google.NanoBanana2);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Google.NanoBanana2);
 
         _viewModel.SupportsResolution.Should().BeTrue();
         _viewModel.ResolutionOptions.Should().BeEquivalentTo("1K", "2K", "4K");
@@ -243,7 +243,7 @@ public class GeneratorViewModelTests
     [Fact]
     public void Capabilities_GptImage15_ExposesAllFourGptOptionLists()
     {
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage15OnReplicate);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage15OnReplicate);
 
         _viewModel.SupportsGptQuality.Should().BeTrue();
         _viewModel.Capabilities.GptBackgroundOptions.Should().NotBeNull();
@@ -258,7 +258,7 @@ public class GeneratorViewModelTests
     [Fact]
     public void Capabilities_NonGptModel_HidesGptOptionLists()
     {
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
 
         _viewModel.SupportsGptQuality.Should().BeFalse();
         _viewModel.Capabilities.GptBackgroundOptions.Should().BeNull();
@@ -331,7 +331,7 @@ public class GeneratorViewModelTests
 
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
 
-        _viewModel.AllModels.Select(m => m.Value)
+        _viewModel.ProviderFilter.AllModels.Select(m => m.Value)
             .Should().Contain("black-forest-labs/flux-2")
             .And.Contain("openai/gpt-image-1.5");
         _viewModel.StatusKind.Should().Be(StatusKind.Success);
@@ -351,24 +351,24 @@ public class GeneratorViewModelTests
 
         await _viewModel.LoadCachedCatalogAsync();
 
-        _viewModel.AllModels.Select(m => m.Value)
+        _viewModel.ProviderFilter.AllModels.Select(m => m.Value)
             .Should().Contain("black-forest-labs/flux-2-pro")
             .And.Contain("openai/gpt-image-1.5");
-        _viewModel.Providers.Should().Contain("Black Forest Labs")
+        _viewModel.ProviderFilter.Providers.Should().Contain("Black Forest Labs")
             .And.Contain("OpenAI (via Replicate)");
     }
 
     [Fact]
     public async Task LoadCachedCatalog_WhenCoordinatorReturnsNull_KeepsHardcodedSeed()
     {
-        var seed = _viewModel.AllModels.ToList();
+        var seed = _viewModel.ProviderFilter.AllModels.ToList();
         _mockCatalogCoordinator
             .Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<ModelOption>?)null);
 
         await _viewModel.LoadCachedCatalogAsync();
 
-        _viewModel.AllModels.Should().BeEquivalentTo(seed);
+        _viewModel.ProviderFilter.AllModels.Should().BeEquivalentTo(seed);
     }
 
     [Fact]
@@ -408,11 +408,11 @@ public class GeneratorViewModelTests
 
         // Regression: FilteredModels must reflect freshly-applied AllModels, not be stuck on the
         // pre-refresh list.
-        _viewModel.FilteredModels.Select(m => m.Value)
+        _viewModel.ProviderFilter.FilteredModels.Select(m => m.Value)
             .Should().Contain("black-forest-labs/flux-2-pro")
             .And.Contain("openai/gpt-image-1.5")
             .And.Contain("google/nano-banana-2");
-        _viewModel.Providers.Should().Contain("Black Forest Labs")
+        _viewModel.ProviderFilter.Providers.Should().Contain("Black Forest Labs")
             .And.Contain("OpenAI (via Replicate)")
             .And.Contain("Google");
     }
@@ -436,21 +436,21 @@ public class GeneratorViewModelTests
 
         _mockCatalogCoordinator.Verify(x => x.RefreshAsync(""), Times.Once);
         _viewModel.StatusKind.Should().Be(StatusKind.Success);
-        _viewModel.AllModels.Select(m => m.Value).Should().Contain(ModelConstants.Pollinations.Flux);
+        _viewModel.ProviderFilter.AllModels.Select(m => m.Value).Should().Contain(ModelConstants.Pollinations.Flux);
     }
 
     [Fact]
     public async Task RefreshModels_NullResult_KeepsExistingCatalogAndReportsError()
     {
         _viewModel.Parameters.ApiToken = "valid-token";
-        var originalModels = _viewModel.AllModels.ToList();
+        var originalModels = _viewModel.ProviderFilter.AllModels.ToList();
         _mockCatalogCoordinator
             .Setup(x => x.RefreshAsync("valid-token"))
             .ReturnsAsync((IReadOnlyList<ModelOption>?)null);
 
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
 
-        _viewModel.AllModels.Should().BeEquivalentTo(originalModels);
+        _viewModel.ProviderFilter.AllModels.Should().BeEquivalentTo(originalModels);
         _viewModel.StatusKind.Should().Be(StatusKind.Error);
     }
 
@@ -547,31 +547,31 @@ public class GeneratorViewModelTests
     [InlineData(ModelConstants.Google.NanoBanana2,          "Input Images (optional, up to 14)")]
     public void ImagePromptCardTitle_ReflectsMaxImageInputs(string model, string expected)
     {
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == model);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == model);
 
-        _viewModel.ImagePromptCardTitle.Should().Be(expected);
+        _viewModel.InputImages.ImagePromptCardTitle.Should().Be(expected);
     }
 
     [Fact]
     public void SupportsImagePromptStrength_RequiresBothUltraModelAndAtLeastOneImage()
     {
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11Ultra);
-        _viewModel.SupportsImagePromptStrength.Should().BeFalse("no image yet");
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11Ultra);
+        _viewModel.InputImages.SupportsImagePromptStrength.Should().BeFalse("no image yet");
 
-        _viewModel.SelectedImages.Add(FakeImage("a"));
-        _viewModel.SupportsImagePromptStrength.Should().BeTrue();
+        _viewModel.InputImages.SelectedImages.Add(FakeImage("a"));
+        _viewModel.InputImages.SupportsImagePromptStrength.Should().BeTrue();
 
-        _viewModel.SelectedImages.Clear();
-        _viewModel.SupportsImagePromptStrength.Should().BeFalse("image removed");
+        _viewModel.InputImages.SelectedImages.Clear();
+        _viewModel.InputImages.SupportsImagePromptStrength.Should().BeFalse("image removed");
     }
 
     [Fact]
     public void SupportsImagePromptStrength_NonUltraModel_StaysFalseEvenWithImages()
     {
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
-        _viewModel.SelectedImages.Add(FakeImage("a"));
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
+        _viewModel.InputImages.SelectedImages.Add(FakeImage("a"));
 
-        _viewModel.SupportsImagePromptStrength.Should().BeFalse();
+        _viewModel.InputImages.SupportsImagePromptStrength.Should().BeFalse();
     }
 
     // --- Multi-image commands ---
@@ -580,15 +580,15 @@ public class GeneratorViewModelTests
     public async Task AddImageCommand_AtCap_SetsErrorStatus_AndDoesNotOpenPicker()
     {
         // Flux 1.1 Pro has MaxImageInputs = 1.
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
-        _viewModel.SelectedImages.Add(FakeImage("a"));
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.InputImages.SelectedImages.Add(FakeImage("a"));
 
-        _viewModel.CanAddImage.Should().BeFalse();
-        await ((IAsyncRelayCommand)_viewModel.AddImageCommand).ExecuteAsync(null);
+        _viewModel.InputImages.CanAddImage.Should().BeFalse();
+        await ((IAsyncRelayCommand)_viewModel.InputImages.AddImageCommand).ExecuteAsync(null);
 
         _viewModel.StatusKind.Should().Be(StatusKind.Error);
         _viewModel.StatusMessage.Should().Contain("Maximum");
-        _viewModel.SelectedImages.Should().HaveCount(1);
+        _viewModel.InputImages.SelectedImages.Should().HaveCount(1);
     }
 
     [Fact]
@@ -597,66 +597,66 @@ public class GeneratorViewModelTests
         var a = FakeImage("a", "a.png");
         var b = FakeImage("b", "b.png");
         var c = FakeImage("c", "c.png");
-        _viewModel.SelectedImages.Add(a);
-        _viewModel.SelectedImages.Add(b);
-        _viewModel.SelectedImages.Add(c);
+        _viewModel.InputImages.SelectedImages.Add(a);
+        _viewModel.InputImages.SelectedImages.Add(b);
+        _viewModel.InputImages.SelectedImages.Add(c);
 
-        _viewModel.RemoveImageCommand.Execute(b);
+        _viewModel.InputImages.RemoveImageCommand.Execute(b);
 
-        _viewModel.SelectedImages.Should().ContainInOrder(a, c);
-        _viewModel.SelectedImages.Should().NotContain(b);
+        _viewModel.InputImages.SelectedImages.Should().ContainInOrder(a, c);
+        _viewModel.InputImages.SelectedImages.Should().NotContain(b);
     }
 
     [Fact]
     public void ClearImagesCommand_EmptiesCollection()
     {
-        _viewModel.SelectedImages.Add(FakeImage("a"));
-        _viewModel.SelectedImages.Add(FakeImage("b"));
+        _viewModel.InputImages.SelectedImages.Add(FakeImage("a"));
+        _viewModel.InputImages.SelectedImages.Add(FakeImage("b"));
 
-        _viewModel.ClearImagesCommand.Execute(null);
+        _viewModel.InputImages.ClearImagesCommand.Execute(null);
 
-        _viewModel.SelectedImages.Should().BeEmpty();
+        _viewModel.InputImages.SelectedImages.Should().BeEmpty();
     }
 
     [Fact]
     public void SwitchModelWithNarrowerCap_TruncatesSelectedImagesToNewCap()
     {
         // Start on nano-banana-2 (cap 14), load 5 images, switch to Flux 1.1 Pro (cap 1).
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Google.NanoBanana2);
-        for (var i = 0; i < 5; i++) _viewModel.SelectedImages.Add(FakeImage($"img{i}"));
-        _viewModel.SelectedImages.Should().HaveCount(5);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Google.NanoBanana2);
+        for (var i = 0; i < 5; i++) _viewModel.InputImages.SelectedImages.Add(FakeImage($"img{i}"));
+        _viewModel.InputImages.SelectedImages.Should().HaveCount(5);
 
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
 
-        _viewModel.SelectedImages.Should().HaveCount(1);
-        _viewModel.CanAddImage.Should().BeFalse();
+        _viewModel.InputImages.SelectedImages.Should().HaveCount(1);
+        _viewModel.InputImages.CanAddImage.Should().BeFalse();
     }
 
     [Fact]
     public void CanAddImage_FlipsAtExactlyTheCap()
     {
         // gpt-image-1.5: cap is 10.
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage15OnReplicate);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage15OnReplicate);
 
         for (var i = 0; i < 9; i++)
         {
-            _viewModel.SelectedImages.Add(FakeImage($"img{i}"));
-            _viewModel.CanAddImage.Should().BeTrue($"only {i + 1} of 10 added");
+            _viewModel.InputImages.SelectedImages.Add(FakeImage($"img{i}"));
+            _viewModel.InputImages.CanAddImage.Should().BeTrue($"only {i + 1} of 10 added");
         }
 
-        _viewModel.SelectedImages.Add(FakeImage("img10"));
-        _viewModel.CanAddImage.Should().BeFalse("reached cap");
+        _viewModel.InputImages.SelectedImages.Add(FakeImage("img10"));
+        _viewModel.InputImages.CanAddImage.Should().BeFalse("reached cap");
     }
 
     [Fact]
     public void ImagePrompts_MirrorsSelectedImagesOnChange()
     {
-        _viewModel.SelectedImages.Add(FakeImage("a", "a.png"));
-        _viewModel.SelectedImages.Add(FakeImage("b", "b.png"));
+        _viewModel.InputImages.SelectedImages.Add(FakeImage("a", "a.png"));
+        _viewModel.InputImages.SelectedImages.Add(FakeImage("b", "b.png"));
 
         _viewModel.Parameters.ImagePrompts.Should().ContainInOrder("a", "b");
 
-        _viewModel.SelectedImages.RemoveAt(0);
+        _viewModel.InputImages.SelectedImages.RemoveAt(0);
         _viewModel.Parameters.ImagePrompts.Should().ContainInOrder("b").And.HaveCount(1);
     }
 
@@ -698,10 +698,10 @@ public class GeneratorViewModelTests
     [Fact]
     public void AspectRatio_SwitchingToCompatibleModel_StaysPut()
     {
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11Ultra);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11Ultra);
         _viewModel.Parameters.AspectRatio = "21:9";
 
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
 
         _viewModel.Parameters.AspectRatio.Should().Be("21:9");
     }
@@ -709,14 +709,14 @@ public class GeneratorViewModelTests
     [Fact]
     public void AspectRatio_SwitchingToIncompatibleModelThenBack_RestoresPreferred()
     {
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
         _viewModel.Parameters.AspectRatio = "21:9";
 
         // GPT 1.5's AR list is just ["1:1", "3:2", "2:3"] — 21:9 is rejected, AR falls back.
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage15OnReplicate);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage15OnReplicate);
         _viewModel.Parameters.AspectRatio.Should().NotBe("21:9");
 
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
 
         _viewModel.Parameters.AspectRatio.Should().Be("21:9", "the preferred AR is restored when the new model supports it again");
     }
@@ -725,11 +725,11 @@ public class GeneratorViewModelTests
     public void AspectRatio_UserPickOverridesInitialDefault()
     {
         // Constructor seeds the initial AR (16:9) as the preferred. A user pick replaces it.
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
         _viewModel.Parameters.AspectRatio = "1:1";
 
         // GPT 1.5 supports both 16:9 (no, actually only 1:1 / 3:2 / 2:3) and 1:1 — 1:1 must win.
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage15OnReplicate);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage15OnReplicate);
 
         _viewModel.Parameters.AspectRatio.Should().Be("1:1");
     }
@@ -738,13 +738,13 @@ public class GeneratorViewModelTests
     public void AspectRatio_RemoveAllImages_FallsBackToPreferredWhenValid()
     {
         // Start on NanoBanana2 which supports both "16:9" and "match_input_image".
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Google.NanoBanana2);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Google.NanoBanana2);
         _viewModel.Parameters.AspectRatio = "16:9";
 
-        _viewModel.SelectedImages.Add(FakeImage("a"));
+        _viewModel.InputImages.SelectedImages.Add(FakeImage("a"));
         _viewModel.Parameters.AspectRatio.Should().Be("match_input_image", "auto-select on 0→1 with a model that supports it");
 
-        _viewModel.SelectedImages.Clear();
+        _viewModel.InputImages.SelectedImages.Clear();
 
         // Without sticky logic this would fall back to "1:1" (first non-match-input AR in NanoBanana2).
         _viewModel.Parameters.AspectRatio.Should().Be("16:9", "the user's preferred AR is restored when images are cleared");
@@ -903,7 +903,7 @@ public class GeneratorViewModelTests
         await vm1.LoadCachedCatalogAsync();
         vm1.LoadSavedUiState();  // first launch: nothing stored, no-op
 
-        vm1.SelectedModel = vm1.FilteredModels.First(m => m.Value == ModelConstants.OpenAI.GptImage2OnReplicate);
+        vm1.ProviderFilter.SelectedModel = vm1.ProviderFilter.FilteredModels.First(m => m.Value == ModelConstants.OpenAI.GptImage2OnReplicate);
 
         sharedModel.Should().Be(ModelConstants.OpenAI.GptImage2OnReplicate,
             "the user's pick must be persisted exactly, not overwritten by a downstream auto-selection");
@@ -926,7 +926,7 @@ public class GeneratorViewModelTests
         vm2.LoadSavedUiState();
 
         vm2.Parameters.Model.Should().Be(ModelConstants.OpenAI.GptImage2OnReplicate);
-        vm2.SelectedModel?.Value.Should().Be(ModelConstants.OpenAI.GptImage2OnReplicate);
+        vm2.ProviderFilter.SelectedModel?.Value.Should().Be(ModelConstants.OpenAI.GptImage2OnReplicate);
         sharedModel.Should().Be(ModelConstants.OpenAI.GptImage2OnReplicate,
             "the stored value must still be the user's pick after the simulated restart");
     }
@@ -941,7 +941,7 @@ public class GeneratorViewModelTests
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
 
-        await _viewModel.RunBatchAsync(new[] { "P1", "P2", "P3" });
+        await _viewModel.Batch.RunBatchAsync(new[] { "P1", "P2", "P3" });
 
         _viewModel.Jobs.Should().HaveCount(3);
         _viewModel.Jobs[0].Prompt.Should().Be("P1");
@@ -952,7 +952,7 @@ public class GeneratorViewModelTests
             j.StatusKind.Should().Be(StatusKind.Success);
             j.IsRunning.Should().BeFalse();
         });
-        _viewModel.IsBatchRunning.Should().BeFalse();
+        _viewModel.Batch.IsBatchRunning.Should().BeFalse();
         _viewModel.StatusMessage.Should().Contain("3 ok").And.Contain("0 failed");
     }
 
@@ -972,7 +972,7 @@ public class GeneratorViewModelTests
                     : new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}");
             });
 
-        await _viewModel.RunBatchAsync(new[] { "A", "B", "C" });
+        await _viewModel.Batch.RunBatchAsync(new[] { "A", "B", "C" });
 
         _viewModel.Jobs.Should().HaveCount(3);
         _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Success); // A
@@ -987,7 +987,7 @@ public class GeneratorViewModelTests
     {
         _viewModel.Parameters.ApiToken = "valid-token";
         // Pick a model that supports seed so RandomizeSeed actually matters.
-        _viewModel.SelectedModel = _viewModel.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
         _viewModel.Parameters.RandomizeSeed = true;
 
         var capturedSeeds = new List<long>();
@@ -999,7 +999,7 @@ public class GeneratorViewModelTests
                 return new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, "ok");
             });
 
-        await _viewModel.RunBatchAsync(new[] { "p1", "p2", "p3" });
+        await _viewModel.Batch.RunBatchAsync(new[] { "p1", "p2", "p3" });
 
         capturedSeeds.Should().HaveCount(3);
         capturedSeeds.Distinct().Should().HaveCount(3,
@@ -1011,10 +1011,10 @@ public class GeneratorViewModelTests
     {
         _viewModel.Parameters.ApiToken = "valid-token";
 
-        await _viewModel.RunBatchAsync(Array.Empty<string>());
+        await _viewModel.Batch.RunBatchAsync(Array.Empty<string>());
 
         _viewModel.Jobs.Should().BeEmpty();
-        _viewModel.IsBatchRunning.Should().BeFalse();
+        _viewModel.Batch.IsBatchRunning.Should().BeFalse();
     }
 
     [Fact]
@@ -1042,10 +1042,10 @@ public class GeneratorViewModelTests
                 throw new InvalidOperationException("Runner should not be called for canceled-queued jobs.");
             });
 
-        var batchTask = _viewModel.RunBatchAsync(new[] { "first", "second", "third" });
+        var batchTask = _viewModel.Batch.RunBatchAsync(new[] { "first", "second", "third" });
 
         await firstJobStarted.Task; // wait until the first job is actually running
-        _viewModel.CancelBatchCommand.Execute(null);
+        _viewModel.Batch.CancelBatchCommand.Execute(null);
 
         // Let the in-flight job finish naturally (success).
         firstJobGate.SetResult(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));

@@ -29,7 +29,7 @@ public partial class MainPage
             var path = Uri.UnescapeDataString(value);
             // Fire-and-forget: AddAsInputAsync sets a status message internally and never
             // throws past its own catch. Awaiting from a property setter isn't possible.
-            _ = _viewModel.AddAsInputAsync(path);
+            _ = _viewModel.InputImages.AddAsInputAsync(path);
         }
     }
 
@@ -67,9 +67,9 @@ public partial class MainPage
     // don't reliably cross the DataTemplate scope under MAUI's compiled bindings.
     private void OnRemoveImageClicked(object sender, EventArgs e)
     {
-        if (sender is Button { CommandParameter: GeneratorViewModel.InputImageItem item })
+        if (sender is Button { CommandParameter: InputImagesCoordinator.InputImageItem item })
         {
-            _viewModel.RemoveImageCommand.Execute(item);
+            _viewModel.InputImages.RemoveImageCommand.Execute(item);
         }
     }
 
@@ -80,17 +80,17 @@ public partial class MainPage
     {
         try
         {
-            var prompts = await _viewModel.PickAndParsePromptsAsync();
+            var prompts = await _viewModel.Batch.PickAndParsePromptsAsync();
             if (prompts is null || prompts.Count == 0) return;
 
-            var modelName = _viewModel.SelectedModel?.Display ?? _viewModel.Parameters.Model;
+            var modelName = _viewModel.ProviderFilter.SelectedModel?.Display ?? _viewModel.Parameters.Model;
             var confirm = await DisplayAlertAsync(
                 "Run batch?",
                 $"Submit {prompts.Count} prompts using {modelName}?\n\nCurrent settings (aspect ratio, format, etc.) will apply to every prompt.",
                 "Run", "Cancel");
             if (!confirm) return;
 
-            await _viewModel.RunBatchAsync(prompts);
+            await _viewModel.Batch.RunBatchAsync(prompts);
         }
         catch (Exception ex)
         {
@@ -140,7 +140,7 @@ public partial class MainPage
 
             foreach (var path in imagePaths)
             {
-                await _viewModel.AddAsInputAsync(path);
+                await _viewModel.InputImages.AddAsInputAsync(path);
             }
 
             if (skipped > 0)
