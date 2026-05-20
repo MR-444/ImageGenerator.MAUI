@@ -524,6 +524,19 @@ public class GeneratorViewModelTests
         _viewModel.TokenProviders.Single(p => p.Key == "pollinations").Value.Should().Be("saved-pollinations");
     }
 
+    [Fact]
+    public async Task LoadAllTokensAsync_IsIdempotent_WhenCalledTwice()
+    {
+        _mockTokenStore.Setup(x => x.LoadAsync()).ReturnsAsync("saved-replicate");
+        _mockPollinationsTokenStore.Setup(x => x.LoadAsync()).ReturnsAsync("saved-pollinations");
+
+        await _viewModel.LoadAllTokensAsync();
+        await _viewModel.LoadAllTokensAsync();
+
+        _mockTokenStore.Verify(x => x.LoadAsync(), Times.Once);
+        _mockPollinationsTokenStore.Verify(x => x.LoadAsync(), Times.Once);
+    }
+
     // --- Card title + strength gate state machine ---
 
     [Theory]
@@ -824,6 +837,19 @@ public class GeneratorViewModelTests
         _viewModel.LoadSavedUiState();
 
         _mockUiStateStore.Verify(s => s.PersistModel(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public void LoadSavedUiState_IsIdempotent_WhenCalledTwice()
+    {
+        _mockUiStateStore.Setup(s => s.LoadPrompt()).Returns("restored prompt");
+        _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ModelConstants.Flux.Pro11);
+
+        _viewModel.LoadSavedUiState();
+        _viewModel.LoadSavedUiState();
+
+        _mockUiStateStore.Verify(s => s.LoadPrompt(), Times.Once);
+        _mockUiStateStore.Verify(s => s.LoadModel(), Times.Once);
     }
 
     [Fact]

@@ -130,6 +130,8 @@ public partial class GeneratorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanAddImage))]
     private ModelCapabilities _capabilities;  // hydrated from registry in ctor
     private bool _cachedCatalogLoaded;
+    private bool _tokensLoaded;
+    private bool _uiStateLoaded;
 
     // Sticky aspect ratio across model swaps: capture the user's last explicit AR pick so
     // we can restore it whenever a model switch lands on a model that supports it. Updated
@@ -656,6 +658,9 @@ public partial class GeneratorViewModel : ObservableObject
     /// </summary>
     public async Task LoadAllTokensAsync()
     {
+        if (_tokensLoaded) return;
+        _tokensLoaded = true;
+
         foreach (var provider in TokenProviders)
         {
             await provider.LoadAsync();
@@ -671,6 +676,9 @@ public partial class GeneratorViewModel : ObservableObject
     // and triggers RefreshCapabilities + the persist hook.
     public void LoadSavedUiState()
     {
+        if (_uiStateLoaded) return;
+        _uiStateLoaded = true;
+
         var savedPrompt = _uiStateStore.LoadPrompt();
         if (!string.IsNullOrEmpty(savedPrompt))
         {
