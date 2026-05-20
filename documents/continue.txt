@@ -33,15 +33,6 @@ CORRECTNESS — open
     File: Presentation/ViewModels/GeneratorViewModel.cs
     Scope: large. M1 carve-up note already in MauiProgram.cs:90.
 
-[ ] F8 (Minor) — MainPage.OnAppearing re-runs token + UI-state loads on every appearance
-    Only the catalog load has a guard (_cachedCatalogLoaded);
-    LoadAllTokensAsync + LoadSavedUiState run again every time the
-    page appears. Harmless today; latent race if those loads ever
-    get expensive.
-    Files: Presentation/Views/MainPage.xaml.cs:49-64,
-           Presentation/ViewModels/GeneratorViewModel.cs:702-721
-
-
 COSMETIC / QUICK WINS — open
 ----------------------------
 
@@ -91,6 +82,16 @@ TRACKED-OPEN BUT NOT NEW (per audit + project memory)
 
 RECENTLY COMPLETED (for context — already on master)
 ----------------------------------------------------
+
+[x] F8 (Minor) — Idempotent LoadAllTokens + LoadSavedUiState on OnAppearing
+    Commit: 29fd6d1 (2026-05-20)
+    Fix: added _tokensLoaded / _uiStateLoaded guard flags mirroring the
+    existing _cachedCatalogLoaded pattern; both methods now short-circuit
+    on the second call. Removes the latent race where a re-run of
+    LoadSavedUiState could re-apply persisted prompt/model over the
+    user's in-memory state during the debounce window.
+    New tests: LoadAllTokensAsync_IsIdempotent_WhenCalledTwice,
+    LoadSavedUiState_IsIdempotent_WhenCalledTwice. 270/270 green.
 
 [x] Cosmetic bundle — F9 + F10 + ModelCapabilities move + QW6 + QW5 + QW4
     Commit: 8551d31 (2026-05-20)
