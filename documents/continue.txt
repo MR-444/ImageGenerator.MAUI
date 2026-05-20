@@ -25,22 +25,6 @@ COSMETIC / QUICK WINS — open
 MISSING TESTS — open (audit §9)
 -------------------------------
 
-[ ] ST3 — Broader PollinationsImageGenerationService tests
-    The F1 follow-up file (PollinationsImageGenerationServiceTests.cs)
-    is intentionally minimal: only seed-clamp coverage. Still missing:
-      - HTTP 4xx/5xx with body → status message contains body
-      - Undersized response (<1000 bytes) → returns undersized message
-      - Token redaction in error strings
-      - URL construction (safe=nsfw on/off)
-      - Authorization header attached only when token non-empty
-      - Cancellation via cancellationToken
-
-[ ] PollinationsCatalogService tests
-    Zero direct tests. Cover:
-      - Filter to output_modalities=image + paid_only!=true
-      - Display-name extraction from description prefix
-      - HTTP failure swallow-and-return-empty
-
 [ ] UiStateStore exception-path tests
     SafeGet/SafeSet swallow exceptions; worth a test for the
     SecureStorage-throws path.
@@ -85,6 +69,28 @@ TRACKED-OPEN BUT NOT NEW (per audit + project memory)
 
 RECENTLY COMPLETED (for context — already on master)
 ----------------------------------------------------
+
+[x] ST3 + PollinationsCatalogService tests — broader Pollinations coverage
+    Commit: a74ba00 (2026-05-20)
+    PollinationsImageGenerationServiceTests gained 11 new tests covering
+    safe=nsfw URL toggle, Bearer header on/off (incl. whitespace token),
+    HTTP 4xx/5xx body inclusion, token redaction, undersized response,
+    handler-thrown OperationCanceledException, and the success-message
+    format. Fixture refactored: a _nextResponse Func lets each test swap
+    the response without losing the request-capture callback;
+    MockBehavior switched to Loose because the SUT's `using var
+    httpClient` triggers handler.Dispose at scope exit (Strict was
+    silently producing an "An error occurred" message that masked every
+    assertion — the prior seed tests only passed because they never
+    read result.Message).
+    PollinationsCatalogServiceTests is new — 13 tests covering filter
+    rules (image modality, paid_only!=true, blank name), display-name
+    extraction (description prefix before " - ", full description,
+    title-cased slug fallback, always-(Pollinations) suffix),
+    value/provider mapping, and three empty-result paths (HTTP error,
+    invalid JSON, JSON null payload — the last exercises the
+    `entries is null` early return rather than the catch block).
+    No production code changes. 290 → 314 tests green.
 
 [x] F6 (Large) — Carve up GeneratorViewModel into three sub-VM coordinators
     Commit: 8691056 (2026-05-20)
