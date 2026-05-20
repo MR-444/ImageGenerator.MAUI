@@ -32,11 +32,13 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
     {
         // Fan out to both providers in parallel — the Pollinations call is anonymous and
         // independent of the Replicate token, so it shouldn't be gated by Replicate's auth.
+        // Tuple-await synchronises both already-running tasks without the .Result anti-pattern
+        // that a separate WhenAll would otherwise leave behind.
         var replicateTask = _catalogService.FetchAsync(apiToken);
         var pollinationsTask = _pollinationsCatalogService.FetchAsync();
-        await Task.WhenAll(replicateTask, pollinationsTask);
+        var (replicate, pollinations) = (await replicateTask, await pollinationsTask);
 
-        var fetched = replicateTask.Result.Concat(pollinationsTask.Result).ToList();
+        var fetched = replicate.Concat(pollinations).ToList();
         if (fetched.Count == 0) return null;
 
         // Cache the raw merged-fetched list (not seeds) — load-time merge keeps any
