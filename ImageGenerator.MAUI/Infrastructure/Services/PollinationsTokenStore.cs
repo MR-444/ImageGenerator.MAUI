@@ -10,19 +10,23 @@ public sealed class PollinationsTokenStore : IPollinationsTokenStore
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(500);
 
     private readonly ILogger<PollinationsTokenStore> _logger;
+    private readonly ISecureStorage _secureStorage;
     private readonly DebouncedSecureStorageWriter _writer;
 
-    public PollinationsTokenStore(ILogger<PollinationsTokenStore> logger)
+    public PollinationsTokenStore(ILogger<PollinationsTokenStore> logger, ISecureStorage? secureStorage = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _writer = new DebouncedSecureStorageWriter(TokenStorageKey, DebounceDelay, _logger);
+        _secureStorage = secureStorage ?? SecureStorage.Default;
+        _writer = new DebouncedSecureStorageWriter(
+            TokenStorageKey, DebounceDelay, _logger,
+            (k, v) => _secureStorage.SetAsync(k, v));
     }
 
     public async Task<string?> LoadAsync()
     {
         try
         {
-            return await SecureStorage.Default.GetAsync(TokenStorageKey);
+            return await _secureStorage.GetAsync(TokenStorageKey);
         }
         catch (Exception ex)
         {
@@ -37,7 +41,7 @@ public sealed class PollinationsTokenStore : IPollinationsTokenStore
     {
         try
         {
-            SecureStorage.Default.Remove(TokenStorageKey);
+            _secureStorage.Remove(TokenStorageKey);
         }
         catch (Exception ex)
         {

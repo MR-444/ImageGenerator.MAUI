@@ -10,10 +10,12 @@ public sealed class UiStateStore : IUiStateStore
     private const string ModelKey = "imggen.last_model";
 
     private readonly ILogger<UiStateStore> _logger;
+    private readonly IPreferences _preferences;
 
-    public UiStateStore(ILogger<UiStateStore> logger)
+    public UiStateStore(ILogger<UiStateStore> logger, IPreferences? preferences = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _preferences = preferences ?? Preferences.Default;
     }
 
     public string? LoadPrompt()
@@ -51,8 +53,8 @@ public sealed class UiStateStore : IUiStateStore
             // ContainsKey-then-Get avoids any ambiguity around how the platform handler treats
             // a `null` defaultValue for `Get<string?>` — some implementations coerce missing
             // keys to "" instead of null, which would defeat the IsNullOrEmpty guard upstream.
-            if (!Preferences.Default.ContainsKey(key)) return null;
-            var value = Preferences.Default.Get(key, string.Empty);
+            if (!_preferences.ContainsKey(key)) return null;
+            var value = _preferences.Get(key, string.Empty);
             return string.IsNullOrEmpty(value) ? null : value;
         }
         catch (Exception ex)
@@ -66,7 +68,7 @@ public sealed class UiStateStore : IUiStateStore
     {
         try
         {
-            Preferences.Default.Set(key, value);
+            _preferences.Set(key, value);
         }
         catch (Exception ex)
         {
