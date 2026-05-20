@@ -61,6 +61,27 @@ TRACKED-OPEN BUT NOT NEW (per audit + project memory)
     Both flagged in project memory's next-up list. Use the existing
     descriptor pattern; near-zero structural impact.
 
+[ ] Feature: Pollinations image-input (manual test 2026-05-20)
+    Smoke test on a Pollinations model confirmed the Input Image card
+    stays hidden — all Pollinations descriptors inherit
+    PollinationsDescriptorBase with ImagePrompt:false (line 53). The
+    Pollinations API itself supports input images per the API reference
+    (documents/Pollinations API Reference.html and the v0/gen.pollinations.ai
+    /openapi.json it loads). Gap to close:
+      1. Flip ImagePrompt:true on the descriptors that actually support
+         it (likely a subset — verify per-model in the API docs, not
+         blanket on the base class).
+      2. PollinationsImageGenerationService.BuildUrl currently only
+         emits prompt/model/width/height/seed/enhance/safe. Add image=
+         (or whatever the spec calls it) when SelectedImages is non-
+         empty. The encoding is the unknown bit: Pollinations is GET-
+         only so expects a URL, but the app holds base64. Likely needs
+         either a URL-input path (Pollinations may accept data: URIs)
+         or a host-the-image-first step.
+      3. ModelCapabilities for Pollinations needs MaxImageInputs > 0
+         only where supported.
+    Generation otherwise works on master (F6 verified by user).
+
 
 RECENTLY COMPLETED (for context — already on master)
 ----------------------------------------------------
