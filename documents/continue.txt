@@ -32,9 +32,6 @@ see RECENTLY COMPLETED below. ST3 + catalog shipped in a74ba00.)
 TRACKED-OPEN BUT NOT NEW (per audit + project memory)
 -----------------------------------------------------
 
-[ ] x:DataType build warning at MainPage.xaml:97
-    Tracked open issue per project memory.
-
 [ ] Feature: kontext (image-prompt for kontext models)
 [ ] Feature: negative_prompt
     Both flagged in project memory's next-up list. Use the existing
@@ -64,6 +61,19 @@ TRACKED-OPEN BUT NOT NEW (per audit + project memory)
 
 RECENTLY COMPLETED (for context — already on master)
 ----------------------------------------------------
+
+[x] XamlC XC0022 — type the two ItemDisplayBinding paths
+    Commit: 65e27b9 (2026-05-20)
+    Audit/memory both flagged this as "MainPage.xaml:97" but that
+    citation was pre-F6 stale. Actual warnings surfaced in Release
+    builds only, at lines 55 and 157 — both Picker.ItemDisplayBinding
+    inline-shorthand paths the XAML compiler couldn't type-check
+    (TokenProviderPicker.DisplayName and ModelPicker.Display). Switched
+    each to the long-form <Picker.ItemDisplayBinding> syntax with an
+    explicit x:DataType (vm:TokenProviderViewModel and vo:ModelOption
+    respectively); added a vo: alias for Core.Domain.ValueObjects.
+    Release build now: 0 warnings. Runtime behavior unchanged. 339
+    tests still green.
 
 [x] Store wrappers — UiStateStore + Api/Pollinations token stores
     Commit: 82cc571 (2026-05-20)
