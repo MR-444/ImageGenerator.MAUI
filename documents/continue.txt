@@ -15,14 +15,6 @@ when you finish or split work.
 CORRECTNESS — open
 ------------------
 
-[ ] F6 (Moderate, known-on-roadmap) — Carve up GeneratorViewModel (930 lines)
-    Eight responsibilities. Carve-up candidates:
-      - BatchCoordinator    (RunBatchAsync, CancelBatch, IsBatchRunning)
-      - InputImagesCoordinator (SelectedImages mirror, AR sticky, image-add cmds)
-      - ProviderFilterCoordinator (SelectedProvider, FilteredModels)
-    File: Presentation/ViewModels/GeneratorViewModel.cs
-    Scope: large. M1 carve-up note already in MauiProgram.cs:90.
-
 COSMETIC / QUICK WINS — open
 ----------------------------
 
@@ -72,6 +64,22 @@ TRACKED-OPEN BUT NOT NEW (per audit + project memory)
 
 RECENTLY COMPLETED (for context — already on master)
 ----------------------------------------------------
+
+[x] F6 (Large) — Carve up GeneratorViewModel into three sub-VM coordinators
+    Commit: 8691056 (2026-05-20)
+    Fix: extracted InputImagesCoordinator (SelectedImages + AR sticky +
+    image cmds), ProviderFilterCoordinator (Providers / SelectedProvider /
+    FilteredModels / SelectedModel + ApplyCatalog + RestoreSelectedModel
+    + SyncSelectionFromParameters; owns its own SuppressModelPersist
+    flag), and BatchCoordinator (IsBatchRunning + RunBatchAsync +
+    CancelBatchCommand + PickAndParsePromptsAsync; receives the shared
+    RunJobAsync via callback so single-job and batch share the same
+    execution seam). Followed the TokenProviderViewModel precedent —
+    sub-VM owns bindable state, host wires via constructor-injected
+    delegates, XAML reaches in via nested binding paths.
+    VM is ~520 lines (was 933). Three coordinator files total ~440 lines.
+    Tests: three new coordinator-specific files (7 + 8 + 5 = 20 new
+    tests). 290/290 green.
 
 [x] F4 (Moderate) — IHttpClientFactory migration for raw HttpClient consumers
     Commit: 49f68a7 (2026-05-20)
