@@ -8,7 +8,7 @@ using Microsoft.Maui.Storage;
 
 namespace ImageGenerator.MAUI.Infrastructure.Services;
 
-public class ModelCatalogService : IModelCatalogService
+public sealed class ModelCatalogService : IModelCatalogService
 {
     private const string CacheFileName = "model-catalog.json";
     private static readonly HashSet<string> ReplicateOwnerAllowlist =

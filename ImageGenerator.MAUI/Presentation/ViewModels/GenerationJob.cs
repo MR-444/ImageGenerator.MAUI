@@ -60,12 +60,16 @@ public partial class GenerationJob : ObservableObject
         if (ResultPath is null) return;
         try
         {
-            Process.Start(new ProcessStartInfo
+            // explorer.exe /select,<path> opens the parent folder with the file highlighted.
+            // ArgumentList handles quoting/escaping internally so a filename containing a quote
+            // can't break out of the argument — mirrors Infrastructure/Services/FileLauncher.cs.
+            var psi = new ProcessStartInfo
             {
                 FileName = "explorer.exe",
-                Arguments = $"/select,\"{ResultPath}\"",
                 UseShellExecute = true
-            });
+            };
+            psi.ArgumentList.Add($"/select,{ResultPath}");
+            Process.Start(psi);
         }
         catch (Exception ex)
         {

@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Shared.Constants;
+using static ImageGenerator.MAUI.Presentation.Common.UiDispatcher;
 
 namespace ImageGenerator.MAUI.Presentation.ViewModels;
 
@@ -217,20 +218,5 @@ public sealed partial class BatchCoordinator : ObservableObject
     {
         try { _batchCts?.Cancel(); }
         catch (ObjectDisposedException) { /* race with RunBatchAsync's finally */ }
-    }
-
-    private static void DispatchToUi(Action action)
-    {
-        try
-        {
-            if (MainThread.IsMainThread) action();
-            else MainThread.BeginInvokeOnMainThread(action);
-        }
-        catch
-        {
-            // MainThread throws in unit-test contexts where WinRT isn't initialised.
-            // Running synchronously is safe because tests run on a single thread anyway.
-            action();
-        }
     }
 }

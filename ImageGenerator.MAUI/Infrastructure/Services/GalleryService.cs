@@ -12,7 +12,7 @@ using SixLabors.ImageSharp.PixelFormats;
 
 namespace ImageGenerator.MAUI.Infrastructure.Services;
 
-public class GalleryService : IGalleryService
+public sealed class GalleryService : IGalleryService
 {
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {

@@ -15,7 +15,7 @@ namespace ImageGenerator.MAUI.Infrastructure.Services;
 /// to return specific image encoders, such as JpegEncoder, WebpEncoder, or PngEncoder, depending on the provided
 /// <see cref="ImageOutputFormat"/>. This class supports customization of encoding quality where applicable.
 /// </remarks>
-public class ImageEncoderProvider : IImageEncoderProvider
+public sealed class ImageEncoderProvider : IImageEncoderProvider
 {
     /// <summary>
     /// Returns an image encoder instance based on the specified output format and quality settings.

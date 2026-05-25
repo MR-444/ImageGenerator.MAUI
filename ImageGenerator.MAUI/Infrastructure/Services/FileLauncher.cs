@@ -3,7 +3,7 @@ using ImageGenerator.MAUI.Infrastructure.Interfaces;
 
 namespace ImageGenerator.MAUI.Infrastructure.Services;
 
-public class FileLauncher : IFileLauncher
+public sealed class FileLauncher : IFileLauncher
 {
     public void Launch(string path)
     {

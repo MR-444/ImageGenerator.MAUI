@@ -11,6 +11,7 @@ using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
+using static ImageGenerator.MAUI.Presentation.Common.UiDispatcher;
 using ImageGenerationParameters = ImageGenerator.MAUI.Core.Domain.Entities.ImageGenerationParameters;
 
 namespace ImageGenerator.MAUI.Presentation.ViewModels;
@@ -400,21 +401,6 @@ public partial class GeneratorViewModel : ObservableObject
         FlashMessage = message;
         await Task.Delay(durationMs);
         if (FlashMessage == message) FlashMessage = null;
-    }
-
-    private static void DispatchToUi(Action action)
-    {
-        try
-        {
-            if (MainThread.IsMainThread) action();
-            else MainThread.BeginInvokeOnMainThread(action);
-        }
-        catch
-        {
-            // MainThread throws in unit-test contexts where WinRT isn't initialised.
-            // Running synchronously is safe because tests run on a single thread anyway.
-            action();
-        }
     }
 
     [RelayCommand]

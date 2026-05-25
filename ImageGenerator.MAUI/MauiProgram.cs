@@ -57,12 +57,12 @@ public static class MauiProgram
         //     standard resilience pipeline (retry on 5xx/408/429, Polly-owned timeouts) so the
         //     CDN download and Pollinations calls are no longer asymmetric with Refit.
         //     "pollinations" is shared by gen + catalog (same host, same retry budget).
-        builder.Services.AddHttpClient("replicate-download")
+        builder.Services.AddHttpClient(ReplicateImageGenerationService.HttpClientName)
             .ConfigureStandardResilience(
                 perAttemptTimeout: TimeSpan.FromSeconds(60),
                 totalTimeout: TimeSpan.FromMinutes(3));
 
-        builder.Services.AddHttpClient("pollinations", client =>
+        builder.Services.AddHttpClient(PollinationsImageGenerationService.HttpClientName, client =>
                 client.BaseAddress = new Uri("https://gen.pollinations.ai"))
             .ConfigureStandardResilience(
                 perAttemptTimeout: TimeSpan.FromSeconds(60),
