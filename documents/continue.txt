@@ -1,9 +1,10 @@
 ImageGenerator.MAUI — Open Work Queue
 =====================================
 
-Source of truth: AUDIT_REPORT.md (audit dated 2026-05-20, v1.3.0+).
-Last updated: 2026-05-20 (post-refresh audit; F1–F10 round all in RECENTLY
-COMPLETED below, new findings populated here).
+Source of truth: AUDIT_REPORT.md (audit dated 2026-05-20 — now predates the
+v1.3.0 release 2026-05-25 and the prompt-import separator change b81bb26).
+Last updated: 2026-05-25 (cleared the cosmetic quick-win cluster: items 1/3/4/5
+done in 588fc48; items 2/6 won't-fix — see notes inline).
 
 Format: each item has a status box, severity, a one-line hook, and
 file:line citations. Pick the top open item; keep this file in sync
@@ -19,10 +20,10 @@ CORRECTNESS — open
 (Empty — .Result refactor shipped in 2d96a6d, see RECENTLY COMPLETED.)
 
 
-COSMETIC / QUICK WINS — open
-----------------------------
+COSMETIC / QUICK WINS — all resolved 2026-05-25 (4 done in 588fc48, 2 won't-fix)
+--------------------------------------------------------------------------------
 
-[ ] (Minor) Second `/select,…` call site missed by QW5
+[x] (Minor) Second `/select,…` call site missed by QW5 — DONE 588fc48
     Presentation/ViewModels/GenerationJob.cs:62-68
     `FileLauncher.RevealInFolder` was migrated to
     `ProcessStartInfo.ArgumentList` in 8551d31 but this second
@@ -32,16 +33,23 @@ COSMETIC / QUICK WINS — open
     (already injected at the launcher level for other callers) or
     switch to ArgumentList here too.
 
-[ ] (Minor) Asymmetric suppression-flag ownership across F6 carve-up
+[-] (Minor) Asymmetric suppression-flag ownership across F6 carve-up — WON'T FIX 2026-05-25
     Presentation/ViewModels/GeneratorViewModel.cs:106,166-169,275-276
     Presentation/ViewModels/ProviderFilterCoordinator.cs:34,73-83,100-108
     `_suppressPreferredArUpdate` is host-owned + host-read while
     `SuppressModelPersist` is coordinator-owned + host-read. Same
-    architectural question answered two ways. AR flag belongs on
-    InputImagesCoordinator because the relevant write path
-    (setAspectRatioProgrammatically callback) already lives there.
+    architectural question answered two ways. The audit suggested moving the
+    AR flag to InputImagesCoordinator "because the write path lives there" —
+    but that premise is wrong: SetAspectRatioProgrammatically is the single
+    programmatic-AR write chokepoint and is called from TWO sites — the host's
+    RefreshCapabilities (GeneratorViewModel.cs:142) AND the coordinator
+    callback (wired :250). The host-owned flag guards the host-owned
+    _parameters.PropertyChanged subscription and cleanly covers both callers;
+    moving it doesn't improve that and risks the line-142 path. Decided with
+    user to keep the current design.
 
-[ ] (Minor) DispatchToUi triplicated — extract to one shared static
+[x] (Minor) DispatchToUi triplicated — extract to one shared static — DONE 588fc48
+    Now Presentation/Common/UiDispatcher.cs; 3 VMs pull it in via `using static`.
     Presentation/ViewModels/GeneratorViewModel.cs:405-418
     Presentation/ViewModels/BatchCoordinator.cs:222-235
     Presentation/ViewModels/GalleryViewModel.cs:304-317
@@ -49,7 +57,7 @@ COSMETIC / QUICK WINS — open
     Presentation/Common/UiDispatcher.cs (or similar) and call from all
     three. ~15min mechanical edit.
 
-[ ] (Minor) Named-client constants declared but not used at registration
+[x] (Minor) Named-client constants declared but not used at registration — DONE 588fc48
     MauiProgram.cs:60,65
     Infrastructure/External/Replicate/ReplicateImageGenerationService.cs:13
     Infrastructure/External/Pollinations/PollinationsImageGenerationService.cs:13
@@ -59,7 +67,7 @@ COSMETIC / QUICK WINS — open
     AddHttpClient(…) calls. Wire the constants so a rename can't
     silently desync the registration from the consumer.
 
-[ ] (Minor) Five unsealed concretes left over from QW1 (8551d31)
+[x] (Minor) Five unsealed concretes left over from QW1 (8551d31) — DONE 588fc48
     Infrastructure/Services/FileLauncher.cs:6
     Infrastructure/Services/ClipboardService.cs:6
     Infrastructure/Services/GalleryService.cs:15
@@ -70,14 +78,14 @@ COSMETIC / QUICK WINS — open
     has protected virtual members. Mechanical 5× `public class` →
     `public sealed class` edit.
 
-[ ] (Nit) Mirror fires per-item during TruncateToMaxInputs
+[-] (Nit) Mirror fires per-item during TruncateToMaxInputs — WON'T FIX 2026-05-25
     Presentation/ViewModels/InputImagesCoordinator.cs:82-91,93-125
     OnSelectedImagesChanged calls _mirrorImagePromptsToParameters on
     every CollectionChanged, including each programmatic remove from
     TruncateToMaxInputs. Cap is ≤14 and ImagePrompts is a tiny
     ObservableCollection<string>, so the cost is negligible. Logged
     for completeness; only matters if MaxImageInputs ever grows past
-    ~50.
+    ~50. Decided with user to leave as-is until that cap actually grows.
 
 
 MISSING TESTS — open (audit §9)
