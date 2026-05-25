@@ -1,10 +1,11 @@
 namespace ImageGenerator.MAUI.Core.Application.Interfaces;
 
 /// <summary>
-/// Parses a textfile of image prompts into a list. Prompts are separated by lines
-/// containing only "---". Lines starting with '#' are treated as comments. Empty
-/// chunks are dropped. Throws <see cref="PromptBatchTooLargeException"/> when the
-/// parsed count exceeds <see cref="PromptBatchParserLimits.MaxPromptsPerBatch"/>.
+/// Parses a textfile of image prompts into a list. Prompts are separated by a blank
+/// line, a '#' comment line, or a line containing only "---". Comment and blank content
+/// is dropped, never emitted; empty chunks are dropped. Consecutive non-blank lines are
+/// joined into a single multi-line prompt. Throws <see cref="PromptBatchTooLargeException"/>
+/// when the parsed count exceeds <see cref="PromptBatchParserLimits.MaxPromptsPerBatch"/>.
 /// </summary>
 public interface IPromptBatchParser
 {

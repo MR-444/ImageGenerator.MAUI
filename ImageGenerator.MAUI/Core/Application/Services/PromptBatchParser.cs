@@ -25,15 +25,16 @@ public sealed class PromptBatchParser : IPromptBatchParser
             var line = raw.EndsWith('\r') ? raw[..^1] : raw;
             var trimmed = line.Trim();
 
-            if (trimmed == Delimiter)
+            // A line that is blank, exactly "---", or a # comment all end the current prompt.
+            // Blank lines and comment blocks are the natural separators in hand-written prompt
+            // lists; "---" stays supported for forcing a split (or keeping a blank line inside
+            // one prompt). Comment/blank text itself is never emitted.
+            if (trimmed.Length == 0 || trimmed == Delimiter || trimmed.StartsWith('#'))
             {
                 EmitIfNotEmpty(current, prompts);
                 current.Clear();
                 continue;
             }
-
-            // # comments: drop the whole line. Lets users disable a prompt without deleting it.
-            if (trimmed.StartsWith('#')) continue;
 
             if (current.Length > 0) current.Append('\n');
             current.Append(line);

@@ -63,6 +63,91 @@ public class PromptBatchParserTests
     }
 
     [Fact]
+    public void Parse_BlankLineSeparatesPrompts()
+    {
+        const string input = """
+            A young woman holding a bouquet
+
+            Mountain range at golden hour
+            """;
+
+        var result = _parser.Parse(input);
+
+        result.Should().HaveCount(2);
+        result[0].Should().Be("A young woman holding a bouquet");
+        result[1].Should().Be("Mountain range at golden hour");
+    }
+
+    [Fact]
+    public void Parse_MultipleBlankLines_CollapseToOneBoundary()
+    {
+        // A run of blank lines is a single separator — no empty prompts emitted.
+        const string input = "Prompt A\n\n\n\nPrompt B";
+
+        var result = _parser.Parse(input);
+
+        result.Should().HaveCount(2);
+        result.Should().ContainInOrder("Prompt A", "Prompt B");
+    }
+
+    [Fact]
+    public void Parse_CommentLineSeparatesPrompts()
+    {
+        // A # comment line ends the current prompt even with no blank line around it.
+        const string input = """
+            Prompt A
+            # header between prompts
+            Prompt B
+            """;
+
+        var result = _parser.Parse(input);
+
+        result.Should().HaveCount(2);
+        result[0].Should().Be("Prompt A");
+        result[1].Should().Be("Prompt B");
+    }
+
+    [Fact]
+    public void Parse_CommentBlockBetweenPrompts_RealWorldFormat()
+    {
+        // Mirrors the user's file: a # header block plus blank lines wrapping single-line
+        // prompts, with no --- delimiters anywhere.
+        const string input = """
+            # ============================
+            # FRAME 01 — INTRO
+            # ============================
+
+            Oil on dark-toned canvas, frame one.
+
+            # ============================
+            # FRAME 02 — VERSE 1
+            # ============================
+
+            Oil on dark-toned canvas, frame two.
+            """;
+
+        var result = _parser.Parse(input);
+
+        result.Should().HaveCount(2);
+        result[0].Should().Be("Oil on dark-toned canvas, frame one.");
+        result[1].Should().Be("Oil on dark-toned canvas, frame two.");
+        result.Should().NotContain(p => p.Contains('#'));
+    }
+
+    [Fact]
+    public void Parse_BlankLineInsidePrompt_NowSplits()
+    {
+        // Accepted trade-off: a blank line inside a prompt splits it. Use --- to keep a
+        // blank line within a single multi-paragraph prompt instead.
+        const string input = "first paragraph\n\nsecond paragraph";
+
+        var result = _parser.Parse(input);
+
+        result.Should().HaveCount(2);
+        result.Should().ContainInOrder("first paragraph", "second paragraph");
+    }
+
+    [Fact]
     public void Parse_CommentLines_AreDropped()
     {
         const string input = """

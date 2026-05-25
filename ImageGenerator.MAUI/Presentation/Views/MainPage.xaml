@@ -310,10 +310,10 @@
                                 Clicked="OnImportPromptsClicked"
                                 IsVisible="{Binding Batch.IsBatchRunning, Converter={StaticResource InverseBool}}"
                                 HorizontalOptions="Fill"
-                                SemanticProperties.Description="Pick a textfile of prompts (separated by --- lines) and run them sequentially with the current model and settings"
+                                SemanticProperties.Description="Pick a textfile of prompts (separated by blank lines, # comments, or ---) and run them sequentially with the current model and settings"
                                 AutomationId="ImportPromptsButton" />
 
-                        <Label Text="Pick a .txt file. Separate prompts with a line containing only ---. Lines starting with # are ignored."
+                        <Label Text="Pick a .txt file. Prompts are separated by a blank line, a # comment line, or a line with only ---. Lines starting with # are ignored."
                                Style="{StaticResource HelperText}"
                                IsVisible="{Binding Batch.IsBatchRunning, Converter={StaticResource InverseBool}}" />
 
