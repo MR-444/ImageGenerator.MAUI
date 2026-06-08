@@ -8,6 +8,7 @@ namespace ImageGenerator.MAUI.Tests.Descriptors;
 public class IdeogramV4DescriptorTests
 {
     private readonly IModelDescriptorRegistry _registry = ModelDescriptorRegistry.Default();
+    private readonly IdeogramV4QualityDescriptor _descriptor = new();
 
     private static readonly IdeogramV4Descriptor[] All =
     [
@@ -16,27 +17,70 @@ public class IdeogramV4DescriptorTests
         new IdeogramV4QualityDescriptor()
     ];
 
-    [Fact]
-    public void Build_SendsPromptOnly()
-    {
-        var descriptor = new IdeogramV4QualityDescriptor();
+    private static ImageGenerationParameters Params(
+        string prompt = "a cat",
+        bool useJson = false,
+        string resolution = IdeogramV4Descriptor.AutoResolution,
+        bool copyright = false) =>
+        new()
+        {
+            Model = ModelConstants.Ideogram.V4Quality,
+            Prompt = prompt,
+            UseJsonPrompt = useJson,
+            Resolution = resolution,
+            EnableCopyrightDetection = copyright,
+            Raw = false
+        };
 
-        var payload = (IDictionary<string, object?>)descriptor.Build(
-            new ImageGenerationParameters { Model = descriptor.ModelId, Prompt = "a cat", Raw = false });
+    private static IDictionary<string, object?> Build(IdeogramV4Descriptor d, ImageGenerationParameters p) =>
+        (IDictionary<string, object?>)d.Build(p);
+
+    [Fact]
+    public void Build_PlainPrompt_Auto_NoCopyright_SendsPromptOnly()
+    {
+        var payload = Build(_descriptor, Params());
 
         payload["prompt"].Should().Be("a cat");
-        // Ideogram V4's schema has none of the fallback's extra fields (aspect_ratio / seed /
-        // output_format / output_quality / images) — sending them would 422. Only prompt ships.
+        // None of the fallback's extra fields, and resolution/copyright omitted at their defaults.
         payload.Keys.Should().BeEquivalentTo(["prompt"]);
+    }
+
+    [Fact]
+    public void Build_WithExplicitResolution_IncludesIt()
+    {
+        Build(_descriptor, Params(resolution: "2048x2048"))["resolution"].Should().Be("2048x2048");
+    }
+
+    [Fact]
+    public void Build_AutoResolution_OmitsResolution()
+    {
+        Build(_descriptor, Params(resolution: IdeogramV4Descriptor.AutoResolution))
+            .Should().NotContainKey("resolution");
+    }
+
+    [Fact]
+    public void Build_JsonMode_SendsJsonPromptAsString_NotPrompt()
+    {
+        // Replicate's cog types json_prompt as a string, so the raw box text ships verbatim.
+        var json = """{"high_level_description":"a cat"}""";
+        var payload = Build(_descriptor, Params(prompt: json, useJson: true));
+
+        payload.Should().NotContainKey("prompt");
+        payload["json_prompt"].Should().Be(json);
+    }
+
+    [Fact]
+    public void Build_CopyrightDetection_IncludedOnlyWhenEnabled()
+    {
+        Build(_descriptor, Params(copyright: false)).Should().NotContainKey("enable_copyright_detection");
+        Build(_descriptor, Params(copyright: true))["enable_copyright_detection"].Should().Be(true);
     }
 
     [Fact]
     public void Seeds_AreGroupedUnderReplicateProvider()
     {
         foreach (var descriptor in All)
-        {
             descriptor.Seed.Provider.Should().Be(ProviderConstants.Replicate);
-        }
     }
 
     [Fact]
@@ -53,26 +97,27 @@ public class IdeogramV4DescriptorTests
     [Fact]
     public void Registry_PayloadFor_V4Quality_ReturnsDedicatedDescriptor_NotFallback()
     {
-        var builder = _registry.PayloadFor(ModelConstants.Ideogram.V4Quality);
-
-        // The fallback declares the sentinel id "_fallback"; the dedicated descriptor declares
-        // the real model id, proving the registry routes Ideogram to the correct payload builder.
-        builder.ModelId.Should().Be(ModelConstants.Ideogram.V4Quality);
+        // The fallback declares the sentinel id "_fallback"; a real id proves correct routing.
+        _registry.PayloadFor(ModelConstants.Ideogram.V4Quality).ModelId
+            .Should().Be(ModelConstants.Ideogram.V4Quality);
     }
 
     [Fact]
-    public void Capabilities_HideEveryKnob_ButKeepAspectRatiosNonEmpty()
+    public void Capabilities_AreIdeogramShaped()
     {
-        var caps = new IdeogramV4QualityDescriptor().Capabilities;
+        var caps = _descriptor.Capabilities;
 
+        caps.IdeogramOptions.Should().BeTrue();
+        caps.OutputFormatSelectable.Should().BeFalse();   // PNG-only model
         caps.AspectRatio.Should().BeFalse();
         caps.Seed.Should().BeFalse();
         caps.OutputQuality.Should().BeFalse();
         caps.ImagePrompt.Should().BeFalse();
         caps.MaxImageInputs.Should().Be(0);
-        caps.Resolutions.Should().BeNull();
-        // RefreshCapabilities indexes AspectRatios[0] unconditionally, so it must stay non-empty
-        // even though the AspectRatio picker is hidden.
+        caps.Resolutions.Should().NotBeNull();
+        caps.Resolutions![0].Should().Be(IdeogramV4Descriptor.AutoResolution);
+        caps.Resolutions.Should().Contain("2048x2048");
+        // RefreshCapabilities indexes AspectRatios[0] unconditionally even when AspectRatio is off.
         caps.AspectRatios.Should().NotBeEmpty();
     }
 }

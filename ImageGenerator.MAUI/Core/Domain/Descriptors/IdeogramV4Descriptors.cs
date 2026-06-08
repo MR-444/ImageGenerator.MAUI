@@ -6,22 +6,38 @@ using ImageGenerator.MAUI.Shared.Constants;
 namespace ImageGenerator.MAUI.Core.Domain.Descriptors;
 
 /// <summary>
-/// ideogram-v4-balanced / -turbo / -quality share one Replicate input schema: a natural-language
-/// <c>prompt</c> (or a structured <c>json_prompt</c>), an optional <c>resolution</c> (omit to let
-/// Ideogram auto-pick the aspect ratio), and <c>enable_copyright_detection</c>. Magic Prompt is
-/// applied automatically — there is no aspect_ratio / seed / output_format / output_quality /
-/// image-input field (unlike Flux/GPT), so the conservative FallbackReplicateDescriptor would
-/// 422 here. We send <c>prompt</c> only: the single guaranteed-valid field. The saved file is
-/// re-encoded to the user's chosen format by ImageFileService regardless of what Ideogram returns.
+/// ideogram-v4-balanced / -turbo / -quality share one Replicate input schema:
+/// <list type="bullet">
+///   <item><c>prompt</c> OR <c>json_prompt</c> (mutually exclusive; the <c>UseJsonPrompt</c>
+///   toggle picks which one the single prompt box maps to). Magic Prompt is auto-applied.</item>
+///   <item><c>resolution</c> — optional; omit (the "Auto" sentinel) to let Ideogram pick the AR.</item>
+///   <item><c>enable_copyright_detection</c> — optional bool.</item>
+/// </list>
+/// There is no aspect_ratio / seed / output_format input and the model only emits PNG, so the
+/// generic knobs are all off and <c>OutputFormatSelectable</c> is false (ImageFileService still
+/// saves PNG). <c>rendering_speed</c> is fixed per variant, so it isn't an input here.
 ///
-/// The <c>resolution</c> picker is intentionally omitted until its exact Replicate enum is
-/// confirmed from https://replicate.com/ideogram-ai/ideogram-v4-quality/api/schema#input-schema
-/// — shipping a wrong resolution value would 422. Auto aspect ratio is a fine default meanwhile.
+/// json_prompt is sent as a JSON **string** — Replicate's cog types the field as `string`, not a
+/// nested object (confirmed by a 422 "input.json_prompt: Expected: string, given: object"). The
+/// UI validates the box is real JSON before generation, so what ships is a valid JSON string.
 /// </summary>
-public abstract class IdeogramV4Descriptor : IPayloadBuilder, ICapabilityProvider, ICatalogSeedEntry
+public abstract class IdeogramV4Descriptor : IPayloadBuilder, ICapabilityProvider, IMetadataDescriber, ICatalogSeedEntry
 {
-    // AspectRatio is hidden (the model auto-selects), but RefreshCapabilities indexes
-    // AspectRatios[0], so this must stay non-empty. The value is never sent to the API.
+    // Sentinel for "let Ideogram choose the aspect ratio" — selecting it omits `resolution`.
+    public const string AutoResolution = "Auto";
+
+    // Ideogram V4 resolutions (from the generate-v4 schema). "Auto" first so RefreshCapabilities
+    // defaults Parameters.Resolution to the omit-sentinel when switching to an Ideogram model.
+    private static readonly string[] IdeogramResolutions =
+    [
+        AutoResolution,
+        "2048x2048", "1440x2880", "2880x1440", "1664x2496", "2496x1664", "1792x2240", "2240x1792",
+        "1440x2560", "2560x1440", "1600x2560", "2560x1600", "1728x2304", "2304x1728", "1296x3168",
+        "3168x1296", "1152x2944", "2944x1152", "1248x3328", "3328x1248", "1280x3072", "3072x1280",
+        "1024x3072", "3072x1024"
+    ];
+
+    // AspectRatio is hidden, but RefreshCapabilities indexes AspectRatios[0], so keep it non-empty.
     private static readonly string[] AspectRatios = ["1:1"];
 
     public abstract string ModelId { get; }
@@ -31,12 +47,35 @@ public abstract class IdeogramV4Descriptor : IPayloadBuilder, ICapabilityProvide
         SafetyTolerance: false, PromptUpsampling: false, OutputQuality: false,
         AspectRatio: false, CustomDimensions: false, Seed: false, ImagePrompt: false,
         AspectRatioLabel: "Aspect ratio", AspectRatios: AspectRatios,
-        MaxImageInputs: 0);
+        Resolutions: IdeogramResolutions,
+        MaxImageInputs: 0,
+        OutputFormatSelectable: false,
+        IdeogramOptions: true);
 
-    public object Build(ImageGenerationParameters p) => new Dictionary<string, object?>
+    public object Build(ImageGenerationParameters p)
     {
-        ["prompt"] = p.Prompt
-    };
+        var payload = new Dictionary<string, object?>();
+
+        if (p.UseJsonPrompt)
+            payload["json_prompt"] = p.Prompt;
+        else
+            payload["prompt"] = p.Prompt;
+
+        if (!string.IsNullOrWhiteSpace(p.Resolution) && p.Resolution != AutoResolution)
+            payload["resolution"] = p.Resolution;
+
+        if (p.EnableCopyrightDetection)
+            payload["enable_copyright_detection"] = true;
+
+        return payload;
+    }
+
+    public IEnumerable<string> Lines(ImageGenerationParameters p) =>
+    [
+        $"Resolution: {p.Resolution}",
+        $"JsonPrompt: {p.UseJsonPrompt}",
+        $"CopyrightDetection: {p.EnableCopyrightDetection}"
+    ];
 }
 
 public sealed class IdeogramV4BalancedDescriptor : IdeogramV4Descriptor

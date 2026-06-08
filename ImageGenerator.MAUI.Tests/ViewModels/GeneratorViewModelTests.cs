@@ -6,6 +6,7 @@ using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Application.Services;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
@@ -932,6 +933,57 @@ public class GeneratorViewModelTests
         vm2.ProviderFilter.SelectedModel?.Value.Should().Be(ModelConstants.OpenAI.GptImage2OnReplicate);
         sharedModel.Should().Be(ModelConstants.OpenAI.GptImage2OnReplicate,
             "the stored value must still be the user's pick after the simulated restart");
+    }
+
+    // --- Ideogram V4 ---
+
+    private static ModelOption IdeogramOption(GeneratorViewModel vm) =>
+        vm.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Ideogram.V4Quality);
+
+    [Fact]
+    public void SelectIdeogram_ShowsIdeogramOptions_AndHidesSharedResolution()
+    {
+        _viewModel.ProviderFilter.SelectedModel = IdeogramOption(_viewModel);
+
+        _viewModel.SupportsIdeogramOptions.Should().BeTrue();
+        _viewModel.SupportsResolution.Should().BeTrue();
+        _viewModel.ShowSharedResolution.Should().BeFalse("the Ideogram block renders its own picker");
+    }
+
+    [Fact]
+    public void SelectIdeogram_ForcesOutputFormatToPng()
+    {
+        _viewModel.Parameters.OutputFormat = ImageOutputFormat.Webp;
+
+        _viewModel.ProviderFilter.SelectedModel = IdeogramOption(_viewModel);
+
+        _viewModel.Parameters.OutputFormat.Should().Be(ImageOutputFormat.Png);
+    }
+
+    [Fact]
+    public void LeavingIdeogram_ClearsUseJsonPrompt()
+    {
+        _viewModel.ProviderFilter.SelectedModel = IdeogramOption(_viewModel);
+        _viewModel.Parameters.UseJsonPrompt = true;
+
+        _viewModel.ProviderFilter.SelectedModel =
+            _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+
+        _viewModel.Parameters.UseJsonPrompt.Should().BeFalse();
+    }
+
+    [Fact]
+    public void JsonPromptMode_GatesValidityOnValidJson()
+    {
+        _viewModel.Parameters.ApiToken = "token";
+        _viewModel.ProviderFilter.SelectedModel = IdeogramOption(_viewModel);
+        _viewModel.Parameters.UseJsonPrompt = true;
+
+        _viewModel.Parameters.Prompt = "not json";
+        _viewModel.IsValid.Should().BeFalse("structured-JSON mode requires the box to be valid JSON");
+
+        _viewModel.Parameters.Prompt = """{"high_level_description":"a cat"}""";
+        _viewModel.IsValid.Should().BeTrue();
     }
 
     // --- Batch (textfile) ---

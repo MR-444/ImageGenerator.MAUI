@@ -96,6 +96,14 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private bool _safe;
 
+    // Ideogram V4: when set, Prompt is sent as the structured `json_prompt` object instead of `prompt`.
+    [ObservableProperty]
+    private bool _useJsonPrompt;
+
+    // Ideogram V4: opt into post-generation copyright detection.
+    [ObservableProperty]
+    private bool _enableCopyrightDetection;
+
     public ImageGenerationParameters Clone()
     {
         var copy = new ImageGenerationParameters
@@ -121,6 +129,8 @@ public partial class ImageGenerationParameters : ObservableObject
             GptInputFidelity = GptInputFidelity,
             PollinationsApiToken = PollinationsApiToken,
             Safe             = Safe,
+            UseJsonPrompt    = UseJsonPrompt,
+            EnableCopyrightDetection = EnableCopyrightDetection,
         };
         foreach (var p in ImagePrompts) copy.ImagePrompts.Add(p);
         return copy;

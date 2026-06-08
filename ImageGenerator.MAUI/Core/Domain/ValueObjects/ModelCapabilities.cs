@@ -23,4 +23,7 @@ public readonly record struct ModelCapabilities(
     bool ImagePromptStrength = false,
     int MaxImageInputs = 0,
     bool Safe = false,
-    bool OutputFormatSelectable = true);
+    bool OutputFormatSelectable = true,
+    // Ideogram V4: gates the dedicated Ideogram options block (resolution + structured-JSON
+    // toggle + copyright-detection) and its custom layout in MainPage.xaml.
+    bool IdeogramOptions = false);

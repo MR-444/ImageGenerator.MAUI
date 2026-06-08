@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Reflection;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Maui.ApplicationModel;
@@ -95,7 +96,9 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SupportsCustomDimensions))]
     [NotifyPropertyChangedFor(nameof(SupportsResolution))]
+    [NotifyPropertyChangedFor(nameof(ShowSharedResolution))]
     [NotifyPropertyChangedFor(nameof(SupportsGptQuality))]
+    [NotifyPropertyChangedFor(nameof(SupportsIdeogramOptions))]
     private ModelCapabilities _capabilities;  // hydrated from registry in ctor
     private bool _cachedCatalogLoaded;
     private bool _tokensLoaded;
@@ -114,6 +117,9 @@ public partial class GeneratorViewModel : ObservableObject
     public bool SupportsCustomDimensions => Capabilities.CustomDimensions && IsCustomAspectRatio;
     public bool SupportsResolution => Capabilities.Resolutions is not null;
     public bool SupportsGptQuality => Capabilities.GptQualityOptions is not null;
+    public bool SupportsIdeogramOptions => Capabilities.IdeogramOptions;
+    // The Ideogram block renders its own resolution picker, so suppress the shared one there.
+    public bool ShowSharedResolution => SupportsResolution && !Capabilities.IdeogramOptions;
 
     partial void OnParametersChanged(ImageGenerationParameters value)
     {
@@ -149,6 +155,12 @@ public partial class GeneratorViewModel : ObservableObject
             Parameters.Resolution = ResolutionOptions[0];
         }
 
+        // Models that hide the output-format picker (Ideogram) only emit PNG — pin the save format.
+        if (!caps.OutputFormatSelectable) Parameters.OutputFormat = ImageOutputFormat.Png;
+        // Clear the structured-JSON toggle when leaving an Ideogram model so a stale flag can't
+        // gate validation (or alter Build) on a model that has no such field.
+        if (!caps.IdeogramOptions) Parameters.UseJsonPrompt = false;
+
         GptQualityOptions = caps.GptQualityOptions?.ToList() ?? [];
         GptBackgroundOptions = caps.GptBackgroundOptions?.ToList() ?? [];
         GptModerationOptions = caps.GptModerationOptions?.ToList() ?? [];
@@ -160,6 +172,9 @@ public partial class GeneratorViewModel : ObservableObject
         InputImages.TruncateToMaxInputs(caps.MaxImageInputs);
 
         Capabilities = caps;
+
+        // Capabilities now reflect the new model, so the JSON-prompt validation gate is accurate.
+        ValidateParameters();
     }
 
     private void SetAspectRatioProgrammatically(string aspectRatio)
@@ -192,7 +207,17 @@ public partial class GeneratorViewModel : ObservableObject
         var tokenOk = ModelConstants.Pollinations.IsId(Parameters.Model)
             ? true
             : !string.IsNullOrWhiteSpace(Parameters.ApiToken);
-        IsValid = tokenOk && !string.IsNullOrWhiteSpace(Parameters.Prompt);
+        // In Ideogram structured-JSON mode the prompt box must contain valid JSON.
+        var jsonOk = !(Capabilities.IdeogramOptions && Parameters.UseJsonPrompt)
+                     || IsValidJson(Parameters.Prompt);
+        IsValid = tokenOk && !string.IsNullOrWhiteSpace(Parameters.Prompt) && jsonOk;
+    }
+
+    private static bool IsValidJson(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        try { using var _ = JsonDocument.Parse(text); return true; }
+        catch (JsonException) { return false; }
     }
 
     public bool IsPollinationsSelected => ModelConstants.Pollinations.IsId(Parameters.Model);
@@ -287,6 +312,9 @@ public partial class GeneratorViewModel : ObservableObject
                     ValidateParameters();
                     _uiStateStore.PersistPrompt(_parameters.Prompt);
                     break;
+                case nameof(ImageGenerationParameters.UseJsonPrompt):
+                    ValidateParameters();
+                    break;
                 case nameof(ImageGenerationParameters.Model):
                     ProviderFilter.SyncSelectionFromParameters(_parameters.Model);
                     if (!ProviderFilter.SuppressModelPersist) _uiStateStore.PersistModel(_parameters.Model);
@@ -331,6 +359,12 @@ public partial class GeneratorViewModel : ObservableObject
         if (missing.Count > 0)
         {
             SetStatus($"Missing required field(s): {string.Join(", ", missing)}.", StatusKind.Error);
+            return;
+        }
+
+        if (Capabilities.IdeogramOptions && Parameters.UseJsonPrompt && !IsValidJson(Parameters.Prompt))
+        {
+            SetStatus("Structured JSON prompt is not valid JSON.", StatusKind.Error);
             return;
         }
 

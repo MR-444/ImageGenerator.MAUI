@@ -1,6 +1,6 @@
 # 🎨 Image Generator MAUI
 
-A Windows desktop image generation app built on .NET MAUI with two image providers — **Replicate** (Flux, Replicate-hosted OpenAI, Google) and **Pollinations.ai** (Flux, Zimage, Qwen Image, plus any free image model their `/models` endpoint surfaces). Switch providers in-app via a tabbed token picker; saved images carry the full prompt and generation parameters as EXIF / PNG-Comment metadata so every output is reproducible.
+A Windows desktop image generation app built on .NET MAUI with two image providers — **Replicate** (Flux, Replicate-hosted OpenAI, Google, Ideogram) and **Pollinations.ai** (Flux, Zimage, Qwen Image, plus any free image model their `/models` endpoint surfaces). Switch providers in-app via a tabbed token picker; saved images carry the full prompt and generation parameters as EXIF / PNG-Comment metadata so every output is reproducible.
 
 ## 🌟 Features
 
@@ -11,10 +11,11 @@ A Windows desktop image generation app built on .NET MAUI with two image provide
 - **Batch from textfile** — point **Import prompts…** at a `.txt` of prompts separated by lines containing only `---`. Lines starting with `#` are ignored, so you can label or disable prompts without deleting them. The batch runs sequentially with the currently-selected model and parameters; failed prompts don't abort the queue. **Cancel batch** drains the remaining queue but lets the in-flight job finish — once a Replicate prediction is created, you're paying for it either way. 100-prompt hard cap.
 - **In-app gallery** — browse previously generated images without leaving the app. Tile grid with sortable order (newest/oldest, name A→Z / Z→A, largest/smallest), live updates via `FileSystemWatcher` when new images are saved or removed, and a detail page with a larger preview, copyable metadata, and one-click **Use as input**, **Open in viewer**, and **Show in folder** actions. Thumbnails come from the Windows shell cache so a directory of multi-megabyte PNGs doesn't blow process memory.
 - **Persisted UI state** — the last prompt and selected model are restored on next launch (per-user `Preferences`). Pick up where you left off.
-- **Dynamic model catalog** — "Refresh Models" queries Replicate's `text-to-image` collection (filtered to `black-forest-labs`, `openai`, and `google` owners) **and** Pollinations' `/models` endpoint (image-only, free-tier) in parallel, then merges with the hardcoded seed entries. New models surface without recompiling. The catalog is cached to `FileSystem.AppDataDirectory/model-catalog.json` and restored on launch.
+- **Dynamic model catalog** — "Refresh Models" queries Replicate's `text-to-image` collection (filtered to `black-forest-labs`, `openai`, and `google` owners) **and** Pollinations' `/models` endpoint (image-only, free-tier) in parallel, then merges with the hardcoded seed entries (the Ideogram V4 family is pinned here — Replicate's collection doesn't list it). Every Replicate-hosted model groups under a single **Replicate** entry in the provider filter. New models surface without recompiling. The catalog is cached to `FileSystem.AppDataDirectory/model-catalog.json` and restored on launch.
 - **Flux 2 family** — `flux-2-klein-4b`, `flux-2-flex`, `flux-2-pro`, `flux-2-max` with per-model payload shaping and optional `images` input
 - **OpenAI** — `openai/gpt-image-1.5` and `openai/gpt-image-2` (via Replicate). The UI exposes the model-specific knobs: `quality`, `background` (incl. transparent PNGs), `moderation`, `input_fidelity`.
 - **Google nano-banana-2** — `google/nano-banana-2` with its 15-value aspect enum, a resolution picker (1K / 2K / 4K), and image-input support. `webp` is auto-coerced to `jpg` (the model doesn't accept webp).
+- **Ideogram V4** — `ideogram-v4-balanced`, `ideogram-v4-turbo`, `ideogram-v4-quality` with a dedicated options block: a resolution picker (`Auto` + the 23 native sizes; `Auto` omits the field and lets Ideogram choose), a **Structured JSON prompt** toggle (sends the prompt box as Ideogram's `json_prompt` string instead of `prompt`, validated as real JSON before generate), and an `enable_copyright_detection` checkbox. Output is PNG.
 - **Flux classic** — 1.1 Pro / 1.1 Pro Ultra
 - API tokens persisted via `SecureStorage` (Windows DPAPI under the hood) — independent slots per provider
 - Per-job cancellation with retry/backoff (Polly via `Microsoft.Extensions.Http.Resilience`)
@@ -49,7 +50,7 @@ The **API Tokens** card at the top of the form has a provider dropdown — switc
 
 ### Getting a Replicate API token
 
-The Replicate branch covers the Flux family, the OpenAI-hosted `gpt-image-1.5` / `gpt-image-2`, and Google's `nano-banana-2`.
+The Replicate branch covers the Flux family, the OpenAI-hosted `gpt-image-1.5` / `gpt-image-2`, Google's `nano-banana-2`, and the Ideogram V4 family (`balanced` / `turbo` / `quality`).
 
 1. Sign up at [replicate.com](https://replicate.com).
 2. Go to **Account → API tokens** (or directly [replicate.com/account/api-tokens](https://replicate.com/account/api-tokens)).
@@ -103,7 +104,7 @@ Click **Cancel batch** at any time to stop the queue from starting any further p
 
 ### Reading back the embedded metadata
 
-The app embeds the full prompt and generation parameters into the saved file so you can recover the recipe months later. For **PNG** the metadata lives in the standard `Comment` text chunk; for **JPG/WebP** it's written as EXIF `UserComment`. The fastest way to inspect it is the in-app gallery's **Show metadata** button (also lets you copy it to the clipboard); externally, **[MediaInfo](https://mediaarea.net/en/MediaInfo)** (GUI + CLI, cross-platform, free) or `exiftool` work too. Besides the prompt and seed you'll see the actual pixel dimensions produced by the API and the model-specific options (GPT quality/background/moderation/input-fidelity, nano-banana resolution, Flux Ultra raw/image-prompt-strength) so two people with the metadata can reproduce the same image.
+The app embeds the full prompt and generation parameters into the saved file so you can recover the recipe months later. For **PNG** the metadata lives in the standard `Comment` text chunk; for **JPG/WebP** it's written as EXIF `UserComment`. The fastest way to inspect it is the in-app gallery's **Show metadata** button (also lets you copy it to the clipboard); externally, **[MediaInfo](https://mediaarea.net/en/MediaInfo)** (GUI + CLI, cross-platform, free) or `exiftool` work too. Besides the prompt and seed you'll see the actual pixel dimensions produced by the API and the model-specific options (GPT quality/background/moderation/input-fidelity, nano-banana resolution, Flux Ultra raw/image-prompt-strength, Ideogram resolution/JSON-mode/copyright-detection) so two people with the metadata can reproduce the same image.
 
 ## 🛠️ Technologies
 
@@ -171,7 +172,7 @@ ImageGenerator.MAUI/
 dotnet test
 ```
 
-249 tests covering: model factory payload shapes, Replicate service HTTP flows (via Refit mocks), the `NullSkippingDictionaryConverter`, model catalog filtering and persistence (both Replicate + Pollinations branches), image file naming + EXIF round-trip, GeneratorViewModel commands and state machine (including batch order, partial failure, distinct seeds, Cancel-batch leaves the in-flight job alone, and the tabbed token slots stay independent across providers), prompt batch parser (delimiter, comments, multi-line, BOM, CRLF, hard-cap), GalleryService enumeration + metadata reads + partial-write guard, GalleryViewModel sort modes + watcher debounce, GalleryItemDetailViewModel actions, and CrashLogger smoke + concurrency.
+357 tests covering: model factory payload shapes, Replicate service HTTP flows (via Refit mocks), the `NullSkippingDictionaryConverter`, model catalog filtering and persistence (both Replicate + Pollinations branches), the Ideogram V4 payload (prompt vs `json_prompt` string, resolution omit-on-`Auto`, PNG-locked output, structured-JSON validation), image file naming + EXIF round-trip, GeneratorViewModel commands and state machine (including batch order, partial failure, distinct seeds, Cancel-batch leaves the in-flight job alone, and the tabbed token slots stay independent across providers), prompt batch parser (delimiter, comments, multi-line, BOM, CRLF, hard-cap), GalleryService enumeration + metadata reads + partial-write guard, GalleryViewModel sort modes + watcher debounce, GalleryItemDetailViewModel actions, and CrashLogger smoke + concurrency.
 
 ## 📱 Supported Platforms
 

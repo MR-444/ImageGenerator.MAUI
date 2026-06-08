@@ -179,6 +179,16 @@
                                 MinimumHeightRequest="90"
                                 AutomationId="PromptEditor" />
 
+                        <VerticalStackLayout Spacing="2" IsVisible="{Binding SupportsIdeogramOptions}">
+                            <HorizontalStackLayout Spacing="8">
+                                <CheckBox IsChecked="{Binding Parameters.UseJsonPrompt}" VerticalOptions="Center"
+                                          AutomationId="JsonPromptCheckBox" />
+                                <Label Text="Structured JSON prompt" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                            <Label Text="Send the prompt box as Ideogram structured JSON (must be valid JSON)."
+                                   Style="{StaticResource HelperText}" />
+                        </VerticalStackLayout>
+
                         <HorizontalStackLayout Spacing="8" IsVisible="{Binding Capabilities.PromptUpsampling}">
                             <CheckBox IsChecked="{Binding Parameters.PromptUpsampling}" VerticalOptions="Center" />
                             <Label Text="Prompt upsampling" VerticalOptions="Center" />
@@ -201,13 +211,30 @@
                                     AutomationId="AspectRatioPicker" />
                         </VerticalStackLayout>
 
-                        <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsResolution}">
+                        <VerticalStackLayout Spacing="4" IsVisible="{Binding ShowSharedResolution}">
                             <Label Text="Resolution" Style="{StaticResource FieldLabel}" />
                             <Picker ItemsSource="{Binding ResolutionOptions}"
                                     SelectedItem="{Binding Parameters.Resolution}"
                                     MaximumWidthRequest="140"
                                     HorizontalOptions="Start"
                                     AutomationId="ResolutionPicker" />
+                        </VerticalStackLayout>
+
+                        <!-- Ideogram V4: resolution + copyright detection (custom grouped layout) -->
+                        <VerticalStackLayout Spacing="12" IsVisible="{Binding SupportsIdeogramOptions}">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="Resolution" Style="{StaticResource FieldLabel}" />
+                                <Picker ItemsSource="{Binding ResolutionOptions}"
+                                        SelectedItem="{Binding Parameters.Resolution}"
+                                        MaximumWidthRequest="160"
+                                        HorizontalOptions="Start"
+                                        AutomationId="IdeogramResolutionPicker" />
+                            </VerticalStackLayout>
+                            <HorizontalStackLayout Spacing="8">
+                                <CheckBox IsChecked="{Binding Parameters.EnableCopyrightDetection}" VerticalOptions="Center"
+                                          AutomationId="CopyrightDetectionCheckBox" />
+                                <Label Text="Enable copyright detection" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
                         </VerticalStackLayout>
 
                         <VerticalStackLayout Spacing="8" IsVisible="{Binding SupportsCustomDimensions}">
