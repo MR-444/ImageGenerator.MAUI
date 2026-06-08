@@ -62,11 +62,11 @@ public abstract class GptImageOnReplicateDescriptor : IPayloadBuilder, ICapabili
 public sealed class GptImage15Descriptor : GptImageOnReplicateDescriptor
 {
     public override string ModelId => ModelConstants.OpenAI.GptImage15OnReplicate;
-    public override ModelOption Seed => new("GPT Image 1.5", ModelId, ProviderConstants.OpenAIOnReplicate);
+    public override ModelOption Seed => new("GPT Image 1.5", ModelId, ProviderConstants.Replicate);
 }
 
 public sealed class GptImage2Descriptor : GptImageOnReplicateDescriptor
 {
     public override string ModelId => ModelConstants.OpenAI.GptImage2OnReplicate;
-    public override ModelOption Seed => new("GPT Image 2", ModelId, ProviderConstants.OpenAIOnReplicate);
+    public override ModelOption Seed => new("GPT Image 2", ModelId, ProviderConstants.Replicate);
 }

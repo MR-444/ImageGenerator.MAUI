@@ -69,6 +69,9 @@ public class ModelDescriptorRegistryTests
         seedIds.Should().Contain(ModelConstants.Flux.Pro11Ultra);
         seedIds.Should().Contain(ModelConstants.Flux.Klein4b);
         seedIds.Should().Contain(ModelConstants.Google.NanoBanana2);
+        seedIds.Should().Contain(ModelConstants.Ideogram.V4Balanced);
+        seedIds.Should().Contain(ModelConstants.Ideogram.V4Turbo);
+        seedIds.Should().Contain(ModelConstants.Ideogram.V4Quality);
         // Flex/Pro/Max are NOT seeded — they only appear after Refresh Models hydrates.
         seedIds.Should().NotContain(ModelConstants.Flux.Flex2);
         seedIds.Should().NotContain(ModelConstants.Flux.Pro2);
@@ -78,7 +81,8 @@ public class ModelDescriptorRegistryTests
     [Fact]
     public void Seeds_CountMatchesPreM2Behavior()
     {
-        // Today's seed count was 6: GPT 1.5, GPT 2, Flux Pro, Flux Pro Ultra, Klein4b, NanoBanana2.
-        _registry.Seeds.Should().HaveCount(6);
+        // 6 originals (GPT 1.5, GPT 2, Flux Pro, Flux Pro Ultra, Klein4b, NanoBanana2)
+        // + 3 pinned Ideogram V4 (balanced/turbo/quality) = 9.
+        _registry.Seeds.Should().HaveCount(9);
     }
 }

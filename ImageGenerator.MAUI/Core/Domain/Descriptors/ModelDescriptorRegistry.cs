@@ -83,6 +83,9 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
         new Flux2Max2Descriptor(),
         new GptImage15Descriptor(),
         new GptImage2Descriptor(),
-        new NanoBanana2Descriptor()
+        new NanoBanana2Descriptor(),
+        new IdeogramV4BalancedDescriptor(),
+        new IdeogramV4TurboDescriptor(),
+        new IdeogramV4QualityDescriptor()
     ];
 }

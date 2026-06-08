@@ -14,7 +14,7 @@ public sealed class Flux11ProDescriptor : IPayloadBuilder, ICapabilityProvider, 
 
     public string ModelId => ModelConstants.Flux.Pro11;
 
-    public ModelOption Seed => new("Flux 1.1 Pro", ModelId, ProviderConstants.BlackForestLabs);
+    public ModelOption Seed => new("Flux 1.1 Pro", ModelId, ProviderConstants.Replicate);
 
     public ModelCapabilities Capabilities => new(
         SafetyTolerance: true, PromptUpsampling: true, OutputQuality: true,

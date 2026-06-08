@@ -59,19 +59,25 @@ public class GeneratorViewModelTests
     [Fact]
     public void Providers_ShouldIncludeAllAndDistinctProviders()
     {
-        _viewModel.ProviderFilter.Providers.Should().Contain("All providers");
-        _viewModel.ProviderFilter.Providers.Should().Contain("OpenAI (via Replicate)");
-        _viewModel.ProviderFilter.Providers.Should().Contain("Black Forest Labs");
-        _viewModel.ProviderFilter.Providers.Should().Contain("Google");
+        // The hardcoded seeds are all Replicate-hosted, so they collapse to one provider.
+        // (Pollinations models are DI-registered, not part of ModelDescriptorRegistry.Default().)
+        _viewModel.ProviderFilter.Providers.Should().BeEquivalentTo(["All providers", "Replicate"]);
     }
 
     [Fact]
     public void SelectedProvider_WhenSet_FiltersModels()
     {
-        _viewModel.ProviderFilter.SelectedProvider = "Google";
+        // Put two providers in play so selecting one is observably narrowing.
+        _viewModel.ProviderFilter.ApplyCatalog(
+        [
+            new ModelOption("Flux 1.1 Pro", ModelConstants.Flux.Pro11, "Replicate"),
+            new ModelOption("Pollinations Flux", ModelConstants.Pollinations.Flux, "Pollinations"),
+        ]);
 
-        _viewModel.ProviderFilter.FilteredModels.Should().OnlyContain(m => m.Provider == "Google");
-        _viewModel.ProviderFilter.FilteredModels.Should().HaveCount(1);
+        _viewModel.ProviderFilter.SelectedProvider = "Replicate";
+
+        _viewModel.ProviderFilter.FilteredModels.Should().OnlyContain(m => m.Provider == "Replicate");
+        _viewModel.ProviderFilter.FilteredModels.Should().ContainSingle();
     }
 
     [Fact]
@@ -322,8 +328,8 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.ApiToken = "valid-token";
         var merged = new List<ModelOption>
         {
-            new("flux-2", "black-forest-labs/flux-2", "Black Forest Labs"),
-            new("gpt-image-1.5", "openai/gpt-image-1.5", "OpenAI (via Replicate)")
+            new("flux-2", "black-forest-labs/flux-2", "Replicate"),
+            new("gpt-image-1.5", "openai/gpt-image-1.5", "Replicate")
         };
         _mockCatalogCoordinator
             .Setup(x => x.RefreshAsync("valid-token"))
@@ -342,8 +348,8 @@ public class GeneratorViewModelTests
     {
         var merged = new List<ModelOption>
         {
-            new("flux-2-pro", "black-forest-labs/flux-2-pro", "Black Forest Labs"),
-            new("gpt-image-1.5", "openai/gpt-image-1.5", "OpenAI (via Replicate)")
+            new("flux-2-pro", "black-forest-labs/flux-2-pro", "Replicate"),
+            new("gpt-image-1.5", "openai/gpt-image-1.5", "Replicate")
         };
         _mockCatalogCoordinator
             .Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
@@ -354,8 +360,7 @@ public class GeneratorViewModelTests
         _viewModel.ProviderFilter.AllModels.Select(m => m.Value)
             .Should().Contain("black-forest-labs/flux-2-pro")
             .And.Contain("openai/gpt-image-1.5");
-        _viewModel.ProviderFilter.Providers.Should().Contain("Black Forest Labs")
-            .And.Contain("OpenAI (via Replicate)");
+        _viewModel.ProviderFilter.Providers.Should().Contain("Replicate");
     }
 
     [Fact]
@@ -376,7 +381,7 @@ public class GeneratorViewModelTests
     {
         var merged = new List<ModelOption>
         {
-            new("flux-2", "black-forest-labs/flux-2", "Black Forest Labs")
+            new("flux-2", "black-forest-labs/flux-2", "Replicate")
         };
         _mockCatalogCoordinator
             .Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
@@ -396,9 +401,9 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.ApiToken = "valid-token";
         var merged = new List<ModelOption>
         {
-            new("flux-2-pro", "black-forest-labs/flux-2-pro", "Black Forest Labs"),
-            new("gpt-image-1.5", "openai/gpt-image-1.5", "OpenAI (via Replicate)"),
-            new("nano-banana-2", "google/nano-banana-2", "Google")
+            new("flux-2-pro", "black-forest-labs/flux-2-pro", "Replicate"),
+            new("gpt-image-1.5", "openai/gpt-image-1.5", "Replicate"),
+            new("nano-banana-2", "google/nano-banana-2", "Replicate")
         };
         _mockCatalogCoordinator
             .Setup(x => x.RefreshAsync("valid-token"))
@@ -412,9 +417,7 @@ public class GeneratorViewModelTests
             .Should().Contain("black-forest-labs/flux-2-pro")
             .And.Contain("openai/gpt-image-1.5")
             .And.Contain("google/nano-banana-2");
-        _viewModel.ProviderFilter.Providers.Should().Contain("Black Forest Labs")
-            .And.Contain("OpenAI (via Replicate)")
-            .And.Contain("Google");
+        _viewModel.ProviderFilter.Providers.Should().Contain("Replicate");
     }
 
     [Fact]
@@ -814,9 +817,9 @@ public class GeneratorViewModelTests
         // silent for the entire hydrate.
         var merged = new List<ModelOption>
         {
-            new("flux-2-max", ModelConstants.Flux.Max2, "Black Forest Labs"),
-            new("flux-1.1-pro", ModelConstants.Flux.Pro11, "Black Forest Labs"),
-            new("gpt-image-2", ModelConstants.OpenAI.GptImage2OnReplicate, "OpenAI (via Replicate)"),
+            new("flux-2-max", ModelConstants.Flux.Max2, "Replicate"),
+            new("flux-1.1-pro", ModelConstants.Flux.Pro11, "Replicate"),
+            new("gpt-image-2", ModelConstants.OpenAI.GptImage2OnReplicate, "Replicate"),
         };
         _mockCatalogCoordinator
             .Setup(c => c.LoadCachedAsync(It.IsAny<CancellationToken>()))
@@ -881,10 +884,10 @@ public class GeneratorViewModelTests
         // Realistic merged catalog (live entries with raw Display, mirrors a real cache hydrate).
         var merged = new List<ModelOption>
         {
-            new("flux-1.1-pro", ModelConstants.Flux.Pro11, "Black Forest Labs"),
-            new("flux-2-max", ModelConstants.Flux.Max2, "Black Forest Labs"),
-            new("gpt-image-1.5", ModelConstants.OpenAI.GptImage15OnReplicate, "OpenAI (via Replicate)"),
-            new("gpt-image-2", ModelConstants.OpenAI.GptImage2OnReplicate, "OpenAI (via Replicate)"),
+            new("flux-1.1-pro", ModelConstants.Flux.Pro11, "Replicate"),
+            new("flux-2-max", ModelConstants.Flux.Max2, "Replicate"),
+            new("gpt-image-1.5", ModelConstants.OpenAI.GptImage15OnReplicate, "Replicate"),
+            new("gpt-image-2", ModelConstants.OpenAI.GptImage2OnReplicate, "Replicate"),
         };
         var coordinator1 = new Mock<IModelCatalogCoordinator>();
         coordinator1.Setup(c => c.LoadCachedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(merged);

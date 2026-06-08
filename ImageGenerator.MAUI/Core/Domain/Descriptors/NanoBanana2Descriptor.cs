@@ -19,7 +19,7 @@ public sealed class NanoBanana2Descriptor : IPayloadBuilder, ICapabilityProvider
 
     public string ModelId => ModelConstants.Google.NanoBanana2;
 
-    public ModelOption Seed => new("Nano Banana 2", ModelId, ProviderConstants.Google);
+    public ModelOption Seed => new("Nano Banana 2", ModelId, ProviderConstants.Replicate);
 
     public ModelCapabilities Capabilities => new(
         SafetyTolerance: false, PromptUpsampling: false, OutputQuality: false,

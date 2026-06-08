@@ -92,8 +92,8 @@ public class ModelCatalogServiceTests : IDisposable
 
         result.Select(m => m.Value).Should().BeEquivalentTo(
             ["black-forest-labs/flux-2", "openai/gpt-image-1.5", "google/nano-banana-2"]);
-        result.Single(m => m.Value == "openai/gpt-image-1.5").Provider.Should().Be("OpenAI (via Replicate)");
-        result.Single(m => m.Value == "google/nano-banana-2").Provider.Should().Be("Google");
+        // All allow-listed owners collapse under the single "Replicate" provider.
+        result.Should().OnlyContain(m => m.Provider == "Replicate");
     }
 
     [Fact]

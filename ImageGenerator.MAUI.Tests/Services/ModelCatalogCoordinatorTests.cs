@@ -59,7 +59,7 @@ public class ModelCatalogCoordinatorTests
         // (or wait for Replicate to catch up) to ever see freshly-added entries.
         var staleCache = new List<ModelOption>
         {
-            new("flux-2-pro", "black-forest-labs/flux-2-pro", ProviderConstants.BlackForestLabs)
+            new("flux-2-pro", "black-forest-labs/flux-2-pro", ProviderConstants.Replicate)
         };
         _catalogService.Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(staleCache);
@@ -110,7 +110,7 @@ public class ModelCatalogCoordinatorTests
     {
         var fetched = new List<ModelOption>
         {
-            new("flux-2", "black-forest-labs/flux-2", ProviderConstants.BlackForestLabs)
+            new("flux-2", "black-forest-labs/flux-2", ProviderConstants.Replicate)
         };
         _catalogService.Setup(x => x.FetchAsync("token"))
             .ReturnsAsync(fetched);

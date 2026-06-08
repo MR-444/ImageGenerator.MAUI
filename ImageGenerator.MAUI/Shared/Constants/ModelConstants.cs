@@ -24,6 +24,15 @@ public static class ModelConstants
         public const string NanoBanana2 = "google/nano-banana-2";
     }
 
+    public static class Ideogram
+    {
+        // The V4 family is not in Replicate's curated text-to-image collection, so these are
+        // pinned as seeds (IdeogramV4Descriptors) rather than surfaced by Refresh Models.
+        public const string V4Balanced = "ideogram-ai/ideogram-v4-balanced";
+        public const string V4Turbo = "ideogram-ai/ideogram-v4-turbo";
+        public const string V4Quality = "ideogram-ai/ideogram-v4-quality";
+    }
+
     public static class Pollinations
     {
         public const string PrefixSlash = "pollinations/";

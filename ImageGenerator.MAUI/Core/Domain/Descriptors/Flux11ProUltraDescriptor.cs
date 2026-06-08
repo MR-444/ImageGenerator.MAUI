@@ -13,7 +13,7 @@ public sealed class Flux11ProUltraDescriptor : IPayloadBuilder, ICapabilityProvi
 
     public string ModelId => ModelConstants.Flux.Pro11Ultra;
 
-    public ModelOption Seed => new("Flux 1.1 Pro Ultra", ModelId, ProviderConstants.BlackForestLabs);
+    public ModelOption Seed => new("Flux 1.1 Pro Ultra", ModelId, ProviderConstants.Replicate);
 
     public ModelCapabilities Capabilities => new(
         SafetyTolerance: true, PromptUpsampling: false, OutputQuality: false,

@@ -81,6 +81,9 @@ public static class MauiProgram
             .AddModelDescriptor<GptImage15Descriptor>()
             .AddModelDescriptor<GptImage2Descriptor>()
             .AddModelDescriptor<NanoBanana2Descriptor>()
+            .AddModelDescriptor<IdeogramV4BalancedDescriptor>()
+            .AddModelDescriptor<IdeogramV4TurboDescriptor>()
+            .AddModelDescriptor<IdeogramV4QualityDescriptor>()
             .AddModelDescriptor<PollinationsFluxDescriptor>()
             .AddModelDescriptor<PollinationsZimageDescriptor>()
             .AddModelDescriptor<PollinationsQwenImageDescriptor>();

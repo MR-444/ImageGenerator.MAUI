@@ -46,14 +46,15 @@ public sealed class ModelCatalogService : IModelCatalogService
         try
         {
             var coll = await _replicateApi.GetTextToImageCollectionAsync(bearer);
-            // Scope the catalog to Flux + OpenAI owners only. The curated text-to-image
-            // collection hosts many other owners (stability-ai, google, bytedance, etc.)
-            // that this app doesn't support — including them clutters the picker.
+            // Scope the catalog to the supported owners only. The curated text-to-image
+            // collection hosts many other owners (stability-ai, bytedance, etc.) that this app
+            // doesn't support — including them clutters the picker. Every surviving owner is
+            // grouped under the single "Replicate" provider (the creator shows in the name).
             return coll.Models
                 .Where(m => !string.IsNullOrWhiteSpace(m.Owner)
                             && !string.IsNullOrWhiteSpace(m.Name)
                             && ReplicateOwnerAllowlist.Contains(m.Owner!))
-                .Select(m => new ModelOption(m.Name!, $"{m.Owner}/{m.Name}", FormatProvider(m.Owner!)))
+                .Select(m => new ModelOption(m.Name!, $"{m.Owner}/{m.Name}", ProviderConstants.Replicate))
                 .ToList();
         }
         catch (Exception ex)
@@ -62,16 +63,6 @@ public sealed class ModelCatalogService : IModelCatalogService
             return [];
         }
     }
-
-    private static string FormatProvider(string owner) => owner switch
-    {
-        "black-forest-labs" => ProviderConstants.BlackForestLabs,
-        "openai" => ProviderConstants.OpenAIOnReplicate,
-        "google" => ProviderConstants.Google,
-        // The allowlist guarantees `owner` is one of the above. Throw if a new entry is ever
-        // added without a matching display label — silent fallthrough would ship the raw slug.
-        _ => throw new InvalidOperationException($"Unexpected owner past allowlist: {owner}")
-    };
 
     public async Task<IReadOnlyList<ModelOption>?> LoadCachedAsync(CancellationToken ct = default)
     {

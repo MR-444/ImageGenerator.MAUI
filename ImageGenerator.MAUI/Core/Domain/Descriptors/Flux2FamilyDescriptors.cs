@@ -39,7 +39,7 @@ public abstract class Flux2FamilyDescriptor : IPayloadBuilder, ICapabilityProvid
 public sealed class Flux2Klein4bDescriptor : Flux2FamilyDescriptor, ICatalogSeedEntry
 {
     public override string ModelId => ModelConstants.Flux.Klein4b;
-    public ModelOption Seed => new("Flux 2 Klein 4B", ModelId, ProviderConstants.BlackForestLabs);
+    public ModelOption Seed => new("Flux 2 Klein 4B", ModelId, ProviderConstants.Replicate);
 }
 
 public sealed class Flux2Flex2Descriptor : Flux2FamilyDescriptor
