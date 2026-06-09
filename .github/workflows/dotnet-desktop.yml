@@ -82,11 +82,13 @@ jobs:
     # Visual Studio the runner image ships (windows-latest moved VS2022 -> VS2026
     # in June 2026). The SDK comes from setup-dotnet above, so the runner's VS
     # version is irrelevant; no setup-msbuild / VS MSBuild step is needed.
-    - name: Restore
-      run: dotnet restore $env:Solution_Name
-
+    #
+    # No standalone `dotnet restore` + `--no-restore`: the MAUI Windows head gets
+    # an implicit win-x64 RuntimeIdentifier that a separate restore doesn't resolve
+    # (NETSDK1112: runtime pack not downloaded). A combined `dotnet build` restores
+    # the win-x64 runtime pack in the same invocation where the RID is applied.
     - name: Build
-      run: dotnet build $env:Solution_Name --no-restore -c ${{ matrix.configuration }}
+      run: dotnet build $env:Solution_Name -c ${{ matrix.configuration }}
 
     - name: Test
       run: dotnet test $env:Solution_Name --no-build -c ${{ matrix.configuration }}
