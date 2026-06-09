@@ -15,6 +15,7 @@
             <converters:StringToEnumConverter x:Key="StringToEnumConverter" />
             <converters:InverseBoolConverter x:Key="InverseBool" />
             <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
+            <converters:ResolutionAspectRatioConverter x:Key="ResolutionAspectRatio" />
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -226,7 +227,8 @@
                                 <Label Text="Resolution" Style="{StaticResource FieldLabel}" />
                                 <Picker ItemsSource="{Binding ResolutionOptions}"
                                         SelectedItem="{Binding Parameters.Resolution}"
-                                        MaximumWidthRequest="160"
+                                        ItemDisplayBinding="{Binding Converter={StaticResource ResolutionAspectRatio}}"
+                                        MaximumWidthRequest="190"
                                         HorizontalOptions="Start"
                                         AutomationId="IdeogramResolutionPicker" />
                             </VerticalStackLayout>
