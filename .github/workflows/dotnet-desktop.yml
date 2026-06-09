@@ -78,19 +78,18 @@ jobs:
     - name: Install MAUI Windows workload
       run: dotnet workload install maui-windows --ignore-failed-sources
 
-    # Add  MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
-    - name: Setup MSBuild.exe
-      uses: microsoft/setup-msbuild@v2
+    # Build and test purely via the .NET SDK CLI — decoupled from whichever
+    # Visual Studio the runner image ships (windows-latest moved VS2022 -> VS2026
+    # in June 2026). The SDK comes from setup-dotnet above, so the runner's VS
+    # version is irrelevant; no setup-msbuild / VS MSBuild step is needed.
+    - name: Restore
+      run: dotnet restore $env:Solution_Name
 
-    # Execute all unit tests in the solution
-    - name: Execute unit tests
-      run: dotnet test
+    - name: Build
+      run: dotnet build $env:Solution_Name --no-restore -c ${{ matrix.configuration }}
 
-    # Restore the application to populate the obj folder with RuntimeIdentifiers
-    - name: Restore the application
-      run: msbuild $env:Solution_Name /t:Restore /p:Configuration=$env:Configuration
-      env:
-        Configuration: ${{ matrix.configuration }}
+    - name: Test
+      run: dotnet test $env:Solution_Name --no-build -c ${{ matrix.configuration }}
 
     # Decode the base 64 encoded pfx and save the Signing_Certificate
     #- name: Decode the pfx
