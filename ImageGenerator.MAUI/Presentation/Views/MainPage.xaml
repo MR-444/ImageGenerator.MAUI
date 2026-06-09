@@ -227,7 +227,7 @@
                                 <Label Text="Resolution" Style="{StaticResource FieldLabel}" />
                                 <Picker ItemsSource="{Binding ResolutionOptions}"
                                         SelectedItem="{Binding Parameters.Resolution}"
-                                        ItemDisplayBinding="{Binding Converter={StaticResource ResolutionAspectRatio}}"
+                                        ItemDisplayBinding="{Binding Path=., Converter={StaticResource ResolutionAspectRatio}, x:DataType='x:String'}"
                                         MaximumWidthRequest="190"
                                         HorizontalOptions="Start"
                                         AutomationId="IdeogramResolutionPicker" />
