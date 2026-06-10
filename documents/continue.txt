@@ -18,8 +18,10 @@ when you finish or split work.
 NEXT FEATURE — ComfyUI as a local provider (plan next context)
 --------------------------------------------------------------
 
-[~] (Feature) ComfyUI provider PHASE 1 IMPLEMENTED 2026-06-10 — AWAITING USER
-    LIVE SMOKE on fireEngine. Six commits, each suite-green:
+[x] (Feature) ComfyUI provider PHASE 1 DONE 2026-06-10 — USER VERIFIED on
+    fireEngine ("it works, the image matches my structure", smoke round 2
+    incl. the cfca177 caption-literal fix). Commits 91bee4a..8c93af4 +
+    cfca177; 593 tests green. Implementation commits, each suite-green:
       91bee4a A: ModelConstants.ComfyUi + JsonPromptEditor capability +
               FallbackComfyUiDescriptor (one descriptor for all comfyui/* ids;
               AR = ResolutionSelector combo strings verbatim, megapixel presets
@@ -49,7 +51,7 @@ NEXT FEATURE — ComfyUI as a local provider (plan next context)
               ValidateParameters and GenerateImageAsync.
     541 -> 590 tests green; Debug + Release rebuilt, 0 warnings.
 
-    USER SMOKE CHECKLIST (fireEngine):
+    ORIGINAL SMOKE CHECKLIST (fireEngine):
       1. In ComfyUI: open "Ideogram workflow_MR" -> Workflow > Export (API) ->
          save into Pictures\ImageGenerator.MAUI\comfy-workflows\.
       2. In the app: set ComfyUI server = http://fireEngine:8188 (tokens card).
@@ -70,7 +72,8 @@ NEXT FEATURE — ComfyUI as a local provider (plan next context)
     every CLIPTextEncode literal that parses as a JSON object (non-JSON
     literals like negative prompts untouched); plain mode on such a graph
     patches that literal instead of refusing. 590 -> 593 tests.
-    AWAITING SMOKE ROUND 2 (close app -> rebuild Debug! -> re-test).
+    SMOKE ROUND 2 PASSED 2026-06-10 ~21:40: generated image matches the
+    editor structure. Phase 1 closed.
 
     PHASE 2 (parked): checkpoint lookup via /object_info; /interrupt on
     cancel; ws progress; auth header for proxied setups; multi-image outputs.
