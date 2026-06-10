@@ -76,7 +76,16 @@ NEXT FEATURE — ComfyUI as a local provider (plan next context)
     editor structure. Phase 1 closed.
 
     PHASE 2 (parked): checkpoint lookup via /object_info; /interrupt on
-    cancel; ws progress; auth header for proxied setups; multi-image outputs.
+    cancel; ws progress; auth header for proxied setups; multi-image outputs;
+    patch the workflow's quality preset combo (CustomCombo Quality/Default/
+    Turbo — needs a targeting convention, class is too generic; zero-code
+    workaround: export one file per preset, each becomes a picker model).
+    OBSERVED 2026-06-10 (user, 2 MP test): a run left 2 differently-named
+    images on the server but only 1 in the app gallery — consistent with the
+    documented first-output-image-only design IF one run emits two images;
+    if instead 2 files exist LOCALLY in Pictures while the gallery shows 1,
+    it's a gallery refresh quirk, not generation. Recheck when phase 2 picks
+    up multi-image support.
 
     HOW A COMFYUI WORKFLOW IS USED VIA API (the user's question):
       A workflow is the node graph built on ComfyUI's canvas. For API use it is
