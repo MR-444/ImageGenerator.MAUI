@@ -15,6 +15,9 @@ internal sealed class StubPreferences : IPreferences
     public Exception? ThrowOnGet { get; set; }
     public Exception? ThrowOnSet { get; set; }
 
+    /// <summary>Actual writes that reached the store — pins UiStateStore's skip-identical rule.</summary>
+    public int SetCallCount { get; private set; }
+
     public void Seed(string key, object? value) => _store[key] = value;
 
     public bool ContainsKey(string key, string? sharedName = null)
@@ -30,6 +33,7 @@ internal sealed class StubPreferences : IPreferences
     public void Set<T>(string key, T value, string? sharedName = null)
     {
         if (ThrowOnSet is { } e) throw e;
+        SetCallCount++;
         _store[key] = value;
     }
 

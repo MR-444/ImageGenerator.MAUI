@@ -199,6 +199,53 @@ public class UiStateStoreTests
         _preferences.Get(PromptKey, string.Empty).Should().Be("hello");
     }
 
+    // Skip-identical rule: the startup Loads echo straight back through the VM's persist
+    // hooks (LoadPrompt -> Parameters.Prompt -> PersistPrompt with the value just read), so
+    // identical rewrites must never reach the backing store.
+
+    [Fact]
+    public void PersistPrompt_UnchangedValue_SkipsTheWrite()
+    {
+        _sut.PersistPrompt("hello");
+
+        _sut.PersistPrompt("hello");
+        _sut.PersistPrompt("hello");
+
+        _preferences.SetCallCount.Should().Be(1, "identical rewrites are wasted I/O");
+        _preferences.Get(PromptKey, string.Empty).Should().Be("hello");
+    }
+
+    [Fact]
+    public void PersistPrompt_ChangedValue_StillWrites()
+    {
+        _sut.PersistPrompt("hello");
+        _sut.PersistPrompt("hello world");
+
+        _preferences.SetCallCount.Should().Be(2);
+        _preferences.Get(PromptKey, string.Empty).Should().Be("hello world");
+    }
+
+    [Fact]
+    public void PersistResolution_UnchangedValue_SkipsTheWrite()
+    {
+        _sut.PersistResolution("2.0 MP", ComfyModel);
+
+        _sut.PersistResolution("2.0 MP", ComfyModel);
+
+        _preferences.SetCallCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void PersistUseJsonPrompt_UnchangedValue_SkipsTheWrite()
+    {
+        _sut.PersistUseJsonPrompt(true);
+
+        _sut.PersistUseJsonPrompt(true);
+
+        _preferences.SetCallCount.Should().Be(1);
+        _sut.LoadUseJsonPrompt().Should().BeTrue();
+    }
+
     [Fact]
     public void PersistPrompt_SetThrows_SwallowedSilently()
     {
