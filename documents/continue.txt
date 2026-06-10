@@ -44,8 +44,20 @@ FEATURE SHIPPED 2026-06-10 — Ideogram V4 Structure Editor (be4a54f)
         IdeogramStructureEditorViewModel (PickerRed/Green/Blue ->
         PickerHex/PickerPreviewColor). Separate task per user.
 
-    [ ] (Phase 2) Drag-move + corner-resize gestures on the editor canvas —
-        NEXT UP, planning started 2026-06-10.
+    [x] (Phase 2) Drag-move + corner-resize gestures on the editor canvas —
+        DONE c255c31 2026-06-10, USER VERIFIED in-app ("drag and resize works").
+        Design (plan: concurrent-dreaming-spindle.md): gesture state machine in the
+        VM (CanvasPointerPressed/Dragged/Released; constants HandleTouchRadius=14px,
+        MinBoxSize=20 grid units), pure corner hit-test in CanvasCoordinateMapper
+        (HitCorner, PIXEL space so AR can't stretch the grab targets), red corner
+        handles on the selected box in the drawable, page wires GraphicsView
+        Drag/End/CancelInteraction. Press: selected box's corner handle wins first
+        (resize, anchored to the opposite corner, clamped 0-1000 + min size, no
+        flip); else topmost containing box selects + moves (grab-offset preserved,
+        size preserved, clamps at edges); empty press keeps selection. Drags
+        without an active press are ignored (platform quirk guard). SelectElementAt
+        folded into CanvasPointerPressed. 518 -> 537 tests green, Release +
+        Debug both rebuilt, 0 warnings.
     Original plans: C:\Users\mr\.claude\plans\i-think-about-a-magical-comet.md
     (executed P1 spec also summarized in the file below)
 
