@@ -60,6 +60,20 @@ public class UiStateStoreTests
     }
 
     [Fact]
+    public void LoadComfyUiBaseUrl_KeyMissing_ReturnsNull()
+    {
+        _sut.LoadComfyUiBaseUrl().Should().BeNull();
+    }
+
+    [Fact]
+    public void ComfyUiBaseUrl_RoundTripsThroughPreferences()
+    {
+        _sut.PersistComfyUiBaseUrl("http://fireEngine:8188");
+
+        _sut.LoadComfyUiBaseUrl().Should().Be("http://fireEngine:8188");
+    }
+
+    [Fact]
     public void LoadUseJsonPrompt_KeyMissing_ReturnsFalse()
     {
         _sut.LoadUseJsonPrompt().Should().BeFalse();

@@ -13,8 +13,11 @@ public interface IUiStateStore
     string? LoadResolution();
     /// <summary>False when never persisted — the toggle is opt-in per session by default.</summary>
     bool LoadUseJsonPrompt();
+    /// <summary>Null when never persisted — callers fall back to ModelConstants.ComfyUi.DefaultBaseUrl.</summary>
+    string? LoadComfyUiBaseUrl();
     void PersistPrompt(string value);
     void PersistModel(string value);
     void PersistResolution(string value);
     void PersistUseJsonPrompt(bool value);
+    void PersistComfyUiBaseUrl(string value);
 }

@@ -77,6 +77,18 @@
                                 HorizontalOptions="Start"
                                 SemanticProperties.Description="Clear the selected provider's saved token from secure storage"
                                 AutomationId="ForgetTokenButton" />
+
+                        <BoxView HeightRequest="1" Color="{AppThemeBinding Light={StaticResource SurfaceBorderLight}, Dark={StaticResource SurfaceBorderDark}}" />
+
+                        <!-- Non-secret server setting, not a token: plain Preferences-backed Entry. -->
+                        <Label Text="ComfyUI server" Style="{StaticResource FieldLabel}" />
+                        <Label Text="URL of your ComfyUI instance (no token needed) — local default, or a LAN host started with --listen."
+                               Style="{StaticResource HelperText}" />
+                        <Entry Text="{Binding ComfyUiBaseUrl, Mode=TwoWay}"
+                               Placeholder="http://127.0.0.1:8188"
+                               Keyboard="Url"
+                               SemanticProperties.Description="Base URL of the ComfyUI server"
+                               AutomationId="ComfyUiBaseUrlEntry" />
                     </VerticalStackLayout>
                 </Border>
 

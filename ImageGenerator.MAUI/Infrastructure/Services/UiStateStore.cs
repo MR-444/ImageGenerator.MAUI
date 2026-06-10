@@ -10,6 +10,7 @@ public sealed class UiStateStore : IUiStateStore
     private const string ModelKey = "imggen.last_model";
     private const string UseJsonPromptKey = "imggen.use_json_prompt";
     private const string ResolutionKey = "imggen.last_resolution";
+    private const string ComfyUiBaseUrlKey = "imggen.comfyui_base_url";
 
     private readonly ILogger<UiStateStore> _logger;
     private readonly IPreferences _preferences;
@@ -57,6 +58,19 @@ public sealed class UiStateStore : IUiStateStore
     {
         _logger.LogDebug("UiStateStore.PersistResolution({Value})", Quote(value));
         SafeSet(ResolutionKey, value);
+    }
+
+    public string? LoadComfyUiBaseUrl()
+    {
+        var v = SafeGet(ComfyUiBaseUrlKey);
+        _logger.LogDebug("UiStateStore.LoadComfyUiBaseUrl -> {Value}", Quote(v));
+        return v;
+    }
+
+    public void PersistComfyUiBaseUrl(string value)
+    {
+        _logger.LogDebug("UiStateStore.PersistComfyUiBaseUrl({Value})", Quote(value));
+        SafeSet(ComfyUiBaseUrlKey, value);
     }
 
     public bool LoadUseJsonPrompt()

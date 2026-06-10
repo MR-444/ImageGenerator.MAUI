@@ -99,6 +99,14 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private string? _jsonPromptStateText;
 
+    // Non-secret server setting (first of its kind) — Preferences-backed, not a token store.
+    // The ComfyUI generation service re-reads the store per request, so edits apply instantly.
+    [ObservableProperty]
+    private string _comfyUiBaseUrl = ModelConstants.ComfyUi.DefaultBaseUrl;
+
+    partial void OnComfyUiBaseUrlChanged(string value) =>
+        _uiStateStore.PersistComfyUiBaseUrl(value ?? string.Empty);
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SupportsCustomDimensions))]
     [NotifyPropertyChangedFor(nameof(SupportsResolution))]
@@ -644,6 +652,14 @@ public partial class GeneratorViewModel : ObservableObject
         if (!string.IsNullOrEmpty(savedPrompt))
         {
             Parameters.Prompt = savedPrompt;
+        }
+
+        // First write equals the loaded value, so the OnChanged persist is a harmless echo —
+        // no suppression window needed (unlike resolution, nothing else writes this field).
+        var savedComfyUrl = _uiStateStore.LoadComfyUiBaseUrl();
+        if (!string.IsNullOrEmpty(savedComfyUrl))
+        {
+            ComfyUiBaseUrl = savedComfyUrl;
         }
 
         var savedModel = _uiStateStore.LoadModel();
