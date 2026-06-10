@@ -35,8 +35,8 @@ FEATURE SHIPPED 2026-06-10 — Ideogram V4 Structure Editor (be4a54f)
     [ ] Quick Flux/GPT/Pollinations regression pass still owed (low risk —
         UseJsonPrompt auto-clear + descriptor paths are pinned by tests).
 
-    [x] (Follow-up F, BUG) DONE 2026-06-10, USER VERIFIED ("it seems to work").
-        RE-DIAGNOSED: the original report ("RGB
+    [x] (Follow-up F, BUG) DONE 0efd069 2026-06-10, USER VERIFIED ("it seems to
+        work"). RE-DIAGNOSED: the original report ("RGB
         NUMBER entries don't update the preview") was a false premise — the
         numbers next to the R/G/B sliders are read-only Labels, there are no RGB
         Entries. User clarified the real repro: typing #RRGGBB into a PALETTE
@@ -52,6 +52,22 @@ FEATURE SHIPPED 2026-06-10 — Ideogram V4 Structure Editor (be4a54f)
         PropertyChanged raise. 537 -> 538 green. Out of scope by user
         preference: same split on the page's other Entries (Medium/Desc/bbox…)
         unless the dropout is observed there.
+
+    [x] (Follow-up G, polish) DONE 2026-06-10 (commit hash: see git log; from
+        the F verify session). (1) Palette hex auto-uppercases live: VM-side
+        normalization in OnStylePaletteTextChanged / ElementItemViewModel.
+        OnPaletteTextChanged (re-set pattern, equality stops re-entrancy; the
+        OneWay Entry bindings rewrite the view). (2) "Examples" suggestion
+        Pickers beside ALL FIVE style-field Entries (Medium/Aesthetics/Lighting/
+        Art style/Photo style) — insert-into-Entry pattern (code-behind
+        InsertSuggestion resets SelectedIndex=-1 so it stays a pure dropdown);
+        fields remain free-form per schema. Lists doc-sourced from
+        ideogram-oss/ideogram4 docs/prompting.md (+ llms-full.txt): Medium is
+        the trained vocabulary [photograph, illustration, 3d_render, painting,
+        graphic_design] — pinned exactly by test; others are example phrases.
+        ANSWERED, no change: palette caps 16 (style) / 5 (element) are Ideogram
+        schema constants ("up to 16"/"up to 5" in prompting.md), not app picks.
+        538 -> 541 green.
 
     [x] (Phase 2) Drag-move + corner-resize gestures on the editor canvas —
         DONE c255c31 2026-06-10, USER VERIFIED in-app ("drag and resize works").

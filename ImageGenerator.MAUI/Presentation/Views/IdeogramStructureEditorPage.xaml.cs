@@ -92,6 +92,31 @@ public partial class IdeogramStructureEditorPage
             element.PaletteText = e.NewTextValue ?? string.Empty;
     }
 
+    // The "Examples" pickers insert a doc-sourced phrase into their Entry, then reset so the
+    // picker keeps showing its title and the same suggestion can be re-picked. The reset
+    // re-fires SelectedIndexChanged with a null SelectedItem, which the type guard ignores.
+    private void OnMediumSuggestionPicked(object? sender, EventArgs e) =>
+        InsertSuggestion(sender, v => _viewModel.Medium = v);
+
+    private void OnAestheticsSuggestionPicked(object? sender, EventArgs e) =>
+        InsertSuggestion(sender, v => _viewModel.Aesthetics = v);
+
+    private void OnLightingSuggestionPicked(object? sender, EventArgs e) =>
+        InsertSuggestion(sender, v => _viewModel.Lighting = v);
+
+    private void OnArtStyleSuggestionPicked(object? sender, EventArgs e) =>
+        InsertSuggestion(sender, v => _viewModel.ArtStyle = v);
+
+    private void OnPhotoStyleSuggestionPicked(object? sender, EventArgs e) =>
+        InsertSuggestion(sender, v => _viewModel.PhotoStyle = v);
+
+    private static void InsertSuggestion(object? sender, Action<string> apply)
+    {
+        if (sender is not Picker { SelectedItem: string value } picker) return;
+        apply(value);
+        picker.SelectedIndex = -1;
+    }
+
     private void OnCanvasStartInteraction(object? sender, TouchEventArgs e)
     {
         if (e.Touches.Length == 0) return;

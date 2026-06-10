@@ -72,12 +72,33 @@
 
                             <VerticalStackLayout Spacing="8" IsVisible="{Binding IncludeStyle}">
                                 <Label Text="Medium (required)" Style="{StaticResource FieldLabel}" />
-                                <Entry Text="{Binding Medium}" Placeholder="e.g. digital illustration, oil on canvas, photograph"
-                                       AutomationId="EditorMediumEntry" />
+                                <!-- Each "Examples" picker INSERTS a doc-sourced phrase into its Entry
+                                     (code-behind resets the picker so it stays a pure dropdown);
+                                     the fields remain free-form per the Ideogram 4 schema. -->
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <Entry Text="{Binding Medium}" Placeholder="e.g. digital illustration, oil on canvas, photograph"
+                                           AutomationId="EditorMediumEntry" />
+                                    <Picker Grid.Column="1" Title="Examples"
+                                            ItemsSource="{Binding MediumSuggestions}"
+                                            SelectedIndexChanged="OnMediumSuggestionPicked"
+                                            AutomationId="EditorMediumSuggestions" />
+                                </Grid>
                                 <Label Text="Aesthetics" Style="{StaticResource FieldLabel}" />
-                                <Entry Text="{Binding Aesthetics}" Placeholder="overall look and feel" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <Entry Text="{Binding Aesthetics}" Placeholder="overall look and feel" />
+                                    <Picker Grid.Column="1" Title="Examples"
+                                            ItemsSource="{Binding AestheticsSuggestions}"
+                                            SelectedIndexChanged="OnAestheticsSuggestionPicked"
+                                            AutomationId="EditorAestheticsSuggestions" />
+                                </Grid>
                                 <Label Text="Lighting" Style="{StaticResource FieldLabel}" />
-                                <Entry Text="{Binding Lighting}" Placeholder="e.g. golden hour, soft studio light" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <Entry Text="{Binding Lighting}" Placeholder="e.g. golden hour, soft studio light" />
+                                    <Picker Grid.Column="1" Title="Examples"
+                                            ItemsSource="{Binding LightingSuggestions}"
+                                            SelectedIndexChanged="OnLightingSuggestionPicked"
+                                            AutomationId="EditorLightingSuggestions" />
+                                </Grid>
 
                                 <HorizontalStackLayout Spacing="8">
                                     <CheckBox IsChecked="{Binding IsPhoto}" VerticalOptions="Center"
@@ -86,13 +107,25 @@
                                 </HorizontalStackLayout>
                                 <VerticalStackLayout Spacing="4" IsVisible="{Binding IsArtStyle}">
                                     <Label Text="Art style" Style="{StaticResource FieldLabel}" />
-                                    <Entry Text="{Binding ArtStyle}" Placeholder="e.g. art nouveau poster, ukiyo-e"
-                                           AutomationId="EditorArtStyleEntry" />
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <Entry Text="{Binding ArtStyle}" Placeholder="e.g. art nouveau poster, ukiyo-e"
+                                               AutomationId="EditorArtStyleEntry" />
+                                        <Picker Grid.Column="1" Title="Examples"
+                                                ItemsSource="{Binding ArtStyleSuggestions}"
+                                                SelectedIndexChanged="OnArtStyleSuggestionPicked"
+                                                AutomationId="EditorArtStyleSuggestions" />
+                                    </Grid>
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Spacing="4" IsVisible="{Binding IsPhoto}">
                                     <Label Text="Photo style" Style="{StaticResource FieldLabel}" />
-                                    <Entry Text="{Binding PhotoStyle}" Placeholder="e.g. 35mm film, shallow depth of field"
-                                           AutomationId="EditorPhotoStyleEntry" />
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <Entry Text="{Binding PhotoStyle}" Placeholder="e.g. 35mm film, shallow depth of field"
+                                               AutomationId="EditorPhotoStyleEntry" />
+                                        <Picker Grid.Column="1" Title="Examples"
+                                                ItemsSource="{Binding PhotoStyleSuggestions}"
+                                                SelectedIndexChanged="OnPhotoStyleSuggestionPicked"
+                                                AutomationId="EditorPhotoStyleSuggestions" />
+                                    </Grid>
                                 </VerticalStackLayout>
 
                                 <Label Text="Color palette (up to 16 × #RRGGBB, comma-separated)" Style="{StaticResource FieldLabel}" />

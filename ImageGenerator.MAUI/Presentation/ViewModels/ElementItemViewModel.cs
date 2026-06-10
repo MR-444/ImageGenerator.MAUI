@@ -50,6 +50,15 @@ public partial class ElementItemViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(Swatches))]
     private string _paletteText = string.Empty;
 
+    // Hex is case-insensitive to ParsePalette but the schema (and the chips) use uppercase;
+    // normalizing here lets the Entry's OneWay binding rewrite typed lowercase live. The
+    // re-entrant set stops at the [ObservableProperty] equality check.
+    partial void OnPaletteTextChanged(string value)
+    {
+        var normalized = value.ToUpperInvariant();
+        if (normalized != value) PaletteText = normalized;
+    }
+
     /// <summary>Renderable chips for the current palette text (unparseable entries skipped).</summary>
     public IReadOnlyList<PaletteSwatch> Swatches => PaletteSwatches.From(PaletteText);
 

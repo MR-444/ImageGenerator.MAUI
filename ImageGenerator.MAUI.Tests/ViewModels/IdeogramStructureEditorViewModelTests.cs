@@ -578,6 +578,48 @@ public class IdeogramStructureEditorViewModelTests
     }
 
     [Fact]
+    public void StylePaletteText_NormalizesLowercaseHexToUppercase()
+    {
+        var sut = CreateSut();
+
+        sut.StylePaletteText = "#aabbcc, #ff00ee";
+
+        sut.StylePaletteText.Should().Be("#AABBCC, #FF00EE");
+        sut.StylePaletteSwatches.Should().HaveCount(2)
+            .And.OnlyContain(s => s.Hex == s.Hex.ToUpperInvariant());
+    }
+
+    [Fact]
+    public void ElementPaletteText_NormalizesLowercaseHexToUppercase()
+    {
+        var item = new ElementItemViewModel(Element.ObjType);
+
+        item.PaletteText = "#aabbcc";
+
+        item.PaletteText.Should().Be("#AABBCC");
+        item.Swatches.Should().ContainSingle().Which.Hex.Should().Be("#AABBCC");
+    }
+
+    [Fact]
+    public void StyleSuggestionLists_AreDocSourcedAndUsable()
+    {
+        var sut = CreateSut();
+
+        // Medium is the trained vocabulary from ideogram4 docs/prompting.md — pin it exactly.
+        sut.MediumSuggestions.Should().Equal(
+            "photograph", "illustration", "3d_render", "painting", "graphic_design");
+
+        foreach (var list in new[]
+                 {
+                     sut.ArtStyleSuggestions, sut.PhotoStyleSuggestions,
+                     sut.LightingSuggestions, sut.AestheticsSuggestions
+                 })
+        {
+            list.Should().NotBeEmpty().And.OnlyHaveUniqueItems();
+        }
+    }
+
+    [Fact]
     public void StylePaletteSwatches_RecomputeWhenPaletteTextChanges()
     {
         // The Swatches notification is what refreshes the chip FlexLayout while the user types

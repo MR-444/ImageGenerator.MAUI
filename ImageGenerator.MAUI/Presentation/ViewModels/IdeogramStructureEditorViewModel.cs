@@ -87,6 +87,14 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(StylePaletteSwatches))]
     private string _stylePaletteText = string.Empty;
 
+    // Mirrors ElementItemViewModel.OnPaletteTextChanged: uppercase live so the Entry's
+    // OneWay binding rewrites typed lowercase hex; equality stops the re-entrant set.
+    partial void OnStylePaletteTextChanged(string value)
+    {
+        var normalized = value.ToUpperInvariant();
+        if (normalized != value) StylePaletteText = normalized;
+    }
+
     /// <summary>Renderable chips for the style palette text (unparseable entries skipped).</summary>
     public IReadOnlyList<PaletteSwatch> StylePaletteSwatches => PaletteSwatches.From(StylePaletteText);
 
@@ -174,6 +182,38 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
         }
         finally { _suppressGeneratorSync = false; }
     }
+
+    // --- Style-field suggestion lists -------------------------------------------------------
+    // Doc-sourced (ideogram-oss/ideogram4 docs/prompting.md examples + developer.ideogram.ai
+    // llms-full.txt). Medium is the model's trained vocabulary; the rest are free-form example
+    // phrases — the pickers INSERT into the Entries, they never constrain them.
+
+    public IReadOnlyList<string> MediumSuggestions { get; } =
+        ["photograph", "illustration", "3d_render", "painting", "graphic_design"];
+
+    public IReadOnlyList<string> ArtStyleSuggestions { get; } =
+        ["flat vector illustration, bold outlines",
+         "flat vector design, generous whitespace, sans-serif typography",
+         "oil painting"];
+
+    public IReadOnlyList<string> PhotoStyleSuggestions { get; } =
+        ["35mm, f/1.4, bokeh",
+         "shallow depth of field, sharp focus, eye-level, telephoto",
+         "wide angle, f/8, long exposure"];
+
+    public IReadOnlyList<string> LightingSuggestions { get; } =
+        ["golden hour, rim light, dramatic shadows",
+         "golden hour backlighting, warm atmospheric haze",
+         "overcast daylight, diffused, soft subtle shadows",
+         "low-key, deep shadows",
+         "soft natural window light"];
+
+    public IReadOnlyList<string> AestheticsSuggestions { get; } =
+        ["moody, cinematic, desaturated",
+         "saturated primary colors, rule of thirds, joyful and triumphant",
+         "serene, warm, golden hour",
+         "minimal, professional, geometric",
+         "warm, cozy, nostalgic"];
 
     // --- RGB color picker (shared by the style and element palettes) -----------------------
 
