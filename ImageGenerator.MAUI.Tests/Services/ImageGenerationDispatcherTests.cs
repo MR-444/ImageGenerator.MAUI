@@ -2,9 +2,11 @@ using System.Net;
 using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Infrastructure.External.ComfyUi;
 using ImageGenerator.MAUI.Infrastructure.External.Pollinations;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
+using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.Services;
 using ImageGenerator.MAUI.Models.Replicate;
 using ImageGenerator.MAUI.Shared.Constants;
@@ -20,7 +22,9 @@ public class ImageGenerationDispatcherTests
     private readonly Mock<IReplicateApi> _replicateApi = new();
     private readonly Mock<HttpMessageHandler> _pollinationsHandler = new(MockBehavior.Strict);
     private readonly Mock<HttpMessageHandler> _replicateHandler = new(MockBehavior.Strict);
+    private readonly Mock<HttpMessageHandler> _comfyHandler = new(MockBehavior.Loose);
     private readonly List<HttpRequestMessage> _pollinationsRequests = new();
+    private readonly List<HttpRequestMessage> _comfyRequests = new();
     private readonly ImageGenerationDispatcher _dispatcher;
 
     public ImageGenerationDispatcherTests()
@@ -38,7 +42,42 @@ public class ImageGenerationDispatcherTests
             registry,
             NullLogger<PollinationsImageGenerationService>.Instance);
 
-        _dispatcher = new ImageGenerationDispatcher(replicate, pollinations);
+        _comfyHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>((req, _) => _comfyRequests.Add(req))
+            .ReturnsAsync(() => new HttpResponseMessage { StatusCode = HttpStatusCode.NotFound });
+
+        var comfyUi = new ComfyUiImageGenerationService(
+            new StubHttpClientFactory(new HttpClient(_comfyHandler.Object)),
+            registry,
+            Mock.Of<IUiStateStore>(),
+            NullLogger<ComfyUiImageGenerationService>.Instance,
+            workflowsDirectoryOverride: Path.Combine(Path.GetTempPath(), "imggen-dispatcher-tests-empty"));
+
+        _dispatcher = new ImageGenerationDispatcher(replicate, pollinations, comfyUi);
+    }
+
+    [Fact]
+    public async Task GenerateImageAsync_ComfyUiModelPrefix_RoutesToComfyService()
+    {
+        // The workflow file doesn't exist, so the ComfyUI service fails fast with its own
+        // message — proving the route without needing a full HTTP choreography here.
+        var parameters = new ImageGenerationParameters
+        {
+            Model = "comfyui/some workflow",
+            Prompt = "a cat"
+        };
+
+        var result = await _dispatcher.GenerateImageAsync(parameters);
+
+        result.Message.Should().Contain("Export it from ComfyUI",
+            "the ComfyUI service must handle comfyui/* ids");
+        _pollinationsRequests.Should().BeEmpty();
+        _replicateApi.VerifyNoOtherCalls();
     }
 
     [Fact]

@@ -4,6 +4,7 @@ using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Descriptors.Pollinations;
 using ImageGenerator.MAUI.Extensions;
 using ImageGenerator.MAUI.Infrastructure.Diagnostics;
+using ImageGenerator.MAUI.Infrastructure.External.ComfyUi;
 using ImageGenerator.MAUI.Infrastructure.External.Pollinations;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
@@ -71,6 +72,14 @@ public static class MauiProgram
                 perAttemptTimeout: TimeSpan.FromSeconds(60),
                 totalTimeout: TimeSpan.FromMinutes(3));
 
+        // No BaseAddress: the ComfyUI server URL is a runtime setting (UiStateStore), so the
+        // service composes absolute URIs per request. Timeouts bound each HTTP call only —
+        // the service's own poll loop owns the overall generation deadline.
+        builder.Services.AddHttpClient(ComfyUiImageGenerationService.HttpClientName)
+            .ConfigureStandardResilience(
+                perAttemptTimeout: TimeSpan.FromSeconds(60),
+                totalTimeout: TimeSpan.FromMinutes(3));
+
         // 2) Per-model descriptors. Each registers as itself + every narrow interface it
         //    implements, forwarded to the same singleton instance. Adding a new model is now
         //    a single-line edit here plus one new descriptor file.
@@ -101,6 +110,7 @@ public static class MauiProgram
         // resolves to.
         builder.Services.AddSingleton<ReplicateImageGenerationService>();
         builder.Services.AddSingleton<PollinationsImageGenerationService>();
+        builder.Services.AddSingleton<ComfyUiImageGenerationService>();
         builder.Services.AddSingleton<IImageGenerationService, ImageGenerationDispatcher>();
         builder.Services.AddSingleton<IModelCatalogService, ModelCatalogService>();
         builder.Services.AddSingleton<IPollinationsCatalogService, PollinationsCatalogService>();
