@@ -2,10 +2,10 @@ ImageGenerator.MAUI — Open Work Queue
 =====================================
 
 Source of truth: AUDIT_REPORT.md (audit dated 2026-05-20 — predates v1.3.0+).
-Last updated: 2026-06-10 (queue COMPACTED after the Ideogram Structure Editor
-bundle shipped and was pushed; ComfyUI provider added as the next feature.
-Full per-item forensics of everything compressed below live in this file's
-git history, last full version at commit 97cd2ab).
+Last updated: 2026-06-11 (ComfyUI test-feedback bundle user-confirmed working
+and PUSHED incl. persist hygiene; release-readiness item added — v1.5.0 tag
+deliberately deferred. Full per-item forensics of everything compressed below
+live in this file's git history, last full version at commit 97cd2ab).
 
 Format: each item has a status box, severity, a one-line hook, and
 file:line citations. Pick the top open item; keep this file in sync
@@ -139,6 +139,19 @@ NEXT FEATURE — ComfyUI as a local provider (plan next context)
     USER ACTION on next smoke: none for the workflow file — the raw-token
     export now works as-is via the app.
 
+    2026-06-11: USER CONFIRMED WORKING ("don't know what it was, but it is
+    working now") — the %date% fix unblocked generation; no ghost activation
+    since the forensics landed. Follow-up persist hygiene, same night:
+      9965d48 UiStateStore skips identical persists (every startup Load
+              echoed straight back through the VM persist hooks — wasted
+              Preferences I/O) + Quote() truncates logged values to 100 chars
+              (the multi-KB JSON prompt was dumped into app.log per call).
+      16d97fe PersistPrompt debounced 500 ms via DebouncedSecureStorageWriter
+              (per-keystroke writes collapse to the last value; an EMPTY
+              prompt writes immediately AND cancels the pending value so a
+              clear can't resurrect stale text after the delay).
+    640 -> 646 tests green. ALL PUSHED 2026-06-11 (user).
+
     HOW A COMFYUI WORKFLOW IS USED VIA API (the user's question):
       A workflow is the node graph built on ComfyUI's canvas. For API use it is
       exported ONCE as "API format" JSON (Workflow menu > Export (API); on old
@@ -190,6 +203,29 @@ OPEN — owed from the editor bundle
 [ ] Quick Flux/GPT/Pollinations regression pass (low risk — UseJsonPrompt
     auto-clear + descriptor paths are pinned by tests). Fold into the next
     in-app verify session.
+
+
+OPEN — v1.5.0 release readiness (tag deferred 2026-06-11, user decision)
+------------------------------------------------------------------------
+
+[ ] ComfyUI is BYO-workflow: the app ships NO workflow; a third party with
+    their own ComfyUI server gets an empty "ComfyUI" provider until they
+    export an API-format JSON into Pictures\ImageGenerator.MAUI\
+    comfy-workflows\. Before tagging, document (README section) what a
+    workflow needs to work with the app:
+      - MINIMUM (plain prompts): a literal-text CLIPTextEncode (lowest id
+        wins) + a SaveImage node; seeds re-roll automatically; %date% tokens
+        in filename_prefix are expanded app-side.
+      - STRUCTURED JSON mode: an Ideogram4PromptBuilderKJ node (kjnodes
+        pack) AND/OR a caption-JSON CLIPTextEncode literal.
+      - AR/megapixels patching: a ResolutionSelector node (else silently
+        skipped — workflow keeps its own resolution).
+      - Server side: ComfyUI started with --listen (LAN), the models the
+        workflow references must be installed; no auth (LAN-only assumption).
+    DECIDE: also ship a sanitized sample workflow export in the repo?
+    CAUTION: do NOT ship the current workflow_MR export as-is — its frozen
+    CLIPTextEncode/builder literals embed the user's private test prompt;
+    a clean re-export with a neutral prompt would be needed.
 
 
 MISSING TESTS — open (audit §9)
