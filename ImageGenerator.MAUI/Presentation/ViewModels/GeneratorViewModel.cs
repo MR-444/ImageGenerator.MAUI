@@ -113,6 +113,7 @@ public partial class GeneratorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowSharedResolution))]
     [NotifyPropertyChangedFor(nameof(SupportsGptQuality))]
     [NotifyPropertyChangedFor(nameof(SupportsIdeogramOptions))]
+    [NotifyPropertyChangedFor(nameof(SupportsJsonPromptEditor))]
     private ModelCapabilities _capabilities;  // hydrated from registry in ctor
     private bool _cachedCatalogLoaded;
     private bool _tokensLoaded;
@@ -150,6 +151,9 @@ public partial class GeneratorViewModel : ObservableObject
     public bool SupportsResolution => Capabilities.Resolutions is not null;
     public bool SupportsGptQuality => Capabilities.GptQualityOptions is not null;
     public bool SupportsIdeogramOptions => Capabilities.IdeogramOptions;
+    // Structured-JSON checkbox + "Edit structure…" button: Ideogram V4 and ComfyUI workflow
+    // models (whose graphs consume the caption JSON) both set this.
+    public bool SupportsJsonPromptEditor => Capabilities.JsonPromptEditor;
     // The Ideogram block renders its own resolution picker, so suppress the shared one there.
     public bool ShowSharedResolution => SupportsResolution && !Capabilities.IdeogramOptions;
 
@@ -215,10 +219,11 @@ public partial class GeneratorViewModel : ObservableObject
 
         // Models that hide the output-format picker (Ideogram) only emit PNG — pin the save format.
         if (!caps.OutputFormatSelectable) Parameters.OutputFormat = ImageOutputFormat.Png;
-        // Clear the structured-JSON toggle when leaving an Ideogram model so a stale flag can't
-        // gate validation (or alter Build) on a model that has no such field. Suppressed from
-        // persistence: this is a capability consequence, not a user preference change.
-        if (!caps.IdeogramOptions)
+        // Clear the structured-JSON toggle when leaving a JSON-capable model (Ideogram V4 /
+        // ComfyUI workflows) so a stale flag can't gate validation (or alter Build) on a model
+        // that has no such field. Suppressed from persistence: this is a capability
+        // consequence, not a user preference change.
+        if (!caps.JsonPromptEditor)
         {
             _suppressJsonPromptPersist = true;
             try { Parameters.UseJsonPrompt = false; }
@@ -266,19 +271,22 @@ public partial class GeneratorViewModel : ObservableObject
 
     private void ValidateParameters()
     {
-        // Pollinations works anonymously, so its token is optional. Replicate requires its own
-        // Bearer token. Prompt is required for both.
-        var tokenOk = ModelConstants.Pollinations.IsId(Parameters.Model)
-            ? true
-            : !string.IsNullOrWhiteSpace(Parameters.ApiToken);
-        // In Ideogram structured-JSON mode the prompt box must contain valid JSON.
-        var jsonModeActive = Capabilities.IdeogramOptions && Parameters.UseJsonPrompt;
+        // Pollinations works anonymously and ComfyUI is the user's own server, so their tokens
+        // are optional/nonexistent. Replicate requires its own Bearer token. Prompt is
+        // required everywhere.
+        var tokenOk = TokenlessModel(Parameters.Model)
+            || !string.IsNullOrWhiteSpace(Parameters.ApiToken);
+        // In structured-JSON mode (Ideogram V4 / ComfyUI) the prompt box must contain valid JSON.
+        var jsonModeActive = Capabilities.JsonPromptEditor && Parameters.UseJsonPrompt;
         var jsonOk = !jsonModeActive || IsValidJson(Parameters.Prompt);
         JsonPromptStateText = jsonModeActive
             ? jsonOk ? "Structured JSON: valid ✓" : "Structured JSON: not valid JSON"
             : null;
         IsValid = tokenOk && !string.IsNullOrWhiteSpace(Parameters.Prompt) && jsonOk;
     }
+
+    private static bool TokenlessModel(string? model) =>
+        ModelConstants.Pollinations.IsId(model) || ModelConstants.ComfyUi.IsId(model);
 
     private static bool IsValidJson(string text)
     {
@@ -461,7 +469,8 @@ public partial class GeneratorViewModel : ObservableObject
     private async Task GenerateImageAsync()
     {
         var missing = new List<string>();
-        if (string.IsNullOrWhiteSpace(Parameters.ApiToken)) missing.Add("API Token");
+        // Mirror ValidateParameters' token rule: Pollinations/ComfyUI generate without one.
+        if (!TokenlessModel(Parameters.Model) && string.IsNullOrWhiteSpace(Parameters.ApiToken)) missing.Add("API Token");
         if (string.IsNullOrWhiteSpace(Parameters.Prompt)) missing.Add("Prompt");
         if (missing.Count > 0)
         {
@@ -469,7 +478,7 @@ public partial class GeneratorViewModel : ObservableObject
             return;
         }
 
-        if (Capabilities.IdeogramOptions && Parameters.UseJsonPrompt && !IsValidJson(Parameters.Prompt))
+        if (Capabilities.JsonPromptEditor && Parameters.UseJsonPrompt && !IsValidJson(Parameters.Prompt))
         {
             SetStatus("Structured JSON prompt is not valid JSON.", StatusKind.Error);
             return;
@@ -685,10 +694,10 @@ public partial class GeneratorViewModel : ObservableObject
         }
 
         // Restore the structured-JSON toggle LAST: the model restore above has settled
-        // Capabilities, and the toggle only means anything on an Ideogram model — restoring
-        // it blindly would re-check the box on a model whose Build has no json_prompt field.
-        // Suppress persistence: a restore isn't a user preference change.
-        if (Capabilities.IdeogramOptions && _uiStateStore.LoadUseJsonPrompt())
+        // Capabilities, and the toggle only means anything on a JSON-capable model (Ideogram /
+        // ComfyUI) — restoring it blindly would re-check the box on a model whose Build has no
+        // json_prompt field. Suppress persistence: a restore isn't a user preference change.
+        if (Capabilities.JsonPromptEditor && _uiStateStore.LoadUseJsonPrompt())
         {
             _suppressJsonPromptPersist = true;
             try { Parameters.UseJsonPrompt = true; }

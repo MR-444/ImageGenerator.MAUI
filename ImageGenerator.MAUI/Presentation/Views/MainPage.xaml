@@ -198,13 +198,15 @@
                                 MinimumHeightRequest="90"
                                 AutomationId="PromptEditor" />
 
-                        <VerticalStackLayout Spacing="2" IsVisible="{Binding SupportsIdeogramOptions}">
+                        <!-- Gated by JsonPromptEditor (not IdeogramOptions): Ideogram V4 AND
+                             ComfyUI workflow models both consume the structured caption JSON. -->
+                        <VerticalStackLayout Spacing="2" IsVisible="{Binding SupportsJsonPromptEditor}">
                             <HorizontalStackLayout Spacing="8">
                                 <CheckBox IsChecked="{Binding Parameters.UseJsonPrompt}" VerticalOptions="Center"
                                           AutomationId="JsonPromptCheckBox" />
                                 <Label Text="Structured JSON prompt" VerticalOptions="Center" />
                             </HorizontalStackLayout>
-                            <Label Text="Send the prompt box as Ideogram structured JSON (must be valid JSON)."
+                            <Label Text="Send the prompt box as a structured caption JSON (must be valid JSON)."
                                    Style="{StaticResource HelperText}" />
                             <Label Text="{Binding JsonPromptStateText}"
                                    Style="{StaticResource HelperText}"

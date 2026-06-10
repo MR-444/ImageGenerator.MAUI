@@ -1218,6 +1218,74 @@ public class GeneratorViewModelTests
             "a capability-driven clear must not erase the user's saved preference");
     }
 
+    private const string ComfyModelId = "comfyui/Ideogram workflow_MR";
+
+    private void SelectComfyWorkflow()
+    {
+        // Workflow entries come from the folder-scan catalog, not the seed list — surface one
+        // (next to the models the switch tests hop between) the way ApplyCatalog would after
+        // a real load. ApplyCatalog replaces AllModels, so include everything needed.
+        _viewModel.ProviderFilter.ApplyCatalog(
+        [
+            new ModelOption("Ideogram V4 Turbo", ModelConstants.Ideogram.V4Turbo, "Replicate"),
+            new ModelOption("Flux 1.1 Pro", ModelConstants.Flux.Pro11, "Replicate"),
+            new ModelOption("Ideogram workflow_MR (ComfyUI)", ComfyModelId, "ComfyUI"),
+        ]);
+        _viewModel.ProviderFilter.SelectedModel =
+            _viewModel.ProviderFilter.AllModels.First(m => m.Value == ComfyModelId);
+    }
+
+    [Fact]
+    public void UseJsonPrompt_SurvivesIdeogramToComfySwitch_ButClearsOnFlux()
+    {
+        SelectComfyWorkflow();
+        SelectIdeogramTurbo();
+        _viewModel.Parameters.UseJsonPrompt = true;
+
+        _viewModel.ProviderFilter.SelectedModel =
+            _viewModel.ProviderFilter.AllModels.First(m => m.Value == ComfyModelId);
+        _viewModel.Parameters.UseJsonPrompt.Should().BeTrue(
+            "ComfyUI workflow models consume the caption JSON, so the toggle must survive");
+
+        var flux = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.ProviderFilter.SelectedModel = flux;
+        _viewModel.Parameters.UseJsonPrompt.Should().BeFalse("Flux has no JSON prompt field");
+    }
+
+    [Fact]
+    public void IsValid_ComfyModel_RequiresNoApiToken_ButValidatesJsonMode()
+    {
+        SelectComfyWorkflow();
+        _viewModel.Parameters.ApiToken = "";
+        _viewModel.Parameters.Prompt = "a plain prompt";
+
+        _viewModel.IsValid.Should().BeTrue("the ComfyUI server is the user's own — no token exists");
+
+        _viewModel.Parameters.UseJsonPrompt = true;
+        _viewModel.IsValid.Should().BeFalse("JSON mode demands valid JSON");
+        _viewModel.JsonPromptStateText.Should().Contain("not valid");
+
+        _viewModel.Parameters.Prompt = "{\"high_level_description\":\"x\"}";
+        _viewModel.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GenerateImage_ComfyModel_RunsWithoutApiToken()
+    {
+        SelectComfyWorkflow();
+        _viewModel.Parameters.ApiToken = "";
+        _viewModel.Parameters.Prompt = "a plain prompt";
+
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
+
+        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+
+        _viewModel.Jobs.Should().HaveCount(1, "the missing-token gate must exempt comfyui/* models");
+        _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Success);
+    }
+
     [Fact]
     public void Resolution_UserPick_Persists()
     {
