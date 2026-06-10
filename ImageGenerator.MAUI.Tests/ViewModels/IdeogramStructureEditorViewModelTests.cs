@@ -578,6 +578,21 @@ public class IdeogramStructureEditorViewModelTests
     }
 
     [Fact]
+    public void StylePaletteSwatches_RecomputeWhenPaletteTextChanges()
+    {
+        // The Swatches notification is what refreshes the chip FlexLayout while the user types
+        // (the Entry's view->VM half is an explicit TextChanged push in the page code-behind).
+        var sut = CreateSut();
+        var notified = false;
+        sut.PropertyChanged += (_, e) => notified |= e.PropertyName == nameof(sut.StylePaletteSwatches);
+
+        sut.StylePaletteText = "#AABBCC";
+
+        notified.Should().BeTrue();
+        sut.StylePaletteSwatches.Should().ContainSingle().Which.Hex.Should().Be("#AABBCC");
+    }
+
+    [Fact]
     public void BuildApplyRoute_CarriesJsonAndResolution()
     {
         var sut = CreateSut();

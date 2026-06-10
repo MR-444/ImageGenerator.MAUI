@@ -35,14 +35,23 @@ FEATURE SHIPPED 2026-06-10 — Ideogram V4 Structure Editor (be4a54f)
     [ ] Quick Flux/GPT/Pollinations regression pass still owed (low risk —
         UseJsonPrompt auto-clear + descriptor paths are pinned by tests).
 
-    [ ] (Follow-up F, BUG) Editor colour picker: changing the RGB NUMBER entries
-        does not update the preview colour (reported 2026-06-10 after live
-        verify; sliders presumably work). Suspect the same WinUI Entry view->VM
-        binding dropout class as Follow-up B's prompt Editor — check whether the
-        numeric Entries push into PickerRed/Green/Blue at all; fix likely mirrors
-        the OneWay + TextChanged split. IdeogramStructureEditorPage.xaml +
-        IdeogramStructureEditorViewModel (PickerRed/Green/Blue ->
-        PickerHex/PickerPreviewColor). Separate task per user.
+    [x] (Follow-up F, BUG) DONE 2026-06-10, USER VERIFIED ("it seems to work").
+        RE-DIAGNOSED: the original report ("RGB
+        NUMBER entries don't update the preview") was a false premise — the
+        numbers next to the R/G/B sliders are read-only Labels, there are no RGB
+        Entries. User clarified the real repro: typing #RRGGBB into a PALETTE
+        text Entry doesn't update the swatch chips. VM chain verified sound +
+        test-pinned (StylePaletteText -> StylePaletteSwatches;
+        ElementItemViewModel.PaletteText -> Swatches; ParsePalette normalizes
+        case/#) => WinUI Entry view->VM TwoWay dropout, same class as Follow-up
+        B. Hazard: Apply serializes the stale palette. FIX:
+        OneWay + TextChanged split on BOTH palette Entries
+        (IdeogramStructureEditorPage.xaml ~:99/:174 + OnStylePaletteTextChanged/
+        OnElementPaletteTextChanged in code-behind, mirroring
+        MainPage.OnPromptTextChanged); +1 test pinning the StylePaletteSwatches
+        PropertyChanged raise. 537 -> 538 green. Out of scope by user
+        preference: same split on the page's other Entries (Medium/Desc/bbox…)
+        unless the dropout is observed there.
 
     [x] (Phase 2) Drag-move + corner-resize gestures on the editor canvas —
         DONE c255c31 2026-06-10, USER VERIFIED in-app ("drag and resize works").

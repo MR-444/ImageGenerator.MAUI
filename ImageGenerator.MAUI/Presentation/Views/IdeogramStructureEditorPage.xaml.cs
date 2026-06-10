@@ -80,6 +80,18 @@ public partial class IdeogramStructureEditorPage
             _viewModel.RemoveElementColorCommand.Execute(swatch.Hex);
     }
 
+    // The view->VM half of the palette Entries' split bindings (see the XAML comments) —
+    // explicit pushes survive the WinUI TwoWay-binding dropout, mirroring
+    // MainPage.OnPromptTextChanged; the [ObservableProperty] equality check suppresses echo loops.
+    private void OnStylePaletteTextChanged(object? sender, TextChangedEventArgs e) =>
+        _viewModel.StylePaletteText = e.NewTextValue ?? string.Empty;
+
+    private void OnElementPaletteTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (_viewModel.SelectedElement is { } element)
+            element.PaletteText = e.NewTextValue ?? string.Empty;
+    }
+
     private void OnCanvasStartInteraction(object? sender, TouchEventArgs e)
     {
         if (e.Touches.Length == 0) return;

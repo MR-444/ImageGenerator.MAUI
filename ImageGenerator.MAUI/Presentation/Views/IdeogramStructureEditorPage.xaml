@@ -96,7 +96,12 @@
                                 </VerticalStackLayout>
 
                                 <Label Text="Color palette (up to 16 × #RRGGBB, comma-separated)" Style="{StaticResource FieldLabel}" />
-                                <Entry Text="{Binding StylePaletteText}" Placeholder="#1E3A5F, #F4D58D"
+                                <!-- One writer per direction: VM->view via OneWay binding, view->VM via the
+                                     explicit TextChanged handler. The default TwoWay binding can stop pushing
+                                     typed/pasted text into the VM on Windows (same dropout as MainPage's prompt
+                                     Editor), leaving the swatches — and Apply! — on a stale palette. -->
+                                <Entry Text="{Binding StylePaletteText, Mode=OneWay}" Placeholder="#1E3A5F, #F4D58D"
+                                       TextChanged="OnStylePaletteTextChanged"
                                        AutomationId="EditorStylePaletteEntry" />
                                 <FlexLayout BindableLayout.ItemsSource="{Binding StylePaletteSwatches}"
                                             Direction="Row" Wrap="Wrap"
@@ -171,7 +176,9 @@
                                 </VerticalStackLayout>
 
                                 <Label Text="Palette (up to 5 × #RRGGBB, comma-separated)" Style="{StaticResource FieldLabel}" />
-                                <Entry Text="{Binding SelectedElement.PaletteText}" Placeholder="#FFFFFF"
+                                <!-- Same split binding as the style palette Entry above (WinUI dropout guard). -->
+                                <Entry Text="{Binding SelectedElement.PaletteText, Mode=OneWay}" Placeholder="#FFFFFF"
+                                       TextChanged="OnElementPaletteTextChanged"
                                        AutomationId="EditorElementPaletteEntry" />
                                 <FlexLayout BindableLayout.ItemsSource="{Binding SelectedElement.Swatches}"
                                             Direction="Row" Wrap="Wrap"
