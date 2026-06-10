@@ -3,8 +3,10 @@ ImageGenerator.MAUI — Open Work Queue
 
 Source of truth: AUDIT_REPORT.md (audit dated 2026-05-20 — now predates the
 v1.3.0 release 2026-05-25 and the prompt-import separator change b81bb26).
-Last updated: 2026-05-25 (cleared the cosmetic quick-win cluster: items 1/3/4/5
-done in 588fc48; items 2/6 won't-fix — see notes inline).
+Last updated: 2026-06-10 (Ideogram V4 Structure Editor SHIPPED — P1 + follow-ups
+A-E + logging fix, one commit be4a54f, user-verified in-app; see section below.
+Prior: 2026-05-25 cleared the cosmetic quick-win cluster — items 1/3/4/5 in 588fc48,
+items 2/6 won't-fix — see notes inline).
 
 Format: each item has a status box, severity, a one-line hook, and
 file:line citations. Pick the top open item; keep this file in sync
@@ -12,6 +14,205 @@ when you finish or split work.
 
   [ ] = open      [~] = in progress (commit not yet on master)
   [x] = done      [-] = won't fix / superseded
+
+
+FEATURE SHIPPED 2026-06-10 — Ideogram V4 Structure Editor (be4a54f)
+-----------------------------------------------------------------------------
+
+[x] (Feature) Visual json_prompt builder for Ideogram V4 — DONE be4a54f 2026-06-10
+    (P1 + follow-ups A-E + the MEL/NLog logging fix in ONE commit; user-verified
+    in-app). All files from the plan landed: Core/Domain/Ideogram/
+    {V4JsonPrompt,V4JsonPromptSerializer,V4JsonPromptValidator}.cs; editor VM
+    (+ElementItemViewModel), render-only canvas (IdeogramCanvasDrawable +
+    CanvasCoordinateMapper), IdeogramStructureEditorPage, JsonPromptFileService +
+    OutputPaths.JsonPromptsDirectory; wiring in AppShell/MauiProgram/
+    GeneratorViewModel/MainPage(.xaml/.cs). 371 -> 452 tests green (81 new, incl.
+    the exact-compact-string parity pin and the VM round-trip test); Release
+    build 0 warnings. Bundle state at commit: 518 tests green, 0 warnings.
+
+    [ ] Verification leftovers (small): one LIVE generate on ideogram-v4-turbo
+        with a structured prompt (re-confirm no 422 after the follow-ups) + a
+        quick Flux/GPT/Pollinations regression pass. Phase 2 (drag/resize
+        gestures on the canvas) is a separate follow-up, deliberately not
+        started.
+    Original plans: C:\Users\mr\.claude\plans\i-think-about-a-magical-comet.md
+    (executed P1 spec also summarized in the file below)
+
+    USER VERIFIED IN-APP 2026-06-10: "It is working." Two follow-ups came out of
+    that test (plan: C:\Users\mr\.claude\plans\the-last-we-did-stateless-squirrel.md):
+
+    [x] (Follow-up A) DONE be4a54f — canvas
+        reshapes to the target resolution, editor has its own resolution picker
+        (seeded via &resolution=, handed back via &ideogramResolution= on Apply,
+        MainPage setter guards against ResolutionOptions). User-verified.
+        Original spec below:
+        Today the 1000x1000 grid renders as a fixed square; for e.g. 1440x2880 the
+        preview misplaces boxes visually (bbox values themselves stay 0-1000/axis —
+        schema constant, serialization unchanged). Agreed design: pass
+        Parameters.Resolution into the editor route (&resolution=), editor gets its
+        own resolution Picker (list exposed from IdeogramV4Descriptor's private
+        IdeogramResolutions via a public accessor), canvas Width/HeightRequest fit
+        the AR into a 480px box ("Auto"/garbage -> square), drawable/mapper/hit-test
+        go per-axis (drop the three Math.Min squarings: drawable :34, page
+        code-behind :64, XAML 480x480), Apply hands the choice back via a new
+        &ideogramResolution= query param (MainPage setter guards value against
+        ResolutionOptions). Reuse ResolutionAspectRatioConverter for picker display.
+
+    [x] (Follow-up C) DONE be4a54f — persist
+        UseJsonPrompt across restarts (was: restart restored the prompt but not the
+        checkbox -> structured JSON would ship as plain `prompt`). IUiStateStore +
+        UiStateStore gained LoadUseJsonPrompt/PersistUseJsonPrompt (key
+        imggen.use_json_prompt); only USER toggles persist (auto-clear in
+        RefreshCapabilities + the restore itself are wrapped in
+        _suppressJsonPromptPersist); LoadSavedUiState restores it LAST and only when
+        Capabilities.IdeogramOptions. User-verified.
+
+    [x] (Follow-up E) DONE be4a54f after THREE rounds — round-1 fix (suppression
+        window around the options swap + membership persist guard) did NOT fix the in-app
+        symptom on the user's re-test (restarts 11:26-11:33 in app.log): resolution still
+        resets on restart, and since the editor seeds its canvas from &resolution= the
+        structure editor opens with a wrong scene shape (SetIncomingResolution falls back
+        to Auto/square for empty/unknown).
+        ROUND 2 (built, 515 tests green, 0 warnings; AWAITING user repro):
+        (a) Found+fixed a real flaw in round 1: the ResolutionOptions swap synchronously
+            nulls Parameters.Resolution (picker push) BEFORE the old !Contains check ran,
+            so a still-valid value was slammed to options[0] on EVERY model switch —
+            in-memory loss the suppression window couldn't prevent (it only stopped the
+            persist). RefreshCapabilities now captures prev BEFORE the swap and picks:
+            prev-if-valid -> saved-from-store-if-valid -> options[0] (sticky, mirrors the
+            AR logic). Saved value now also survives flux->ideogram switches mid-session.
+        (b) DEBUG LEAD armed (was the staged next step): CrashLogger now bumps
+            Infrastructure.Services.* AND Presentation.ViewModels.* to Debug (file target),
+            and GeneratorViewModel Debug-logs every Resolution write (value/suppressed/
+            membership/persisted), the RefreshCapabilities prev/saved/target decision, and
+            the LoadSavedUiState adopt decision. One repro run now yields the full writer
+            sequence with timestamps in Pictures\ImageGenerator.MAUI\app.log.
+        2 new tests: ideogram->ideogram switch keeps the pick despite the null push;
+        saved value adopted (not options[0]) when switching to a model that offers it.
+        513 -> 515 green.
+        ROUND 2 USER RE-TEST 2026-06-10 ~12:10: restart restore NOW WORKS, but (1) a
+        mid-session model switch still loses the value, and (2) a resolution picked
+        INSIDE the editor is lost when leaving without Apply. Also: round-2 Debug lines
+        never appeared in app.log — MEL's default Information filter drops LogDebug
+        before NLog sees it; the NLog Debug rules (incl. the pre-existing External one)
+        were dead letters all along.
+        ROUND 3 (built, 518 tests green, 0 warnings; AWAITING user repro):
+        (a) MauiProgram: builder.Logging.SetMinimumLevel(Trace) — NLog rules are now the
+            real filter; file stays Info+ globally, Debug for External/Services/ViewModels.
+        (b) Resolution null tolerance (GeneratorViewModel): startup works because
+            LoadSavedUiState runs AFTER the OnAppearing awaits gave WinUI time to finish
+            its deferred ComboBox rebuild; a mid-session switch has no later re-assert, so
+            the rebuild's deferred SelectedItem=null push (a later dispatcher tick, OUTSIDE
+            the suppression window) wiped the value. New _lastValidResolution field tracks
+            the last options-member value; an unsuppressed null/empty write while
+            _lastValidResolution is still offered reverts to it (suppressed, no persist) —
+            the exact tolerance that lets the MODEL picker survive the identical push.
+        (c) Editor write-through: IdeogramStructureEditorViewModel now takes the singleton
+            GeneratorViewModel (optional 4th ctor param, DI auto-wires); a resolution pick
+            in the editor writes Parameters.Resolution immediately (membership-guarded,
+            persists as a user pick) so back-navigation without Apply keeps it.
+            SetIncomingResolution suppresses the write-through (its Auto fallback must not
+            clobber the generator state on editor open). Apply's &ideogramResolution=
+            hand-off stays (now idempotent).
+        3 new tests (deferred-null-push revert incl. no-double-persist; editor pick
+        write-through+persist; editor seeding no-write-back). 515 -> 518 green.
+        ROUND 3 USER-VERIFIED 2026-06-10: restart, model switch and editor write-through
+        all stick. NOTE the round-3 "still fails" report was a STALE BINARY: the user
+        launches bin\Debug\...\win-x64\ImageGenerator.MAUI.exe (built 11:51 = round 2)
+        while rounds were only landing in bin\Release — rebuilt Debug too and it passed.
+        Lesson for future verify loops: rebuild BOTH configs (or check exe LastWriteTime
+        vs app.log startup lines) before declaring a fix refuted.
+        Residual theoretical hole (not observed): a deferred FIRST-ITEM (non-null) push
+        would pass the membership guard and persist; the now-working Debug log would show
+        it as "persisting=True" right after a model switch.
+
+    [x] (Follow-up D) DONE be4a54f — palette
+        swatch chips (tap to remove) under both palette entries + shared RGB-slider
+        Color picker card (preview + hex + add-to-style / add-to-selected-element,
+        caps 16/5 enforced with a warning). New Presentation/Common/PaletteSwatch.cs
+        (PaletteSwatches.From/ToHex/Append/RemoveFirst). Swatch taps go through
+        page code-behind handlers (DataTemplate command bindings unreliable —
+        OnRemoveImageClicked precedent). User-verified.
+
+    [x] (Follow-up B) DONE be4a54f — prompt
+        Editor split into OneWay binding + OnPromptTextChanged push; live
+        "Structured JSON: valid/invalid" label (JsonPromptStateText) under the
+        checkbox. User-verified.
+        Original diagnosis below:
+        (BUG, MainPage not editor) "Structured JSON prompt" checkbox /
+        Generate-button validation breaks: manual paste -> clear -> paste new ->
+        button stays WRONGLY ENABLED on invalid JSON; typing/toggling does NOT
+        recover; restart does. Diagnosis: VM chain is sound (every Prompt/
+        UseJsonPrompt write revalidates); only a dead WinUI Editor view->VM binding
+        push explains all three observations (VM keeps validating the stale,
+        still-valid prompt — generating would silently send stale JSON!). Fix:
+        prompt Editor binding Mode=OneWay (VM->view) + explicit TextChanged handler
+        pushing into Parameters.Prompt (view->VM); no loop (ObservableProperty
+        equality + MapText no-op). Plus a visible "Structured JSON: valid/invalid"
+        HelperText label under the checkbox (JsonPromptStateText set in
+        ValidateParameters) so any future desync is immediately visible.
+    Schema src: https://github.com/ideogram-oss/ideogram4  (docs/prompting.md)
+                https://developer.ideogram.ai/llms-full.txt
+
+    WHY: a JSON *validator* is worthless (LLMs emit valid JSON). But Ideogram 4's
+    json_prompt carries spatial BBOXES, and placing boxes on a canvas is the one
+    thing an LLM is bad at. The editor adds that spatial value and replaces the
+    current hand-paste-and-edit-[y,x,y,x] workflow.
+
+    CRITICAL CONSTRAINT (confirmed in code + a prior live 422): the app goes
+    through Replicate, whose ideogram-v4 cog types json_prompt as a STRING, not an
+    object ("input.json_prompt: Expected: string, given: object"). So the editor
+    builds a typed model and serializes to a COMPACT STRING into Parameters.Prompt
+    with UseJsonPrompt=true — the existing IdeogramV4Descriptor.Build path is
+    UNCHANGED (Core/Domain/Descriptors/IdeogramV4Descriptors.cs:55-71).
+
+    TWO OUTPUTS from one model (Serialize(model, indented)):
+      - Prompt box        -> compact string (this app's Replicate generation).
+      - "Save JSON to file" -> pretty .json on disk
+        (Pictures\ImageGenerator.MAUI\json-prompts\) — portable to a local Ideogram
+        install / official API / any Ideogram-backed UI. (User-requested addition.)
+
+    SCHEMA (V4JsonPrompt): high_level_description (req); style_description
+    (aesthetics/lighting/medium + art_style XOR photo; color_palette <=16 #RRGGBB);
+    compositional_deconstruction (background + elements[]). Element type "obj" or
+    "text"; optional bbox [y_min,x_min,y_max,x_max] ints 0-1000, origin top-left,
+    canvas always 1000x1000; per-element palette <=5.
+
+    PHASING:
+      P1 (ship first, de-risked): Core model+serializer+validator (unit-tested);
+         editor page+VM (high-level/style/background/elements/palette panels);
+         render-only GraphicsView canvas + numeric/slider bbox + tap-to-select;
+         Apply hand-off (Shell query-param, mirror gallery "Use as input"); disk
+         export. Fully demoable; emits the exact JSON P2 will.
+      P2 (after P1 verifies): drag-move + corner-resize on the canvas; palette
+         polish; lenient round-trip for hand-authored JSON; optional draft persist.
+
+    NEW FILES: Core/Domain/Ideogram/{V4JsonPrompt, V4JsonPromptSerializer,
+      V4JsonPromptValidator}.cs; Presentation/ViewModels/
+      IdeogramStructureEditorViewModel.cs (+ ElementItemViewModel);
+      Presentation/Drawing/IdeogramCanvasDrawable.cs (+ CanvasCoordinateMapper);
+      Presentation/Views/IdeogramStructureEditorPage.xaml(.cs); Infrastructure/
+      {Interfaces/IJsonPromptFileService, Services/JsonPromptFileService}.cs
+    EDIT: AppShell.xaml.cs (route "ideogram-editor"); MauiProgram.cs (DI: transient
+      page+VM, singleton file service); GeneratorViewModel.cs
+      (OpenIdeogramEditorCommand, mirror OpenGalleryAsync ~:464); MainPage.xaml
+      ("Edit structure…" button in the SupportsIdeogramOptions block ~:183);
+      MainPage.xaml.cs (ideogramJson QueryProperty + setter, mirror AddInputPath
+      :24-34 — name it IdeogramJson NOT Json, like NavPath, to dodge a XAML-compile
+      collision); Shared/Constants/OutputPaths.cs (add JsonPromptsDirectory).
+
+    VERIFY (app CLOSED — MAUI locks the exe): dotnet build + dotnet test (keep 371
+      green + ~25-30 new); pick Ideogram V4 -> "Edit structure…" appears (absent for
+      Flux/GPT/Pollinations); build a structure -> Apply -> prompt box holds the
+      space-free JSON and the "Structured JSON prompt" checkbox is on -> re-open
+      round-trips the boxes; export writes a pretty .json; LIVE generate on
+      ideogram-v4-turbo -> NO 422, elements land near their bboxes; regression:
+      Flux/GPT/Pollinations unchanged and UseJsonPrompt auto-clears.
+
+    RISKS: canvas gestures (highest — P1 sidesteps with numeric/tap); compact-string
+      parity (lock with an exact-string test, don't hand-roll a minifier); never
+      serialize an object into the payload (keeps the 422 dead); URI length of the
+      hand-off (fallback: a singleton IIdeogramDraftHandoff).
 
 
 CORRECTNESS — open
