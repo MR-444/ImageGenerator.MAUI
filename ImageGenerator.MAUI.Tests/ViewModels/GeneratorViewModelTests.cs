@@ -1113,4 +1113,332 @@ public class GeneratorViewModelTests
         runAsyncCalls.Should().Be(1, "queued jobs after the cancel must not be submitted to the runner");
         _viewModel.StatusMessage.Should().Contain("1 ok").And.Contain("2 canceled");
     }
+
+    // --- Structured-JSON validation chain (paste/clear/paste regression + state label) ------
+
+    private void SelectIdeogramTurbo()
+    {
+        var ideogram = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Ideogram.V4Turbo);
+        _viewModel.ProviderFilter.SelectedModel = ideogram;
+        _viewModel.Parameters.ApiToken = "valid-token";
+    }
+
+    // Pins the VM half of the paste -> clear -> paste-new repro: every Prompt write must
+    // revalidate. (The in-app bug was the WinUI Editor binding not delivering the writes;
+    // the view fix splits the binding, this proves the VM does its part for each delivery.)
+    [Fact]
+    public void IsValid_JsonMode_TracksEveryPromptRewrite()
+    {
+        SelectIdeogramTurbo();
+        _viewModel.Parameters.UseJsonPrompt = true;
+
+        _viewModel.Parameters.Prompt = "{\"high_level_description\":\"x\"}";
+        _viewModel.IsValid.Should().BeTrue();
+
+        _viewModel.Parameters.Prompt = string.Empty;
+        _viewModel.IsValid.Should().BeFalse();
+
+        _viewModel.Parameters.Prompt = "definitely not json";
+        _viewModel.IsValid.Should().BeFalse();
+
+        _viewModel.Parameters.Prompt = "{\"high_level_description\":\"y\"}";
+        _viewModel.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void JsonPromptStateText_NullOutsideStructuredMode()
+    {
+        SelectIdeogramTurbo();
+        _viewModel.Parameters.Prompt = "anything";
+
+        _viewModel.JsonPromptStateText.Should().BeNull("checkbox is off");
+
+        _viewModel.Parameters.UseJsonPrompt = true;
+        _viewModel.JsonPromptStateText.Should().NotBeNull();
+
+        _viewModel.Parameters.UseJsonPrompt = false;
+        _viewModel.JsonPromptStateText.Should().BeNull("toggling off must clear the label");
+    }
+
+    [Fact]
+    public void JsonPromptStateText_NullForNonIdeogramModels()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        _viewModel.Parameters.Prompt = "plain prompt"; // default model is GPT, not Ideogram
+
+        _viewModel.JsonPromptStateText.Should().BeNull();
+    }
+
+    [Fact]
+    public void LoadSavedUiState_RestoresUseJsonPrompt_OnSavedIdeogramModel()
+    {
+        _mockUiStateStore.Setup(s => s.LoadPrompt()).Returns("{\"a\":1}");
+        _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ModelConstants.Ideogram.V4Turbo);
+        _mockUiStateStore.Setup(s => s.LoadUseJsonPrompt()).Returns(true);
+
+        _viewModel.LoadSavedUiState();
+
+        _viewModel.Parameters.UseJsonPrompt.Should().BeTrue();
+        // The restore itself must not re-persist (it isn't a user preference change).
+        _mockUiStateStore.Verify(s => s.PersistUseJsonPrompt(It.IsAny<bool>()), Times.Never);
+    }
+
+    [Fact]
+    public void LoadSavedUiState_IgnoresSavedToggle_OnNonIdeogramModel()
+    {
+        _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ModelConstants.Flux.Pro11);
+        _mockUiStateStore.Setup(s => s.LoadUseJsonPrompt()).Returns(true);
+
+        _viewModel.LoadSavedUiState();
+
+        _viewModel.Parameters.UseJsonPrompt.Should().BeFalse("the toggle is meaningless on non-Ideogram models");
+    }
+
+    [Fact]
+    public void UseJsonPrompt_UserToggle_Persists()
+    {
+        SelectIdeogramTurbo();
+
+        _viewModel.Parameters.UseJsonPrompt = true;
+
+        _mockUiStateStore.Verify(s => s.PersistUseJsonPrompt(true), Times.Once);
+    }
+
+    [Fact]
+    public void UseJsonPrompt_AutoClearOnModelSwitch_DoesNotPersistFalse()
+    {
+        SelectIdeogramTurbo();
+        _viewModel.Parameters.UseJsonPrompt = true;
+
+        var flux = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.ProviderFilter.SelectedModel = flux;
+
+        _viewModel.Parameters.UseJsonPrompt.Should().BeFalse("RefreshCapabilities auto-clears on non-Ideogram models");
+        _mockUiStateStore.Verify(s => s.PersistUseJsonPrompt(false), Times.Never,
+            "a capability-driven clear must not erase the user's saved preference");
+    }
+
+    [Fact]
+    public void Resolution_UserPick_Persists()
+    {
+        SelectIdeogramTurbo(); // RefreshCapabilities defaults Resolution to "Auto" (suppressed)
+
+        _viewModel.Parameters.Resolution = "1440x2880";
+
+        _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880"), Times.Once);
+    }
+
+    [Fact]
+    public void Resolution_CapabilityFallbackOnModelSwitch_DoesNotPersist()
+    {
+        SelectIdeogramTurbo(); // forces Resolution -> "Auto" because the prior value isn't Ideogram-valid
+
+        _viewModel.Parameters.Resolution.Should().Be("Auto");
+        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>()), Times.Never,
+            "a capability fallback isn't a user pick and must not overwrite the saved choice");
+    }
+
+    [Fact]
+    public void LoadSavedUiState_RestoresResolution_WhenSavedModelOffersIt()
+    {
+        _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ModelConstants.Ideogram.V4Turbo);
+        _mockUiStateStore.Setup(s => s.LoadResolution()).Returns("1440x2880");
+
+        _viewModel.LoadSavedUiState();
+
+        _viewModel.Parameters.Resolution.Should().Be("1440x2880");
+        // The restore itself must not re-persist.
+        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public void LoadSavedUiState_IgnoresResolution_NotOfferedByTheModel()
+    {
+        _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ModelConstants.Ideogram.V4Turbo);
+        _mockUiStateStore.Setup(s => s.LoadResolution()).Returns("999x999");
+
+        _viewModel.LoadSavedUiState();
+
+        _viewModel.Parameters.Resolution.Should().Be("Auto", "the capability fallback stays when the saved value is foreign");
+    }
+
+    [Fact]
+    public void JsonPromptStateText_ReflectsJsonValidity()
+    {
+        SelectIdeogramTurbo();
+        _viewModel.Parameters.UseJsonPrompt = true;
+
+        _viewModel.Parameters.Prompt = "{\"a\":1}";
+        _viewModel.JsonPromptStateText.Should().Contain("valid ✓");
+
+        _viewModel.Parameters.Prompt = "not json";
+        _viewModel.JsonPromptStateText.Should().Contain("not valid");
+    }
+
+    // The four tests below pin the view-layer interaction that broke resolution persistence
+    // in-app while every pure-VM test stayed green: the two MainPage Pickers two-way bind
+    // SelectedItem to Parameters.Resolution, and replacing their ItemsSource (the
+    // ResolutionOptions swap in RefreshCapabilities) makes them push null — synchronously,
+    // from inside the ResolutionOptions PropertyChanged cascade. Unsuppressed, that push
+    // persisted null and deleted the saved key before LoadSavedUiState could read it.
+
+    [Fact]
+    public void Resolution_PickerNullPushDuringOptionsSwap_DoesNotPersist_AndFallbackRecovers()
+    {
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(GeneratorViewModel.ResolutionOptions))
+                _viewModel.Parameters.Resolution = null!;
+        };
+
+        SelectIdeogramTurbo();
+
+        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>()), Times.Never,
+            "a binding artifact must never overwrite the saved resolution");
+        _viewModel.Parameters.Resolution.Should().Be("Auto", "the capability fallback recovers from the null push");
+    }
+
+    [Fact]
+    public void Resolution_PickerFirstItemPushDuringOptionsSwap_DoesNotPersist()
+    {
+        // Variant: a Picker that resets to the first row instead of null pushes a value that
+        // IS in the new list — only the widened suppression window can tell it from a user pick.
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(GeneratorViewModel.ResolutionOptions) && _viewModel.ResolutionOptions.Count > 0)
+                _viewModel.Parameters.Resolution = _viewModel.ResolutionOptions[0];
+        };
+
+        SelectIdeogramTurbo();
+
+        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public void Resolution_WriteOutsideCurrentOptions_DoesNotPersist()
+    {
+        SelectIdeogramTurbo();
+
+        // E.g. a Picker pushing null on binding attach (page recreation), or any stale write
+        // the current model doesn't offer.
+        _viewModel.Parameters.Resolution = null!;
+        _viewModel.Parameters.Resolution = "999x999";
+
+        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public void LoadSavedUiState_RestoresResolution_DespitePickerNullPushOnOptionsSwap()
+    {
+        // End-to-end repro of the in-app startup: the model restore swaps ResolutionOptions,
+        // the bound Pickers push null mid-swap, and the saved value must still both survive
+        // in storage and win in Parameters.
+        _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ModelConstants.Ideogram.V4Turbo);
+        _mockUiStateStore.Setup(s => s.LoadResolution()).Returns("1440x2880");
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(GeneratorViewModel.ResolutionOptions))
+                _viewModel.Parameters.Resolution = null!;
+        };
+
+        _viewModel.LoadSavedUiState();
+
+        _viewModel.Parameters.Resolution.Should().Be("1440x2880");
+        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public void Resolution_SurvivesIdeogramToIdeogramModelSwitch_DespitePickerNullPush()
+    {
+        // Round 2 of the restart bug: the options swap synchronously nulls the value via the
+        // bound Pickers BEFORE the old code's membership check ran, so a still-valid choice
+        // was slammed to the first option on every model switch. The capture-before-swap fix
+        // must carry the user's pick across an Ideogram->Ideogram switch (same options list).
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(GeneratorViewModel.ResolutionOptions))
+                _viewModel.Parameters.Resolution = null!;
+        };
+        SelectIdeogramTurbo();
+        _viewModel.Parameters.Resolution = "1440x2880"; // user pick, persists once
+
+        var quality = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Ideogram.V4Quality);
+        _viewModel.ProviderFilter.SelectedModel = quality;
+
+        _viewModel.Parameters.Resolution.Should().Be("1440x2880", "the new model offers the same value");
+        _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880"), Times.Once,
+            "only the user pick persists; the switch must neither re-persist nor overwrite");
+    }
+
+    [Fact]
+    public void Resolution_SavedValueAdopted_WhenSwitchingToModelThatOffersIt()
+    {
+        // Mid-session sticky restore: coming from a model without resolutions, the saved
+        // user preference (not the first option) wins when the new model offers it.
+        _mockUiStateStore.Setup(s => s.LoadResolution()).Returns("1440x2880");
+
+        SelectIdeogramTurbo();
+
+        _viewModel.Parameters.Resolution.Should().Be("1440x2880");
+        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>()), Times.Never,
+            "adopting the saved value is a restore, not a user pick");
+    }
+
+    [Fact]
+    public void Resolution_DeferredNullPushOutsideSuppression_IsReverted()
+    {
+        // In-app, the WinUI ComboBox finishes its ItemsSource rebuild on a LATER dispatcher
+        // tick than the ResolutionOptions swap and pushes SelectedItem=null then — outside
+        // the RefreshCapabilities suppression window, where no flag can identify it. This is
+        // what wiped the resolution on every mid-session model switch (round 2 of the bug).
+        SelectIdeogramTurbo();
+        _viewModel.Parameters.Resolution = "1440x2880"; // user pick
+
+        _viewModel.Parameters.Resolution = null!; // the deferred platform push
+
+        _viewModel.Parameters.Resolution.Should().Be("1440x2880",
+            "an unsuppressed null while the model offers options is a binding artifact, never a user pick");
+        _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880"), Times.Once,
+            "the revert is a restore and must not double-persist");
+    }
+
+    [Fact]
+    public void EditorResolutionPick_WritesThroughToGenerator_AndPersists()
+    {
+        // The editor hands the resolution back via &ideogramResolution= only on Apply; a
+        // pick must ALSO reach the generator immediately so leaving via back navigation
+        // doesn't discard it.
+        SelectIdeogramTurbo();
+        var editor = new IdeogramStructureEditorViewModel(
+            Mock.Of<IJsonPromptFileService>(),
+            Mock.Of<IFileLauncher>(),
+            NullLogger<IdeogramStructureEditorViewModel>.Instance,
+            _viewModel);
+
+        editor.SelectedResolution = "1440x2880";
+
+        _viewModel.Parameters.Resolution.Should().Be("1440x2880");
+        _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880"), Times.Once);
+    }
+
+    [Fact]
+    public void EditorSeeding_DoesNotWriteBackToGenerator()
+    {
+        // Seeding reflects the generator's state; its Auto fallback for unknown values must
+        // not clobber the generator's choice just because the editor opened.
+        SelectIdeogramTurbo();
+        _viewModel.Parameters.Resolution = "1440x2880";
+        var editor = new IdeogramStructureEditorViewModel(
+            Mock.Of<IJsonPromptFileService>(),
+            Mock.Of<IFileLauncher>(),
+            NullLogger<IdeogramStructureEditorViewModel>.Instance,
+            _viewModel);
+
+        editor.SetIncomingResolution("999x999");
+
+        editor.SelectedResolution.Should().Be("Auto");
+        _viewModel.Parameters.Resolution.Should().Be("1440x2880");
+        _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880"), Times.Once,
+            "only the user's original pick persists");
+    }
 }

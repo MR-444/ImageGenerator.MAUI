@@ -106,6 +106,20 @@ public static class CrashLogger
             "ImageGenerator.MAUI.Infrastructure.External.*",
             final: false);
 
+        // Same for the persistence stores (UiStateStore Load/Persist sequences) and the
+        // ViewModels — together these trace who writes Parameters.Resolution in what order,
+        // which is the diagnostic for the saved-resolution-resets-on-restart class of bug.
+        config.AddRule(
+            NLog.LogLevel.Debug, NLog.LogLevel.Info,
+            fileTarget,
+            "ImageGenerator.MAUI.Infrastructure.Services.*",
+            final: false);
+        config.AddRule(
+            NLog.LogLevel.Debug, NLog.LogLevel.Info,
+            fileTarget,
+            "ImageGenerator.MAUI.Presentation.ViewModels.*",
+            final: false);
+
         LogManager.Configuration = config;
     }
 

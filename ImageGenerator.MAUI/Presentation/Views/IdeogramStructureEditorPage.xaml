@@ -1,0 +1,377 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:behaviors="clr-namespace:ImageGenerator.MAUI.Presentation.Behaviors"
+             xmlns:converters="clr-namespace:ImageGenerator.MAUI.Presentation.Converters"
+             xmlns:common="clr-namespace:ImageGenerator.MAUI.Presentation.Common"
+             xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
+             x:Class="ImageGenerator.MAUI.Presentation.Views.IdeogramStructureEditorPage"
+             x:DataType="vm:IdeogramStructureEditorViewModel"
+             Title="Ideogram structure editor"
+             Shell.NavBarIsVisible="True"
+             Padding="0">
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
+            <converters:InverseBoolConverter x:Key="InverseBool" />
+            <converters:ResolutionAspectRatioConverter x:Key="ResolutionAspectRatio" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="16">
+
+            <!-- Header: back + title -->
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <Button Grid.Column="0"
+                        Text="← Back"
+                        Command="{Binding CancelCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        VerticalOptions="Start"
+                        AutomationId="EditorBackButton" />
+                <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                    <Label Text="Structured prompt builder" Style="{StaticResource CardTitle}" />
+                    <Label Text="Build Ideogram V4's json_prompt visually. Apply writes it into the prompt box; Save exports a portable .json file."
+                           Style="{StaticResource HelperText}" />
+                </VerticalStackLayout>
+            </Grid>
+
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+
+                <!-- LEFT: form cards -->
+                <VerticalStackLayout Grid.Column="0" Spacing="16">
+
+                    <!-- CARD: Description -->
+                    <Border Style="{StaticResource Card}" VerticalOptions="Start">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Description" Style="{StaticResource CardTitle}" />
+                            <Label Text="High-level description (required, 1–2 sentences)" Style="{StaticResource FieldLabel}" />
+                            <Editor Text="{Binding HighLevelDescription}"
+                                    Placeholder="What the whole image shows…"
+                                    AutoSize="TextChanges"
+                                    MinimumHeightRequest="60"
+                                    AutomationId="EditorHighLevelEntry" />
+                            <Label Text="Background (required)" Style="{StaticResource FieldLabel}" />
+                            <Editor Text="{Binding Background}"
+                                    Placeholder="What fills the scene behind the elements…"
+                                    AutoSize="TextChanges"
+                                    MinimumHeightRequest="60"
+                                    AutomationId="EditorBackgroundEntry" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- CARD: Style (optional) -->
+                    <Border Style="{StaticResource Card}" VerticalOptions="Start">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Style" Style="{StaticResource CardTitle}" />
+                            <HorizontalStackLayout Spacing="8">
+                                <CheckBox IsChecked="{Binding IncludeStyle}" VerticalOptions="Center"
+                                          AutomationId="EditorIncludeStyleCheckBox" />
+                                <Label Text="Include a style description" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+
+                            <VerticalStackLayout Spacing="8" IsVisible="{Binding IncludeStyle}">
+                                <Label Text="Medium (required)" Style="{StaticResource FieldLabel}" />
+                                <Entry Text="{Binding Medium}" Placeholder="e.g. digital illustration, oil on canvas, photograph"
+                                       AutomationId="EditorMediumEntry" />
+                                <Label Text="Aesthetics" Style="{StaticResource FieldLabel}" />
+                                <Entry Text="{Binding Aesthetics}" Placeholder="overall look and feel" />
+                                <Label Text="Lighting" Style="{StaticResource FieldLabel}" />
+                                <Entry Text="{Binding Lighting}" Placeholder="e.g. golden hour, soft studio light" />
+
+                                <HorizontalStackLayout Spacing="8">
+                                    <CheckBox IsChecked="{Binding IsPhoto}" VerticalOptions="Center"
+                                              AutomationId="EditorIsPhotoCheckBox" />
+                                    <Label Text="Photographic (photo instead of art_style)" VerticalOptions="Center" />
+                                </HorizontalStackLayout>
+                                <VerticalStackLayout Spacing="4" IsVisible="{Binding IsArtStyle}">
+                                    <Label Text="Art style" Style="{StaticResource FieldLabel}" />
+                                    <Entry Text="{Binding ArtStyle}" Placeholder="e.g. art nouveau poster, ukiyo-e"
+                                           AutomationId="EditorArtStyleEntry" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4" IsVisible="{Binding IsPhoto}">
+                                    <Label Text="Photo style" Style="{StaticResource FieldLabel}" />
+                                    <Entry Text="{Binding PhotoStyle}" Placeholder="e.g. 35mm film, shallow depth of field"
+                                           AutomationId="EditorPhotoStyleEntry" />
+                                </VerticalStackLayout>
+
+                                <Label Text="Color palette (up to 16 × #RRGGBB, comma-separated)" Style="{StaticResource FieldLabel}" />
+                                <Entry Text="{Binding StylePaletteText}" Placeholder="#1E3A5F, #F4D58D"
+                                       AutomationId="EditorStylePaletteEntry" />
+                                <FlexLayout BindableLayout.ItemsSource="{Binding StylePaletteSwatches}"
+                                            Direction="Row" Wrap="Wrap"
+                                            AutomationId="EditorStyleSwatches">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="common:PaletteSwatch">
+                                            <Border BackgroundColor="{Binding Color}"
+                                                    WidthRequest="24" HeightRequest="24"
+                                                    Margin="0,4,6,0"
+                                                    Stroke="{AppThemeBinding Light={StaticResource SurfaceBorderLight}, Dark={StaticResource SurfaceBorderDark}}"
+                                                    StrokeThickness="1"
+                                                    SemanticProperties.Description="{Binding Hex}">
+                                                <Border.StrokeShape>
+                                                    <RoundRectangle CornerRadius="5" />
+                                                </Border.StrokeShape>
+                                                <Border.GestureRecognizers>
+                                                    <TapGestureRecognizer Tapped="OnStyleSwatchTapped" />
+                                                </Border.GestureRecognizers>
+                                            </Border>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </FlexLayout>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- CARD: Elements -->
+                    <Border Style="{StaticResource Card}" VerticalOptions="Start">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Elements" Style="{StaticResource CardTitle}" />
+                            <HorizontalStackLayout Spacing="8">
+                                <Button Text="Add object"
+                                        Command="{Binding AddObjElementCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        AutomationId="EditorAddObjButton" />
+                                <Button Text="Add text"
+                                        Command="{Binding AddTextElementCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        AutomationId="EditorAddTextButton" />
+                                <Button Text="Delete selected"
+                                        Command="{Binding DeleteSelectedElementCommand}"
+                                        Style="{StaticResource DangerButton}"
+                                        IsEnabled="{Binding HasSelectedElement}"
+                                        AutomationId="EditorDeleteElementButton" />
+                            </HorizontalStackLayout>
+
+                            <CollectionView ItemsSource="{Binding Elements}"
+                                            SelectionMode="Single"
+                                            SelectedItem="{Binding SelectedElement, Mode=TwoWay}"
+                                            MaximumHeightRequest="180"
+                                            AutomationId="EditorElementsList">
+                                <CollectionView.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ElementItemViewModel">
+                                        <Label Text="{Binding Summary}" Padding="8,6" LineBreakMode="TailTruncation" />
+                                    </DataTemplate>
+                                </CollectionView.ItemTemplate>
+                            </CollectionView>
+
+                            <!-- Selected element editor -->
+                            <VerticalStackLayout Spacing="8" IsVisible="{Binding HasSelectedElement}">
+                                <BoxView HeightRequest="1" Color="{AppThemeBinding Light={StaticResource SurfaceBorderLight}, Dark={StaticResource SurfaceBorderDark}}" />
+                                <Label Text="{Binding SelectedElement.Summary}" Style="{StaticResource FieldLabel}" />
+
+                                <Label Text="Description" Style="{StaticResource FieldLabel}" />
+                                <Entry Text="{Binding SelectedElement.Desc}" Placeholder="What this element is…"
+                                       AutomationId="EditorElementDescEntry" />
+
+                                <VerticalStackLayout Spacing="4" IsVisible="{Binding SelectedElement.IsText}">
+                                    <Label Text="Text to render" Style="{StaticResource FieldLabel}" />
+                                    <Entry Text="{Binding SelectedElement.Text}" Placeholder="The literal text in the image…"
+                                           AutomationId="EditorElementTextEntry" />
+                                </VerticalStackLayout>
+
+                                <Label Text="Palette (up to 5 × #RRGGBB, comma-separated)" Style="{StaticResource FieldLabel}" />
+                                <Entry Text="{Binding SelectedElement.PaletteText}" Placeholder="#FFFFFF"
+                                       AutomationId="EditorElementPaletteEntry" />
+                                <FlexLayout BindableLayout.ItemsSource="{Binding SelectedElement.Swatches}"
+                                            Direction="Row" Wrap="Wrap"
+                                            AutomationId="EditorElementSwatches">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="common:PaletteSwatch">
+                                            <Border BackgroundColor="{Binding Color}"
+                                                    WidthRequest="24" HeightRequest="24"
+                                                    Margin="0,4,6,0"
+                                                    Stroke="{AppThemeBinding Light={StaticResource SurfaceBorderLight}, Dark={StaticResource SurfaceBorderDark}}"
+                                                    StrokeThickness="1"
+                                                    SemanticProperties.Description="{Binding Hex}">
+                                                <Border.StrokeShape>
+                                                    <RoundRectangle CornerRadius="5" />
+                                                </Border.StrokeShape>
+                                                <Border.GestureRecognizers>
+                                                    <TapGestureRecognizer Tapped="OnElementSwatchTapped" />
+                                                </Border.GestureRecognizers>
+                                            </Border>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </FlexLayout>
+
+                                <HorizontalStackLayout Spacing="8">
+                                    <CheckBox IsChecked="{Binding SelectedElement.HasBbox}" VerticalOptions="Center"
+                                              AutomationId="EditorElementHasBboxCheckBox" />
+                                    <Label Text="Place with a bounding box" VerticalOptions="Center" />
+                                </HorizontalStackLayout>
+
+                                <VerticalStackLayout Spacing="4" IsVisible="{Binding SelectedElement.HasBbox}">
+                                    <Grid ColumnDefinitions="60,*,70" RowDefinitions="Auto,Auto,Auto,Auto"
+                                          ColumnSpacing="8" RowSpacing="4">
+                                        <Label Grid.Row="0" Grid.Column="0" Text="Top" VerticalOptions="Center" Style="{StaticResource HelperText}" />
+                                        <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="1000"
+                                                Value="{Binding SelectedElement.YMin, Mode=TwoWay}" />
+                                        <Entry Grid.Row="0" Grid.Column="2" Text="{Binding SelectedElement.YMin}" Keyboard="Numeric">
+                                            <Entry.Behaviors><behaviors:NumericOnlyBehavior /></Entry.Behaviors>
+                                        </Entry>
+
+                                        <Label Grid.Row="1" Grid.Column="0" Text="Left" VerticalOptions="Center" Style="{StaticResource HelperText}" />
+                                        <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="1000"
+                                                Value="{Binding SelectedElement.XMin, Mode=TwoWay}" />
+                                        <Entry Grid.Row="1" Grid.Column="2" Text="{Binding SelectedElement.XMin}" Keyboard="Numeric">
+                                            <Entry.Behaviors><behaviors:NumericOnlyBehavior /></Entry.Behaviors>
+                                        </Entry>
+
+                                        <Label Grid.Row="2" Grid.Column="0" Text="Bottom" VerticalOptions="Center" Style="{StaticResource HelperText}" />
+                                        <Slider Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="1000"
+                                                Value="{Binding SelectedElement.YMax, Mode=TwoWay}" />
+                                        <Entry Grid.Row="2" Grid.Column="2" Text="{Binding SelectedElement.YMax}" Keyboard="Numeric">
+                                            <Entry.Behaviors><behaviors:NumericOnlyBehavior /></Entry.Behaviors>
+                                        </Entry>
+
+                                        <Label Grid.Row="3" Grid.Column="0" Text="Right" VerticalOptions="Center" Style="{StaticResource HelperText}" />
+                                        <Slider Grid.Row="3" Grid.Column="1" Minimum="0" Maximum="1000"
+                                                Value="{Binding SelectedElement.XMax, Mode=TwoWay}" />
+                                        <Entry Grid.Row="3" Grid.Column="2" Text="{Binding SelectedElement.XMax}" Keyboard="Numeric">
+                                            <Entry.Behaviors><behaviors:NumericOnlyBehavior /></Entry.Behaviors>
+                                        </Entry>
+                                    </Grid>
+                                </VerticalStackLayout>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                </VerticalStackLayout>
+
+                <!-- RIGHT: canvas + actions -->
+                <VerticalStackLayout Grid.Column="1" Spacing="16">
+
+                    <!-- CARD: Canvas -->
+                    <Border Style="{StaticResource Card}" VerticalOptions="Start">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Layout (1000 × 1000 grid)" Style="{StaticResource CardTitle}" />
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="Target resolution" Style="{StaticResource FieldLabel}" />
+                                <Picker ItemsSource="{Binding ResolutionOptions}"
+                                        SelectedItem="{Binding SelectedResolution}"
+                                        ItemDisplayBinding="{Binding Path=., Converter={StaticResource ResolutionAspectRatio}, x:DataType='x:String'}"
+                                        MaximumWidthRequest="190"
+                                        HorizontalOptions="Start"
+                                        AutomationId="EditorResolutionPicker" />
+                            </VerticalStackLayout>
+                            <GraphicsView x:Name="StructureCanvas"
+                                          WidthRequest="{Binding CanvasWidthRequest}"
+                                          HeightRequest="{Binding CanvasHeightRequest}"
+                                          HorizontalOptions="Center"
+                                          StartInteraction="OnCanvasStartInteraction"
+                                          AutomationId="EditorCanvas" />
+                            <Label Text="The canvas mirrors the target resolution's aspect ratio (Auto shows a square — Ideogram picks the shape itself). Origin is top-left; coordinates are always 0–1000 per axis. Tap a box to select it, then position it with the sliders. Apply also hands the chosen resolution back to the generator."
+                                   Style="{StaticResource HelperText}"
+                                   MaximumWidthRequest="480" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- CARD: Actions -->
+                    <Border Style="{StaticResource Card}" VerticalOptions="Start">
+                        <VerticalStackLayout Spacing="12">
+                            <Button Text="Apply to prompt"
+                                    Command="{Binding ApplyCommand}"
+                                    Style="{StaticResource PrimaryButton}"
+                                    HorizontalOptions="Fill"
+                                    SemanticProperties.Description="Validate and write the compact JSON into the generator's prompt box"
+                                    AutomationId="EditorApplyButton" />
+                            <Button Text="Save JSON to file…"
+                                    Command="{Binding SaveToFileCommand}"
+                                    Style="{StaticResource SecondaryButton}"
+                                    HorizontalOptions="Fill"
+                                    SemanticProperties.Description="Validate and export the pretty-printed JSON to the json-prompts folder"
+                                    AutomationId="EditorSaveJsonButton" />
+                            <Button Text="Show in folder"
+                                    Command="{Binding ShowExportInFolderCommand}"
+                                    Style="{StaticResource SecondaryButton}"
+                                    HorizontalOptions="Start"
+                                    IsVisible="{Binding HasExportedPath}"
+                                    AutomationId="EditorShowExportButton" />
+
+                            <Label Text="{Binding StatusMessage}"
+                                   Style="{StaticResource StatusLabel}"
+                                   IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
+                                   LineBreakMode="WordWrap"
+                                   MaximumWidthRequest="480"
+                                   AutomationId="EditorStatusLabel">
+                                <Label.Triggers>
+                                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
+                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
+                                    </DataTrigger>
+                                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
+                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
+                                    </DataTrigger>
+                                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Warning}">
+                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
+                                    </DataTrigger>
+                                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Info}">
+                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusInfoLight}, Dark={StaticResource StatusInfoDark}}" />
+                                    </DataTrigger>
+                                </Label.Triggers>
+                            </Label>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- CARD: Color picker (shared by style + element palettes) -->
+                    <Border Style="{StaticResource Card}" VerticalOptions="Start">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Color picker" Style="{StaticResource CardTitle}" />
+                            <HorizontalStackLayout Spacing="12">
+                                <Border BackgroundColor="{Binding PickerPreviewColor}"
+                                        WidthRequest="48" HeightRequest="48"
+                                        Stroke="{AppThemeBinding Light={StaticResource SurfaceBorderLight}, Dark={StaticResource SurfaceBorderDark}}"
+                                        StrokeThickness="1"
+                                        AutomationId="PickerPreview">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="8" />
+                                    </Border.StrokeShape>
+                                </Border>
+                                <Label Text="{Binding PickerHex}"
+                                       FontAttributes="Bold"
+                                       VerticalOptions="Center"
+                                       AutomationId="PickerHexLabel" />
+                            </HorizontalStackLayout>
+
+                            <Grid ColumnDefinitions="16,*,40" RowDefinitions="Auto,Auto,Auto"
+                                  ColumnSpacing="8" RowSpacing="2">
+                                <Label Grid.Row="0" Grid.Column="0" Text="R" VerticalOptions="Center" Style="{StaticResource HelperText}" />
+                                <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="255"
+                                        Value="{Binding PickerRed, Mode=TwoWay}" />
+                                <Label Grid.Row="0" Grid.Column="2" Text="{Binding PickerRed}" VerticalOptions="Center" Style="{StaticResource HelperText}" />
+
+                                <Label Grid.Row="1" Grid.Column="0" Text="G" VerticalOptions="Center" Style="{StaticResource HelperText}" />
+                                <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="255"
+                                        Value="{Binding PickerGreen, Mode=TwoWay}" />
+                                <Label Grid.Row="1" Grid.Column="2" Text="{Binding PickerGreen}" VerticalOptions="Center" Style="{StaticResource HelperText}" />
+
+                                <Label Grid.Row="2" Grid.Column="0" Text="B" VerticalOptions="Center" Style="{StaticResource HelperText}" />
+                                <Slider Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="255"
+                                        Value="{Binding PickerBlue, Mode=TwoWay}" />
+                                <Label Grid.Row="2" Grid.Column="2" Text="{Binding PickerBlue}" VerticalOptions="Center" Style="{StaticResource HelperText}" />
+                            </Grid>
+
+                            <HorizontalStackLayout Spacing="8">
+                                <Button Text="Add to style palette"
+                                        Command="{Binding AddPickerColorToStyleCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        AutomationId="PickerAddStyleButton" />
+                                <Button Text="Add to selected element"
+                                        Command="{Binding AddPickerColorToElementCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        IsEnabled="{Binding HasSelectedElement}"
+                                        AutomationId="PickerAddElementButton" />
+                            </HorizontalStackLayout>
+
+                            <Label Text="Palette colors render as chips under the palette fields — tap a chip to remove it."
+                                   Style="{StaticResource HelperText}"
+                                   MaximumWidthRequest="480" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                </VerticalStackLayout>
+            </Grid>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

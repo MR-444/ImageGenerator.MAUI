@@ -8,6 +8,8 @@ public sealed class UiStateStore : IUiStateStore
 {
     private const string PromptKey = "imggen.last_prompt";
     private const string ModelKey = "imggen.last_model";
+    private const string UseJsonPromptKey = "imggen.use_json_prompt";
+    private const string ResolutionKey = "imggen.last_resolution";
 
     private readonly ILogger<UiStateStore> _logger;
     private readonly IPreferences _preferences;
@@ -42,6 +44,47 @@ public sealed class UiStateStore : IUiStateStore
     {
         _logger.LogDebug("UiStateStore.PersistModel({Value})", Quote(value));
         SafeSet(ModelKey, value);
+    }
+
+    public string? LoadResolution()
+    {
+        var v = SafeGet(ResolutionKey);
+        _logger.LogDebug("UiStateStore.LoadResolution -> {Value}", Quote(v));
+        return v;
+    }
+
+    public void PersistResolution(string value)
+    {
+        _logger.LogDebug("UiStateStore.PersistResolution({Value})", Quote(value));
+        SafeSet(ResolutionKey, value);
+    }
+
+    public bool LoadUseJsonPrompt()
+    {
+        try
+        {
+            var value = _preferences.Get(UseJsonPromptKey, false);
+            _logger.LogDebug("UiStateStore.LoadUseJsonPrompt -> {Value}", value);
+            return value;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Preferences.Get({Key}) failed", UseJsonPromptKey);
+            return false;
+        }
+    }
+
+    public void PersistUseJsonPrompt(bool value)
+    {
+        _logger.LogDebug("UiStateStore.PersistUseJsonPrompt({Value})", value);
+        try
+        {
+            _preferences.Set(UseJsonPromptKey, value);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Preferences.Set({Key}) failed", UseJsonPromptKey);
+        }
     }
 
     private static string Quote(string? v) => v is null ? "<null>" : $"\"{v}\"";

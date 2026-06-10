@@ -11,6 +11,7 @@ public class UiStateStoreTests
     // rather than a silent loss of persisted UI state across app launches.
     private const string PromptKey = "imggen.last_prompt";
     private const string ModelKey = "imggen.last_model";
+    private const string UseJsonPromptKey = "imggen.use_json_prompt";
 
     private readonly StubPreferences _preferences = new();
     private readonly UiStateStore _sut;
@@ -42,6 +43,55 @@ public class UiStateStoreTests
         _preferences.Seed(PromptKey, string.Empty);
 
         _sut.LoadPrompt().Should().BeNull();
+    }
+
+    [Fact]
+    public void LoadResolution_KeyMissing_ReturnsNull()
+    {
+        _sut.LoadResolution().Should().BeNull();
+    }
+
+    [Fact]
+    public void Resolution_RoundTripsThroughPreferences()
+    {
+        _sut.PersistResolution("1440x2880");
+
+        _sut.LoadResolution().Should().Be("1440x2880");
+    }
+
+    [Fact]
+    public void LoadUseJsonPrompt_KeyMissing_ReturnsFalse()
+    {
+        _sut.LoadUseJsonPrompt().Should().BeFalse();
+    }
+
+    [Fact]
+    public void UseJsonPrompt_RoundTripsThroughPreferences()
+    {
+        _sut.PersistUseJsonPrompt(true);
+        _sut.LoadUseJsonPrompt().Should().BeTrue();
+
+        _sut.PersistUseJsonPrompt(false);
+        _sut.LoadUseJsonPrompt().Should().BeFalse();
+    }
+
+    [Fact]
+    public void LoadUseJsonPrompt_GetThrows_SwallowedAndReturnsFalse()
+    {
+        _preferences.Seed(UseJsonPromptKey, true);
+        _preferences.ThrowOnGet = new InvalidOperationException("backend down");
+
+        _sut.LoadUseJsonPrompt().Should().BeFalse();
+    }
+
+    [Fact]
+    public void PersistUseJsonPrompt_SetThrows_IsSwallowed()
+    {
+        _preferences.ThrowOnSet = new InvalidOperationException("backend down");
+
+        var act = () => _sut.PersistUseJsonPrompt(true);
+
+        act.Should().NotThrow();
     }
 
     [Fact]

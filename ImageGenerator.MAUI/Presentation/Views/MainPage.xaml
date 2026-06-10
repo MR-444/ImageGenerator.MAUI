@@ -174,7 +174,13 @@
                                 SemanticProperties.Description="Fetch live model catalogs from Replicate and Pollinations. Replicate models require an API token; Pollinations refreshes anonymously."
                                 AutomationId="RefreshModelsButton" />
 
-                        <Editor Text="{Binding Parameters.Prompt}"
+                        <!-- One writer per direction: VM->view via OneWay binding, view->VM via the
+                             explicit TextChanged handler. The default TwoWay binding intermittently
+                             stopped pushing paste/clear/paste sequences into Parameters.Prompt on
+                             Windows, leaving validation (and generation!) on a stale prompt. -->
+                        <Editor x:Name="PromptEditor"
+                                Text="{Binding Parameters.Prompt, Mode=OneWay}"
+                                TextChanged="OnPromptTextChanged"
                                 Placeholder="Describe the image you want to generate…"
                                 AutoSize="TextChanges"
                                 MinimumHeightRequest="90"
@@ -188,6 +194,17 @@
                             </HorizontalStackLayout>
                             <Label Text="Send the prompt box as Ideogram structured JSON (must be valid JSON)."
                                    Style="{StaticResource HelperText}" />
+                            <Label Text="{Binding JsonPromptStateText}"
+                                   Style="{StaticResource HelperText}"
+                                   IsVisible="{Binding JsonPromptStateText, Converter={StaticResource NonEmptyStringToBool}}"
+                                   AutomationId="JsonPromptStateLabel" />
+                            <Button Text="Edit structure…"
+                                    Command="{Binding OpenIdeogramEditorCommand}"
+                                    Style="{StaticResource SecondaryButton}"
+                                    HorizontalOptions="Start"
+                                    Margin="0,6,0,0"
+                                    SemanticProperties.Description="Open the visual builder for Ideogram's structured JSON prompt"
+                                    AutomationId="EditStructureButton" />
                         </VerticalStackLayout>
 
                         <HorizontalStackLayout Spacing="8" IsVisible="{Binding Capabilities.PromptUpsampling}">

@@ -93,6 +93,12 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private bool _isValid;
 
+    // Live validity readout for structured-JSON mode, shown under the checkbox. Besides the
+    // direct feedback while pasting, it makes any view->VM prompt desync immediately visible
+    // (the label reflects what the VM actually holds, not what the Editor displays).
+    [ObservableProperty]
+    private string? _jsonPromptStateText;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SupportsCustomDimensions))]
     [NotifyPropertyChangedFor(nameof(SupportsResolution))]
@@ -111,6 +117,24 @@ public partial class GeneratorViewModel : ObservableObject
 
     // Persist suppression for Parameters.Model writes now lives on ProviderFilterCoordinator —
     // see ProviderFilter.SuppressModelPersist, set during ApplyCatalog / RestoreSelectedModel.
+
+    // Suppresses persisting UseJsonPrompt during programmatic writes (the RefreshCapabilities
+    // auto-clear on non-Ideogram models, the LoadSavedUiState restore) so a temporary model
+    // switch can't erase the user's saved toggle preference.
+    private bool _suppressJsonPromptPersist;
+
+    // Same idea for Parameters.Resolution: RefreshCapabilities slams it to the new model's
+    // first option whenever the current value isn't in the list — a capability fallback, not
+    // a user pick, so it must not overwrite the persisted choice.
+    private bool _suppressResolutionPersist;
+
+    // Last Resolution value that was a member of the then-current ResolutionOptions. Used to
+    // revert the WinUI ComboBox's DEFERRED null push: after an ItemsSource swap the platform
+    // picker finishes rebuilding on a later dispatcher tick and pushes SelectedItem=null —
+    // outside the suppression window, so flags can't catch it. (The model picker survives the
+    // identical push because OnSelectedModelChanged ignores null; this is Resolution's
+    // equivalent tolerance.)
+    private string _lastValidResolution = string.Empty;
 
     partial void OnCapabilitiesChanged(ModelCapabilities value) => InputImages.OnCapabilitiesChanged();
 
@@ -149,17 +173,49 @@ public partial class GeneratorViewModel : ObservableObject
             SetAspectRatioProgrammatically(target);
         }
 
-        ResolutionOptions = caps.Resolutions?.ToList() ?? [];
-        if (ResolutionOptions.Count > 0 && !ResolutionOptions.Contains(Parameters.Resolution))
+        // The options swap must sit INSIDE the persist-suppression window: replacing the
+        // ItemsSource makes the two-way-bound Pickers push SelectedItem=null into
+        // Parameters.Resolution synchronously whenever the old value isn't in the new list.
+        // Outside the window that push looked user-driven and persisted null — deleting the
+        // saved resolution before LoadSavedUiState could read it. (The model picker survives
+        // the same push only because OnSelectedModelChanged ignores null.)
+        _suppressResolutionPersist = true;
+        try
         {
-            Parameters.Resolution = ResolutionOptions[0];
+            // Capture BEFORE the swap: the Pickers' synchronous null push lands in
+            // Parameters.Resolution during the assignment below, so reading it afterwards
+            // would always see null and slam a still-valid choice to the first option.
+            var previousResolution = Parameters.Resolution;
+            ResolutionOptions = caps.Resolutions?.ToList() ?? [];
+            if (ResolutionOptions.Count > 0)
+            {
+                // Sticky resolution, mirroring the AR logic above: keep the current value if
+                // the new model offers it, else fall back to the persisted user choice, else
+                // the model's first option.
+                var savedResolution = _uiStateStore.LoadResolution();
+                var targetResolution =
+                    ResolutionOptions.Contains(previousResolution) ? previousResolution :
+                    savedResolution is not null && ResolutionOptions.Contains(savedResolution) ? savedResolution :
+                    ResolutionOptions[0];
+                _logger.LogDebug(
+                    "RefreshCapabilities({Model}): resolution prev=\"{Prev}\" saved=\"{Saved}\" -> \"{Target}\" ({Count} options)",
+                    modelValue, previousResolution, savedResolution, targetResolution, ResolutionOptions.Count);
+                Parameters.Resolution = targetResolution;
+            }
         }
+        finally { _suppressResolutionPersist = false; }
 
         // Models that hide the output-format picker (Ideogram) only emit PNG — pin the save format.
         if (!caps.OutputFormatSelectable) Parameters.OutputFormat = ImageOutputFormat.Png;
         // Clear the structured-JSON toggle when leaving an Ideogram model so a stale flag can't
-        // gate validation (or alter Build) on a model that has no such field.
-        if (!caps.IdeogramOptions) Parameters.UseJsonPrompt = false;
+        // gate validation (or alter Build) on a model that has no such field. Suppressed from
+        // persistence: this is a capability consequence, not a user preference change.
+        if (!caps.IdeogramOptions)
+        {
+            _suppressJsonPromptPersist = true;
+            try { Parameters.UseJsonPrompt = false; }
+            finally { _suppressJsonPromptPersist = false; }
+        }
 
         GptQualityOptions = caps.GptQualityOptions?.ToList() ?? [];
         GptBackgroundOptions = caps.GptBackgroundOptions?.ToList() ?? [];
@@ -208,8 +264,11 @@ public partial class GeneratorViewModel : ObservableObject
             ? true
             : !string.IsNullOrWhiteSpace(Parameters.ApiToken);
         // In Ideogram structured-JSON mode the prompt box must contain valid JSON.
-        var jsonOk = !(Capabilities.IdeogramOptions && Parameters.UseJsonPrompt)
-                     || IsValidJson(Parameters.Prompt);
+        var jsonModeActive = Capabilities.IdeogramOptions && Parameters.UseJsonPrompt;
+        var jsonOk = !jsonModeActive || IsValidJson(Parameters.Prompt);
+        JsonPromptStateText = jsonModeActive
+            ? jsonOk ? "Structured JSON: valid ✓" : "Structured JSON: not valid JSON"
+            : null;
         IsValid = tokenOk && !string.IsNullOrWhiteSpace(Parameters.Prompt) && jsonOk;
     }
 
@@ -314,6 +373,46 @@ public partial class GeneratorViewModel : ObservableObject
                     break;
                 case nameof(ImageGenerationParameters.UseJsonPrompt):
                     ValidateParameters();
+                    if (!_suppressJsonPromptPersist) _uiStateStore.PersistUseJsonPrompt(_parameters.UseJsonPrompt);
+                    break;
+                case nameof(ImageGenerationParameters.Resolution):
+                    // Revert the deferred null push (see _lastValidResolution). Unsuppressed
+                    // null/empty while the model still offers options is never a user pick —
+                    // the Pickers only offer list members.
+                    if (!_suppressResolutionPersist
+                        && string.IsNullOrEmpty(_parameters.Resolution)
+                        && ResolutionOptions.Contains(_lastValidResolution))
+                    {
+                        _logger.LogDebug(
+                            "Resolution null push reverted -> \"{Value}\"", _lastValidResolution);
+                        _suppressResolutionPersist = true;
+                        try { _parameters.Resolution = _lastValidResolution; }
+                        finally { _suppressResolutionPersist = false; }
+                        break;
+                    }
+
+                    if (!string.IsNullOrEmpty(_parameters.Resolution)
+                        && ResolutionOptions.Contains(_parameters.Resolution))
+                    {
+                        _lastValidResolution = _parameters.Resolution;
+                    }
+
+                    // Membership guard: only a value the current model actually offers can be
+                    // a user pick. Binding artifacts (the Pickers pushing null on ItemsSource
+                    // attach/swap) must never overwrite the saved choice.
+                    var resolutionPersistable = !_suppressResolutionPersist
+                        && !string.IsNullOrEmpty(_parameters.Resolution)
+                        && ResolutionOptions.Contains(_parameters.Resolution);
+                    _logger.LogDebug(
+                        "Resolution changed -> \"{Value}\" (suppressed={Suppressed}, inOptions={InOptions}, persisting={Persisting})",
+                        _parameters.Resolution,
+                        _suppressResolutionPersist,
+                        ResolutionOptions.Contains(_parameters.Resolution ?? string.Empty),
+                        resolutionPersistable);
+                    if (resolutionPersistable)
+                    {
+                        _uiStateStore.PersistResolution(_parameters.Resolution!);
+                    }
                     break;
                 case nameof(ImageGenerationParameters.Model):
                     ProviderFilter.SyncSelectionFromParameters(_parameters.Model);
@@ -478,6 +577,23 @@ public partial class GeneratorViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task OpenIdeogramEditorAsync()
+    {
+        // Hand the current prompt box content to the editor so an applied structured prompt
+        // round-trips (re-open → same boxes). Same Shell.Current guard as OpenGalleryAsync.
+        try
+        {
+            var json = Uri.EscapeDataString(Parameters.Prompt ?? string.Empty);
+            var resolution = Uri.EscapeDataString(Parameters.Resolution ?? string.Empty);
+            await Shell.Current.GoToAsync($"ideogram-editor?json={json}&resolution={resolution}");
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Couldn't open the structure editor: {ex.Message}", StatusKind.Error);
+        }
+    }
+
+    [RelayCommand]
     private async Task RefreshModelsAsync()
     {
         // Pollinations refresh is anonymous and doesn't need the Replicate token, so don't
@@ -534,6 +650,33 @@ public partial class GeneratorViewModel : ObservableObject
         if (!string.IsNullOrEmpty(savedModel))
         {
             ProviderFilter.RestoreSelectedModel(savedModel);
+        }
+
+        // Restore the resolution after the model: RestoreSelectedModel ran RefreshCapabilities,
+        // which both populated ResolutionOptions for the saved model and slammed the value to
+        // the first option. Only adopt a saved value the current model actually offers.
+        // Suppressed from persistence — a restore isn't a user pick.
+        var savedResolution = _uiStateStore.LoadResolution();
+        var adoptResolution = !string.IsNullOrEmpty(savedResolution) && ResolutionOptions.Contains(savedResolution);
+        _logger.LogDebug(
+            "LoadSavedUiState: resolution saved=\"{Saved}\" current=\"{Current}\" adopting={Adopting}",
+            savedResolution, Parameters.Resolution, adoptResolution);
+        if (adoptResolution)
+        {
+            _suppressResolutionPersist = true;
+            try { Parameters.Resolution = savedResolution!; }
+            finally { _suppressResolutionPersist = false; }
+        }
+
+        // Restore the structured-JSON toggle LAST: the model restore above has settled
+        // Capabilities, and the toggle only means anything on an Ideogram model — restoring
+        // it blindly would re-check the box on a model whose Build has no json_prompt field.
+        // Suppress persistence: a restore isn't a user preference change.
+        if (Capabilities.IdeogramOptions && _uiStateStore.LoadUseJsonPrompt())
+        {
+            _suppressJsonPromptPersist = true;
+            try { Parameters.UseJsonPrompt = true; }
+            finally { _suppressJsonPromptPersist = false; }
         }
     }
 

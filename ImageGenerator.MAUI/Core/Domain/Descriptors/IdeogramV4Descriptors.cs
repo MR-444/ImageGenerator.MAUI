@@ -37,6 +37,10 @@ public abstract class IdeogramV4Descriptor : IPayloadBuilder, ICapabilityProvide
         "1024x3072", "3072x1024"
     ];
 
+    // The structure editor offers the same resolution choice on its canvas card, so the
+    // single source of truth for the V4 list lives here.
+    public static IReadOnlyList<string> AllResolutions => IdeogramResolutions;
+
     // AspectRatio is hidden, but RefreshCapabilities indexes AspectRatios[0], so keep it non-empty.
     private static readonly string[] AspectRatios = ["1:1"];
 

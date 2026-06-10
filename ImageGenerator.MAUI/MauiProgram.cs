@@ -46,10 +46,13 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
-        // NLog config (file target + Infrastructure.External.* Debug rule) was set up by
+        // NLog config (file target + the namespace Debug rules) was set up by
         // CrashLogger.Install() above; here we just route MEL through NLog so every
         // ILogger<T> resolved from DI lands in the same physical app.log.
-        builder.Logging.ClearProviders().AddNLog();
+        // SetMinimumLevel(Trace) is required for the Debug rules to ever fire: MEL's own
+        // default filter (Information) would drop LogDebug calls before NLog sees them —
+        // the NLog rules, not MEL, are the intended filtering layer.
+        builder.Logging.ClearProviders().SetMinimumLevel(LogLevel.Trace).AddNLog();
         // 1) Add the Refit client
         builder.Services.AddRefitClient<IReplicateApi>("https://api.replicate.com");
 
@@ -104,6 +107,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IGalleryService>(_ => new GalleryService());
         builder.Services.AddSingleton<IFileLauncher, FileLauncher>();
         builder.Services.AddSingleton<IClipboardService, ClipboardService>();
+        builder.Services.AddSingleton<IJsonPromptFileService, JsonPromptFileService>();
 
         // 3a) VM collaborators carved out of the original god-class GeneratorViewModel (M1).
         builder.Services.AddSingleton<IApiTokenStore, ApiTokenStore>();
@@ -122,12 +126,14 @@ public static class MauiProgram
         builder.Services.AddSingleton<GeneratorViewModel>();
         builder.Services.AddTransient<GalleryViewModel>();
         builder.Services.AddTransient<GalleryItemDetailViewModel>();
+        builder.Services.AddTransient<IdeogramStructureEditorViewModel>();
 
         // 4) Register MainPage so it (and its constructor) can be injected. See the
         //    Singleton rationale above the GeneratorViewModel registration.
         builder.Services.AddSingleton<MainPage>();
         builder.Services.AddTransient<GalleryPage>();
         builder.Services.AddTransient<GalleryItemDetailPage>();
+        builder.Services.AddTransient<IdeogramStructureEditorPage>();
 
         return builder.Build();
     }

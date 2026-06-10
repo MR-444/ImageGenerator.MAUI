@@ -12,6 +12,8 @@ using WinDataPackageOperation = Windows.ApplicationModel.DataTransfer.DataPackag
 namespace ImageGenerator.MAUI.Presentation.Views;
 
 [QueryProperty(nameof(AddInputPath), "addInput")]
+[QueryProperty(nameof(IdeogramJson), "ideogramJson")]
+[QueryProperty(nameof(IdeogramResolution), "ideogramResolution")]
 public partial class MainPage
 {
     private readonly GeneratorViewModel _viewModel;
@@ -30,6 +32,37 @@ public partial class MainPage
             // Fire-and-forget: AddAsInputAsync sets a status message internally and never
             // throws past its own catch. Awaiting from a property setter isn't possible.
             _ = _viewModel.InputImages.AddAsInputAsync(path);
+        }
+    }
+
+    /// <summary>
+    /// Set by Shell when the structure editor's Apply navigates back with
+    /// "//MainPage?ideogramJson=…". The compact JSON string becomes the prompt and the
+    /// structured-JSON toggle turns on so IdeogramV4Descriptor.Build ships it as json_prompt.
+    /// Named IdeogramJson (not Json) to dodge a XAML-compile name collision — see NavPath.
+    /// </summary>
+    public string? IdeogramJson
+    {
+        set
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            _viewModel.Parameters.Prompt = Uri.UnescapeDataString(value);
+            _viewModel.Parameters.UseJsonPrompt = true;
+        }
+    }
+
+    /// <summary>
+    /// The resolution chosen on the structure editor's canvas card, handed back together
+    /// with the JSON. Guarded against anything not in the current model's picker options.
+    /// </summary>
+    public string? IdeogramResolution
+    {
+        set
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            var resolution = Uri.UnescapeDataString(value);
+            if (_viewModel.ResolutionOptions.Contains(resolution))
+                _viewModel.Parameters.Resolution = resolution;
         }
     }
 
@@ -61,6 +94,14 @@ public partial class MainPage
         {
             _logger.LogWarning(ex, "MainPage.{Op} failed", "OnAppearing");
         }
+    }
+
+    // The view->VM half of the prompt Editor's split binding (see the XAML comment). Pushing
+    // the platform text explicitly survives the WinUI TwoWay-binding dropout seen after
+    // paste/clear/paste; the [ObservableProperty] equality check suppresses echo loops.
+    private void OnPromptTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        _viewModel.Parameters.Prompt = e.NewTextValue ?? string.Empty;
     }
 
     // Code-behind because RelativeSource lookups inside a CollectionView.ItemTemplate
