@@ -79,11 +79,6 @@ public static class ComfyUiWorkflowPatcher
         List<(string Id, string ClassType, JsonObject Inputs)> nodes, string prompt)
     {
         var builders = nodes.Where(n => n.ClassType == PromptBuilderClass).ToList();
-        if (builders.Count == 0)
-            throw new InvalidOperationException(
-                $"This workflow has no {PromptBuilderClass} node to receive the structured JSON — "
-                + "uncheck 'Structured JSON prompt' or pick an Ideogram workflow.");
-
         foreach (var (_, _, inputs) in builders)
         {
             // Overwrites a wired link if present — the whole point is that the app's JSON
@@ -91,7 +86,40 @@ public static class ComfyUiWorkflowPatcher
             inputs["import_json"] = prompt;
             inputs["import_mode"] = "always";
         }
-        return $"import_json on {builders.Count} {PromptBuilderClass} node(s)";
+
+        // The builder can be wired as a mere VIEWER (its prompt output feeding only a preview)
+        // while the conditioning comes from a CLIPTextEncode whose text is a frozen caption-
+        // JSON literal — the user's workflow_MR export has exactly that shape. Replace every
+        // such JSON literal too; non-JSON literals (plain/negative prompts) stay untouched.
+        var jsonLiteralEncodes = nodes
+            .Where(n => n.ClassType == TextEncodeClass
+                        && n.Inputs["text"]?.GetValueKind() == JsonValueKind.String
+                        && LooksLikeJsonObject(n.Inputs["text"]!.GetValue<string>()))
+            .ToList();
+        foreach (var (_, _, inputs) in jsonLiteralEncodes)
+        {
+            inputs["text"] = prompt;
+        }
+
+        if (builders.Count == 0 && jsonLiteralEncodes.Count == 0)
+            throw new InvalidOperationException(
+                $"This workflow has no {PromptBuilderClass} node and no caption-JSON "
+                + $"{TextEncodeClass} literal to receive the structured JSON — uncheck "
+                + "'Structured JSON prompt' or pick an Ideogram workflow.");
+
+        return $"import_json on {builders.Count} {PromptBuilderClass} node(s)"
+               + $" + text on {jsonLiteralEncodes.Count} JSON-literal {TextEncodeClass} node(s)";
+    }
+
+    private static bool LooksLikeJsonObject(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || !text.TrimStart().StartsWith('{')) return false;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(text);
+            return doc.RootElement.ValueKind == JsonValueKind.Object;
+        }
+        catch (JsonException) { return false; }
     }
 
     private static string PatchPlainPrompt(

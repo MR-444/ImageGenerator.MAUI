@@ -10,7 +10,9 @@ namespace ImageGenerator.MAUI.Tests.Core.Domain.ComfyUi;
 public class ComfyUiWorkflowPatcherTests
 {
     // Shape mirrors the user's "Ideogram workflow_MR" API export: a ResolutionSelector feeding
-    // the builder via links, import_json WIRED (link), a RandomNoise seed, and a SaveImage.
+    // the builder via links, import_json WIRED (link), a RandomNoise seed, a SaveImage — and,
+    // crucially, the builder acting as a VIEWER while the REAL prompt is a frozen caption-JSON
+    // literal on a flattened-subgraph CLIPTextEncode ("98:24").
     private const string IdeogramTemplate =
         """
         {
@@ -24,8 +26,20 @@ public class ComfyUiWorkflowPatcherTests
                                "background": "old background" } },
           "190": { "class_type": "KSampler",
                    "inputs": { "seed": 42, "steps": 28 } },
+          "98:24": { "class_type": "CLIPTextEncode",
+                     "inputs": { "text": "{ \"high_level_description\": \"OLD caption\" }",
+                                 "clip": ["98:14", 0] } },
           "200": { "class_type": "SaveImage",
                    "inputs": { "images": ["162", 0], "filename_prefix": "Ideogram4" } }
+        }
+        """;
+
+    // No literal text anywhere — every encoder is link-driven.
+    private const string LinkOnlyTemplate =
+        """
+        {
+          "2": { "class_type": "CLIPTextEncode", "inputs": { "text": ["9", 0] } },
+          "3": { "class_type": "KSampler", "inputs": { "seed": 7 } }
         }
         """;
 
@@ -54,6 +68,40 @@ public class ComfyUiWorkflowPatcherTests
         builder["import_json"]!.GetValue<string>().Should().Be("""{"high_level_description":"x"}""");
         builder["import_mode"]!.GetValue<string>().Should().Be("always");
         result.PromptTargetDescription.Should().Contain("Ideogram4PromptBuilderKJ");
+    }
+
+    [Fact]
+    public void JsonMode_AlsoReplacesCaptionJsonLiteralTextEncodes()
+    {
+        // The live-bug shape: the builder is a viewer; the conditioning comes from the frozen
+        // caption-JSON literal on the flattened-subgraph CLIPTextEncode. It must be replaced.
+        var result = ComfyUiWorkflowPatcher.Patch(
+            IdeogramTemplate, Request(prompt: """{"high_level_description":"NEW"}""", json: true));
+
+        var graph = JsonNode.Parse(result.GraphJson)!;
+        graph["98:24"]!["inputs"]!["text"]!.GetValue<string>()
+            .Should().Be("""{"high_level_description":"NEW"}""");
+        graph["98:24"]!["inputs"]!["clip"]!.GetValueKind().Should().Be(JsonValueKind.Array);
+        result.PromptTargetDescription.Should().Contain("1 JSON-literal CLIPTextEncode");
+    }
+
+    [Fact]
+    public void JsonMode_LeavesPlainTextLiteralEncodesAlone()
+    {
+        const string withNegative =
+            """
+            {
+              "5":   { "class_type": "Ideogram4PromptBuilderKJ", "inputs": { "import_mode": "when empty" } },
+              "7":   { "class_type": "CLIPTextEncode", "inputs": { "text": "blurry, lowres" } }
+            }
+            """;
+
+        var result = ComfyUiWorkflowPatcher.Patch(
+            withNegative, Request(prompt: """{"a":1}""", json: true));
+
+        var graph = JsonNode.Parse(result.GraphJson)!;
+        graph["7"]!["inputs"]!["text"]!.GetValue<string>().Should().Be("blurry, lowres",
+            "non-JSON literals (plain/negative prompts) are not caption sinks");
     }
 
     [Fact]
@@ -90,11 +138,20 @@ public class ComfyUiWorkflowPatcherTests
     [Fact]
     public void PlainMode_OnLinkDrivenWorkflow_ThrowsAndPointsToJsonMode()
     {
-        // The Ideogram template has no CLIPTextEncode with a literal text at all.
-        var act = () => ComfyUiWorkflowPatcher.Patch(IdeogramTemplate, Request(json: false));
+        var act = () => ComfyUiWorkflowPatcher.Patch(LinkOnlyTemplate, Request(json: false));
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*Structured JSON*");
+    }
+
+    [Fact]
+    public void PlainMode_OnTheIdeogramTemplate_PatchesTheCaptionLiteral()
+    {
+        // The subgraph encode's literal IS the prompt sink, JSON or not — plain mode hits it.
+        var result = ComfyUiWorkflowPatcher.Patch(IdeogramTemplate, Request(prompt: "plain", json: false));
+
+        JsonNode.Parse(result.GraphJson)!["98:24"]!["inputs"]!["text"]!
+            .GetValue<string>().Should().Be("plain");
     }
 
     [Fact]
