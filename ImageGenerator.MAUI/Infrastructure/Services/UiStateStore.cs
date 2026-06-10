@@ -10,6 +10,7 @@ public sealed class UiStateStore : IUiStateStore
     private const string ModelKey = "imggen.last_model";
     private const string UseJsonPromptKey = "imggen.use_json_prompt";
     private const string ResolutionKey = "imggen.last_resolution";
+    private const string ComfyUiResolutionKey = "imggen.last_resolution.comfyui";
     private const string ComfyUiBaseUrlKey = "imggen.comfyui_base_url";
 
     private readonly ILogger<UiStateStore> _logger;
@@ -47,18 +48,26 @@ public sealed class UiStateStore : IUiStateStore
         SafeSet(ModelKey, value);
     }
 
-    public string? LoadResolution()
+    public string? LoadResolution(string? modelId)
     {
-        var v = SafeGet(ResolutionKey);
-        _logger.LogDebug("UiStateStore.LoadResolution -> {Value}", Quote(v));
+        var key = ResolutionKeyFor(modelId);
+        var v = SafeGet(key);
+        _logger.LogDebug("UiStateStore.LoadResolution[{Key}] -> {Value}", key, Quote(v));
         return v;
     }
 
-    public void PersistResolution(string value)
+    public void PersistResolution(string value, string? modelId)
     {
-        _logger.LogDebug("UiStateStore.PersistResolution({Value})", Quote(value));
-        SafeSet(ResolutionKey, value);
+        var key = ResolutionKeyFor(modelId);
+        _logger.LogDebug("UiStateStore.PersistResolution[{Key}]({Value})", key, Quote(value));
+        SafeSet(key, value);
     }
+
+    // ComfyUI's MP presets and the other models' "WxH"-style strings are different option
+    // families — each gets its own key so model switches restore that family's last pick.
+    // The legacy key stays the default family, keeping previously saved data valid.
+    private static string ResolutionKeyFor(string? modelId) =>
+        Shared.Constants.ModelConstants.ComfyUi.IsId(modelId) ? ComfyUiResolutionKey : ResolutionKey;
 
     public string? LoadComfyUiBaseUrl()
     {

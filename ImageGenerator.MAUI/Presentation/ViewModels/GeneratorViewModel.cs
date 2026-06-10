@@ -202,9 +202,9 @@ public partial class GeneratorViewModel : ObservableObject
             if (ResolutionOptions.Count > 0)
             {
                 // Sticky resolution, mirroring the AR logic above: keep the current value if
-                // the new model offers it, else fall back to the persisted user choice, else
-                // the model's first option.
-                var savedResolution = _uiStateStore.LoadResolution();
+                // the new model offers it, else fall back to the persisted user choice (of the
+                // NEW model's option family), else the model's first option.
+                var savedResolution = _uiStateStore.LoadResolution(modelValue);
                 var targetResolution =
                     ResolutionOptions.Contains(previousResolution) ? previousResolution :
                     savedResolution is not null && ResolutionOptions.Contains(savedResolution) ? savedResolution :
@@ -427,7 +427,7 @@ public partial class GeneratorViewModel : ObservableObject
                         resolutionPersistable);
                     if (resolutionPersistable)
                     {
-                        _uiStateStore.PersistResolution(_parameters.Resolution!);
+                        _uiStateStore.PersistResolution(_parameters.Resolution!, _parameters.Model);
                     }
                     break;
                 case nameof(ImageGenerationParameters.Model):
@@ -616,14 +616,27 @@ public partial class GeneratorViewModel : ObservableObject
         // round-trips (re-open → same boxes). Same Shell.Current guard as OpenGalleryAsync.
         try
         {
-            var json = Uri.EscapeDataString(Parameters.Prompt ?? string.Empty);
-            var resolution = Uri.EscapeDataString(Parameters.Resolution ?? string.Empty);
-            await Shell.Current.GoToAsync($"ideogram-editor?json={json}&resolution={resolution}");
+            await Shell.Current.GoToAsync(BuildEditorRoute());
         }
         catch (Exception ex)
         {
             SetStatus($"Couldn't open the structure editor: {ex.Message}", StatusKind.Error);
         }
+    }
+
+    /// <summary>
+    /// The editor hand-off route. On a ComfyUI workflow the output shape lives in
+    /// Parameters.AspectRatio (ResolutionSelector combo string), so that is what seeds the
+    /// editor's picker; everywhere else it's the resolution. Internal: tests pin the shape
+    /// without Shell, mirroring the editor's BuildApplyRoute seam.
+    /// </summary>
+    internal string BuildEditorRoute()
+    {
+        var json = Uri.EscapeDataString(Parameters.Prompt ?? string.Empty);
+        var shape = ModelConstants.ComfyUi.IsId(Parameters.Model)
+            ? Parameters.AspectRatio
+            : Parameters.Resolution;
+        return $"ideogram-editor?json={json}&resolution={Uri.EscapeDataString(shape ?? string.Empty)}";
     }
 
     [RelayCommand]
@@ -697,7 +710,7 @@ public partial class GeneratorViewModel : ObservableObject
         // which both populated ResolutionOptions for the saved model and slammed the value to
         // the first option. Only adopt a saved value the current model actually offers.
         // Suppressed from persistence — a restore isn't a user pick.
-        var savedResolution = _uiStateStore.LoadResolution();
+        var savedResolution = _uiStateStore.LoadResolution(Parameters.Model);
         var adoptResolution = !string.IsNullOrEmpty(savedResolution) && ResolutionOptions.Contains(savedResolution);
         _logger.LogDebug(
             "LoadSavedUiState: resolution saved=\"{Saved}\" current=\"{Current}\" adopting={Adopting}",

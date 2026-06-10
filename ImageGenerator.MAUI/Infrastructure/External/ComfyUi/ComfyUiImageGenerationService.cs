@@ -103,6 +103,10 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
             var promptId = await QueuePromptAsync(httpClient, baseUri, patched.GraphJson, cancellationToken);
             if (promptId.Error is not null) return Fail(promptId.Error);
 
+            // The HttpClient/Polly per-request logging is blackholed below Warning
+            // (CrashLogger) — these two INFO lines carry the run timeline instead.
+            _logger.LogInformation("ComfyUI queued PromptId={PromptId}", promptId.Value);
+
             var entry = await PollHistoryAsync(httpClient, baseUri, promptId.Value!, cancellationToken);
 
             if (entry.Status?.StatusStr == "error"
@@ -123,6 +127,9 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
             {
                 return Fail("ComfyUI completed but produced no output images — does the workflow contain a SaveImage node?");
             }
+
+            _logger.LogInformation(
+                "ComfyUI finished PromptId={PromptId}, downloading {Filename}", promptId.Value, image.Filename);
 
             var bytes = await DownloadImageAsync(httpClient, baseUri, image, cancellationToken);
             if (bytes.Length < MinValidImageBytes)

@@ -270,4 +270,138 @@ public class ComfyUiWorkflowPatcherTests
         graph["200"]!["inputs"]!["filename_prefix"]!.GetValue<string>().Should().Be("Ideogram4");
         graph["200"]!["inputs"]!["images"]!.GetValueKind().Should().Be(JsonValueKind.Array);
     }
+
+    // ---- %date% expansion in filename_prefix --------------------------------------------
+    // The browser frontend expands %date:FORMAT% at queue time; the SERVER takes the prefix
+    // literally and the ':' inside an unexpanded token is path-invalid on Windows (the live
+    // WinError 267 failure). Fixed timestamp exercises zero-padding on M/d/h/m/s.
+
+    private static readonly DateTimeOffset FixedNow =
+        new(2026, 6, 9, 7, 5, 4, TimeSpan.Zero);
+
+    private static string PatchPrefix(string prefix)
+    {
+        var template =
+            $$"""
+            {
+              "6":   { "class_type": "CLIPTextEncode", "inputs": { "text": "x" } },
+              "200": { "class_type": "SaveImage",
+                       "inputs": { "images": ["162", 0], "filename_prefix": {{JsonSerializer.Serialize(prefix)}} } }
+            }
+            """;
+        var result = ComfyUiWorkflowPatcher.Patch(template, Request(), FixedNow);
+        return JsonNode.Parse(result.GraphJson)!["200"]!["inputs"]!["filename_prefix"]!.GetValue<string>();
+    }
+
+    [Fact]
+    public void FilenamePrefix_DateToken_ExpandsWithInjectedTimestamp()
+    {
+        // The user's real workflow_MR prefix shape.
+        PatchPrefix("%date:yyyy-MM%/Ideogram4_%date:hhmmss%")
+            .Should().Be("2026-06/Ideogram4_070504");
+    }
+
+    [Fact]
+    public void FilenamePrefix_DateToken_AllFormatChars_PadCorrectly()
+    {
+        PatchPrefix("%date:yyyy yy MM M dd d hh h mm m ss s%")
+            .Should().Be("2026 26 06 6 09 9 07 7 05 5 04 4");
+    }
+
+    [Fact]
+    public void FilenamePrefix_DateToken_HhIsTwentyFourHourPadded()
+    {
+        var evening = new DateTimeOffset(2026, 6, 10, 21, 14, 49, TimeSpan.Zero);
+        var template =
+            """
+            {
+              "6":   { "class_type": "CLIPTextEncode", "inputs": { "text": "x" } },
+              "200": { "class_type": "SaveImage",
+                       "inputs": { "filename_prefix": "Ideogram4_%date:hhmmss%" } }
+            }
+            """;
+        var result = ComfyUiWorkflowPatcher.Patch(template, Request(), evening);
+
+        // Matches the frozen "Ideogram4_211449" stamp observed in the live export.
+        JsonNode.Parse(result.GraphJson)!["200"]!["inputs"]!["filename_prefix"]!
+            .GetValue<string>().Should().Be("Ideogram4_211449");
+    }
+
+    [Fact]
+    public void FilenamePrefix_BareDateToken_UsesDefaultFormat()
+    {
+        PatchPrefix("img_%date%").Should().Be("img_20260609070504");
+    }
+
+    [Fact]
+    public void FilenamePrefix_MultipleTokens_AllExpanded()
+    {
+        PatchPrefix("%date:yyyy%/%date:MM%/%date:dd%").Should().Be("2026/06/09");
+    }
+
+    [Fact]
+    public void FilenamePrefix_UnknownSpecChars_PassThroughVerbatim()
+    {
+        PatchPrefix("%date:yyyy_MM~dd%").Should().Be("2026_06~09");
+    }
+
+    [Fact]
+    public void FilenamePrefix_UnterminatedToken_IsLeftVerbatim()
+    {
+        PatchPrefix("img_%date:yyyy").Should().Be("img_%date:yyyy");
+    }
+
+    [Fact]
+    public void FilenamePrefix_ExpandedResult_ContainsNoPercentOrColon()
+    {
+        // The WinError 267 guard: nothing path-invalid may survive expansion.
+        var expanded = PatchPrefix("%date:yyyy-MM%/Ideogram4_%date:hhmmss%");
+        expanded.Should().NotContain("%").And.NotContain(":");
+    }
+
+    [Fact]
+    public void FilenamePrefix_LinkValue_IsLeftUntouched()
+    {
+        const string template =
+            """
+            {
+              "6":   { "class_type": "CLIPTextEncode", "inputs": { "text": "x" } },
+              "200": { "class_type": "SaveImage", "inputs": { "filename_prefix": ["9", 0] } }
+            }
+            """;
+        var result = ComfyUiWorkflowPatcher.Patch(template, Request(), FixedNow);
+
+        JsonNode.Parse(result.GraphJson)!["200"]!["inputs"]!["filename_prefix"]!
+            .GetValueKind().Should().Be(JsonValueKind.Array);
+        result.PromptTargetDescription.Should().NotContain("%date%");
+    }
+
+    [Fact]
+    public void FilenamePrefix_WithoutToken_IsUnchangedAndNoNoteEmitted()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(IdeogramTemplate, Request(json: true), FixedNow);
+
+        JsonNode.Parse(result.GraphJson)!["200"]!["inputs"]!["filename_prefix"]!
+            .GetValue<string>().Should().Be("Ideogram4");
+        result.PromptTargetDescription.Should().NotContain("%date%");
+    }
+
+    [Fact]
+    public void DateExpansion_AppliesToEveryNodeWithFilenamePrefix_AndNotesTheCount()
+    {
+        const string template =
+            """
+            {
+              "6":   { "class_type": "CLIPTextEncode", "inputs": { "text": "x" } },
+              "200": { "class_type": "SaveImage", "inputs": { "filename_prefix": "%date:yyyy%/a" } },
+              "201": { "class_type": "SaveImage", "inputs": { "filename_prefix": "%date:yyyy%/b" } }
+            }
+            """;
+        var result = ComfyUiWorkflowPatcher.Patch(template, Request(), FixedNow);
+
+        var graph = JsonNode.Parse(result.GraphJson)!;
+        graph["200"]!["inputs"]!["filename_prefix"]!.GetValue<string>().Should().Be("2026/a");
+        graph["201"]!["inputs"]!["filename_prefix"]!.GetValue<string>().Should().Be("2026/b");
+        result.PromptTargetDescription.Should().Contain("%date% expanded on 2 filename_prefix input(s)");
+    }
 }

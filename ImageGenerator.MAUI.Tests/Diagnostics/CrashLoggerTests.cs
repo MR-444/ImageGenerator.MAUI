@@ -61,6 +61,27 @@ public class CrashLoggerTests : IDisposable
     }
 
     [Fact]
+    public void HttpClientAndPollyInfoChatter_IsSuppressed_WarningsStillLand()
+    {
+        // A ComfyUI run polls every 2 s and each poll emits 5-6 INFO lines from the
+        // HttpClient pipeline + Polly (~900 lines/run). The blackhole rules drop them
+        // below Warning; warnings and errors must still reach the file.
+        LogManager.GetLogger("System.Net.Http.HttpClient.comfyui.LogicalHandler")
+            .Info("poll-noise-info");
+        LogManager.GetLogger("Polly").Info("polly-noise-info");
+        LogManager.GetLogger("System.Net.Http.HttpClient.comfyui.LogicalHandler")
+            .Warn("http-warning-survives");
+        LogManager.GetLogger("Polly").Warn("polly-warning-survives");
+
+        LogManager.Flush(TimeSpan.FromSeconds(1));
+        var content = File.ReadAllText(_logPath);
+        content.Should().NotContain("poll-noise-info");
+        content.Should().NotContain("polly-noise-info");
+        content.Should().Contain("http-warning-survives");
+        content.Should().Contain("polly-warning-survives");
+    }
+
+    [Fact]
     public void Log_WritesSourceAndExceptionMessage()
     {
         CrashLogger.Log("TestSource", new InvalidOperationException("hello-from-test"));

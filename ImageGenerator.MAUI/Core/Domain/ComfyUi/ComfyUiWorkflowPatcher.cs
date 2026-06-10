@@ -27,7 +27,7 @@ public static class ComfyUiWorkflowPatcher
     private const string TextEncodeClass = "CLIPTextEncode";
     private const string ResolutionSelectorClass = "ResolutionSelector";
 
-    public static ComfyUiPatchResult Patch(string templateJson, ComfyUiRequest request)
+    public static ComfyUiPatchResult Patch(string templateJson, ComfyUiRequest request, DateTimeOffset? now = null)
     {
         if (JsonNode.Parse(templateJson) is not JsonObject root)
             throw new InvalidOperationException("The workflow file does not contain a JSON object.");
@@ -49,10 +49,11 @@ public static class ComfyUiWorkflowPatcher
 
         var seedNodeIds = PatchSeeds(nodes, request.Seed);
         var resolutionNote = PatchResolution(nodes, request.AspectRatio, request.Megapixels);
+        var dateNote = PatchFilenamePrefixDates(nodes, now ?? DateTimeOffset.Now);
 
         return new ComfyUiPatchResult(
             root.ToJsonString(),
-            promptTarget + resolutionNote,
+            promptTarget + resolutionNote + dateNote,
             seedNodeIds);
     }
 
@@ -179,4 +180,112 @@ public static class ComfyUiWorkflowPatcher
         }
         return $"; resolution on {selectors.Count} ResolutionSelector node(s)";
     }
+
+    private static string PatchFilenamePrefixDates(
+        List<(string Id, string ClassType, JsonObject Inputs)> nodes, DateTimeOffset now)
+    {
+        // ComfyUI's %date:FORMAT% tokens are expanded by the BROWSER frontend at queue time;
+        // the server takes filename_prefix literally, and the ':' inside an unexpanded token
+        // is path-invalid on Windows (SaveImage fails with WinError 267). Expand them here so
+        // raw API exports keep their dated server subfolders when queued by the app.
+        var expanded = 0;
+        foreach (var (_, _, inputs) in nodes)
+        {
+            if (inputs["filename_prefix"]?.GetValueKind() != JsonValueKind.String) continue;
+
+            var text = inputs["filename_prefix"]!.GetValue<string>();
+            var replaced = ExpandDateTokens(text, now);
+            if (replaced != text)
+            {
+                inputs["filename_prefix"] = replaced;
+                expanded++;
+            }
+        }
+        return expanded == 0 ? string.Empty : $"; %date% expanded on {expanded} filename_prefix input(s)";
+    }
+
+    private static string ExpandDateTokens(string text, DateTimeOffset now)
+    {
+        var start = text.IndexOf("%date", StringComparison.Ordinal);
+        if (start < 0) return text;
+
+        var result = new System.Text.StringBuilder(text.Length);
+        var pos = 0;
+        while (pos < text.Length)
+        {
+            var tokenStart = text.IndexOf("%date", pos, StringComparison.Ordinal);
+            if (tokenStart < 0)
+            {
+                result.Append(text, pos, text.Length - pos);
+                break;
+            }
+            result.Append(text, pos, tokenStart - pos);
+
+            var afterDate = tokenStart + "%date".Length;
+            if (afterDate < text.Length && text[afterDate] == '%')
+            {
+                // Bare %date% — the frontend's default format.
+                result.Append(FormatDateSpec("yyyyMMddhhmmss", now));
+                pos = afterDate + 1;
+            }
+            else if (afterDate < text.Length && text[afterDate] == ':'
+                     && text.IndexOf('%', afterDate + 1) is var specEnd && specEnd >= 0)
+            {
+                result.Append(FormatDateSpec(text[(afterDate + 1)..specEnd], now));
+                pos = specEnd + 1;
+            }
+            else
+            {
+                // Unterminated token — leave verbatim rather than guess.
+                result.Append(text, tokenStart, text.Length - tokenStart);
+                pos = text.Length;
+            }
+        }
+        return result.ToString();
+    }
+
+    private static string FormatDateSpec(string spec, DateTimeOffset now)
+    {
+        // The frontend's format chars; "hh" is 24-hour. Positional scan, longest token first,
+        // so already-substituted digits can never be re-matched (unlike sequential Replace).
+        var result = new System.Text.StringBuilder(spec.Length + 8);
+        var tokens = DateTokens(now);
+        var pos = 0;
+        while (pos < spec.Length)
+        {
+            var matched = false;
+            foreach (var (token, value) in tokens)
+            {
+                if (string.CompareOrdinal(spec, pos, token, 0, token.Length) == 0)
+                {
+                    result.Append(value);
+                    pos += token.Length;
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched)
+            {
+                result.Append(spec[pos]);
+                pos++;
+            }
+        }
+        return result.ToString();
+    }
+
+    private static (string Token, string Value)[] DateTokens(DateTimeOffset now) =>
+    [
+        ("yyyy", now.Year.ToString("D4")),
+        ("yy", (now.Year % 100).ToString("D2")),
+        ("MM", now.Month.ToString("D2")),
+        ("M", now.Month.ToString()),
+        ("dd", now.Day.ToString("D2")),
+        ("d", now.Day.ToString()),
+        ("hh", now.Hour.ToString("D2")),
+        ("h", now.Hour.ToString()),
+        ("mm", now.Minute.ToString("D2")),
+        ("m", now.Minute.ToString()),
+        ("ss", now.Second.ToString("D2")),
+        ("s", now.Second.ToString()),
+    ];
 }

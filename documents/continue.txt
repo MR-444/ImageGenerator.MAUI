@@ -102,6 +102,43 @@ NEXT FEATURE — ComfyUI as a local provider (plan next context)
     "Generate activated" appears, fix by moving focus off the button.
     Multi-image output support itself stays parked above on its own merits.
 
+    TEST ROUND 2 (2026-06-10 ~22:51-23:07, pid 4120) — diagnostics worked,
+    five fixes shipped as the follow-up bundle (commit pending below):
+      - Both runs failed server-side: re-exported workflow carries the RAW
+        %date:yyyy-MM% filename_prefix token; the ComfyUI SERVER never
+        expands %date% (frontend-only) and the ':' is path-invalid on
+        Windows (WinError 267). Earlier exports worked only because they
+        froze the EXPANDED text at export time ("2026-06/Ideogram4_211449",
+        21:14:49 = export moment). FIX: patcher expands %date:SPEC% (and
+        bare %date%) in every literal filename_prefix input, frontend
+        format chars yyyy yy MM M dd d hh(24h) h mm m ss s, injected-clock
+        testable (Patch gained optional DateTimeOffset? now).
+      - GHOST CONFIRMED AGAIN: "Generate activated JobCount=1" 22:51:38,
+        18 s after startup, stale persisted prompt, user did NOT click.
+        FIX (diagnostics): WinUI platform hooks on GenerateButton —
+        PointerPressed (AddHandler handledEventsToo:true, WinUI marks it
+        handled internally), PreviewKeyDown, GotFocus(Debug) — classify
+        every activation as pointer/keyboard/programmatic. Views.* Debug
+        NLog rule added.
+      - Editor↔ComfyUI mismatch: editor picker was hardcoded to Ideogram's
+        23 WxH strings. FIX: AR mode — on comfyui/* the picker lists the
+        generator's 8 ResolutionSelector combo strings, canvas parses the
+        "W:H" prefix (CanvasCoordinateMapper.TryParseAspectRatioLabel),
+        picks write through to Parameters.AspectRatio; BuildEditorRoute
+        sends the AR for comfyui models. Ideogram behavior unchanged.
+      - Model switches slammed resolution to options[0] (format families
+        differ). FIX: per-family persistence — UiStateStore keys
+        imggen.last_resolution (legacy, default family) vs
+        imggen.last_resolution.comfyui; Load/Persist take the model id.
+      - app.log ~900 lines/run: HttpClient.*/Polly INFO chatter. FIX:
+        final no-target NLog blackhole rules (Trace..Info; Warn+ still
+        lands; NOTE LoggingRule's string ctor sets RuleName, NOT the
+        pattern — use LoggerNamePattern) + two service INFO lines
+        ("ComfyUI queued PromptId", "finished, downloading <file>").
+    594 -> 640 tests green; Debug + Release rebuilt, 0 warnings.
+    USER ACTION on next smoke: none for the workflow file — the raw-token
+    export now works as-is via the app.
+
     HOW A COMFYUI WORKFLOW IS USED VIA API (the user's question):
       A workflow is the node graph built on ComfyUI's canvas. For API use it is
       exported ONCE as "API format" JSON (Workflow menu > Export (API); on old

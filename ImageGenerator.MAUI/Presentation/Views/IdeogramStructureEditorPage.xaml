@@ -287,7 +287,7 @@
                         <VerticalStackLayout Spacing="8">
                             <Label Text="Layout (1000 × 1000 grid)" Style="{StaticResource CardTitle}" />
                             <VerticalStackLayout Spacing="4">
-                                <Label Text="Target resolution" Style="{StaticResource FieldLabel}" />
+                                <Label Text="{Binding ResolutionPickerTitle}" Style="{StaticResource FieldLabel}" />
                                 <Picker ItemsSource="{Binding ResolutionOptions}"
                                         SelectedItem="{Binding SelectedResolution}"
                                         ItemDisplayBinding="{Binding Path=., Converter={StaticResource ResolutionAspectRatio}, x:DataType='x:String'}"

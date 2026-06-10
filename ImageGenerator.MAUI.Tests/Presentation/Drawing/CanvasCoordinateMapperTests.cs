@@ -88,6 +88,38 @@ public class CanvasCoordinateMapperTests
     }
 
     [Theory]
+    [InlineData("1:1 (Square)", true, 1, 1)]
+    [InlineData("3:2 (Photo)", true, 3, 2)]
+    [InlineData("4:3 (Standard)", true, 4, 3)]
+    [InlineData("16:9 (Widescreen)", true, 16, 9)]
+    [InlineData("21:9 (Ultrawide)", true, 21, 9)]
+    [InlineData("2:3 (Portrait Photo)", true, 2, 3)]
+    [InlineData("3:4 (Portrait Standard)", true, 3, 4)]
+    [InlineData("9:16 (Portrait Widescreen)", true, 9, 16)]
+    [InlineData("3:4", true, 3, 4)]               // bare ratio, no label
+    [InlineData("Auto", false, 0, 0)]
+    [InlineData("1440x2880", false, 0, 0)]        // resolution string, not an AR label
+    [InlineData("", false, 0, 0)]
+    [InlineData(null, false, 0, 0)]
+    [InlineData(":4 (x)", false, 0, 0)]
+    [InlineData("3: (x)", false, 0, 0)]
+    [InlineData("0:4 (x)", false, 0, 0)]
+    public void TryParseAspectRatioLabel_ParsesComboStrings_AndRejectsGarbage(
+        string? input, bool expectedOk, int expectedWidth, int expectedHeight)
+    {
+        // The eight true cases are the ResolutionSelector combo strings verbatim
+        // (FallbackComfyUiDescriptor) — the editor's AR-mode canvas parses exactly these.
+        var ok = CanvasCoordinateMapper.TryParseAspectRatioLabel(input, out var width, out var height);
+
+        ok.Should().Be(expectedOk);
+        if (expectedOk)
+        {
+            width.Should().Be(expectedWidth);
+            height.Should().Be(expectedHeight);
+        }
+    }
+
+    [Theory]
     [InlineData(200, 100, true)]   // top-left corner (inclusive)
     [InlineData(400, 300, true)]   // bottom-right corner (inclusive)
     [InlineData(300, 200, true)]   // interior

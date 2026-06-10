@@ -77,7 +77,49 @@ public partial class MainPage
         _viewModel = viewModel;
         _logger = logger;
         BindingContext = viewModel;
+
+        // Activation forensics: a generation once started without any conscious click
+        // (app.log 2026-06-10 22:51:38). These platform hooks classify every "Generate
+        // activated" line as pointer vs keyboard vs neither (= programmatic).
+        _generatePointerPressedHandler = new Microsoft.UI.Xaml.Input.PointerEventHandler(OnGenerateButtonPointerPressed);
+        GenerateButton.HandlerChanged += OnGenerateButtonHandlerChanged;
     }
+
+    // --- Generate-button activation instrumentation (diagnostics only, never sets Handled) ---
+
+    private readonly Microsoft.UI.Xaml.Input.PointerEventHandler _generatePointerPressedHandler;
+    private Microsoft.UI.Xaml.Controls.Button? _generatePlatformButton;
+
+    private void OnGenerateButtonHandlerChanged(object? sender, EventArgs e)
+    {
+        // Detach from any previous platform button on handler swaps so logs never double.
+        if (_generatePlatformButton is not null)
+        {
+            _generatePlatformButton.RemoveHandler(
+                Microsoft.UI.Xaml.UIElement.PointerPressedEvent, _generatePointerPressedHandler);
+            _generatePlatformButton.PreviewKeyDown -= OnGenerateButtonPreviewKeyDown;
+            _generatePlatformButton.GotFocus -= OnGenerateButtonGotFocus;
+            _generatePlatformButton = null;
+        }
+
+        if (GenerateButton.Handler?.PlatformView is not Microsoft.UI.Xaml.Controls.Button platform) return;
+        _generatePlatformButton = platform;
+        // WinUI's Button marks PointerPressed as handled internally — only
+        // handledEventsToo:true ever sees it; a plain += never fires.
+        platform.AddHandler(
+            Microsoft.UI.Xaml.UIElement.PointerPressedEvent, _generatePointerPressedHandler, handledEventsToo: true);
+        platform.PreviewKeyDown += OnGenerateButtonPreviewKeyDown;
+        platform.GotFocus += OnGenerateButtonGotFocus;
+    }
+
+    private void OnGenerateButtonPointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        => _logger.LogInformation("GenerateButton PointerPressed Device={Device}", e.Pointer.PointerDeviceType);
+
+    private void OnGenerateButtonPreviewKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+        => _logger.LogInformation("GenerateButton PreviewKeyDown Key={Key}", e.Key);
+
+    private void OnGenerateButtonGotFocus(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        => _logger.LogDebug("GenerateButton GotFocus State={State}", _generatePlatformButton?.FocusState);
 
     protected override async void OnAppearing()
     {

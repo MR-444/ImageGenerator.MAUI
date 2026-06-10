@@ -31,6 +31,19 @@ public class IdeogramStructureEditorViewModelTests
     }
 
     [Fact]
+    public void Editor_WithoutGenerator_UsesIdeogramResolutionMode()
+    {
+        // Stand-alone construction (tests, future hosts) must keep the classic behavior:
+        // Ideogram's resolution list, "Target resolution" title, Auto default.
+        var sut = CreateSut();
+
+        sut.IsAspectRatioMode.Should().BeFalse();
+        sut.ResolutionPickerTitle.Should().Be("Target resolution");
+        sut.ResolutionOptions.Should().Contain("Auto").And.Contain("1440x2880");
+        sut.SelectedResolution.Should().Be("Auto");
+    }
+
+    [Fact]
     public void LoadFromJson_ValidStructuredPrompt_PopulatesAllFields()
     {
         var sut = CreateSut();

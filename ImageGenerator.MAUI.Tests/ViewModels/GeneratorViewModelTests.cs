@@ -1293,7 +1293,7 @@ public class GeneratorViewModelTests
 
         _viewModel.Parameters.Resolution = "1440x2880";
 
-        _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880"), Times.Once);
+        _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880", It.IsAny<string?>()), Times.Once);
     }
 
     [Fact]
@@ -1302,7 +1302,7 @@ public class GeneratorViewModelTests
         SelectIdeogramTurbo(); // forces Resolution -> "Auto" because the prior value isn't Ideogram-valid
 
         _viewModel.Parameters.Resolution.Should().Be("Auto");
-        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>()), Times.Never,
+        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>(), It.IsAny<string?>()), Times.Never,
             "a capability fallback isn't a user pick and must not overwrite the saved choice");
     }
 
@@ -1310,20 +1310,20 @@ public class GeneratorViewModelTests
     public void LoadSavedUiState_RestoresResolution_WhenSavedModelOffersIt()
     {
         _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ModelConstants.Ideogram.V4Turbo);
-        _mockUiStateStore.Setup(s => s.LoadResolution()).Returns("1440x2880");
+        _mockUiStateStore.Setup(s => s.LoadResolution(It.IsAny<string?>())).Returns("1440x2880");
 
         _viewModel.LoadSavedUiState();
 
         _viewModel.Parameters.Resolution.Should().Be("1440x2880");
         // The restore itself must not re-persist.
-        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>()), Times.Never);
+        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>(), It.IsAny<string?>()), Times.Never);
     }
 
     [Fact]
     public void LoadSavedUiState_IgnoresResolution_NotOfferedByTheModel()
     {
         _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ModelConstants.Ideogram.V4Turbo);
-        _mockUiStateStore.Setup(s => s.LoadResolution()).Returns("999x999");
+        _mockUiStateStore.Setup(s => s.LoadResolution(It.IsAny<string?>())).Returns("999x999");
 
         _viewModel.LoadSavedUiState();
 
@@ -1361,7 +1361,7 @@ public class GeneratorViewModelTests
 
         SelectIdeogramTurbo();
 
-        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>()), Times.Never,
+        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>(), It.IsAny<string?>()), Times.Never,
             "a binding artifact must never overwrite the saved resolution");
         _viewModel.Parameters.Resolution.Should().Be("Auto", "the capability fallback recovers from the null push");
     }
@@ -1379,7 +1379,7 @@ public class GeneratorViewModelTests
 
         SelectIdeogramTurbo();
 
-        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>()), Times.Never);
+        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>(), It.IsAny<string?>()), Times.Never);
     }
 
     [Fact]
@@ -1392,7 +1392,7 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.Resolution = null!;
         _viewModel.Parameters.Resolution = "999x999";
 
-        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>()), Times.Never);
+        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>(), It.IsAny<string?>()), Times.Never);
     }
 
     [Fact]
@@ -1402,7 +1402,7 @@ public class GeneratorViewModelTests
         // the bound Pickers push null mid-swap, and the saved value must still both survive
         // in storage and win in Parameters.
         _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ModelConstants.Ideogram.V4Turbo);
-        _mockUiStateStore.Setup(s => s.LoadResolution()).Returns("1440x2880");
+        _mockUiStateStore.Setup(s => s.LoadResolution(It.IsAny<string?>())).Returns("1440x2880");
         _viewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(GeneratorViewModel.ResolutionOptions))
@@ -1412,7 +1412,7 @@ public class GeneratorViewModelTests
         _viewModel.LoadSavedUiState();
 
         _viewModel.Parameters.Resolution.Should().Be("1440x2880");
-        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>()), Times.Never);
+        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>(), It.IsAny<string?>()), Times.Never);
     }
 
     [Fact]
@@ -1434,7 +1434,7 @@ public class GeneratorViewModelTests
         _viewModel.ProviderFilter.SelectedModel = quality;
 
         _viewModel.Parameters.Resolution.Should().Be("1440x2880", "the new model offers the same value");
-        _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880"), Times.Once,
+        _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880", It.IsAny<string?>()), Times.Once,
             "only the user pick persists; the switch must neither re-persist nor overwrite");
     }
 
@@ -1443,13 +1443,74 @@ public class GeneratorViewModelTests
     {
         // Mid-session sticky restore: coming from a model without resolutions, the saved
         // user preference (not the first option) wins when the new model offers it.
-        _mockUiStateStore.Setup(s => s.LoadResolution()).Returns("1440x2880");
+        _mockUiStateStore.Setup(s => s.LoadResolution(It.IsAny<string?>())).Returns("1440x2880");
 
         SelectIdeogramTurbo();
 
         _viewModel.Parameters.Resolution.Should().Be("1440x2880");
-        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>()), Times.Never,
+        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>(), It.IsAny<string?>()), Times.Never,
             "adopting the saved value is a restore, not a user pick");
+    }
+
+    // Resolution persistence is per option-format FAMILY (ComfyUI MP presets vs everything
+    // else): the store keys on the model id so Ideogram <-> ComfyUI switches restore each
+    // family's last pick instead of slamming to the first option.
+
+    [Fact]
+    public void Resolution_ComfyPick_PersistsUnderTheComfyModelsFamily()
+    {
+        SelectComfyWorkflow();
+
+        _viewModel.Parameters.Resolution = "2.0 MP";
+
+        _mockUiStateStore.Verify(s => s.PersistResolution("2.0 MP", ComfyModelId), Times.Once);
+    }
+
+    [Fact]
+    public void RefreshCapabilities_LoadsSavedResolution_ForTheNewModelsFamily()
+    {
+        _mockUiStateStore.Setup(s => s.LoadResolution(ComfyModelId)).Returns("2.0 MP");
+
+        SelectComfyWorkflow();
+
+        _viewModel.Parameters.Resolution.Should().Be("2.0 MP",
+            "the switch must consult the NEW model's family, not the legacy key");
+    }
+
+    [Fact]
+    public void Resolution_SwitchIdeogramToComfyAndBack_RestoresEachFamilysChoice()
+    {
+        _mockUiStateStore
+            .Setup(s => s.LoadResolution(It.Is<string?>(m => ModelConstants.ComfyUi.IsId(m))))
+            .Returns("2.0 MP");
+        _mockUiStateStore
+            .Setup(s => s.LoadResolution(It.Is<string?>(m => !ModelConstants.ComfyUi.IsId(m))))
+            .Returns("1440x2880");
+
+        SelectComfyWorkflow();
+        SelectIdeogramTurbo();
+        _viewModel.Parameters.Resolution.Should().Be("1440x2880");
+
+        _viewModel.ProviderFilter.SelectedModel =
+            _viewModel.ProviderFilter.AllModels.First(m => m.Value == ComfyModelId);
+        _viewModel.Parameters.Resolution.Should().Be("2.0 MP");
+
+        SelectIdeogramTurbo();
+        _viewModel.Parameters.Resolution.Should().Be("1440x2880");
+    }
+
+    [Fact]
+    public void LoadSavedUiState_RestoresComfyResolution_WhenSavedModelIsComfy()
+    {
+        SelectComfyWorkflow(); // catalog contains the workflow entry
+        SelectIdeogramTurbo(); // move away so the restore below actually switches back
+        _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ComfyModelId);
+        _mockUiStateStore.Setup(s => s.LoadResolution(ComfyModelId)).Returns("2.0 MP");
+
+        _viewModel.LoadSavedUiState();
+
+        _viewModel.Parameters.Model.Should().Be(ComfyModelId);
+        _viewModel.Parameters.Resolution.Should().Be("2.0 MP");
     }
 
     [Fact]
@@ -1466,7 +1527,7 @@ public class GeneratorViewModelTests
 
         _viewModel.Parameters.Resolution.Should().Be("1440x2880",
             "an unsuppressed null while the model offers options is a binding artifact, never a user pick");
-        _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880"), Times.Once,
+        _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880", It.IsAny<string?>()), Times.Once,
             "the revert is a restore and must not double-persist");
     }
 
@@ -1486,7 +1547,7 @@ public class GeneratorViewModelTests
         editor.SelectedResolution = "1440x2880";
 
         _viewModel.Parameters.Resolution.Should().Be("1440x2880");
-        _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880"), Times.Once);
+        _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880", It.IsAny<string?>()), Times.Once);
     }
 
     [Fact]
@@ -1506,7 +1567,121 @@ public class GeneratorViewModelTests
 
         editor.SelectedResolution.Should().Be("Auto");
         _viewModel.Parameters.Resolution.Should().Be("1440x2880");
-        _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880"), Times.Once,
+        _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880", It.IsAny<string?>()), Times.Once,
             "only the user's original pick persists");
+    }
+
+    // --- Editor AR mode (host model = ComfyUI workflow) -----------------------------------
+    // On comfyui/* the output shape is the ResolutionSelector's aspect-ratio combo string,
+    // not an Ideogram "WxH" resolution: the editor's picker mirrors the generator's AR
+    // options and writes through to Parameters.AspectRatio.
+
+    private IdeogramStructureEditorViewModel CreateEditor() => new(
+        Mock.Of<IJsonPromptFileService>(),
+        Mock.Of<IFileLauncher>(),
+        NullLogger<IdeogramStructureEditorViewModel>.Instance,
+        _viewModel);
+
+    [Fact]
+    public void Editor_ComfyModel_ListsGeneratorAspectRatioOptions_AndAspectRatioTitle()
+    {
+        SelectComfyWorkflow();
+
+        var editor = CreateEditor();
+
+        editor.IsAspectRatioMode.Should().BeTrue();
+        editor.ResolutionPickerTitle.Should().Be("Aspect ratio");
+        editor.ResolutionOptions.Should().BeEquivalentTo(_viewModel.AspectRatioOptions);
+    }
+
+    [Fact]
+    public void Editor_IdeogramModel_StaysInResolutionMode()
+    {
+        SelectIdeogramTurbo();
+
+        var editor = CreateEditor();
+
+        editor.IsAspectRatioMode.Should().BeFalse();
+        editor.ResolutionPickerTitle.Should().Be("Target resolution");
+        editor.ResolutionOptions.Should().Contain("1440x2880");
+    }
+
+    [Fact]
+    public void Editor_ComfyModel_SeedsSelectionFromIncomingAspectRatio_WithoutWritingBack()
+    {
+        SelectComfyWorkflow();
+        _viewModel.Parameters.AspectRatio = "3:4 (Portrait Standard)";
+        var editor = CreateEditor();
+
+        editor.SetIncomingResolution("3:4 (Portrait Standard)");
+
+        editor.SelectedResolution.Should().Be("3:4 (Portrait Standard)");
+        _viewModel.Parameters.AspectRatio.Should().Be("3:4 (Portrait Standard)");
+    }
+
+    [Fact]
+    public void Editor_ComfyModel_UnknownIncomingValue_FallsBackToFirstAspectRatio()
+    {
+        SelectComfyWorkflow();
+        var editor = CreateEditor();
+
+        editor.SetIncomingResolution("1440x2880"); // an Ideogram resolution is foreign here
+
+        editor.SelectedResolution.Should().Be(_viewModel.AspectRatioOptions[0]);
+    }
+
+    [Fact]
+    public void Editor_ComfyModel_AspectRatioPick_WritesThroughToGeneratorAspectRatio()
+    {
+        SelectComfyWorkflow();
+        var editor = CreateEditor();
+
+        editor.SelectedResolution = "9:16 (Portrait Widescreen)";
+
+        _viewModel.Parameters.AspectRatio.Should().Be("9:16 (Portrait Widescreen)");
+    }
+
+    [Fact]
+    public void Editor_ComfyModel_AspectRatioPick_NeverTouchesGeneratorResolution()
+    {
+        SelectComfyWorkflow();
+        _viewModel.Parameters.Resolution = "2.0 MP"; // user's MP pick must survive
+        var editor = CreateEditor();
+
+        editor.SelectedResolution = "9:16 (Portrait Widescreen)";
+
+        _viewModel.Parameters.Resolution.Should().Be("2.0 MP");
+    }
+
+    [Fact]
+    public void Editor_ComfyModel_CanvasShapeFollowsAspectRatioLabel()
+    {
+        SelectComfyWorkflow();
+        var editor = CreateEditor();
+
+        editor.SelectedResolution = "3:4 (Portrait Standard)";
+
+        editor.CanvasHeightRequest.Should().Be(IdeogramStructureEditorViewModel.CanvasFitBox);
+        editor.CanvasWidthRequest.Should().BeApproximately(
+            IdeogramStructureEditorViewModel.CanvasFitBox * 3 / 4, 0.001);
+    }
+
+    [Fact]
+    public void BuildEditorRoute_ComfyModel_CarriesTheAspectRatio()
+    {
+        SelectComfyWorkflow();
+        _viewModel.Parameters.AspectRatio = "3:4 (Portrait Standard)";
+
+        _viewModel.BuildEditorRoute().Should().Contain(
+            $"resolution={Uri.EscapeDataString("3:4 (Portrait Standard)")}");
+    }
+
+    [Fact]
+    public void BuildEditorRoute_IdeogramModel_CarriesTheResolution()
+    {
+        SelectIdeogramTurbo();
+        _viewModel.Parameters.Resolution = "1440x2880";
+
+        _viewModel.BuildEditorRoute().Should().Contain("resolution=1440x2880");
     }
 }

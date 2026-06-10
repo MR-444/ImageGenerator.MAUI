@@ -61,6 +61,28 @@ public static class CanvasCoordinateMapper
                && width > 0 && height > 0;
     }
 
+    /// <summary>
+    /// Parses the leading "W:H" of a ComfyUI ResolutionSelector combo label
+    /// (e.g. "3:4 (Portrait Standard)" → 3, 4). False for blanks or anything malformed —
+    /// callers fall back to a square canvas then.
+    /// </summary>
+    public static bool TryParseAspectRatioLabel(string? label, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+        if (string.IsNullOrWhiteSpace(label)) return false;
+
+        var space = label.IndexOf(' ');
+        var ratio = space > 0 ? label[..space] : label;
+
+        var colon = ratio.IndexOf(':');
+        if (colon <= 0 || colon >= ratio.Length - 1) return false;
+
+        return int.TryParse(ratio[..colon], out width)
+               && int.TryParse(ratio[(colon + 1)..], out height)
+               && width > 0 && height > 0;
+    }
+
     /// <summary>True when the grid point lies inside (or on the edge of) the bbox.</summary>
     public static bool BboxContains(int[] bbox, int gridX, int gridY) =>
         bbox.Length == 4 && gridY >= bbox[0] && gridY <= bbox[2] && gridX >= bbox[1] && gridX <= bbox[3];

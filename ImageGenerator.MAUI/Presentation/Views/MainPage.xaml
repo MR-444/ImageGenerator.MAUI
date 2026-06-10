@@ -353,7 +353,8 @@
                     <VerticalStackLayout Spacing="12">
                         <Label Text="Run" Style="{StaticResource CardTitle}" />
 
-                        <Button Text="Generate Image"
+                        <Button x:Name="GenerateButton"
+                                Text="Generate Image"
                                 Style="{StaticResource PrimaryButton}"
                                 Command="{Binding GenerateImageCommand}"
                                 IsEnabled="{Binding IsValid}"

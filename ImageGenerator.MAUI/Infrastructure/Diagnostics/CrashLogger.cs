@@ -97,6 +97,20 @@ public static class CrashLogger
         config.AddTarget(fileTarget);
         config.AddTarget(debugTarget);
 
+        // Blackhole the HttpClient/Polly per-request chatter below Warning BEFORE any other
+        // rule: a single ComfyUI run polls /history every 2 s and each poll emits 5-6 INFO
+        // lines (LogicalHandler start/end, ClientHandler send/receive, Polly attempt) —
+        // ~900 lines of noise per generation that drowned the lines that matter. Warnings
+        // and errors (timeouts, retries-exhausted, non-2xx) still flow to the file. A final
+        // rule with no targets is NLog's suppression idiom.
+        foreach (var noisy in new[] { "System.Net.Http.*", "Polly*" })
+        {
+            // NOTE: LoggingRule's string ctor sets RuleName, not the pattern.
+            var suppress = new LoggingRule { LoggerNamePattern = noisy, Final = true };
+            suppress.SetLoggingLevels(NLog.LogLevel.Trace, NLog.LogLevel.Info);
+            config.LoggingRules.Add(suppress);
+        }
+
         // Default rule: Info+ to file + debugger.
         config.AddRule(NLog.LogLevel.Info, NLog.LogLevel.Fatal, fileTarget, "*");
         config.AddRule(NLog.LogLevel.Info, NLog.LogLevel.Fatal, debugTarget, "*");
@@ -121,6 +135,12 @@ public static class CrashLogger
             NLog.LogLevel.Debug, NLog.LogLevel.Info,
             fileTarget,
             "ImageGenerator.MAUI.Presentation.ViewModels.*",
+            final: false);
+        // Views carry the Generate-button activation forensics (GotFocus is Debug).
+        config.AddRule(
+            NLog.LogLevel.Debug, NLog.LogLevel.Info,
+            fileTarget,
+            "ImageGenerator.MAUI.Presentation.Views.*",
             final: false);
 
         LogManager.Configuration = config;

@@ -48,8 +48,32 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _generator = generator;
 
+        // Mode snapshot is safe: this VM is transient (fresh per navigation) and the singleton
+        // generator's model can't change while the editor is open. On a ComfyUI workflow the
+        // output shape is picked via the ResolutionSelector's aspect-ratio combo strings, not
+        // Ideogram's "WxH" list — the picker mirrors the generator's AR options then.
+        IsAspectRatioMode = generator is not null
+                            && Shared.Constants.ModelConstants.ComfyUi.IsId(generator.Parameters.Model);
+        ResolutionOptions = IsAspectRatioMode
+            ? generator!.AspectRatioOptions.ToList()
+            : IdeogramV4Descriptor.AllResolutions;
+        if (IsAspectRatioMode && ResolutionOptions.Count > 0)
+        {
+            // Field write: no change handler fires, so nothing is written back to the generator.
+            _selectedResolution = ResolutionOptions[0];
+        }
+
         Elements.CollectionChanged += OnElementsChanged;
     }
+
+    /// <summary>
+    /// True when the host model is a ComfyUI workflow: the picker lists aspect-ratio combo
+    /// strings ("3:4 (Portrait Standard)") instead of Ideogram resolutions, and picks write
+    /// through to the generator's AspectRatio.
+    /// </summary>
+    public bool IsAspectRatioMode { get; }
+
+    public string ResolutionPickerTitle => IsAspectRatioMode ? "Aspect ratio" : "Target resolution";
 
     [ObservableProperty]
     private string _highLevelDescription = string.Empty;
@@ -126,7 +150,8 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
     /// <summary>Longest canvas side in device-independent pixels; the other side shrinks to the AR.</summary>
     public const double CanvasFitBox = 480;
 
-    public IReadOnlyList<string> ResolutionOptions { get; } = IdeogramV4Descriptor.AllResolutions;
+    /// <summary>Ctor-assigned: Ideogram's resolution list, or the generator's AR combos in <see cref="IsAspectRatioMode"/>.</summary>
+    public IReadOnlyList<string> ResolutionOptions { get; }
 
     [ObservableProperty]
     private string _selectedResolution = IdeogramV4Descriptor.AutoResolution;
@@ -145,7 +170,11 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
 
     partial void OnSelectedResolutionChanged(string value)
     {
-        if (CanvasCoordinateMapper.TryParseResolution(value, out var width, out var height))
+        int width, height;
+        var parsed = IsAspectRatioMode
+            ? CanvasCoordinateMapper.TryParseAspectRatioLabel(value, out width, out height)
+            : CanvasCoordinateMapper.TryParseResolution(value, out width, out height);
+        if (parsed)
         {
             var aspectRatio = (double)width / height;
             CanvasWidthRequest = aspectRatio >= 1 ? CanvasFitBox : CanvasFitBox * aspectRatio;
@@ -161,16 +190,26 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
 
         // Write the pick through to the generator immediately so it survives leaving the
         // editor WITHOUT Apply (back navigation has no query-param hand-off). Membership
-        // guard mirrors MainPage.IdeogramResolution.
-        if (!_suppressGeneratorSync
-            && _generator is not null
-            && _generator.ResolutionOptions.Contains(value))
+        // guards mirror MainPage.IdeogramResolution. In AR mode the pick is an aspect-ratio
+        // combo string and lands on Parameters.AspectRatio — never on Resolution.
+        if (_suppressGeneratorSync || _generator is null) return;
+        if (IsAspectRatioMode)
+        {
+            if (_generator.AspectRatioOptions.Contains(value))
+            {
+                _generator.Parameters.AspectRatio = value;
+            }
+        }
+        else if (_generator.ResolutionOptions.Contains(value))
         {
             _generator.Parameters.Resolution = value;
         }
     }
 
-    /// <summary>Seeds the picker from the generator's resolution query param; unknown values fall back to Auto.</summary>
+    /// <summary>
+    /// Seeds the picker from the generator's resolution (or, in AR mode, aspect-ratio) query
+    /// param; unknown values fall back to Auto / the first AR option.
+    /// </summary>
     public void SetIncomingResolution(string? resolution)
     {
         _suppressGeneratorSync = true;
@@ -178,7 +217,9 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
         {
             SelectedResolution = resolution is not null && ResolutionOptions.Contains(resolution)
                 ? resolution
-                : IdeogramV4Descriptor.AutoResolution;
+                : IsAspectRatioMode && ResolutionOptions.Count > 0
+                    ? ResolutionOptions[0]
+                    : IdeogramV4Descriptor.AutoResolution;
         }
         finally { _suppressGeneratorSync = false; }
     }
@@ -585,6 +626,8 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
     /// <summary>
     /// The Apply hand-off route: compact JSON plus the resolution chosen on the canvas card,
     /// both consumed by MainPage QueryProperties. Internal so tests can pin the shape without Shell.
+    /// In AR mode the second param carries an aspect-ratio combo string; MainPage's membership
+    /// guard drops it harmlessly — the live write-through already delivered the pick.
     /// </summary>
     internal string BuildApplyRoute(string compactJson) =>
         $"//MainPage?ideogramJson={Uri.EscapeDataString(compactJson)}" +

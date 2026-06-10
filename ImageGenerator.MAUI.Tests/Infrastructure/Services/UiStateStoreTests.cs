@@ -45,18 +45,65 @@ public class UiStateStoreTests
         _sut.LoadPrompt().Should().BeNull();
     }
 
+    // Resolution is persisted per option-format family: ComfyUI models ("comfyui/*") get
+    // their own key; every other model shares the legacy key so old saved data stays valid.
+    private const string ResolutionKey = "imggen.last_resolution";
+    private const string ComfyResolutionKey = "imggen.last_resolution.comfyui";
+    private const string IdeogramModel = "ideogram-ai/ideogram-v4-balanced";
+    private const string ComfyModel = "comfyui/Ideogram workflow_MR";
+
     [Fact]
     public void LoadResolution_KeyMissing_ReturnsNull()
     {
-        _sut.LoadResolution().Should().BeNull();
+        _sut.LoadResolution(IdeogramModel).Should().BeNull();
+        _sut.LoadResolution(ComfyModel).Should().BeNull();
     }
 
     [Fact]
-    public void Resolution_RoundTripsThroughPreferences()
+    public void Resolution_NonComfyModel_RoundTripsThroughTheLegacyKey()
     {
-        _sut.PersistResolution("1440x2880");
+        _sut.PersistResolution("1440x2880", IdeogramModel);
 
-        _sut.LoadResolution().Should().Be("1440x2880");
+        _sut.LoadResolution(IdeogramModel).Should().Be("1440x2880");
+        _preferences.Get(ResolutionKey, string.Empty).Should().Be("1440x2880");
+    }
+
+    [Fact]
+    public void Resolution_ComfyModel_RoundTripsThroughTheComfyKey_LeavingLegacyUntouched()
+    {
+        _sut.PersistResolution("2.0 MP", ComfyModel);
+
+        _sut.LoadResolution(ComfyModel).Should().Be("2.0 MP");
+        _preferences.Get(ComfyResolutionKey, string.Empty).Should().Be("2.0 MP");
+        _preferences.Get(ResolutionKey, string.Empty).Should().BeEmpty(
+            "a ComfyUI pick must not clobber the other models' saved resolution");
+    }
+
+    [Fact]
+    public void Resolution_FamiliesAreIsolated_EachModelRestoresItsOwnPick()
+    {
+        _sut.PersistResolution("1440x2880", IdeogramModel);
+        _sut.PersistResolution("2.0 MP", ComfyModel);
+
+        _sut.LoadResolution(IdeogramModel).Should().Be("1440x2880");
+        _sut.LoadResolution(ComfyModel).Should().Be("2.0 MP");
+    }
+
+    [Fact]
+    public void LoadResolution_ComfyModel_DoesNotFallBackToTheLegacyKey()
+    {
+        _preferences.Seed(ResolutionKey, "1440x2880");
+
+        _sut.LoadResolution(ComfyModel).Should().BeNull(
+            "an Ideogram 'WxH' string is never a valid ComfyUI MP preset");
+    }
+
+    [Fact]
+    public void LoadResolution_NullModelId_ReadsTheLegacyKey()
+    {
+        _preferences.Seed(ResolutionKey, "1440x2880");
+
+        _sut.LoadResolution(null).Should().Be("1440x2880");
     }
 
     [Fact]
