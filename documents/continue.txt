@@ -18,12 +18,55 @@ when you finish or split work.
 NEXT FEATURE — ComfyUI as a local provider (plan next context)
 --------------------------------------------------------------
 
-[ ] (Feature) Send prompts to the user's ComfyUI instance; look up its local
-    models and workflows.
-    User context 2026-06-10: ComfyUI is installed on a SEPARATE machine in the
-    user's LAN, hostname "fireEngine" — base URL must be configurable (default
-    guess http://fireEngine:8188; port + reachability unverified). User asked
-    how workflows are used programmatically — answer below.
+[~] (Feature) ComfyUI provider PHASE 1 IMPLEMENTED 2026-06-10 — AWAITING USER
+    LIVE SMOKE on fireEngine. Six commits, each suite-green:
+      91bee4a A: ModelConstants.ComfyUi + JsonPromptEditor capability +
+              FallbackComfyUiDescriptor (one descriptor for all comfyui/* ids;
+              AR = ResolutionSelector combo strings verbatim, megapixel presets
+              via the shared resolution picker) + registry routing BEFORE the
+              Replicate owner/name heuristic.
+      0deef58 B: ComfyUiWorkflowPatcher (pure, Core/Domain/ComfyUi): JSON mode
+              sets import_json + import_mode="always" on every
+              Ideogram4PromptBuilderKJ (overwrites wired links — intended);
+              plain mode = lowest-id literal CLIPTextEncode; ALL literal
+              seed/noise_seed re-rolled (API runs don't randomize!);
+              ResolutionSelector gets aspect_ratio/megapixels; UI-format saves
+              throw with Export (API) guidance. 15 tests.
+      082cc34 C: imggen.comfyui_base_url setting (UiStateStore/Preferences,
+              NOT a token store) + GeneratorViewModel.ComfyUiBaseUrl + Entry in
+              the tokens card. Default http://127.0.0.1:8188 — USER MUST ENTER
+              http://fireEngine:8188 once in the app.
+      18740c2 D: ComfyUiImageGenerationService (template load -> patch ->
+              POST /prompt -> poll /history 2s/10min -> prefer type=output ->
+              GET /view; Pollinations error conventions; named client
+              "comfyui" with NO BaseAddress) + dispatcher route + DI. 11 tests.
+      65aecb4 E: comfy-workflows folder scan -> "comfyui/<stem>" picker entries
+              under provider "ComfyUI"; live scan on load+refresh, NEVER
+              disk-cached; appears on first launch; folder auto-created.
+      6d65390 F: JSON checkbox + "Edit structure…" re-gated on JsonPromptEditor
+              (UseJsonPrompt survives Ideogram->ComfyUI switches, clears on
+              Flux); token gates exempt comfyui/* like pollinations/* in BOTH
+              ValidateParameters and GenerateImageAsync.
+    541 -> 590 tests green; Debug + Release rebuilt, 0 warnings.
+
+    USER SMOKE CHECKLIST (fireEngine):
+      1. In ComfyUI: open "Ideogram workflow_MR" -> Workflow > Export (API) ->
+         save into Pictures\ImageGenerator.MAUI\comfy-workflows\.
+      2. In the app: set ComfyUI server = http://fireEngine:8188 (tokens card).
+      3. Model picker -> provider "ComfyUI" -> "Ideogram workflow_MR (ComfyUI)".
+      4. Build a structure in the editor -> Apply (JSON checkbox stays ON) ->
+         pick AR "3:4 (Portrait Standard)" + Resolution "1.5 MP" -> Generate.
+         Expect: portrait image ~1.5 MP in the gallery with metadata.
+      5. Generate twice -> DIFFERENT images (seed re-roll).
+      6. Negative: drop a normal (UI-format) save in the folder -> friendly
+         "Export (API)" error; wrong base URL -> friendly error; cancel
+         mid-generation -> "canceled" (server finishes its render — known).
+    KNOWN RISK: import_json literal on a forceInput input is schema-verified
+    but only the first live POST proves the kjnodes validator takes it —
+    failure mode is a clean 400 in the job row.
+
+    PHASE 2 (parked): checkpoint lookup via /object_info; /interrupt on
+    cancel; ws progress; auth header for proxied setups; multi-image outputs.
 
     HOW A COMFYUI WORKFLOW IS USED VIA API (the user's question):
       A workflow is the node graph built on ComfyUI's canvas. For API use it is
