@@ -9,28 +9,37 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
 {
     private readonly IModelCatalogService _catalogService;
     private readonly IPollinationsCatalogService _pollinationsCatalogService;
+    private readonly IComfyUiWorkflowCatalogService _comfyUiWorkflowCatalogService;
     private readonly IModelDescriptorRegistry _registry;
 
     public ModelCatalogCoordinator(
         IModelCatalogService catalogService,
         IPollinationsCatalogService pollinationsCatalogService,
+        IComfyUiWorkflowCatalogService comfyUiWorkflowCatalogService,
         IModelDescriptorRegistry registry)
     {
         _catalogService = catalogService;
         _pollinationsCatalogService = pollinationsCatalogService;
+        _comfyUiWorkflowCatalogService = comfyUiWorkflowCatalogService;
         _registry = registry;
     }
 
     public async Task<IReadOnlyList<ModelOption>?> LoadCachedAsync(CancellationToken ct = default)
     {
+        // ComfyUI entries come from a live folder scan on EVERY load (never the disk cache):
+        // they're free to enumerate and must reflect renames/deletes immediately — and they
+        // should appear on first launch even when no remote catalog was ever cached.
         var cached = await _catalogService.LoadCachedAsync(ct);
-        if (cached is null or { Count: 0 }) return null;
-        return MergeWithSeeds(cached);
+        var comfy = await _comfyUiWorkflowCatalogService.FetchAsync(ct);
+
+        var combined = (cached ?? []).Concat(comfy).ToList();
+        if (combined.Count == 0) return null;
+        return MergeWithSeeds(combined);
     }
 
     public async Task<IReadOnlyList<ModelOption>?> RefreshAsync(string apiToken)
     {
-        // Fan out to both providers in parallel — the Pollinations call is anonymous and
+        // Fan out to both remote providers in parallel — the Pollinations call is anonymous and
         // independent of the Replicate token, so it shouldn't be gated by Replicate's auth.
         // Tuple-await synchronises both already-running tasks without the .Result anti-pattern
         // that a separate WhenAll would otherwise leave behind.
@@ -39,12 +48,15 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
         var (replicate, pollinations) = (await replicateTask, await pollinationsTask);
 
         var fetched = replicate.Concat(pollinations).ToList();
-        if (fetched.Count == 0) return null;
+        var comfy = await _comfyUiWorkflowCatalogService.FetchAsync();
+        if (fetched.Count == 0 && comfy.Count == 0) return null;
 
-        // Cache the raw merged-fetched list (not seeds) — load-time merge keeps any
-        // freshly-added seed entries surfacing even when the cache was written before they existed.
-        await _catalogService.SaveCachedAsync(fetched);
-        return MergeWithSeeds(fetched);
+        // Cache the raw merged-fetched list (not seeds, not comfy — the workflow folder is
+        // rescanned live every time, so caching it would only let stale entries linger).
+        // Load-time merge keeps any freshly-added seed entries surfacing even when the cache
+        // was written before they existed.
+        if (fetched.Count > 0) await _catalogService.SaveCachedAsync(fetched);
+        return MergeWithSeeds(fetched.Concat(comfy).ToList());
     }
 
     /// <summary>

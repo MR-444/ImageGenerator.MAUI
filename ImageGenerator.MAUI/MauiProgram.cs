@@ -114,6 +114,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IImageGenerationService, ImageGenerationDispatcher>();
         builder.Services.AddSingleton<IModelCatalogService, ModelCatalogService>();
         builder.Services.AddSingleton<IPollinationsCatalogService, PollinationsCatalogService>();
+        builder.Services.AddSingleton<IComfyUiWorkflowCatalogService, ComfyUiWorkflowCatalogService>();
         builder.Services.AddSingleton<IGalleryService>(_ => new GalleryService());
         builder.Services.AddSingleton<IFileLauncher, FileLauncher>();
         builder.Services.AddSingleton<IClipboardService, ClipboardService>();

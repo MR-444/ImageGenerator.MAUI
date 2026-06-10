@@ -12,20 +12,25 @@ public class ModelCatalogCoordinatorTests
 {
     private readonly Mock<IModelCatalogService> _catalogService = new();
     private readonly Mock<IPollinationsCatalogService> _pollinationsCatalogService = new();
+    private readonly Mock<IComfyUiWorkflowCatalogService> _comfyCatalogService = new();
     private readonly ModelCatalogCoordinator _sut;
 
     public ModelCatalogCoordinatorTests()
     {
-        // Default Pollinations catalog to empty so the existing assertions (which only know
-        // about the Replicate path) keep matching exactly. Tests that exercise the merge can
-        // override this setup.
+        // Default the Pollinations + ComfyUI catalogs to empty so the existing assertions
+        // (which only know about the Replicate path) keep matching exactly. Tests that
+        // exercise the merges can override these setups.
         _pollinationsCatalogService
+            .Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ModelOption>());
+        _comfyCatalogService
             .Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<ModelOption>());
 
         _sut = new ModelCatalogCoordinator(
             _catalogService.Object,
             _pollinationsCatalogService.Object,
+            _comfyCatalogService.Object,
             ModelDescriptorRegistry.Default());
     }
 
@@ -128,5 +133,78 @@ public class ModelCatalogCoordinatorTests
             x => x.SaveCachedAsync(
                 It.Is<IReadOnlyList<ModelOption>>(l => l.SequenceEqual(fetched))),
             Times.Once);
+    }
+
+    private static ModelOption ComfyEntry(string stem = "Ideogram workflow_MR") =>
+        new($"{stem} (ComfyUI)", ModelConstants.ComfyUi.PrefixSlash + stem, ProviderConstants.ComfyUi);
+
+    [Fact]
+    public async Task LoadCachedAsync_NoCacheButWorkflowsExist_SurfacesThem()
+    {
+        // First launch: nothing was ever fetched/cached, but the user already exported
+        // workflows — they (plus the seeds via merge) must appear without a Refresh.
+        _catalogService.Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<ModelOption>?)null);
+        _comfyCatalogService.Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([ComfyEntry()]);
+
+        var merged = await _sut.LoadCachedAsync();
+
+        merged.Should().NotBeNull();
+        merged!.Select(m => m.Value).Should().Contain("comfyui/Ideogram workflow_MR");
+    }
+
+    [Fact]
+    public async Task LoadCachedAsync_MergesComfyEntriesWithTheCache()
+    {
+        _catalogService.Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ModelOption("flux-2", "black-forest-labs/flux-2", ProviderConstants.Replicate)]);
+        _comfyCatalogService.Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([ComfyEntry()]);
+
+        var merged = await _sut.LoadCachedAsync();
+
+        merged!.Select(m => m.Value).Should()
+            .Contain("black-forest-labs/flux-2")
+            .And.Contain("comfyui/Ideogram workflow_MR");
+    }
+
+    [Fact]
+    public async Task RefreshAsync_ComfyEntriesAreMergedButNeverCached()
+    {
+        var fetched = new List<ModelOption>
+        {
+            new("flux-2", "black-forest-labs/flux-2", ProviderConstants.Replicate)
+        };
+        _catalogService.Setup(x => x.FetchAsync("token")).ReturnsAsync(fetched);
+        _comfyCatalogService.Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([ComfyEntry()]);
+
+        var merged = await _sut.RefreshAsync("token");
+
+        merged!.Select(m => m.Value).Should().Contain("comfyui/Ideogram workflow_MR");
+        // The disk cache stays provider-pure: the workflow folder is rescanned live every
+        // load, so caching its entries would only let deleted workflows linger.
+        _catalogService.Verify(
+            x => x.SaveCachedAsync(It.Is<IReadOnlyList<ModelOption>>(
+                l => l.SequenceEqual(fetched))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_OnlyComfyEntries_ReturnsThemWithoutSaving()
+    {
+        _catalogService.Setup(x => x.FetchAsync("token"))
+            .ReturnsAsync(Array.Empty<ModelOption>());
+        _comfyCatalogService.Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([ComfyEntry()]);
+
+        var merged = await _sut.RefreshAsync("token");
+
+        merged.Should().NotBeNull();
+        merged!.Select(m => m.Value).Should().Contain("comfyui/Ideogram workflow_MR");
+        _catalogService.Verify(
+            x => x.SaveCachedAsync(It.IsAny<IReadOnlyList<ModelOption>>()),
+            Times.Never);
     }
 }
