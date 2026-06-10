@@ -24,6 +24,10 @@ public readonly record struct ModelCapabilities(
     int MaxImageInputs = 0,
     bool Safe = false,
     bool OutputFormatSelectable = true,
-    // Ideogram V4: gates the dedicated Ideogram options block (resolution + structured-JSON
-    // toggle + copyright-detection) and its custom layout in MainPage.xaml.
-    bool IdeogramOptions = false);
+    // Ideogram V4: gates the dedicated Ideogram options block (resolution +
+    // copyright-detection) and its custom layout in MainPage.xaml.
+    bool IdeogramOptions = false,
+    // Gates the structured-JSON prompt toggle + "Edit structure…" button. Set by the
+    // Ideogram V4 descriptors (alongside IdeogramOptions) and by ComfyUI workflow models
+    // whose graphs consume the caption JSON.
+    bool JsonPromptEditor = false);

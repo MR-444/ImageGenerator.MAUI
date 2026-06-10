@@ -12,4 +12,9 @@ public static class OutputPaths
     // API / a local Ideogram install). Lives next to the images for the same survive-rebuilds reason.
     public static string JsonPromptsDirectory =>
         Path.Combine(GeneratedImagesDirectory, "json-prompts");
+
+    // ComfyUI workflow templates the user exports via Workflow > Export (API). Each file's
+    // stem becomes a "comfyui/<stem>" model in the picker.
+    public static string ComfyWorkflowsDirectory =>
+        Path.Combine(GeneratedImagesDirectory, "comfy-workflows");
 }

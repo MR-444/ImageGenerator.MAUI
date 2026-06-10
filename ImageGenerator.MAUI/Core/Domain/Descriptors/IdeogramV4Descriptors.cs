@@ -54,7 +54,8 @@ public abstract class IdeogramV4Descriptor : IPayloadBuilder, ICapabilityProvide
         Resolutions: IdeogramResolutions,
         MaxImageInputs: 0,
         OutputFormatSelectable: false,
-        IdeogramOptions: true);
+        IdeogramOptions: true,
+        JsonPromptEditor: true);
 
     public object Build(ImageGenerationParameters p)
     {

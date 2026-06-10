@@ -85,4 +85,37 @@ public class ModelDescriptorRegistryTests
         // + 3 pinned Ideogram V4 (balanced/turbo/quality) = 9.
         _registry.Seeds.Should().HaveCount(9);
     }
+
+    [Fact]
+    public void PayloadFor_ComfyUiId_RoutesToComfyFallback_NotReplicate()
+    {
+        // "comfyui/foo" satisfies the owner/name heuristic — the explicit branch must win,
+        // including for workflow stems with spaces.
+        _registry.PayloadFor("comfyui/Ideogram workflow_MR").ModelId.Should().Be("_fallback_comfyui");
+        _registry.PayloadFor("comfyui/x").ModelId.Should().Be("_fallback_comfyui");
+    }
+
+    [Fact]
+    public void CapabilitiesFor_ComfyUiId_DeclaresSeedJsonEditorAndResolutionKnobs()
+    {
+        var caps = _registry.CapabilitiesFor("comfyui/anything").Capabilities;
+
+        caps.Seed.Should().BeTrue();
+        caps.JsonPromptEditor.Should().BeTrue();
+        caps.IdeogramOptions.Should().BeFalse("the Replicate resolution/copyright block must stay hidden");
+        caps.AspectRatio.Should().BeTrue();
+        caps.AspectRatios.Should().Contain("3:4 (Portrait Standard)");
+        caps.Resolutions.Should().NotBeNull().And.HaveElementAt(0, "1.0 MP");
+        caps.ImagePrompt.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MetadataFor_ComfyUiId_YieldsWorkflowName()
+    {
+        var lines = _registry.MetadataFor("comfyui/My Workflow")!
+            .Lines(new ImageGenerationParameters { Model = "comfyui/My Workflow", Prompt = "x" })
+            .ToList();
+
+        lines.Should().Contain("Workflow: My Workflow");
+    }
 }

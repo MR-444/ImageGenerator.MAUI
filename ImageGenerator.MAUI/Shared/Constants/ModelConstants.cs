@@ -47,4 +47,22 @@ public static class ModelConstants
             !string.IsNullOrEmpty(modelId)
             && modelId.StartsWith(PrefixSlash, StringComparison.Ordinal);
     }
+
+    public static class ComfyUi
+    {
+        // "comfyui/<workflow-file-stem>" — the stem round-trips to an API-format workflow
+        // export in OutputPaths.ComfyWorkflowsDirectory; there is no remote model catalog.
+        public const string PrefixSlash = "comfyui/";
+
+        // ComfyUI's own default bind. A LAN instance (started with --listen) or a proxied
+        // https endpoint is configured per-user via the ComfyUI server setting.
+        public const string DefaultBaseUrl = "http://127.0.0.1:8188";
+
+        public static bool IsId(string? modelId) =>
+            !string.IsNullOrEmpty(modelId)
+            && modelId.StartsWith(PrefixSlash, StringComparison.Ordinal);
+
+        public static string WorkflowName(string modelId) =>
+            IsId(modelId) ? modelId[PrefixSlash.Length..] : modelId;
+    }
 }

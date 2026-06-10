@@ -11,4 +11,5 @@ public static class ProviderConstants
 {
     public const string Replicate = "Replicate";
     public const string Pollinations = "Pollinations";
+    public const string ComfyUi = "ComfyUI";
 }
