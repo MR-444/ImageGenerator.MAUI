@@ -61,9 +61,16 @@ NEXT FEATURE — ComfyUI as a local provider (plan next context)
       6. Negative: drop a normal (UI-format) save in the folder -> friendly
          "Export (API)" error; wrong base URL -> friendly error; cancel
          mid-generation -> "canceled" (server finishes its render — known).
-    KNOWN RISK: import_json literal on a forceInput input is schema-verified
-    but only the first live POST proves the kjnodes validator takes it —
-    failure mode is a clean 400 in the job row.
+    SMOKE ROUND 1 (2026-06-10 ~21:20): pipeline end-to-end OK (queue, poll,
+    image back into the gallery) BUT the image used the workflow's OWN prompt.
+    Root cause from the actual export + app.log: in workflow_MR the builder
+    node is a VIEWER (prompt output -> PreviewAny only); the REAL prompt is a
+    frozen caption-JSON literal on the flattened-subgraph CLIPTextEncode
+    ("98:24") feeding DualModelGuider. FIX cfca177: JSON mode now ALSO replaces
+    every CLIPTextEncode literal that parses as a JSON object (non-JSON
+    literals like negative prompts untouched); plain mode on such a graph
+    patches that literal instead of refusing. 590 -> 593 tests.
+    AWAITING SMOKE ROUND 2 (close app -> rebuild Debug! -> re-test).
 
     PHASE 2 (parked): checkpoint lookup via /object_info; /interrupt on
     cancel; ws progress; auth header for proxied setups; multi-image outputs.
