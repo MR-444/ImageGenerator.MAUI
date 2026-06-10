@@ -322,9 +322,44 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
                 ReferenceEquals(e, SelectedElement)))
             .ToList();
 
-    /// <summary>Tap-to-select: picks the topmost (last-added) element whose bbox contains the tap.</summary>
-    public void SelectElementAt(float pixelX, float pixelY, float canvasWidth, float canvasHeight)
+    // --- Canvas gestures (Phase 2: drag-move + corner-resize) ------------------------------
+    // The page maps GraphicsView Start/Drag/End/CancelInteraction onto these three methods;
+    // all state and math live here so the gestures are unit-testable without MAUI.
+
+    /// <summary>Pointer-to-handle hit radius in pixels (pixel space so the AR can't stretch it).</summary>
+    public const float HandleTouchRadius = 14f;
+
+    /// <summary>Smallest box edge a resize can produce, in grid units.</summary>
+    public const int MinBoxSize = 20;
+
+    private enum CanvasGesture { None, Move, Resize }
+
+    private CanvasGesture _gesture = CanvasGesture.None;
+    private ElementItemViewModel? _gestureTarget;
+    private BboxCorner _resizeCorner;
+    // Move: pointer grid position minus the box's min corner at press time, so the box
+    // follows the grab point instead of jumping its origin onto the pointer.
+    private int _grabOffsetX;
+    private int _grabOffsetY;
+
+    /// <summary>
+    /// Press: a corner handle of the SELECTED box wins first (so handles stay grabbable over
+    /// an overlapping box's body) and begins a resize; otherwise the topmost (last-added)
+    /// containing box is selected and begins a move; empty canvas keeps the selection.
+    /// </summary>
+    public void CanvasPointerPressed(float pixelX, float pixelY, float canvasWidth, float canvasHeight)
     {
+        if (SelectedElement is { HasBbox: true } selected
+            && CanvasCoordinateMapper.HitCorner(
+                [selected.YMin, selected.XMin, selected.YMax, selected.XMax],
+                pixelX, pixelY, canvasWidth, canvasHeight, HandleTouchRadius) is { } corner)
+        {
+            _gesture = CanvasGesture.Resize;
+            _gestureTarget = selected;
+            _resizeCorner = corner;
+            return;
+        }
+
         var gridX = CanvasCoordinateMapper.PixelsToGrid(pixelX, canvasWidth);
         var gridY = CanvasCoordinateMapper.PixelsToGrid(pixelY, canvasHeight);
 
@@ -332,7 +367,77 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
             .Where(e => e.HasBbox)
             .LastOrDefault(e => CanvasCoordinateMapper.BboxContains([e.YMin, e.XMin, e.YMax, e.XMax], gridX, gridY));
 
-        if (hit is not null) SelectedElement = hit;
+        if (hit is null) return;
+
+        SelectedElement = hit;
+        _gesture = CanvasGesture.Move;
+        _gestureTarget = hit;
+        _grabOffsetX = gridX - hit.XMin;
+        _grabOffsetY = gridY - hit.YMin;
+    }
+
+    /// <summary>
+    /// Drag: moves or resizes the gesture target. A no-op without an active press — some
+    /// platforms surface drag events without one, and stale drags after release must die.
+    /// </summary>
+    public void CanvasPointerDragged(float pixelX, float pixelY, float canvasWidth, float canvasHeight)
+    {
+        if (_gesture == CanvasGesture.None || _gestureTarget is null) return;
+
+        var gridX = CanvasCoordinateMapper.PixelsToGrid(pixelX, canvasWidth);
+        var gridY = CanvasCoordinateMapper.PixelsToGrid(pixelY, canvasHeight);
+        var target = _gestureTarget;
+
+        if (_gesture == CanvasGesture.Move)
+        {
+            // Preserve the size exactly; clamp the box as a whole onto the grid.
+            var boxWidth = target.XMax - target.XMin;
+            var boxHeight = target.YMax - target.YMin;
+            var newXMin = Math.Clamp(gridX - _grabOffsetX, 0, V4JsonPrompt.CanvasSize - boxWidth);
+            var newYMin = Math.Clamp(gridY - _grabOffsetY, 0, V4JsonPrompt.CanvasSize - boxHeight);
+            // Order matters: when moving right/down, write the max first so min/max never
+            // momentarily invert for the live canvas + sliders.
+            if (newXMin >= target.XMin) { target.XMax = newXMin + boxWidth; target.XMin = newXMin; }
+            else { target.XMin = newXMin; target.XMax = newXMin + boxWidth; }
+            if (newYMin >= target.YMin) { target.YMax = newYMin + boxHeight; target.YMin = newYMin; }
+            else { target.YMin = newYMin; target.YMax = newYMin + boxHeight; }
+            return;
+        }
+
+        // Resize: the dragged corner follows the pointer; the opposite corner stays pinned.
+        // Clamps enforce the grid bounds and a minimum edge so corners can't cross over.
+        // The Min/Max guards keep the clamp ranges valid for hand-authored boxes that are
+        // already smaller than MinBoxSize or pinned at a grid edge.
+        var maxForYMin = Math.Max(0, target.YMax - MinBoxSize);
+        var maxForXMin = Math.Max(0, target.XMax - MinBoxSize);
+        var minForYMax = Math.Min(V4JsonPrompt.CanvasSize, target.YMin + MinBoxSize);
+        var minForXMax = Math.Min(V4JsonPrompt.CanvasSize, target.XMin + MinBoxSize);
+        switch (_resizeCorner)
+        {
+            case BboxCorner.TopLeft:
+                target.YMin = Math.Clamp(gridY, 0, maxForYMin);
+                target.XMin = Math.Clamp(gridX, 0, maxForXMin);
+                break;
+            case BboxCorner.TopRight:
+                target.YMin = Math.Clamp(gridY, 0, maxForYMin);
+                target.XMax = Math.Clamp(gridX, minForXMax, V4JsonPrompt.CanvasSize);
+                break;
+            case BboxCorner.BottomLeft:
+                target.YMax = Math.Clamp(gridY, minForYMax, V4JsonPrompt.CanvasSize);
+                target.XMin = Math.Clamp(gridX, 0, maxForXMin);
+                break;
+            case BboxCorner.BottomRight:
+                target.YMax = Math.Clamp(gridY, minForYMax, V4JsonPrompt.CanvasSize);
+                target.XMax = Math.Clamp(gridX, minForXMax, V4JsonPrompt.CanvasSize);
+                break;
+        }
+    }
+
+    /// <summary>Release/cancel: ends the active gesture (subsequent drags are no-ops).</summary>
+    public void CanvasPointerReleased()
+    {
+        _gesture = CanvasGesture.None;
+        _gestureTarget = null;
     }
 
     [RelayCommand]

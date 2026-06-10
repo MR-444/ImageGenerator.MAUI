@@ -85,7 +85,22 @@ public partial class IdeogramStructureEditorPage
         if (e.Touches.Length == 0) return;
         var touch = e.Touches[0];
 
-        _viewModel.SelectElementAt(touch.X, touch.Y,
+        _viewModel.CanvasPointerPressed(touch.X, touch.Y,
             (float)StructureCanvas.Width, (float)StructureCanvas.Height);
     }
+
+    private void OnCanvasDragInteraction(object? sender, TouchEventArgs e)
+    {
+        if (e.Touches.Length == 0) return;
+        var touch = e.Touches[0];
+
+        _viewModel.CanvasPointerDragged(touch.X, touch.Y,
+            (float)StructureCanvas.Width, (float)StructureCanvas.Height);
+    }
+
+    private void OnCanvasEndInteraction(object? sender, TouchEventArgs e) =>
+        _viewModel.CanvasPointerReleased();
+
+    private void OnCanvasCancelInteraction(object? sender, EventArgs e) =>
+        _viewModel.CanvasPointerReleased();
 }

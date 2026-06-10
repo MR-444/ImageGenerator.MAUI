@@ -26,6 +26,9 @@ public sealed class IdeogramCanvasDrawable : IDrawable
 
     private const int GridDivisions = 10;
     private const int MaxLabelLength = 24;
+    // Visual size of the resize handles on the selected box. Smaller than the VM's
+    // HandleTouchRadius on purpose — the touch target is forgiving, the visual is tidy.
+    private const float HandleDrawSize = 8f;
 
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
@@ -68,10 +71,30 @@ public sealed class IdeogramCanvasDrawable : IDrawable
             canvas.StrokeSize = box.IsSelected ? 3 : 1.5f;
             canvas.DrawRectangle(rect);
 
+            if (box.IsSelected) DrawResizeHandles(canvas, rect);
+
             var label = box.Label.Length > MaxLabelLength ? box.Label[..MaxLabelLength] + "…" : box.Label;
             canvas.FontColor = box.IsSelected ? SelectedStroke : LabelColor;
             canvas.DrawString(label, rect.X + 4, rect.Y + 2, Math.Max(rect.Width - 8, 10), 16,
                 HorizontalAlignment.Left, VerticalAlignment.Top);
+        }
+    }
+
+    /// <summary>Filled squares on the four corners of the selected box — the resize affordance.</summary>
+    private static void DrawResizeHandles(ICanvas canvas, RectF rect)
+    {
+        canvas.FillColor = SelectedStroke;
+        const float half = HandleDrawSize / 2;
+        Span<PointF> corners =
+        [
+            new PointF(rect.Left, rect.Top),
+            new PointF(rect.Right, rect.Top),
+            new PointF(rect.Left, rect.Bottom),
+            new PointF(rect.Right, rect.Bottom)
+        ];
+        foreach (var corner in corners)
+        {
+            canvas.FillRectangle(corner.X - half, corner.Y - half, HandleDrawSize, HandleDrawSize);
         }
     }
 }

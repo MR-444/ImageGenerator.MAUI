@@ -2,6 +2,15 @@ using ImageGenerator.MAUI.Core.Domain.Ideogram;
 
 namespace ImageGenerator.MAUI.Presentation.Drawing;
 
+/// <summary>A corner of a bbox, for the resize-handle hit-test and drag state.</summary>
+public enum BboxCorner
+{
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight
+}
+
 /// <summary>
 /// Pure math between the schema's fixed 0–1000 bbox grid and the on-screen pixel square the
 /// canvas is rendered into. Kept free of MAUI controls so it is unit-testable; the drawable
@@ -55,4 +64,40 @@ public static class CanvasCoordinateMapper
     /// <summary>True when the grid point lies inside (or on the edge of) the bbox.</summary>
     public static bool BboxContains(int[] bbox, int gridX, int gridY) =>
         bbox.Length == 4 && gridY >= bbox[0] && gridY <= bbox[2] && gridX >= bbox[1] && gridX <= bbox[3];
+
+    /// <summary>
+    /// Which corner handle (if any) of the bbox lies within <paramref name="radius"/> pixels
+    /// of the pointer. Works in PIXEL space deliberately: a grid-unit radius would stretch
+    /// with the canvas aspect ratio, making handles harder to grab on one axis. The nearest
+    /// in-radius corner wins (matters for boxes smaller than 2×radius).
+    /// </summary>
+    public static BboxCorner? HitCorner(
+        int[] bbox, float pixelX, float pixelY, float canvasWidth, float canvasHeight, float radius)
+    {
+        if (bbox.Length != 4) return null;
+        var rect = BboxToRect(bbox, canvasWidth, canvasHeight);
+
+        (BboxCorner Corner, float X, float Y)[] corners =
+        [
+            (BboxCorner.TopLeft, rect.Left, rect.Top),
+            (BboxCorner.TopRight, rect.Right, rect.Top),
+            (BboxCorner.BottomLeft, rect.Left, rect.Bottom),
+            (BboxCorner.BottomRight, rect.Right, rect.Bottom)
+        ];
+
+        BboxCorner? best = null;
+        var bestDistSq = radius * radius;
+        foreach (var (corner, x, y) in corners)
+        {
+            var dx = pixelX - x;
+            var dy = pixelY - y;
+            var distSq = dx * dx + dy * dy;
+            if (distSq <= bestDistSq)
+            {
+                bestDistSq = distSq;
+                best = corner;
+            }
+        }
+        return best;
+    }
 }

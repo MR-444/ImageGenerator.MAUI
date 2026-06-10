@@ -185,28 +185,170 @@ public class IdeogramStructureEditorViewModelTests
     }
 
     [Fact]
-    public void SelectElementAt_PicksTopmostHit_AndIgnoresMisses()
+    public void CanvasPointerPressed_SelectsTopmostHit_AndIgnoresMisses()
     {
         var sut = CreateSut();
         sut.LoadFromJson(SampleJson); // [0] obj y100-300/x200-400, [1] text y0-100/x0-1000; both overlap at y=100,x=300
         sut.SelectedElement = null;
 
         // 480px square canvas: pixel 96 -> grid 200. Point (grid 300, 50) hits only the text strip.
-        sut.SelectElementAt(pixelX: 144, pixelY: 24, canvasWidth: 480, canvasHeight: 480);
+        sut.CanvasPointerPressed(pixelX: 144, pixelY: 24, canvasWidth: 480, canvasHeight: 480);
         sut.SelectedElement.Should().BeSameAs(sut.Elements[1]);
+        sut.CanvasPointerReleased();
 
         // Point (grid 300, 200) hits only the obj box.
-        sut.SelectElementAt(pixelX: 144, pixelY: 96, canvasWidth: 480, canvasHeight: 480);
+        sut.CanvasPointerPressed(pixelX: 144, pixelY: 96, canvasWidth: 480, canvasHeight: 480);
         sut.SelectedElement.Should().BeSameAs(sut.Elements[0]);
+        sut.CanvasPointerReleased();
 
         // A miss keeps the current selection.
-        sut.SelectElementAt(pixelX: 470, pixelY: 470, canvasWidth: 480, canvasHeight: 480);
+        sut.CanvasPointerPressed(pixelX: 470, pixelY: 470, canvasWidth: 480, canvasHeight: 480);
         sut.SelectedElement.Should().BeSameAs(sut.Elements[0]);
+        sut.CanvasPointerReleased();
 
         // Non-square canvas (portrait 240x480): same grid point (300, 200) is pixel (72, 96).
         sut.SelectedElement = null;
-        sut.SelectElementAt(pixelX: 72, pixelY: 96, canvasWidth: 240, canvasHeight: 480);
+        sut.CanvasPointerPressed(pixelX: 72, pixelY: 96, canvasWidth: 240, canvasHeight: 480);
         sut.SelectedElement.Should().BeSameAs(sut.Elements[0]);
+    }
+
+    // --- Canvas drag/resize gestures (Phase 2) --------------------------------------------
+    // All on a 480x480 canvas: pixel = grid * 0.48. The obj box from SampleJson is
+    // y100-300/x200-400 (a 200x200 box).
+
+    [Fact]
+    public void CanvasDrag_InsideBox_MovesIt_PreservingSize()
+    {
+        var sut = CreateSut();
+        sut.LoadFromJson(SampleJson);
+
+        // Grab the obj box at grid (x300, y200) — offset (100, 100) from its min corner.
+        sut.CanvasPointerPressed(144, 96, 480, 480);
+        // Drag the pointer to grid (x500, y400).
+        sut.CanvasPointerDragged(240, 192, 480, 480);
+
+        var box = sut.Elements[0];
+        (box.XMin, box.XMax, box.YMin, box.YMax).Should().Be((400, 600, 300, 500));
+    }
+
+    [Fact]
+    public void CanvasDrag_Move_ClampsAtCanvasEdge_PreservingSize()
+    {
+        var sut = CreateSut();
+        sut.LoadFromJson(SampleJson);
+
+        sut.CanvasPointerPressed(144, 96, 480, 480);
+        // Pointer to the far bottom-right corner: box pins at the edge, stays 200x200.
+        sut.CanvasPointerDragged(480, 480, 480, 480);
+
+        var box = sut.Elements[0];
+        (box.XMin, box.XMax, box.YMin, box.YMax).Should().Be((800, 1000, 800, 1000));
+    }
+
+    [Fact]
+    public void CanvasDrag_BottomRightHandle_ResizesOnlyMaxPair()
+    {
+        var sut = CreateSut();
+        sut.LoadFromJson(SampleJson);
+        sut.SelectedElement = sut.Elements[0];
+
+        // The obj box's bottom-right corner grid (x400, y300) sits at pixel (192, 144).
+        sut.CanvasPointerPressed(192, 144, 480, 480);
+        // Drag to grid (x500, y500).
+        sut.CanvasPointerDragged(240, 240, 480, 480);
+
+        var box = sut.Elements[0];
+        (box.XMin, box.XMax, box.YMin, box.YMax).Should().Be((200, 500, 100, 500));
+    }
+
+    [Fact]
+    public void CanvasDrag_TopLeftHandle_ClampsToGridZero()
+    {
+        var sut = CreateSut();
+        sut.LoadFromJson(SampleJson);
+        sut.SelectedElement = sut.Elements[0];
+
+        // TL corner grid (x200, y100) = pixel (96, 48); drag off-canvas.
+        sut.CanvasPointerPressed(96, 48, 480, 480);
+        sut.CanvasPointerDragged(-10, -10, 480, 480);
+
+        var box = sut.Elements[0];
+        (box.XMin, box.XMax, box.YMin, box.YMax).Should().Be((0, 400, 0, 300));
+    }
+
+    [Fact]
+    public void CanvasDrag_Resize_EnforcesMinimumBoxSize()
+    {
+        var sut = CreateSut();
+        sut.LoadFromJson(SampleJson);
+        sut.SelectedElement = sut.Elements[0];
+
+        // Grab the BR handle and drag PAST the box's own min corner: edges stop at MinBoxSize.
+        sut.CanvasPointerPressed(192, 144, 480, 480);
+        sut.CanvasPointerDragged(96, 48, 480, 480); // pointer at grid (x200, y100) = the TL corner
+
+        var box = sut.Elements[0];
+        (box.XMin, box.XMax, box.YMin, box.YMax).Should()
+            .Be((200, 200 + IdeogramStructureEditorViewModel.MinBoxSize,
+                 100, 100 + IdeogramStructureEditorViewModel.MinBoxSize));
+    }
+
+    [Fact]
+    public void CanvasPress_HandleOfSelectedBox_WinsOverOverlappingBody()
+    {
+        var sut = CreateSut();
+        sut.LoadFromJson(SampleJson);
+        sut.SelectedElement = sut.Elements[0];
+
+        // The obj box's TL corner (grid x200, y100 = pixel 96, 48) lies ON the text strip
+        // (y0-100/x0-1000). The selected box's handle must win: no re-selection, and the
+        // following drag resizes the obj box instead of moving the strip.
+        sut.CanvasPointerPressed(96, 48, 480, 480);
+        sut.SelectedElement.Should().BeSameAs(sut.Elements[0]);
+
+        sut.CanvasPointerDragged(48, 24, 480, 480); // grid (x100, y50)
+
+        var box = sut.Elements[0];
+        (box.XMin, box.YMin).Should().Be((100, 50));
+        var strip = sut.Elements[1];
+        (strip.YMin, strip.XMin, strip.YMax, strip.XMax).Should().Be((0, 0, 100, 1000));
+    }
+
+    [Fact]
+    public void CanvasDrag_WithoutPress_OrAfterRelease_IsANoOp()
+    {
+        var sut = CreateSut();
+        sut.LoadFromJson(SampleJson);
+
+        // No press at all.
+        sut.CanvasPointerDragged(240, 240, 480, 480);
+        var box = sut.Elements[0];
+        (box.XMin, box.XMax, box.YMin, box.YMax).Should().Be((200, 400, 100, 300));
+
+        // Press on empty canvas: still no gesture.
+        sut.CanvasPointerPressed(470, 470, 480, 480);
+        sut.CanvasPointerDragged(240, 240, 480, 480);
+        (box.XMin, box.XMax, box.YMin, box.YMax).Should().Be((200, 400, 100, 300));
+
+        // Genuine move, then release: a stale drag afterwards must change nothing.
+        sut.CanvasPointerPressed(144, 96, 480, 480);
+        sut.CanvasPointerReleased();
+        sut.CanvasPointerDragged(480, 480, 480, 480);
+        (box.XMin, box.XMax, box.YMin, box.YMax).Should().Be((200, 400, 100, 300));
+    }
+
+    [Fact]
+    public void CanvasPress_IgnoresElementsWithoutBbox()
+    {
+        var sut = CreateSut();
+        sut.LoadFromJson(SampleJson);
+        sut.SelectedElement = null;
+        sut.Elements[1].HasBbox = false;
+
+        // Inside where the text strip used to be: nothing selectable there any more.
+        sut.CanvasPointerPressed(144, 24, 480, 480);
+
+        sut.SelectedElement.Should().BeNull();
     }
 
     [Fact]

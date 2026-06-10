@@ -260,8 +260,11 @@
                                           HeightRequest="{Binding CanvasHeightRequest}"
                                           HorizontalOptions="Center"
                                           StartInteraction="OnCanvasStartInteraction"
+                                          DragInteraction="OnCanvasDragInteraction"
+                                          EndInteraction="OnCanvasEndInteraction"
+                                          CancelInteraction="OnCanvasCancelInteraction"
                                           AutomationId="EditorCanvas" />
-                            <Label Text="The canvas mirrors the target resolution's aspect ratio (Auto shows a square — Ideogram picks the shape itself). Origin is top-left; coordinates are always 0–1000 per axis. Tap a box to select it, then position it with the sliders. Apply also hands the chosen resolution back to the generator."
+                            <Label Text="The canvas mirrors the target resolution's aspect ratio (Auto shows a square — Ideogram picks the shape itself). Origin is top-left; coordinates are always 0–1000 per axis. Tap a box to select it; drag to move it, drag a red corner handle to resize. The sliders stay in sync. Apply also hands the chosen resolution back to the generator."
                                    Style="{StaticResource HelperText}"
                                    MaximumWidthRequest="480" />
                         </VerticalStackLayout>

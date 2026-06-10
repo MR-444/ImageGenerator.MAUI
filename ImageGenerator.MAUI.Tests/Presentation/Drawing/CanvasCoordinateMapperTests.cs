@@ -103,4 +103,57 @@ public class CanvasCoordinateMapperTests
     {
         CanvasCoordinateMapper.BboxContains([1, 2, 3], 0, 0).Should().BeFalse();
     }
+
+    // HitCorner: bbox [100,200,300,400] on a 480x480 canvas puts the rect at
+    // x 96-192, y 48-144 — corners TL(96,48) TR(192,48) BL(96,144) BR(192,144).
+
+    [Theory]
+    [InlineData(96f, 48f, BboxCorner.TopLeft)]      // exact hit
+    [InlineData(192f, 48f, BboxCorner.TopRight)]
+    [InlineData(96f, 144f, BboxCorner.BottomLeft)]
+    [InlineData(192f, 144f, BboxCorner.BottomRight)]
+    [InlineData(100f, 52f, BboxCorner.TopLeft)]     // inside the radius (dist ~5.7)
+    public void HitCorner_FindsTheCornerWithinRadius(float px, float py, BboxCorner expected)
+    {
+        CanvasCoordinateMapper
+            .HitCorner([100, 200, 300, 400], px, py, 480f, 480f, radius: 14f)
+            .Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(144f, 96f)]   // box center
+    [InlineData(96f, 70f)]    // on the left edge but 22px below TL (outside radius)
+    [InlineData(300f, 300f)]  // nowhere near
+    public void HitCorner_MissesOutsideRadius(float px, float py)
+    {
+        CanvasCoordinateMapper
+            .HitCorner([100, 200, 300, 400], px, py, 480f, 480f, radius: 14f)
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void HitCorner_NonSquareCanvas_UsesPixelSpace()
+    {
+        // Portrait 240x480: the same bbox maps to x 48-96, y 48-144 (see BboxToRect test).
+        // The BR corner sits at pixel (96, 144) — NOT where a square mapping would put it.
+        CanvasCoordinateMapper
+            .HitCorner([100, 200, 300, 400], 96f, 144f, 240f, 480f, radius: 14f)
+            .Should().Be(BboxCorner.BottomRight);
+    }
+
+    [Fact]
+    public void HitCorner_SmallBox_PicksTheNearestCorner()
+    {
+        // A 20x20-grid box on 480px: rect x 96-105.6, y 48-57.6 — all corners fall inside
+        // one 14px radius. The pointer just right of the TR corner must pick TR, not TL.
+        CanvasCoordinateMapper
+            .HitCorner([100, 200, 120, 220], 107f, 47f, 480f, 480f, radius: 14f)
+            .Should().Be(BboxCorner.TopRight);
+    }
+
+    [Fact]
+    public void HitCorner_WrongLength_IsNeverAHit()
+    {
+        CanvasCoordinateMapper.HitCorner([1, 2, 3], 0f, 0f, 480f, 480f, 14f).Should().BeNull();
+    }
 }
