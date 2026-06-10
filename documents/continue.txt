@@ -30,11 +30,22 @@ FEATURE SHIPPED 2026-06-10 — Ideogram V4 Structure Editor (be4a54f)
     the exact-compact-string parity pin and the VM round-trip test); Release
     build 0 warnings. Bundle state at commit: 518 tests green, 0 warnings.
 
-    [ ] Verification leftovers (small): one LIVE generate on ideogram-v4-turbo
-        with a structured prompt (re-confirm no 422 after the follow-ups) + a
-        quick Flux/GPT/Pollinations regression pass. Phase 2 (drag/resize
-        gestures on the canvas) is a separate follow-up, deliberately not
-        started.
+    [x] LIVE generate on ideogram-v4-turbo with a structured prompt — USER
+        VERIFIED 2026-06-10 (no 422), bundle pushed to origin.
+    [ ] Quick Flux/GPT/Pollinations regression pass still owed (low risk —
+        UseJsonPrompt auto-clear + descriptor paths are pinned by tests).
+
+    [ ] (Follow-up F, BUG) Editor colour picker: changing the RGB NUMBER entries
+        does not update the preview colour (reported 2026-06-10 after live
+        verify; sliders presumably work). Suspect the same WinUI Entry view->VM
+        binding dropout class as Follow-up B's prompt Editor — check whether the
+        numeric Entries push into PickerRed/Green/Blue at all; fix likely mirrors
+        the OneWay + TextChanged split. IdeogramStructureEditorPage.xaml +
+        IdeogramStructureEditorViewModel (PickerRed/Green/Blue ->
+        PickerHex/PickerPreviewColor). Separate task per user.
+
+    [ ] (Phase 2) Drag-move + corner-resize gestures on the editor canvas —
+        NEXT UP, planning started 2026-06-10.
     Original plans: C:\Users\mr\.claude\plans\i-think-about-a-magical-comet.md
     (executed P1 spec also summarized in the file below)
 
