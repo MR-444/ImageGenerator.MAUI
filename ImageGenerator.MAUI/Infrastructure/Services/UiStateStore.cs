@@ -13,13 +13,32 @@ public sealed class UiStateStore : IUiStateStore
     private const string ComfyUiResolutionKey = "imggen.last_resolution.comfyui";
     private const string ComfyUiBaseUrlKey = "imggen.comfyui_base_url";
 
+    private static readonly TimeSpan PromptDebounceDelay = TimeSpan.FromMilliseconds(500);
+
     private readonly ILogger<UiStateStore> _logger;
     private readonly IPreferences _preferences;
+    private readonly DebouncedSecureStorageWriter _promptWriter;
 
-    public UiStateStore(ILogger<UiStateStore> logger, IPreferences? preferences = null)
+    public UiStateStore(
+        ILogger<UiStateStore> logger,
+        IPreferences? preferences = null,
+        TimeSpan? promptDebounceDelay = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _preferences = preferences ?? Preferences.Default;
+
+        // The prompt is persisted on every Parameters.Prompt change — once per KEYSTROKE
+        // when typing by hand. Same debounce as the token stores: only the last value in
+        // the window reaches Preferences. The skip-identical rule still applies at write
+        // time, so the startup load-echo stays a no-op.
+        _promptWriter = new DebouncedSecureStorageWriter(
+            PromptKey, promptDebounceDelay ?? PromptDebounceDelay, _logger,
+            (k, v) =>
+            {
+                if (SafeSet(k, v))
+                    _logger.LogDebug("UiStateStore.PersistPrompt({Value})", Quote(v));
+                return Task.CompletedTask;
+            });
     }
 
     public string? LoadPrompt()
@@ -38,7 +57,11 @@ public sealed class UiStateStore : IUiStateStore
 
     public void PersistPrompt(string value)
     {
-        if (SafeSet(PromptKey, value))
+        // Schedule() also cancels any pending stale write. It deliberately DROPS empties
+        // (the token stores' clear semantics) — but a cleared prompt must still persist,
+        // and an empty can't storm the store, so write that one immediately.
+        _promptWriter.Schedule(value);
+        if (string.IsNullOrEmpty(value) && SafeSet(PromptKey, value))
             _logger.LogDebug("UiStateStore.PersistPrompt({Value})", Quote(value));
     }
 

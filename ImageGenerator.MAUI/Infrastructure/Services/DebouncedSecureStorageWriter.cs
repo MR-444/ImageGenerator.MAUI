@@ -4,7 +4,8 @@ using Microsoft.Maui.Storage;
 namespace ImageGenerator.MAUI.Infrastructure.Services;
 
 /// <summary>
-/// Debounced single-key SecureStorage writer shared by the API/Pollinations token stores.
+/// Debounced single-key writer shared by the API/Pollinations token stores (SecureStorage)
+/// and UiStateStore's prompt persistence (Preferences, via the injected writer).
 /// Schedule() can be called freely on every keystroke; only the last value within the
 /// debounce window is persisted. The CTS swap is locked so concurrent callers can't
 /// observe a half-disposed source (the token-store call-sites are UI-thread today, but

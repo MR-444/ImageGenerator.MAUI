@@ -13,12 +13,18 @@ public class UiStateStoreTests
     private const string ModelKey = "imggen.last_model";
     private const string UseJsonPromptKey = "imggen.use_json_prompt";
 
+    // Real (tiny) debounce window for the prompt writer; prompt tests wait comfortably
+    // past it so slow CI runners don't race the background write — same numbers as
+    // DebouncedSecureStorageWriterTests.
+    private static readonly TimeSpan PromptDebounce = TimeSpan.FromMilliseconds(50);
+    private const int WaitPastDebounceMs = 250;
+
     private readonly StubPreferences _preferences = new();
     private readonly UiStateStore _sut;
 
     public UiStateStoreTests()
     {
-        _sut = new UiStateStore(NullLogger<UiStateStore>.Instance, _preferences);
+        _sut = new UiStateStore(NullLogger<UiStateStore>.Instance, _preferences, PromptDebounce);
     }
 
     [Fact]
@@ -192,11 +198,28 @@ public class UiStateStoreTests
     }
 
     [Fact]
-    public void PersistPrompt_WritesToPromptKey()
+    public async Task PersistPrompt_WritesToPromptKey_AfterTheDebounceWindow()
     {
         _sut.PersistPrompt("hello");
 
+        _preferences.SetCallCount.Should().Be(0, "the prompt write is debounced, not immediate");
+        await Task.Delay(WaitPastDebounceMs);
         _preferences.Get(PromptKey, string.Empty).Should().Be("hello");
+    }
+
+    [Fact]
+    public async Task PersistPrompt_KeystrokeBurst_CollapsesToOneWriteOfTheLastValue()
+    {
+        // Hand-typing fires PersistPrompt once per keystroke; only the final value may
+        // reach Preferences.
+        for (var i = 0; i < 10; i++)
+        {
+            _sut.PersistPrompt($"a cat in a ha{i}");
+        }
+        await Task.Delay(WaitPastDebounceMs);
+
+        _preferences.SetCallCount.Should().Be(1);
+        _preferences.Get(PromptKey, string.Empty).Should().Be("a cat in a ha9");
     }
 
     // Skip-identical rule: the startup Loads echo straight back through the VM's persist
@@ -204,25 +227,42 @@ public class UiStateStoreTests
     // identical rewrites must never reach the backing store.
 
     [Fact]
-    public void PersistPrompt_UnchangedValue_SkipsTheWrite()
+    public async Task PersistPrompt_UnchangedValue_SkipsTheWrite()
     {
         _sut.PersistPrompt("hello");
+        await Task.Delay(WaitPastDebounceMs);
 
         _sut.PersistPrompt("hello");
-        _sut.PersistPrompt("hello");
+        await Task.Delay(WaitPastDebounceMs);
 
         _preferences.SetCallCount.Should().Be(1, "identical rewrites are wasted I/O");
         _preferences.Get(PromptKey, string.Empty).Should().Be("hello");
     }
 
     [Fact]
-    public void PersistPrompt_ChangedValue_StillWrites()
+    public async Task PersistPrompt_ChangedValue_StillWrites()
     {
         _sut.PersistPrompt("hello");
+        await Task.Delay(WaitPastDebounceMs);
         _sut.PersistPrompt("hello world");
+        await Task.Delay(WaitPastDebounceMs);
 
         _preferences.SetCallCount.Should().Be(2);
         _preferences.Get(PromptKey, string.Empty).Should().Be("hello world");
+    }
+
+    [Fact]
+    public async Task PersistPrompt_Clear_PersistsImmediately_AndCancelsThePendingWrite()
+    {
+        // Clearing must both stick (an empty prompt is a real state) and cancel any
+        // not-yet-flushed keystroke value, or stale text would resurrect after the delay.
+        _sut.PersistPrompt("stale text");
+        _sut.PersistPrompt(string.Empty);
+        await Task.Delay(WaitPastDebounceMs);
+
+        _preferences.SetCallCount.Should().Be(1, "only the clear may land");
+        _preferences.Get(PromptKey, "sentinel").Should().BeEmpty();
+        _sut.LoadPrompt().Should().BeNull("SafeGet collapses empty to null");
     }
 
     [Fact]
