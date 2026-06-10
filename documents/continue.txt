@@ -80,12 +80,27 @@ NEXT FEATURE — ComfyUI as a local provider (plan next context)
     patch the workflow's quality preset combo (CustomCombo Quality/Default/
     Turbo — needs a targeting convention, class is too generic; zero-code
     workaround: export one file per preset, each becomes a picker model).
-    OBSERVED 2026-06-10 (user, 2 MP test): a run left 2 differently-named
-    images on the server but only 1 in the app gallery — consistent with the
-    documented first-output-image-only design IF one run emits two images;
-    if instead 2 files exist LOCALLY in Pictures while the gallery shows 1,
-    it's a gallery refresh quirk, not generation. Recheck when phase 2 picks
-    up multi-image support.
+    OBSERVED 2026-06-10 (user, 2 MP test) — ROOT-CAUSED 2026-06-10 late: the
+    "2 images from 1 generate" was NOT multi-image output. app.log shows TWO
+    full independent runs in session pid=12432: POST 21:43:43 (prompt_id
+    f818e58a, seed 32219809) and a second POST 21:46:48 — 12 s after run 1's
+    download, empty log gap between — (prompt_id 3cacda5d, seed 2358881113);
+    both 1776x1184 (2.0 MP, the user's new setting). Workflow has exactly ONE
+    SaveImage node (158; DualModelGuider's two UNets feed ONE sampler) and the
+    server /history confirms one image per run (Ideogram4_211449_00003/00004).
+    Code provably can't self-fire (no retry anywhere; Generate button is the
+    only command binding; batch needs a file pick; every activation inserts a
+    job card). User confirms one window + one click → a second IN-WINDOW
+    command activation of unknown origin; prime suspect: WinUI re-fires the
+    still-focused Generate button on a later Space/Enter press (the new card
+    inserts at the top and is easy to miss). DIAGNOSTICS SHIPPED (this
+    commit): ${processid} in the NLog layout, "Generate activated …
+    JobCount=…" / "Job started/finished" INFO lines in GeneratorViewModel
+    (JobCount=2 after one click = ghost-activation smoking gun), and a
+    "shutdown pid=…" line on Window.Destroying pairing with "startup OK".
+    Repro probe if it recurs: generate, wait, press Space — if a card +
+    "Generate activated" appears, fix by moving focus off the button.
+    Multi-image output support itself stays parked above on its own merits.
 
     HOW A COMFYUI WORKFLOW IS USED VIA API (the user's question):
       A workflow is the node graph built on ComfyUI's canvas. For API use it is

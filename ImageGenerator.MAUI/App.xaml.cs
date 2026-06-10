@@ -1,4 +1,6 @@
-﻿namespace ImageGenerator.MAUI;
+﻿using ImageGenerator.MAUI.Infrastructure.Diagnostics;
+
+namespace ImageGenerator.MAUI;
 
 /// <summary>
 /// Represents the primary application class for the ImageGenerator.MAUI application.
@@ -37,6 +39,10 @@ public partial class App
         var screenHeight = display.Height / display.Density;
         window.X = Math.Max(0, (screenWidth - window.Width) / 2);
         window.Y = Math.Max(0, (screenHeight - window.Height) / 2);
+
+        // Several instances may share one app.log; the shutdown line pairs with "startup OK"
+        // so the log shows which instances were alive when.
+        window.Destroying += (_, _) => CrashLogger.WriteShutdownLine();
 
         return window;
     }

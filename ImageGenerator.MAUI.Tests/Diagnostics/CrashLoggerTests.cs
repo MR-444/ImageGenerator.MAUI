@@ -47,6 +47,20 @@ public class CrashLoggerTests : IDisposable
     }
 
     [Fact]
+    public void WriteShutdownLine_WritesShutdownMarkerWithPid()
+    {
+        // Pairs with "startup OK" so app.log shows which instances were alive when —
+        // multiple app processes share one physical log file.
+        CrashLogger.WriteShutdownLine();
+
+        // WriteShutdownLine calls LogManager.Shutdown() (flushes targets), so the file is
+        // complete; the next test's ctor re-Installs NLog, which is documented as safe.
+        var content = File.ReadAllText(_logPath);
+        content.Should().Contain("shutdown");
+        content.Should().Contain($"pid={Environment.ProcessId}");
+    }
+
+    [Fact]
     public void Log_WritesSourceAndExceptionMessage()
     {
         CrashLogger.Log("TestSource", new InvalidOperationException("hello-from-test"));

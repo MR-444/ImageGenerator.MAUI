@@ -491,6 +491,13 @@ public partial class GeneratorViewModel : ObservableObject
         var job = new GenerationJob(snapshot, AddAsInputAsync);
         Jobs.Insert(0, job);
 
+        // Activation audit: a generate run used to be invisible in app.log until the service's
+        // first line, which made the 2026-06-10 "phantom second generation" unattributable.
+        // JobCount exposes unnoticed extra cards (e.g. a focused-button Space/Enter re-fire).
+        _logger.LogInformation(
+            "Generate activated Model={Model} Seed={Seed} JobCount={Count}",
+            snapshot.Model, snapshot.Seed, Jobs.Count);
+
         // Click-time feedback: generation can take minutes, so confirm the click before
         // the job-row spinner is the only visible signal.
         _ = FlashAsync("Generation started");
@@ -502,7 +509,14 @@ public partial class GeneratorViewModel : ObservableObject
     {
         try
         {
+            // Start/finish lines bracket BOTH single and batch runs (shared chokepoint).
+            _logger.LogInformation(
+                "Job started Model={Model} Seed={Seed}", job.Parameters.Model, job.Parameters.Seed);
+
             var outcome = await _jobRunner.RunAsync(job.Parameters, job.Cts.Token);
+
+            _logger.LogInformation(
+                "Job finished Kind={Kind} Path={Path}", outcome.Kind, outcome.SavedPath);
 
             // HttpClient continuations can land on a ThreadPool thread; MAUI drops
             // PropertyChanged fired off the UI thread, so marshal the update back.
@@ -524,6 +538,7 @@ public partial class GeneratorViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
+            _logger.LogInformation("Job finished Kind=Canceled Path=(null)");
             DispatchToUi(() =>
             {
                 job.StatusMessage = "Canceled.";
@@ -532,6 +547,7 @@ public partial class GeneratorViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Job finished Kind=Threw Model={Model}", job.Parameters.Model);
             var msg = $"Error: {ex.Message}";
             DispatchToUi(() =>
             {

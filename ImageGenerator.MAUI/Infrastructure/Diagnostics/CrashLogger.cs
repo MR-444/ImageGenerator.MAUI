@@ -15,8 +15,11 @@ namespace ImageGenerator.MAUI.Infrastructure.Diagnostics;
 public static class CrashLogger
 {
     private const string LogFileName = "app.log";
+    // ${processid} because several app instances may write to the same physical app.log
+    // (KeepFileOpen=false + cross-process locking) — without it their lines are
+    // indistinguishable, which buried the 2026-06-10 "phantom second generation" analysis.
     private const string LayoutFormat =
-        "${longdate}|${level:uppercase=true}|${logger}|${message} ${exception:format=ToString}";
+        "${longdate}|${level:uppercase=true}|${processid}|${logger}|${message} ${exception:format=ToString}";
 
     private static readonly Logger Logger = LogManager.GetLogger("CrashLogger");
     private static string? _logPath;
@@ -169,5 +172,17 @@ public static class CrashLogger
         var version = Assembly.GetExecutingAssembly()
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0] ?? "unknown";
         Logger.Info("startup OK pid={Pid} version={Version}", Environment.ProcessId, version);
+    }
+
+    /// <summary>
+    /// Counterpart to the "startup OK" line, written from Window.Destroying so app.log shows
+    /// which instances were alive when (several instances share one log file). A hard kill or
+    /// crash skips it — crashes are covered by the unhandled-exception hooks instead.
+    /// Flushes and shuts NLog down; only call when the process is exiting (or re-Install after).
+    /// </summary>
+    public static void WriteShutdownLine()
+    {
+        Logger.Info("shutdown pid={Pid}", Environment.ProcessId);
+        try { LogManager.Shutdown(); } catch { /* never block window teardown */ }
     }
 }
