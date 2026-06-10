@@ -1,12 +1,11 @@
 ImageGenerator.MAUI — Open Work Queue
 =====================================
 
-Source of truth: AUDIT_REPORT.md (audit dated 2026-05-20 — now predates the
-v1.3.0 release 2026-05-25 and the prompt-import separator change b81bb26).
-Last updated: 2026-06-10 (Ideogram V4 Structure Editor SHIPPED — P1 + follow-ups
-A-E + logging fix, one commit be4a54f, user-verified in-app; see section below.
-Prior: 2026-05-25 cleared the cosmetic quick-win cluster — items 1/3/4/5 in 588fc48,
-items 2/6 won't-fix — see notes inline).
+Source of truth: AUDIT_REPORT.md (audit dated 2026-05-20 — predates v1.3.0+).
+Last updated: 2026-06-10 (queue COMPACTED after the Ideogram Structure Editor
+bundle shipped and was pushed; ComfyUI provider added as the next feature.
+Full per-item forensics of everything compressed below live in this file's
+git history, last full version at commit 97cd2ab).
 
 Format: each item has a status box, severity, a one-line hook, and
 file:line citations. Pick the top open item; keep this file in sync
@@ -16,531 +15,168 @@ when you finish or split work.
   [x] = done      [-] = won't fix / superseded
 
 
-FEATURE SHIPPED 2026-06-10 — Ideogram V4 Structure Editor (be4a54f)
------------------------------------------------------------------------------
+NEXT FEATURE — ComfyUI as a local provider (plan next context)
+--------------------------------------------------------------
 
-[x] (Feature) Visual json_prompt builder for Ideogram V4 — DONE be4a54f 2026-06-10
-    (P1 + follow-ups A-E + the MEL/NLog logging fix in ONE commit; user-verified
-    in-app). All files from the plan landed: Core/Domain/Ideogram/
-    {V4JsonPrompt,V4JsonPromptSerializer,V4JsonPromptValidator}.cs; editor VM
-    (+ElementItemViewModel), render-only canvas (IdeogramCanvasDrawable +
-    CanvasCoordinateMapper), IdeogramStructureEditorPage, JsonPromptFileService +
-    OutputPaths.JsonPromptsDirectory; wiring in AppShell/MauiProgram/
-    GeneratorViewModel/MainPage(.xaml/.cs). 371 -> 452 tests green (81 new, incl.
-    the exact-compact-string parity pin and the VM round-trip test); Release
-    build 0 warnings. Bundle state at commit: 518 tests green, 0 warnings.
+[ ] (Feature) Send prompts to the user's ComfyUI instance; look up its local
+    models and workflows.
+    User context 2026-06-10: ComfyUI is installed on a SEPARATE machine in the
+    user's LAN, hostname "fireEngine" — base URL must be configurable (default
+    guess http://fireEngine:8188; port + reachability unverified). User asked
+    how workflows are used programmatically — answer below.
 
-    [x] LIVE generate on ideogram-v4-turbo with a structured prompt — USER
-        VERIFIED 2026-06-10 (no 422), bundle pushed to origin.
-    [ ] Quick Flux/GPT/Pollinations regression pass still owed (low risk —
-        UseJsonPrompt auto-clear + descriptor paths are pinned by tests).
+    HOW A COMFYUI WORKFLOW IS USED VIA API (the user's question):
+      A workflow is the node graph built on ComfyUI's canvas. For API use it is
+      exported ONCE as "API format" JSON (Workflow menu > Export (API); on old
+      UIs enable dev mode first). That JSON maps node-id -> {class_type,
+      inputs}. The app never builds graphs — it PATCHES a few input fields in
+      the template (prompt text, seed, width/height, ckpt_name) and POSTs it.
+      Normal saves / PNG-embedded workflows are the UI format and are NOT
+      accepted by POST /prompt.
 
-    [x] (Follow-up F, BUG) DONE 0efd069 2026-06-10, USER VERIFIED ("it seems to
-        work"). RE-DIAGNOSED: the original report ("RGB
-        NUMBER entries don't update the preview") was a false premise — the
-        numbers next to the R/G/B sliders are read-only Labels, there are no RGB
-        Entries. User clarified the real repro: typing #RRGGBB into a PALETTE
-        text Entry doesn't update the swatch chips. VM chain verified sound +
-        test-pinned (StylePaletteText -> StylePaletteSwatches;
-        ElementItemViewModel.PaletteText -> Swatches; ParsePalette normalizes
-        case/#) => WinUI Entry view->VM TwoWay dropout, same class as Follow-up
-        B. Hazard: Apply serializes the stale palette. FIX:
-        OneWay + TextChanged split on BOTH palette Entries
-        (IdeogramStructureEditorPage.xaml ~:99/:174 + OnStylePaletteTextChanged/
-        OnElementPaletteTextChanged in code-behind, mirroring
-        MainPage.OnPromptTextChanged); +1 test pinning the StylePaletteSwatches
-        PropertyChanged raise. 537 -> 538 green. Out of scope by user
-        preference: same split on the page's other Entries (Medium/Desc/bbox…)
-        unless the dropout is observed there.
+    API surface (stable knowledge; verify against the live instance early):
+      - POST /prompt {"prompt": <api-format graph>, "client_id": id}
+        -> {prompt_id}; 400 carries node-level validation errors.
+      - GET /history/{prompt_id} -> outputs incl. image filenames when done.
+      - GET /view?filename=&subfolder=&type=output -> image bytes.
+      - GET /object_info -> every installed node + its valid enum values;
+        CheckpointLoaderSimple.input.required.ckpt_name[0] IS the list of
+        local checkpoints (same trick for LoRAs, samplers, VAEs).
+      - WS /ws?clientId= pushes progress; polling /history also works and
+        matches the existing Replicate create->poll shape.
+      - GET /system_stats -> cheap "is fireEngine up" health check.
 
-    [x] (Follow-up G, polish) DONE 2026-06-10 (commit hash: see git log; from
-        the F verify session). (1) Palette hex auto-uppercases live: VM-side
-        normalization in OnStylePaletteTextChanged / ElementItemViewModel.
-        OnPaletteTextChanged (re-set pattern, equality stops re-entrancy; the
-        OneWay Entry bindings rewrite the view). (2) "Examples" suggestion
-        Pickers beside ALL FIVE style-field Entries (Medium/Aesthetics/Lighting/
-        Art style/Photo style) — insert-into-Entry pattern (code-behind
-        InsertSuggestion resets SelectedIndex=-1 so it stays a pure dropdown);
-        fields remain free-form per schema. Lists doc-sourced from
-        ideogram-oss/ideogram4 docs/prompting.md (+ llms-full.txt): Medium is
-        the trained vocabulary [photograph, illustration, 3d_render, painting,
-        graphic_design] — pinned exactly by test; others are example phrases.
-        ANSWERED, no change: palette caps 16 (style) / 5 (element) are Ideogram
-        schema constants ("up to 16"/"up to 5" in prompting.md), not app picks.
-        538 -> 541 green.
+    DESIGN SKETCH (settle in the planning session):
+      - Workflow templates: user exports API-format .json into
+        Pictures\ImageGenerator.MAUI\comfy-workflows\; app lists them in a
+        picker. Patch-target discovery: prefer a node-TITLE convention
+        (_meta.title "PROMPT"/"NEGATIVE"/...), fall back to class_type
+        heuristics (CLIPTextEncode wired to KSampler.positive; KSampler.seed;
+        EmptyLatentImage width/height).
+      - Model lookup: /object_info checkpoint list -> model picker; patched
+        into the template's CheckpointLoaderSimple.ckpt_name.
+      - Provider integration: follow the Pollinations precedent — descriptor +
+        IImageGenerationService impl + named HttpClient ("comfyui", base URL
+        from a settings card; no token). Save through the existing
+        SaveImageWithMetadataAsync path so gallery metadata works.
+      - OPEN DECISIONS: full provider vs minimal hand-off first (user
+        undecided); ship a stock starter template vs user-exported-only;
+        how to surface per-workflow extra inputs.
 
-    [x] (Phase 2) Drag-move + corner-resize gestures on the editor canvas —
-        DONE c255c31 2026-06-10, USER VERIFIED in-app ("drag and resize works").
-        Design (plan: concurrent-dreaming-spindle.md): gesture state machine in the
-        VM (CanvasPointerPressed/Dragged/Released; constants HandleTouchRadius=14px,
-        MinBoxSize=20 grid units), pure corner hit-test in CanvasCoordinateMapper
-        (HitCorner, PIXEL space so AR can't stretch the grab targets), red corner
-        handles on the selected box in the drawable, page wires GraphicsView
-        Drag/End/CancelInteraction. Press: selected box's corner handle wins first
-        (resize, anchored to the opposite corner, clamped 0-1000 + min size, no
-        flip); else topmost containing box selects + moves (grab-offset preserved,
-        size preserved, clamps at edges); empty press keeps selection. Drags
-        without an active press are ignored (platform quirk guard). SelectElementAt
-        folded into CanvasPointerPressed. 518 -> 537 tests green, Release +
-        Debug both rebuilt, 0 warnings.
-    Original plans: C:\Users\mr\.claude\plans\i-think-about-a-magical-comet.md
-    (executed P1 spec also summarized in the file below)
-
-    USER VERIFIED IN-APP 2026-06-10: "It is working." Two follow-ups came out of
-    that test (plan: C:\Users\mr\.claude\plans\the-last-we-did-stateless-squirrel.md):
-
-    [x] (Follow-up A) DONE be4a54f — canvas
-        reshapes to the target resolution, editor has its own resolution picker
-        (seeded via &resolution=, handed back via &ideogramResolution= on Apply,
-        MainPage setter guards against ResolutionOptions). User-verified.
-        Original spec below:
-        Today the 1000x1000 grid renders as a fixed square; for e.g. 1440x2880 the
-        preview misplaces boxes visually (bbox values themselves stay 0-1000/axis —
-        schema constant, serialization unchanged). Agreed design: pass
-        Parameters.Resolution into the editor route (&resolution=), editor gets its
-        own resolution Picker (list exposed from IdeogramV4Descriptor's private
-        IdeogramResolutions via a public accessor), canvas Width/HeightRequest fit
-        the AR into a 480px box ("Auto"/garbage -> square), drawable/mapper/hit-test
-        go per-axis (drop the three Math.Min squarings: drawable :34, page
-        code-behind :64, XAML 480x480), Apply hands the choice back via a new
-        &ideogramResolution= query param (MainPage setter guards value against
-        ResolutionOptions). Reuse ResolutionAspectRatioConverter for picker display.
-
-    [x] (Follow-up C) DONE be4a54f — persist
-        UseJsonPrompt across restarts (was: restart restored the prompt but not the
-        checkbox -> structured JSON would ship as plain `prompt`). IUiStateStore +
-        UiStateStore gained LoadUseJsonPrompt/PersistUseJsonPrompt (key
-        imggen.use_json_prompt); only USER toggles persist (auto-clear in
-        RefreshCapabilities + the restore itself are wrapped in
-        _suppressJsonPromptPersist); LoadSavedUiState restores it LAST and only when
-        Capabilities.IdeogramOptions. User-verified.
-
-    [x] (Follow-up E) DONE be4a54f after THREE rounds — round-1 fix (suppression
-        window around the options swap + membership persist guard) did NOT fix the in-app
-        symptom on the user's re-test (restarts 11:26-11:33 in app.log): resolution still
-        resets on restart, and since the editor seeds its canvas from &resolution= the
-        structure editor opens with a wrong scene shape (SetIncomingResolution falls back
-        to Auto/square for empty/unknown).
-        ROUND 2 (built, 515 tests green, 0 warnings; AWAITING user repro):
-        (a) Found+fixed a real flaw in round 1: the ResolutionOptions swap synchronously
-            nulls Parameters.Resolution (picker push) BEFORE the old !Contains check ran,
-            so a still-valid value was slammed to options[0] on EVERY model switch —
-            in-memory loss the suppression window couldn't prevent (it only stopped the
-            persist). RefreshCapabilities now captures prev BEFORE the swap and picks:
-            prev-if-valid -> saved-from-store-if-valid -> options[0] (sticky, mirrors the
-            AR logic). Saved value now also survives flux->ideogram switches mid-session.
-        (b) DEBUG LEAD armed (was the staged next step): CrashLogger now bumps
-            Infrastructure.Services.* AND Presentation.ViewModels.* to Debug (file target),
-            and GeneratorViewModel Debug-logs every Resolution write (value/suppressed/
-            membership/persisted), the RefreshCapabilities prev/saved/target decision, and
-            the LoadSavedUiState adopt decision. One repro run now yields the full writer
-            sequence with timestamps in Pictures\ImageGenerator.MAUI\app.log.
-        2 new tests: ideogram->ideogram switch keeps the pick despite the null push;
-        saved value adopted (not options[0]) when switching to a model that offers it.
-        513 -> 515 green.
-        ROUND 2 USER RE-TEST 2026-06-10 ~12:10: restart restore NOW WORKS, but (1) a
-        mid-session model switch still loses the value, and (2) a resolution picked
-        INSIDE the editor is lost when leaving without Apply. Also: round-2 Debug lines
-        never appeared in app.log — MEL's default Information filter drops LogDebug
-        before NLog sees it; the NLog Debug rules (incl. the pre-existing External one)
-        were dead letters all along.
-        ROUND 3 (built, 518 tests green, 0 warnings; AWAITING user repro):
-        (a) MauiProgram: builder.Logging.SetMinimumLevel(Trace) — NLog rules are now the
-            real filter; file stays Info+ globally, Debug for External/Services/ViewModels.
-        (b) Resolution null tolerance (GeneratorViewModel): startup works because
-            LoadSavedUiState runs AFTER the OnAppearing awaits gave WinUI time to finish
-            its deferred ComboBox rebuild; a mid-session switch has no later re-assert, so
-            the rebuild's deferred SelectedItem=null push (a later dispatcher tick, OUTSIDE
-            the suppression window) wiped the value. New _lastValidResolution field tracks
-            the last options-member value; an unsuppressed null/empty write while
-            _lastValidResolution is still offered reverts to it (suppressed, no persist) —
-            the exact tolerance that lets the MODEL picker survive the identical push.
-        (c) Editor write-through: IdeogramStructureEditorViewModel now takes the singleton
-            GeneratorViewModel (optional 4th ctor param, DI auto-wires); a resolution pick
-            in the editor writes Parameters.Resolution immediately (membership-guarded,
-            persists as a user pick) so back-navigation without Apply keeps it.
-            SetIncomingResolution suppresses the write-through (its Auto fallback must not
-            clobber the generator state on editor open). Apply's &ideogramResolution=
-            hand-off stays (now idempotent).
-        3 new tests (deferred-null-push revert incl. no-double-persist; editor pick
-        write-through+persist; editor seeding no-write-back). 515 -> 518 green.
-        ROUND 3 USER-VERIFIED 2026-06-10: restart, model switch and editor write-through
-        all stick. NOTE the round-3 "still fails" report was a STALE BINARY: the user
-        launches bin\Debug\...\win-x64\ImageGenerator.MAUI.exe (built 11:51 = round 2)
-        while rounds were only landing in bin\Release — rebuilt Debug too and it passed.
-        Lesson for future verify loops: rebuild BOTH configs (or check exe LastWriteTime
-        vs app.log startup lines) before declaring a fix refuted.
-        Residual theoretical hole (not observed): a deferred FIRST-ITEM (non-null) push
-        would pass the membership guard and persist; the now-working Debug log would show
-        it as "persisting=True" right after a model switch.
-
-    [x] (Follow-up D) DONE be4a54f — palette
-        swatch chips (tap to remove) under both palette entries + shared RGB-slider
-        Color picker card (preview + hex + add-to-style / add-to-selected-element,
-        caps 16/5 enforced with a warning). New Presentation/Common/PaletteSwatch.cs
-        (PaletteSwatches.From/ToHex/Append/RemoveFirst). Swatch taps go through
-        page code-behind handlers (DataTemplate command bindings unreliable —
-        OnRemoveImageClicked precedent). User-verified.
-
-    [x] (Follow-up B) DONE be4a54f — prompt
-        Editor split into OneWay binding + OnPromptTextChanged push; live
-        "Structured JSON: valid/invalid" label (JsonPromptStateText) under the
-        checkbox. User-verified.
-        Original diagnosis below:
-        (BUG, MainPage not editor) "Structured JSON prompt" checkbox /
-        Generate-button validation breaks: manual paste -> clear -> paste new ->
-        button stays WRONGLY ENABLED on invalid JSON; typing/toggling does NOT
-        recover; restart does. Diagnosis: VM chain is sound (every Prompt/
-        UseJsonPrompt write revalidates); only a dead WinUI Editor view->VM binding
-        push explains all three observations (VM keeps validating the stale,
-        still-valid prompt — generating would silently send stale JSON!). Fix:
-        prompt Editor binding Mode=OneWay (VM->view) + explicit TextChanged handler
-        pushing into Parameters.Prompt (view->VM); no loop (ObservableProperty
-        equality + MapText no-op). Plus a visible "Structured JSON: valid/invalid"
-        HelperText label under the checkbox (JsonPromptStateText set in
-        ValidateParameters) so any future desync is immediately visible.
-    Schema src: https://github.com/ideogram-oss/ideogram4  (docs/prompting.md)
-                https://developer.ideogram.ai/llms-full.txt
-
-    WHY: a JSON *validator* is worthless (LLMs emit valid JSON). But Ideogram 4's
-    json_prompt carries spatial BBOXES, and placing boxes on a canvas is the one
-    thing an LLM is bad at. The editor adds that spatial value and replaces the
-    current hand-paste-and-edit-[y,x,y,x] workflow.
-
-    CRITICAL CONSTRAINT (confirmed in code + a prior live 422): the app goes
-    through Replicate, whose ideogram-v4 cog types json_prompt as a STRING, not an
-    object ("input.json_prompt: Expected: string, given: object"). So the editor
-    builds a typed model and serializes to a COMPACT STRING into Parameters.Prompt
-    with UseJsonPrompt=true — the existing IdeogramV4Descriptor.Build path is
-    UNCHANGED (Core/Domain/Descriptors/IdeogramV4Descriptors.cs:55-71).
-
-    TWO OUTPUTS from one model (Serialize(model, indented)):
-      - Prompt box        -> compact string (this app's Replicate generation).
-      - "Save JSON to file" -> pretty .json on disk
-        (Pictures\ImageGenerator.MAUI\json-prompts\) — portable to a local Ideogram
-        install / official API / any Ideogram-backed UI. (User-requested addition.)
-
-    SCHEMA (V4JsonPrompt): high_level_description (req); style_description
-    (aesthetics/lighting/medium + art_style XOR photo; color_palette <=16 #RRGGBB);
-    compositional_deconstruction (background + elements[]). Element type "obj" or
-    "text"; optional bbox [y_min,x_min,y_max,x_max] ints 0-1000, origin top-left,
-    canvas always 1000x1000; per-element palette <=5.
-
-    PHASING:
-      P1 (ship first, de-risked): Core model+serializer+validator (unit-tested);
-         editor page+VM (high-level/style/background/elements/palette panels);
-         render-only GraphicsView canvas + numeric/slider bbox + tap-to-select;
-         Apply hand-off (Shell query-param, mirror gallery "Use as input"); disk
-         export. Fully demoable; emits the exact JSON P2 will.
-      P2 (after P1 verifies): drag-move + corner-resize on the canvas; palette
-         polish; lenient round-trip for hand-authored JSON; optional draft persist.
-
-    NEW FILES: Core/Domain/Ideogram/{V4JsonPrompt, V4JsonPromptSerializer,
-      V4JsonPromptValidator}.cs; Presentation/ViewModels/
-      IdeogramStructureEditorViewModel.cs (+ ElementItemViewModel);
-      Presentation/Drawing/IdeogramCanvasDrawable.cs (+ CanvasCoordinateMapper);
-      Presentation/Views/IdeogramStructureEditorPage.xaml(.cs); Infrastructure/
-      {Interfaces/IJsonPromptFileService, Services/JsonPromptFileService}.cs
-    EDIT: AppShell.xaml.cs (route "ideogram-editor"); MauiProgram.cs (DI: transient
-      page+VM, singleton file service); GeneratorViewModel.cs
-      (OpenIdeogramEditorCommand, mirror OpenGalleryAsync ~:464); MainPage.xaml
-      ("Edit structure…" button in the SupportsIdeogramOptions block ~:183);
-      MainPage.xaml.cs (ideogramJson QueryProperty + setter, mirror AddInputPath
-      :24-34 — name it IdeogramJson NOT Json, like NavPath, to dodge a XAML-compile
-      collision); Shared/Constants/OutputPaths.cs (add JsonPromptsDirectory).
-
-    VERIFY (app CLOSED — MAUI locks the exe): dotnet build + dotnet test (keep 371
-      green + ~25-30 new); pick Ideogram V4 -> "Edit structure…" appears (absent for
-      Flux/GPT/Pollinations); build a structure -> Apply -> prompt box holds the
-      space-free JSON and the "Structured JSON prompt" checkbox is on -> re-open
-      round-trips the boxes; export writes a pretty .json; LIVE generate on
-      ideogram-v4-turbo -> NO 422, elements land near their bboxes; regression:
-      Flux/GPT/Pollinations unchanged and UseJsonPrompt auto-clears.
-
-    RISKS: canvas gestures (highest — P1 sidesteps with numeric/tap); compact-string
-      parity (lock with an exact-string test, don't hand-roll a minifier); never
-      serialize an object into the payload (keeps the 422 dead); URI length of the
-      hand-off (fallback: a singleton IIdeogramDraftHandoff).
+    RISKS / UNKNOWNS: fireEngine reachability (ComfyUI must run with --listen
+    so it binds 0.0.0.0, plus firewall + actual port — verify with
+    GET /system_stats before writing code); API-format export location varies
+    by ComfyUI version; generations take minutes on local GPUs (generous Polly
+    timeouts on the named client); no auth by default — LAN-only assumption.
 
 
-CORRECTNESS — open
-------------------
+OPEN — owed from the editor bundle
+----------------------------------
 
-(Empty — .Result refactor shipped in 2d96a6d, see RECENTLY COMPLETED.)
-
-
-COSMETIC / QUICK WINS — all resolved 2026-05-25 (4 done in 588fc48, 2 won't-fix)
---------------------------------------------------------------------------------
-
-[x] (Minor) Second `/select,…` call site missed by QW5 — DONE 588fc48
-    Presentation/ViewModels/GenerationJob.cs:62-68
-    `FileLauncher.RevealInFolder` was migrated to
-    `ProcessStartInfo.ArgumentList` in 8551d31 but this second
-    explorer-select call site was missed. BuildFileName strips invalid
-    filename chars today so there is no current exploit; consistency
-    + defense-in-depth says either route through IFileLauncher
-    (already injected at the launcher level for other callers) or
-    switch to ArgumentList here too.
-
-[-] (Minor) Asymmetric suppression-flag ownership across F6 carve-up — WON'T FIX 2026-05-25
-    Presentation/ViewModels/GeneratorViewModel.cs:106,166-169,275-276
-    Presentation/ViewModels/ProviderFilterCoordinator.cs:34,73-83,100-108
-    `_suppressPreferredArUpdate` is host-owned + host-read while
-    `SuppressModelPersist` is coordinator-owned + host-read. Same
-    architectural question answered two ways. The audit suggested moving the
-    AR flag to InputImagesCoordinator "because the write path lives there" —
-    but that premise is wrong: SetAspectRatioProgrammatically is the single
-    programmatic-AR write chokepoint and is called from TWO sites — the host's
-    RefreshCapabilities (GeneratorViewModel.cs:142) AND the coordinator
-    callback (wired :250). The host-owned flag guards the host-owned
-    _parameters.PropertyChanged subscription and cleanly covers both callers;
-    moving it doesn't improve that and risks the line-142 path. Decided with
-    user to keep the current design.
-
-[x] (Minor) DispatchToUi triplicated — extract to one shared static — DONE 588fc48
-    Now Presentation/Common/UiDispatcher.cs; 3 VMs pull it in via `using static`.
-    Presentation/ViewModels/GeneratorViewModel.cs:405-418
-    Presentation/ViewModels/BatchCoordinator.cs:222-235
-    Presentation/ViewModels/GalleryViewModel.cs:304-317
-    Same six-line static across three VMs. Extract to
-    Presentation/Common/UiDispatcher.cs (or similar) and call from all
-    three. ~15min mechanical edit.
-
-[x] (Minor) Named-client constants declared but not used at registration — DONE 588fc48
-    MauiProgram.cs:60,65
-    Infrastructure/External/Replicate/ReplicateImageGenerationService.cs:13
-    Infrastructure/External/Pollinations/PollinationsImageGenerationService.cs:13
-    `HttpClientName` const exists on both services and is consumed
-    correctly at PollinationsCatalogService.cs:31, but MauiProgram
-    still hard-codes the same strings as literals in the two
-    AddHttpClient(…) calls. Wire the constants so a rename can't
-    silently desync the registration from the consumer.
-
-[x] (Minor) Five unsealed concretes left over from QW1 (8551d31) — DONE 588fc48
-    Infrastructure/Services/FileLauncher.cs:6
-    Infrastructure/Services/ClipboardService.cs:6
-    Infrastructure/Services/GalleryService.cs:15
-    Infrastructure/Services/ImageEncoderProvider.cs:18
-    Infrastructure/Services/ModelCatalogService.cs:11
-    `8551d31` sealed ReplicateImageGenerationService + ImageFileService;
-    these five matching concretes were not. None has subclasses, none
-    has protected virtual members. Mechanical 5× `public class` →
-    `public sealed class` edit.
-
-[-] (Nit) Mirror fires per-item during TruncateToMaxInputs — WON'T FIX 2026-05-25
-    Presentation/ViewModels/InputImagesCoordinator.cs:82-91,93-125
-    OnSelectedImagesChanged calls _mirrorImagePromptsToParameters on
-    every CollectionChanged, including each programmatic remove from
-    TruncateToMaxInputs. Cap is ≤14 and ImagePrompts is a tiny
-    ObservableCollection<string>, so the cost is negligible. Logged
-    for completeness; only matters if MaxImageInputs ever grows past
-    ~50. Decided with user to leave as-is until that cap actually grows.
+[ ] Quick Flux/GPT/Pollinations regression pass (low risk — UseJsonPrompt
+    auto-clear + descriptor paths are pinned by tests). Fold into the next
+    in-app verify session.
 
 
 MISSING TESTS — open (audit §9)
 -------------------------------
 
-[ ] (Minor) Default() registers 9 descriptors; production registers 12
-    Core/Domain/Descriptors/ModelDescriptorRegistry.cs:76-87
-    MauiProgram.cs:75-86
-    ProductionDescriptors() lists nine Replicate descriptors and omits
-    the three Pollinations descriptors (PollinationsFlux,
-    PollinationsZimage, PollinationsQwenImage). Tests that rely on
-    Default() therefore route Pollinations IDs through
-    FallbackPollinationsDescriptor instead of the concrete-typed
-    descriptor under test, so specific-descriptor Pollinations
-    behavior is currently tested only indirectly via the service
-    fixtures. Add the three descriptors to ProductionDescriptors() and
-    add Default_RegistersAllProductionDescriptors_AndCountMatchesMauiProgram
-    pinning the count.
+[ ] (Minor) ModelDescriptorRegistry.Default() omits the Pollinations (and
+    check: Ideogram?) descriptors that MauiProgram registers.
+    Core/Domain/Descriptors/ModelDescriptorRegistry.cs / MauiProgram.cs
+    Audit counted 9 vs 12; Ideogram V4 later added 3 more, so RE-DERIVE the
+    real lists before fixing. Tests relying on Default() route Pollinations
+    IDs through FallbackPollinationsDescriptor instead of the concrete types.
+    Fix: align ProductionDescriptors() with MauiProgram + add
+    Default_RegistersAllProductionDescriptors pinning the count.
+    Pairs naturally with any descriptor-surface commit.
 
 
-TRACKED-OPEN BUT NOT NEW (per audit + project memory)
------------------------------------------------------
+TRACKED-OPEN BUT NOT NEW (inert until the user asks — project memory)
+---------------------------------------------------------------------
 
-[ ] Feature: kontext (image-prompt for kontext models)
-[ ] Feature: negative_prompt
-    Both flagged in project memory's next-up list. Use the existing
-    descriptor pattern; near-zero structural impact.
-
-[ ] Feature: Pollinations image-input (manual test 2026-05-20)
-    Smoke test on a Pollinations model confirmed the Input Image card
-    stays hidden — all Pollinations descriptors inherit
-    PollinationsDescriptorBase with ImagePrompt:false (line 53). The
-    Pollinations API itself supports input images per the API reference
-    (documents/Pollinations API Reference.html and the v0/gen.pollinations.ai
-    /openapi.json it loads). Gap to close:
-      1. Flip ImagePrompt:true on the descriptors that actually support
-         it (likely a subset — verify per-model in the API docs, not
-         blanket on the base class).
-      2. PollinationsImageGenerationService.BuildUrl currently only
-         emits prompt/model/width/height/seed/enhance/safe. Add image=
-         (or whatever the spec calls it) when SelectedImages is non-
-         empty. The encoding is the unknown bit: Pollinations is GET-
-         only so expects a URL, but the app holds base64. Likely needs
-         either a URL-input path (Pollinations may accept data: URIs)
-         or a host-the-image-first step.
-      3. ModelCapabilities for Pollinations needs MaxImageInputs > 0
-         only where supported.
-    Generation otherwise works on master (F6 verified by user).
+[ ] Feature: kontext (image-prompt for kontext models) — descriptor pattern,
+    near-zero structural impact.
+[ ] Feature: negative_prompt — same.
+[ ] Feature: Pollinations image-input — descriptors inherit ImagePrompt:false;
+    API supports input images (documents/Pollinations API Reference.html).
+    Gap: per-model ImagePrompt:true, BuildUrl image= param (encoding unknown:
+    GET-only API vs the app's base64 — data: URI or host-first?), and
+    MaxImageInputs > 0 where supported.
 
 
-RECENTLY COMPLETED (for context — already on master)
-----------------------------------------------------
+SHIPPED 2026-06-10 — Ideogram V4 Structure Editor (compressed)
+--------------------------------------------------------------
 
-[x] (Moderate) .Result after Task.WhenAll — tuple-await refactor
-    Commit: 2d96a6d (2026-05-20)
-    The only .Result access in the codebase. After
-    `await Task.WhenAll(replicateTask, pollinationsTask)` the reads
-    were functionally safe (both tasks complete) but read as
-    sync-over-async at a glance. Replaced with
-    `var (replicate, pollinations) = (await replicateTask, await
-    pollinationsTask);` — both fetches still start concurrently
-    (no await until the tuple), parallelism preserved, .Result gone.
-    339/339 green.
+[x] Visual json_prompt builder for Ideogram V4 — 4 commits, all user-verified
+    in-app (incl. live generate, no 422), pushed:
+      be4a54f  P1: typed model + compact serializer + validator (Core/Domain/
+               Ideogram/), editor page/VM, render canvas + per-axis mapping,
+               Apply hand-off via Shell query params, pretty-.json export —
+               plus follow-ups A-E (canvas/resolution AR, prompt-Editor split
+               binding, UseJsonPrompt persist, palette swatches + RGB picker,
+               resolution persistence x3 rounds) and the MEL/NLog Trace fix.
+      c255c31  Phase 2: drag-move + corner-resize canvas gestures (VM state
+               machine, pixel-space corner hit-test, clamps).
+      0efd069  Follow-up F: palette Entry view->VM dropout — re-diagnosed (the
+               "RGB number entries" premise was false; those are Labels), fixed
+               with the OneWay + TextChanged split on both palette Entries.
+      97cd2ab  Follow-up G: palette hex auto-uppercases (VM re-set pattern);
+               "Examples" suggestion Pickers on all five style fields —
+               insert-into-Entry, fields stay free-form; Medium's trained
+               vocabulary [photograph, illustration, 3d_render, painting,
+               graphic_design] pinned by test (src: ideogram-oss/ideogram4
+               docs/prompting.md + developer.ideogram.ai/llms-full.txt).
+    371 -> 541 tests across the bundle; Debug + Release both 0 warnings.
 
-[x] XamlC XC0022 — type the two ItemDisplayBinding paths
-    Commit: 65e27b9 (2026-05-20)
-    Audit/memory both flagged this as "MainPage.xaml:97" but that
-    citation was pre-F6 stale. Actual warnings surfaced in Release
-    builds only, at lines 55 and 157 — both Picker.ItemDisplayBinding
-    inline-shorthand paths the XAML compiler couldn't type-check
-    (TokenProviderPicker.DisplayName and ModelPicker.Display). Switched
-    each to the long-form <Picker.ItemDisplayBinding> syntax with an
-    explicit x:DataType (vm:TokenProviderViewModel and vo:ModelOption
-    respectively); added a vo: alias for Core.Domain.ValueObjects.
-    Release build now: 0 warnings. Runtime behavior unchanged. 339
-    tests still green.
+    CONSTRAINTS THAT MUST OUTLIVE THIS ENTRY:
+      - Replicate's ideogram-v4 cog types json_prompt as a STRING: always
+        serialize COMPACT into Parameters.Prompt with UseJsonPrompt=true
+        (a typed object 422s). IdeogramV4Descriptor.Build is unchanged.
+      - Palette caps 16 (style) / 5 (element) are SCHEMA constants
+        (V4JsonPrompt.cs MaxPaletteColors), not app choices.
 
-[x] Store wrappers — UiStateStore + Api/Pollinations token stores
-    Commit: 82cc571 (2026-05-20)
-    Closed the last two MISSING TESTS items. Each store reaches a static
-    MAUI handler (SecureStorage.Default / Preferences.Default) that
-    throws outside an app-container context, so they had no direct tests
-    until now. Added an optional ISecureStorage / IPreferences ctor
-    parameter to each (defaulting to the platform static) — mirrors the
-    existing DebouncedSecureStorageWriter writer-Func seam, and MS.DI
-    honors the default when the interface isn't registered, so
-    MauiProgram.cs is unchanged.
-    Two ConcurrentDictionary-backed stubs land in Tests/TestSupport/
-    (StubSecureStorage, StubPreferences) with throw-on-X hooks for
-    catch-path assertions (the debounced writer fires from background
-    Task.Run, so the concurrent backing matters).
-    New fixtures: UiStateStoreTests (11), ApiTokenStoreTests (7),
-    PollinationsTokenStoreTests (7). Persist tests wait 700ms (200ms
-    above the SUT's hard-coded 500ms debounce); fixtures run in
-    parallel so the wall-time impact is bounded.
-    314 → 339 tests green.
+    LESSONS (suspect these FIRST on similar symptoms):
+      - WinUI Entry/Editor TwoWay view->VM bindings can silently stop pushing
+        (paste/clear/paste class). Fix: Mode=OneWay + explicit TextChanged
+        push. Done: MainPage prompt Editor (B), both palette Entries (F).
+        Any future "typing does nothing" report -> this, before VM debugging.
+      - WinUI ComboBox pushes SelectedItem=null on a LATER dispatcher tick
+        after an ItemsSource swap; suppression windows can't catch it. Keep
+        the _lastValidResolution-style revert (GeneratorViewModel).
+      - MEL's default Information filter eats LogDebug before NLog sees it:
+        builder.Logging.SetMinimumLevel(Trace); NLog rules are the filter.
+      - STALE BINARY trap: the user launches the bin\Debug exe — rebuild BOTH
+        configs before believing a "fix refuted" re-test.
 
-[x] ST3 + PollinationsCatalogService tests — broader Pollinations coverage
-    Commit: a74ba00 (2026-05-20)
-    PollinationsImageGenerationServiceTests gained 11 new tests covering
-    safe=nsfw URL toggle, Bearer header on/off (incl. whitespace token),
-    HTTP 4xx/5xx body inclusion, token redaction, undersized response,
-    handler-thrown OperationCanceledException, and the success-message
-    format. Fixture refactored: a _nextResponse Func lets each test swap
-    the response without losing the request-capture callback;
-    MockBehavior switched to Loose because the SUT's `using var
-    httpClient` triggers handler.Dispose at scope exit (Strict was
-    silently producing an "An error occurred" message that masked every
-    assertion — the prior seed tests only passed because they never
-    read result.Message).
-    PollinationsCatalogServiceTests is new — 13 tests covering filter
-    rules (image modality, paid_only!=true, blank name), display-name
-    extraction (description prefix before " - ", full description,
-    title-cased slug fallback, always-(Pollinations) suffix),
-    value/provider mapping, and three empty-result paths (HTTP error,
-    invalid JSON, JSON null payload — the last exercises the
-    `entries is null` early return rather than the catch block).
-    No production code changes. 290 → 314 tests green.
 
-[x] F6 (Large) — Carve up GeneratorViewModel into three sub-VM coordinators
-    Commit: 8691056 (2026-05-20)
-    Fix: extracted InputImagesCoordinator (SelectedImages + AR sticky +
-    image cmds), ProviderFilterCoordinator (Providers / SelectedProvider /
-    FilteredModels / SelectedModel + ApplyCatalog + RestoreSelectedModel
-    + SyncSelectionFromParameters; owns its own SuppressModelPersist
-    flag), and BatchCoordinator (IsBatchRunning + RunBatchAsync +
-    CancelBatchCommand + PickAndParsePromptsAsync; receives the shared
-    RunJobAsync via callback so single-job and batch share the same
-    execution seam). Followed the TokenProviderViewModel precedent —
-    sub-VM owns bindable state, host wires via constructor-injected
-    delegates, XAML reaches in via nested binding paths.
-    VM is ~520 lines (was 933). Three coordinator files total ~440 lines.
-    Tests: three new coordinator-specific files (7 + 8 + 5 = 20 new
-    tests). 290/290 green.
+OLDER COMPLETED (full details in this file's git history @ 97cd2ab)
+-------------------------------------------------------------------
 
-[x] F4 (Moderate) — IHttpClientFactory migration for raw HttpClient consumers
-    Commit: 49f68a7 (2026-05-20)
-    Fix: extracted ConfigureStandardResilience as a reusable
-    IHttpClientBuilder extension; AddRefitClient<T> delegates to it
-    (behavior unchanged). Registered two named clients —
-    "replicate-download" (60s/3min) and "pollinations" (BaseAddress
-    gen.pollinations.ai, 60s/3min, shared by gen + catalog). Refactored
-    ReplicateImageGenerationService, PollinationsImageGenerationService,
-    and PollinationsCatalogService to take IHttpClientFactory and
-    CreateClient(name) per request. Dropped inline CancelAfter blocks —
-    Polly's per-attempt timeout is now the ceiling.
-    Tests: new StubHttpClientFactory under Tests/TestSupport/; three
-    fixtures updated (Replicate, Pollinations, dispatcher). 270/270 green.
-
-[x] F8 (Minor) — Idempotent LoadAllTokens + LoadSavedUiState on OnAppearing
-    Commit: 29fd6d1 (2026-05-20)
-    Fix: added _tokensLoaded / _uiStateLoaded guard flags mirroring the
-    existing _cachedCatalogLoaded pattern; both methods now short-circuit
-    on the second call. Removes the latent race where a re-run of
-    LoadSavedUiState could re-apply persisted prompt/model over the
-    user's in-memory state during the debounce window.
-    New tests: LoadAllTokensAsync_IsIdempotent_WhenCalledTwice,
-    LoadSavedUiState_IsIdempotent_WhenCalledTwice. 270/270 green.
-
-[x] Cosmetic bundle — F9 + F10 + ModelCapabilities move + QW6 + QW5 + QW4
-    Commit: 8551d31 (2026-05-20)
-    F9:  ToLower() -> ToLowerInvariant() (GeneratorViewModel.cs:92).
-    F10: sealed ReplicateImageGenerationService and ImageFileService;
-         protected virtual DownloadImageAsync is now private.
-    Layering: ModelCapabilities moved from Presentation/ViewModels/
-         to Core/Domain/ValueObjects/; usings updated in interface +
-         7 descriptors; test file relocated to mirror the new layout.
-    QW6: ModelConstants.Pollinations.IsId(string?) added; three
-         duplicate locals deleted from dispatcher / registry / VM.
-    QW5: FileLauncher.RevealInFolder now uses ProcessStartInfo.ArgumentList.
-    QW4: ReplicatePredictionResponse.Input widened to
-         Dictionary<string, object?>?.
-    Zero behavior change; 268/268 tests still pass.
-
-[x] F1 (Major) — Dispatcher seed mutation
-    Commit: d77d180 (2026-05-20)
-    Fix: moved int32 clamp to PollinationsImageGenerationService as
-    a `request with { Seed = ... }` on the immutable PollinationsRequest.
-    Tests: ImageGenerationDispatcherTests (4), PollinationsImageGenerationServiceTests (2).
-
-[x] F7 (Moderate) — JobRunner partial-file cleanup
-    Commit: 50317a1 (2026-05-20)
-    Fix: wrap SaveImageWithMetadataAsync in try/catch; best-effort
-    File.Delete the partial file; return JobOutcome(Failed, ...).
-    New tests: JobRunnerTests (6). 268/268 green.
-
-[x] F2 (Major) — Token-store CTS race
-[x] F3 (Major) — MainPage state loss on Shell GoToAsync
-[x] F5 (Moderate) — Token-store duplication
-    Commit: c446d35 — extracted DebouncedSecureStorageWriter,
-    promoted GeneratorViewModel to Singleton, query-prop on MainPage.
+[x] 2026-05-25 cosmetic cluster — 588fc48 (2nd /select call site, UiDispatcher
+    extract, named-client consts wired, 5x sealed); won't-fix: suppression-flag
+    asymmetry (decided with user — host-owned flag guards both callers),
+    per-item mirror during TruncateToMaxInputs (negligible until cap >> 14).
+[x] 2026-05-20 audit wave — 2d96a6d (.Result tuple-await), 65e27b9 (XamlC
+    XC0022), 82cc571 (store-wrapper tests + Stub{SecureStorage,Preferences}),
+    a74ba00 (Pollinations service/catalog tests), 8691056 (F6: GeneratorVM ->
+    3 coordinators), 49f68a7 (F4: IHttpClientFactory + named clients),
+    29fd6d1 (F8: idempotent loads), 8551d31 (cosmetic bundle F9/F10/QW4-6),
+    d77d180 (F1: seed clamp), 50317a1 (F7: partial-file cleanup),
+    c446d35 (F2/F3/F5: DebouncedSecureStorageWriter, singleton VM, query-prop).
 
 
 HOW TO PICK THE NEXT ITEM
 -------------------------
 
-1. Prefer Correctness over Cosmetic over Missing-tests.
-2. The single Correctness item (.Result refactor) is the smallest
-   commit in the queue — do it first.
-3. Within Cosmetic, smaller-scope first: seal-bundle (one ~5min
-   commit), constant-wire (one ~5min commit), and the second
-   /select, fix (one ~5min commit) are all mechanical. DispatchToUi
-   extract is ~15min. Suppression-flag move is the largest cosmetic
-   and ripples through GeneratorViewModel + InputImagesCoordinator.
-4. The Missing-Tests item (Default() registry completeness) pairs
-   naturally with the seal-bundle commit since both touch the
-   descriptor surface.
+1. The ComfyUI provider is the user-chosen next feature — start with a
+   plan-mode session; verify fireEngine reachability (GET /system_stats)
+   before writing any code.
+2. The regression pass is a 10-minute manual smoke — fold it into the next
+   in-app verify session rather than running it as its own task.
+3. The Default()-registry test item pairs with any descriptor-surface commit
+   (the ComfyUI provider will be one).
+4. kontext / negative_prompt / Pollinations image-input stay inert until the
+   user asks (project memory: don't suggest unused features).
 5. Update this file when you start (set [~]) and when you finish
    (set [x] + commit hash).
