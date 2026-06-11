@@ -198,12 +198,18 @@ NEXT FEATURE — ComfyUI as a local provider (plan next context)
     timeouts on the named client); no auth by default — LAN-only assumption.
 
 
-OPEN — owed from the editor bundle
+DONE — owed from the editor bundle
 ----------------------------------
 
-[ ] Quick Flux/GPT/Pollinations regression pass (low risk — UseJsonPrompt
-    auto-clear + descriptor paths are pinned by tests). Fold into the next
-    in-app verify session.
+[x] Quick Flux/GPT/Pollinations regression pass — PASSED 2026-06-11 (user,
+    in-app): Flux + GPT legs OK, Pollinations flux + zimage generate fine,
+    "everything else is OK". One NON-regression fail observed on a
+    Bedrock-backed Pollinations model: upstream 400
+    "textToImageParams/text maxLength 1024, actual 1992" — a per-model
+    upstream prompt cap that /models does not advertise; app error path
+    behaved correctly (logged body, job card Failed, queue unaffected).
+    Decided with user: NO app-side prompt-length clamping (caps are
+    unpublished; would be guesswork hardcoding).
 
 
 DONE — v1.5.0 release readiness (tag itself still deferred, user decision)
@@ -325,13 +331,13 @@ OLDER COMPLETED (full details in this file's git history @ 97cd2ab)
 HOW TO PICK THE NEXT ITEM
 -------------------------
 
-1. The ComfyUI provider is the user-chosen next feature — start with a
-   plan-mode session; verify fireEngine reachability (GET /system_stats)
-   before writing any code.
-2. The regression pass is a 10-minute manual smoke — fold it into the next
-   in-app verify session rather than running it as its own task.
-3. The Default()-registry test item pairs with any descriptor-surface commit
-   (the ComfyUI provider will be one).
+1. v1.5.0 is RELEASE-READY (version bumped to 1.5.0 in 97023b7, readiness
+   item + regression pass both [x]) — the tag/release is the next step the
+   moment the user asks: `pwsh ./publish.ps1` then `gh release create`
+   (pattern: v1.4.1 notes in this file's history).
+2. The Default()-registry test item pairs with any descriptor-surface
+   commit (ComfyUI phase 2 would be one).
+3. ComfyUI phase 2 is parked until the user asks (see the PHASE 2 block).
 4. kontext / negative_prompt / Pollinations image-input stay inert until the
    user asks (project memory: don't suggest unused features).
 5. Update this file when you start (set [~]) and when you finish
