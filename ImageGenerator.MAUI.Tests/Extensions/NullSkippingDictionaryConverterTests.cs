@@ -1,7 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
 using ImageGenerator.MAUI.Extensions;
-using ImageGenerator.MAUI.Models.Replicate;
+using ImageGenerator.MAUI.Infrastructure.External.Replicate;
 
 namespace ImageGenerator.MAUI.Tests.Extensions;
 

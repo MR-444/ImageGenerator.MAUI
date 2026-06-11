@@ -1,7 +1,6 @@
 using FluentAssertions;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
-using ImageGenerator.MAUI.Models.Replicate;
 using Moq;
 
 namespace ImageGenerator.MAUI.Tests.Services.Replicate;

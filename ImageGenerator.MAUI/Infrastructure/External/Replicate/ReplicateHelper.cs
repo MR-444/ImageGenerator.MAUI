@@ -1,5 +1,4 @@
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
-using ImageGenerator.MAUI.Models.Replicate;
 
 namespace ImageGenerator.MAUI.Infrastructure.External.Replicate;
 

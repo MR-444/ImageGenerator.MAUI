@@ -1,4 +1,3 @@
-using ImageGenerator.MAUI.Models.Replicate;
 using Refit;
 
 namespace ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;

@@ -2,7 +2,6 @@ using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
-using ImageGenerator.MAUI.Models.Replicate;
 using Microsoft.Extensions.Logging;
 
 

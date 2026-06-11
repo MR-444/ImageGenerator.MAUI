@@ -59,9 +59,9 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
     public IReadOnlyList<ModelOption> Seeds { get; }
 
     /// <summary>
-    /// Mirrors the original ImageModelFactory.LooksLikeReplicatePath gate — only payload-build
-    /// for ids that look like an owner/name path. Anything else throws so misconfigured models
-    /// fail loud at generation time instead of silently shipping the conservative dict shape.
+    /// Only payload-build for ids that look like an owner/name path. Anything else throws so
+    /// misconfigured models fail loud at generation time instead of silently shipping the
+    /// conservative dict shape.
     /// </summary>
     private static bool LooksLikeReplicatePath(string modelName)
     {

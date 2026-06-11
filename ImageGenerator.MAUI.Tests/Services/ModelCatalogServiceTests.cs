@@ -2,7 +2,7 @@ using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.Services;
-using ImageGenerator.MAUI.Models.Replicate;
+using ImageGenerator.MAUI.Infrastructure.External.Replicate;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
