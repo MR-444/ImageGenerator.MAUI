@@ -280,6 +280,11 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
     [RelayCommand]
     private void AddPickerColorToStyle()
     {
+        if (PaletteSwatches.Contains(StylePaletteText, PickerHex))
+        {
+            SetStatus($"{PickerHex} is already in the style palette.", StatusKind.Warning);
+            return;
+        }
         if (StylePaletteSwatches.Count >= StyleDescription.MaxPaletteColors)
         {
             SetStatus($"Style palette is full ({StyleDescription.MaxPaletteColors} colors max).", StatusKind.Warning);
@@ -293,6 +298,11 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
     private void AddPickerColorToElement()
     {
         if (SelectedElement is null) return;
+        if (PaletteSwatches.Contains(SelectedElement.PaletteText, PickerHex))
+        {
+            SetStatus($"{PickerHex} is already in the element palette.", StatusKind.Warning);
+            return;
+        }
         if (SelectedElement.Swatches.Count >= Element.MaxPaletteColors)
         {
             SetStatus($"Element palette is full ({Element.MaxPaletteColors} colors max).", StatusKind.Warning);

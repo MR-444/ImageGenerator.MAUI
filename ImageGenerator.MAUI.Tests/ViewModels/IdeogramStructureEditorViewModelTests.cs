@@ -554,6 +554,35 @@ public class IdeogramStructureEditorViewModelTests
     }
 
     [Fact]
+    public void AddPickerColorToStyle_IgnoresDuplicate_AndWarns()
+    {
+        var sut = CreateSut();
+        sut.StylePaletteText = "#FF0000";
+        sut.PickerRed = 255; sut.PickerGreen = 0; sut.PickerBlue = 0;
+
+        sut.AddPickerColorToStyleCommand.Execute(null);
+
+        sut.StylePaletteText.Should().Be("#FF0000");
+        sut.StatusKind.Should().Be(StatusKind.Warning);
+        sut.StatusMessage.Should().Contain("#FF0000");
+    }
+
+    [Fact]
+    public void AddPickerColorToElement_IgnoresDuplicate_AndWarns()
+    {
+        var sut = CreateSut();
+        sut.AddObjElementCommand.Execute(null);
+        sut.PickerRed = 0; sut.PickerGreen = 255; sut.PickerBlue = 0;
+
+        sut.AddPickerColorToElementCommand.Execute(null);
+        sut.AddPickerColorToElementCommand.Execute(null);
+
+        sut.SelectedElement!.PaletteText.Should().Be("#00FF00");
+        sut.StatusKind.Should().Be(StatusKind.Warning);
+        sut.StatusMessage.Should().Contain("#00FF00");
+    }
+
+    [Fact]
     public void RemoveStyleColor_RebuildsPaletteText()
     {
         var sut = CreateSut();

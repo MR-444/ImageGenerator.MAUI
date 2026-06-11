@@ -31,6 +31,10 @@ public static partial class PaletteSwatches
     public static string ToHex(int red, int green, int blue) =>
         $"#{Math.Clamp(red, 0, 255):X2}{Math.Clamp(green, 0, 255):X2}{Math.Clamp(blue, 0, 255):X2}";
 
+    /// <summary>True if the normalized palette text already contains <paramref name="hex"/>.</summary>
+    public static bool Contains(string paletteText, string hex) =>
+        ElementItemViewModel.ParsePalette(paletteText)?.Contains(hex) == true;
+
     /// <summary>Appends <paramref name="hex"/> to a comma-separated palette text.</summary>
     public static string Append(string paletteText, string hex) =>
         string.IsNullOrWhiteSpace(paletteText) ? hex : $"{paletteText.TrimEnd().TrimEnd(',')}, {hex}";

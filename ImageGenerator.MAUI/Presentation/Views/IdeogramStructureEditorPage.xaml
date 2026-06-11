@@ -196,7 +196,7 @@
                             <!-- Selected element editor -->
                             <VerticalStackLayout Spacing="8" IsVisible="{Binding HasSelectedElement}">
                                 <BoxView HeightRequest="1" Color="{AppThemeBinding Light={StaticResource SurfaceBorderLight}, Dark={StaticResource SurfaceBorderDark}}" />
-                                <Label Text="{Binding SelectedElement.Summary}" Style="{StaticResource FieldLabel}" />
+                                <Label Text="{Binding SelectedElement.Type, StringFormat='[{0}] element'}" Style="{StaticResource FieldLabel}" />
 
                                 <Label Text="Description" Style="{StaticResource FieldLabel}" />
                                 <Entry Text="{Binding SelectedElement.Desc}" Placeholder="What this element is…"
