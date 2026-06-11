@@ -2,11 +2,12 @@ ImageGenerator.MAUI — Open Work Queue
 =====================================
 
 Source of truth: AUDIT_REPORT.md (audit dated 2026-05-20 — predates v1.3.0+).
-Last updated: 2026-06-11 (v1.5.0 readiness item DONE: README ComfyUI section
-+ sanitized sample workflow shipped in comfy-workflows/; the v1.5.0 tag itself
-is the remaining user decision. Full per-item forensics of everything
-compressed below live in this file's git history, last full version at
-commit 97cd2ab).
+Last updated: 2026-06-11 (v1.5.0 RELEASED — tag v1.5.0 "Structure Editor &
+ComfyUI", exe attached, --latest:
+https://github.com/MR-444/ImageGenerator.MAUI/releases/tag/v1.5.0
+118.2 MB publish.ps1 exe; readiness item + regression pass were closed the
+same day. Full per-item forensics of everything compressed below live in
+this file's git history, last full version at commit 97cd2ab).
 
 Format: each item has a status box, severity, a one-line hook, and
 file:line citations. Pick the top open item; keep this file in sync
@@ -331,10 +332,9 @@ OLDER COMPLETED (full details in this file's git history @ 97cd2ab)
 HOW TO PICK THE NEXT ITEM
 -------------------------
 
-1. v1.5.0 is RELEASE-READY (version bumped to 1.5.0 in 97023b7, readiness
-   item + regression pass both [x]) — the tag/release is the next step the
-   moment the user asks: `pwsh ./publish.ps1` then `gh release create`
-   (pattern: v1.4.1 notes in this file's history).
+1. v1.5.0 RELEASED 2026-06-11 — nothing release-blocking remains; next
+   work is whatever the user picks (ComfyUI phase 2 is the parked feature
+   pool, the Default()-registry test the parked hygiene item).
 2. The Default()-registry test item pairs with any descriptor-surface
    commit (ComfyUI phase 2 would be one).
 3. ComfyUI phase 2 is parked until the user asks (see the PHASE 2 block).
