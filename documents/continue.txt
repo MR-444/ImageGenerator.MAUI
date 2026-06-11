@@ -18,9 +18,21 @@ next pass).
 PARKED FEATURE POOL — ComfyUI Phase 2 (user picks when)
 -------------------------------------------------------
 
-[ ] Checkpoint lookup via GET /object_info — CheckpointLoaderSimple.input.
-    required.ckpt_name[0] is the list of local checkpoints (same trick for
-    LoRAs, samplers, VAEs); patch into the template's CheckpointLoaderSimple.
+[x] Checkpoint lookup via GET /object_info — DONE d7d33ec 2026-06-11,
+    USER-VERIFIED on fireEngine: narrow /object_info/CheckpointLoaderSimple
+    fetch (5 s timeout, disk cache comfyui-checkpoints.json), picker on
+    model select (default = workflow's baked ckpt = no patch; hidden + INFO
+    log when no literal loader — e.g. split-loader graphs), per-workflow
+    sticky pick (imggen.comfyui_checkpoint.<wf>). Verified: Count=8 fetch,
+    sticky restore, zavychromaxl render via "Checkpoint Test.json" (user-
+    local Pictures file, not in repo), SD3.5 clip-missing error proved the
+    patched checkpoint really loads server-side. 693 tests.
+[ ] UNETLoader extension (user-picked follow-up): same trick via
+    /object_info/UNETLoader → unet_name[0]. DESIGN WRINKLE: Ideogram_wf_san
+    has TWO UNETLoaders with DIFFERENT models (ideogram4 + ideogram4_
+    unconditional feeding DualModelGuider) — one shared pick would corrupt
+    the pair. Decide: picker per loader node vs lowest-id-only vs
+    only-when-exactly-one-loader.
 [ ] POST /interrupt on cancel (today the server finishes its render — known).
 [ ] WS /ws?clientId= progress instead of 2 s /history polling.
 [ ] Auth header for proxied setups (LAN-only assumption today).
