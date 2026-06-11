@@ -1,6 +1,7 @@
 using FluentAssertions;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.Services;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -48,7 +49,7 @@ public class JobRunnerTests : IDisposable
     {
         var parameters = SampleParameters();
         var expectedPath = PathInTempDir();
-        _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>()))
+        _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new GeneratedImage { ImageData = new byte[] { 1, 2, 3 }, Message = "ok" });
         _imageFileService.Setup(f => f.GetUniqueSavePath(It.IsAny<string>(), parameters))
             .Returns(expectedPath);
@@ -66,7 +67,7 @@ public class JobRunnerTests : IDisposable
     public async Task RunAsync_ServiceReturnsNullImageData_ReturnsFailedOutcome()
     {
         var parameters = SampleParameters();
-        _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>()))
+        _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new GeneratedImage { ImageData = null, Message = "service error" });
 
         var outcome = await _sut.RunAsync(parameters, CancellationToken.None);
@@ -83,7 +84,7 @@ public class JobRunnerTests : IDisposable
     public async Task RunAsync_ServiceReturnsEmptyImageData_ReturnsFailedOutcome()
     {
         var parameters = SampleParameters();
-        _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>()))
+        _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new GeneratedImage { ImageData = Array.Empty<byte>(), Message = "empty" });
 
         var outcome = await _sut.RunAsync(parameters, CancellationToken.None);
@@ -94,12 +95,27 @@ public class JobRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_ForwardsProgressSinkToService()
+    {
+        var parameters = SampleParameters();
+        var progress = new Progress<JobProgress>();
+        _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>(), progress))
+            .ReturnsAsync(new GeneratedImage { ImageData = null, Message = "x" })
+            .Verifiable();
+
+        await _sut.RunAsync(parameters, CancellationToken.None, progress);
+
+        _imageService.Verify(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>(), progress), Times.Once,
+            "the job card's progress sink must reach the generation service untouched");
+    }
+
+    [Fact]
     public async Task RunAsync_ServiceThrowsOperationCanceled_Propagates()
     {
         // The VM's RunJobAsync distinguishes OperationCanceledException from other failures, so
         // JobRunner must not catch it — let it bubble.
         var parameters = SampleParameters();
-        _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>()))
+        _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ThrowsAsync(new OperationCanceledException());
 
         var act = async () => await _sut.RunAsync(parameters, CancellationToken.None);
@@ -114,7 +130,7 @@ public class JobRunnerTests : IDisposable
         // can leave a partial image on disk. JobRunner must best-effort delete it.
         var parameters = SampleParameters();
         var partialPath = PathInTempDir("partial.png");
-        _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>()))
+        _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new GeneratedImage { ImageData = new byte[] { 1, 2, 3 }, Message = "ok" });
         _imageFileService.Setup(f => f.GetUniqueSavePath(It.IsAny<string>(), parameters))
             .Returns(partialPath);
@@ -141,7 +157,7 @@ public class JobRunnerTests : IDisposable
         // branch must still execute cleanly (File.Exists returns false; no delete attempt).
         var parameters = SampleParameters();
         var targetPath = PathInTempDir("never-written.png");
-        _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>()))
+        _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new GeneratedImage { ImageData = new byte[] { 1, 2, 3 }, Message = "ok" });
         _imageFileService.Setup(f => f.GetUniqueSavePath(It.IsAny<string>(), parameters))
             .Returns(targetPath);

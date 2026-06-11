@@ -3,6 +3,7 @@ using System.Text;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects.Pollinations;
 using Microsoft.Extensions.Logging;
 
@@ -36,7 +37,11 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters, CancellationToken cancellationToken = default)
+    // progress is unused: the Pollinations GET returns in one shot, there is nothing to report.
+    public async Task<GeneratedImage> GenerateImageAsync(
+        ImageGenerationParameters parameters,
+        CancellationToken cancellationToken = default,
+        IProgress<JobProgress>? progress = null)
     {
         try
         {

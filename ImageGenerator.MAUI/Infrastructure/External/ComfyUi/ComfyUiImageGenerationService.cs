@@ -5,6 +5,7 @@ using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.ComfyUi;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects.ComfyUi;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
@@ -34,6 +35,8 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
     // budget — short, because a dead host must not hang the cancel path (the shared
     // resilience pipeline would allow minutes).
     private static readonly TimeSpan CancelNotifyTimeout = TimeSpan.FromSeconds(5);
+    // WS connect budget: a proxied/blocked setup must degrade to polling fast, not stall the job.
+    private static readonly TimeSpan WsConnectTimeout = TimeSpan.FromSeconds(5);
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IModelDescriptorRegistry _registry;
@@ -42,6 +45,7 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
     private readonly string _workflowsDirectory;
     private readonly TimeSpan _pollInterval;
     private readonly TimeSpan _maxPollDuration;
+    private readonly Func<IComfyUiSocket> _socketFactory;
 
     public ComfyUiImageGenerationService(
         IHttpClientFactory httpClientFactory,
@@ -50,7 +54,8 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
         ILogger<ComfyUiImageGenerationService> logger,
         string? workflowsDirectoryOverride = null,
         TimeSpan? pollInterval = null,
-        TimeSpan? maxPollDuration = null)
+        TimeSpan? maxPollDuration = null,
+        Func<IComfyUiSocket>? socketFactory = null)
     {
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
@@ -59,9 +64,13 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
         _workflowsDirectory = workflowsDirectoryOverride ?? OutputPaths.ComfyWorkflowsDirectory;
         _pollInterval = pollInterval ?? DefaultPollInterval;
         _maxPollDuration = maxPollDuration ?? DefaultMaxPollDuration;
+        _socketFactory = socketFactory ?? (() => new ClientWebSocketComfyUiSocket());
     }
 
-    public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters, CancellationToken cancellationToken = default)
+    public async Task<GeneratedImage> GenerateImageAsync(
+        ImageGenerationParameters parameters,
+        CancellationToken cancellationToken = default,
+        IProgress<JobProgress>? progress = null)
     {
         try
         {
@@ -104,7 +113,12 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
 
             using var httpClient = _httpClientFactory.CreateClient(HttpClientName);
 
-            var promptId = await QueuePromptAsync(httpClient, baseUri, patched.GraphJson, cancellationToken);
+            // The ws connection must exist with the SAME clientId BEFORE the prompt is queued,
+            // or the server's early events (execution_start, first progress) are lost.
+            var clientId = Guid.NewGuid().ToString("N");
+            await using var socket = await TryConnectSocketAsync(baseUri, clientId, cancellationToken);
+
+            var promptId = await QueuePromptAsync(httpClient, baseUri, patched.GraphJson, clientId, cancellationToken);
             if (promptId.Error is not null) return Fail(promptId.Error);
 
             // The HttpClient/Polly per-request logging is blackholed below Warning
@@ -113,6 +127,15 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
 
             try
             {
+                // Live progress + completion signal; on any ws failure this returns silently
+                // and the poll below carries the job exactly as before.
+                if (socket is not null)
+                {
+                    await WaitViaWebSocketAsync(socket, promptId.Value!, progress, cancellationToken);
+                }
+
+                // First iteration returns immediately when the ws saw completion; otherwise
+                // this is the unchanged 2 s polling fallback.
                 var entry = await PollHistoryAsync(httpClient, baseUri, promptId.Value!, cancellationToken);
 
                 if (entry.Status?.StatusStr == "error"
@@ -177,12 +200,13 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
     }
 
     private async Task<(string? Value, string? Error)> QueuePromptAsync(
-        HttpClient httpClient, Uri baseUri, string graphJson, CancellationToken ct)
+        HttpClient httpClient, Uri baseUri, string graphJson, string clientId, CancellationToken ct)
     {
         var body = new JsonObject
         {
             ["prompt"] = JsonNode.Parse(graphJson),
-            ["client_id"] = Guid.NewGuid().ToString("N")
+            // Same id the ws connected with — that is what routes the progress events to us.
+            ["client_id"] = clientId
         };
         using var content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
         using var response = await httpClient.PostAsync(new Uri(baseUri, "prompt"), content, ct);
@@ -204,6 +228,106 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
         }
         return (parsed.PromptId, null);
     }
+
+    /// <summary>
+    /// Opens the progress WebSocket (ws(s)://host/ws?clientId=…) with a short connect budget.
+    /// Null on any failure — the caller silently degrades to /history polling, so proxied or
+    /// ws-blocked setups keep working.
+    /// </summary>
+    private async Task<IComfyUiSocket?> TryConnectSocketAsync(Uri baseUri, string clientId, CancellationToken ct)
+    {
+        var socket = _socketFactory();
+        try
+        {
+            // Resolve "ws" relative to the base like the HTTP endpoints do, then flip the scheme.
+            var wsUri = new UriBuilder(new Uri(baseUri, "ws"))
+            {
+                Scheme = baseUri.Scheme == Uri.UriSchemeHttps ? "wss" : "ws",
+                Query = "clientId=" + clientId
+            }.Uri;
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(WsConnectTimeout);
+            await socket.ConnectAsync(wsUri, timeoutCts.Token);
+
+            _logger.LogInformation("ComfyUI ws connected ClientId={ClientId}", clientId);
+            return socket;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            await socket.DisposeAsync();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await socket.DisposeAsync();
+            _logger.LogWarning(ex, "ComfyUI ws unavailable — falling back to polling");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Consumes ws events until OUR prompt completes or fails (history carries the outcome
+    /// either way — the caller's /history fetch handles both), reporting sampler progress
+    /// along the way. Every event is filtered by prompt id: clientId routing should already
+    /// isolate us, but a browser tab on the same server must never confuse the app. Returns
+    /// normally on any socket failure so the caller falls back to polling.
+    /// </summary>
+    private async Task WaitViaWebSocketAsync(
+        IComfyUiSocket socket, string promptId, IProgress<JobProgress>? progress, CancellationToken ct)
+    {
+        try
+        {
+            // Same overall deadline as the poll loop, enforced on the receive calls.
+            using var deadlineCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            deadlineCts.CancelAfter(_maxPollDuration);
+
+            while (true)
+            {
+                var message = await socket.ReceiveTextAsync(deadlineCts.Token);
+                if (message is null)
+                {
+                    _logger.LogWarning("ComfyUI ws closed by server — falling back to polling");
+                    return;
+                }
+
+                switch (ComfyUiWsEvent.TryParse(message))
+                {
+                    case ComfyUiWsEvent.ExecutionStart start when start.PromptId == promptId:
+                        progress?.Report(new JobProgress("Rendering…"));
+                        break;
+
+                    case ComfyUiWsEvent.Progress step when step.PromptId == promptId:
+                        progress?.Report(new JobProgress(
+                            $"Rendering… {step.Value}/{step.Max}",
+                            step.Max > 0 ? (double)step.Value / step.Max : null));
+                        break;
+
+                    case ComfyUiWsEvent.Completed completed when completed.PromptId == promptId:
+                        return;
+
+                    case ComfyUiWsEvent.Failed failed when failed.PromptId == promptId:
+                        return;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw; // user cancel — the caller's cancel path notifies the server
+        }
+        catch (OperationCanceledException)
+        {
+            throw new TimeoutException(PollTimeoutMessage()); // ws stayed silent past the deadline
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ComfyUI ws receive failed — falling back to polling");
+        }
+    }
+
+    private string PollTimeoutMessage() =>
+        $"ComfyUI did not finish within {_maxPollDuration.TotalMinutes:0} minutes — "
+        + "the job may still be queued behind others on the server.";
 
     /// <summary>
     /// Best-effort server-side cancel, mirroring what ComfyUI's own UI cancel button does:
@@ -275,9 +399,7 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
             ct.ThrowIfCancellationRequested();
             if (DateTimeOffset.UtcNow > deadline)
             {
-                throw new TimeoutException(
-                    $"ComfyUI did not finish within {_maxPollDuration.TotalMinutes:0} minutes — "
-                    + "the job may still be queued behind others on the server.");
+                throw new TimeoutException(PollTimeoutMessage());
             }
 
             using var response = await httpClient.GetAsync(historyUri, ct);

@@ -663,7 +663,21 @@ public partial class GeneratorViewModel : ObservableObject
             _logger.LogInformation(
                 "Job started Model={Model} Seed={Seed}", job.Parameters.Model, job.Parameters.Seed);
 
-            var outcome = await _jobRunner.RunAsync(job.Parameters, job.Cts.Token);
+            // Live sampler progress (ComfyUI ws). The IsRunning guard drops any report that
+            // arrives after the outcome landed — a late ws frame must not overwrite the final
+            // status text.
+            var progress = new Progress<JobProgress>(p => DispatchToUi(() =>
+            {
+                if (!job.IsRunning) return;
+                job.StatusMessage = p.Message;
+                if (p.Percent is { } pct)
+                {
+                    job.Progress = pct;
+                    job.HasProgress = true;
+                }
+            }));
+
+            var outcome = await _jobRunner.RunAsync(job.Parameters, job.Cts.Token, progress);
 
             _logger.LogInformation(
                 "Job finished Kind={Kind} Path={Path}", outcome.Kind, outcome.SavedPath);
@@ -707,7 +721,11 @@ public partial class GeneratorViewModel : ObservableObject
         }
         finally
         {
-            DispatchToUi(() => job.IsRunning = false);
+            DispatchToUi(() =>
+            {
+                job.IsRunning = false;
+                job.HasProgress = false;
+            });
             job.Cts.Dispose();
         }
     }

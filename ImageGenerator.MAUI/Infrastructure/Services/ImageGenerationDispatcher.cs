@@ -1,5 +1,6 @@
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.External.ComfyUi;
 using ImageGenerator.MAUI.Infrastructure.External.Pollinations;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate;
@@ -29,16 +30,19 @@ public sealed class ImageGenerationDispatcher : IImageGenerationService
         _comfyUi = comfyUi ?? throw new ArgumentNullException(nameof(comfyUi));
     }
 
-    public Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters, CancellationToken cancellationToken = default)
+    public Task<GeneratedImage> GenerateImageAsync(
+        ImageGenerationParameters parameters,
+        CancellationToken cancellationToken = default,
+        IProgress<JobProgress>? progress = null)
     {
         if (ModelConstants.Pollinations.IsId(parameters.Model))
         {
-            return _pollinations.GenerateImageAsync(parameters, cancellationToken);
+            return _pollinations.GenerateImageAsync(parameters, cancellationToken, progress);
         }
         if (ModelConstants.ComfyUi.IsId(parameters.Model))
         {
-            return _comfyUi.GenerateImageAsync(parameters, cancellationToken);
+            return _comfyUi.GenerateImageAsync(parameters, cancellationToken, progress);
         }
-        return _replicate.GenerateImageAsync(parameters, cancellationToken);
+        return _replicate.GenerateImageAsync(parameters, cancellationToken, progress);
     }
 }

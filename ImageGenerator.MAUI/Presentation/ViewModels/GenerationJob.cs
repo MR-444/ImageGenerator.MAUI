@@ -18,6 +18,11 @@ public partial class GenerationJob : ObservableObject
     [ObservableProperty] private string? _resultPath;
     [ObservableProperty] private bool _isRunning = true;
 
+    // Live sampler progress (ComfyUI ws). HasProgress gates the card's ProgressBar: it flips
+    // on with the first percent report and off again with the final outcome.
+    [ObservableProperty] private double _progress;
+    [ObservableProperty] private bool _hasProgress;
+
     public CancellationTokenSource Cts { get; } = new();
 
     public GenerationJob(ImageGenerationParameters parameters, Func<string, Task>? useAsInput = null)

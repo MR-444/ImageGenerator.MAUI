@@ -101,7 +101,7 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.Prompt = "test prompt";
 
         _mockJobRunner
-            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
 
         await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
@@ -204,7 +204,7 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.ApiToken = "valid-token";
         _viewModel.Parameters.Prompt = "test prompt";
         _mockJobRunner
-            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ThrowsAsync(new Exception("Test error"));
 
         await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
@@ -467,7 +467,7 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.ApiToken = "valid-token";
         _viewModel.Parameters.Prompt = "test prompt";
         _mockJobRunner
-            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Failed, null, "Image generation was canceled."));
 
         await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
@@ -684,7 +684,7 @@ public class GeneratorViewModelTests
         var gate2 = new TaskCompletionSource<JobOutcome>();
         var call = 0;
         _mockJobRunner
-            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .Returns(() => Interlocked.Increment(ref call) == 1 ? gate1.Task : gate2.Task);
 
         _viewModel.Parameters.Prompt = "PROMPT_A";
@@ -1002,7 +1002,7 @@ public class GeneratorViewModelTests
     {
         _viewModel.Parameters.ApiToken = "valid-token";
         _mockJobRunner
-            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
 
         await _viewModel.Batch.RunBatchAsync(new[] { "P1", "P2", "P3" });
@@ -1026,7 +1026,7 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.ApiToken = "valid-token";
         var call = 0;
         _mockJobRunner
-            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(() =>
             {
                 Interlocked.Increment(ref call);
@@ -1056,8 +1056,8 @@ public class GeneratorViewModelTests
 
         var capturedSeeds = new List<long>();
         _mockJobRunner
-            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((ImageGenerationParameters p, CancellationToken _) =>
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .ReturnsAsync((ImageGenerationParameters p, CancellationToken _, IProgress<JobProgress>? _) =>
             {
                 capturedSeeds.Add(p.Seed);
                 return new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, "ok");
@@ -1093,8 +1093,8 @@ public class GeneratorViewModelTests
         var firstJobStarted = new TaskCompletionSource<bool>();
         var runAsyncCalls = 0;
         _mockJobRunner
-            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
-            .Returns((ImageGenerationParameters _, CancellationToken __) =>
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .Returns((ImageGenerationParameters _, CancellationToken __, IProgress<JobProgress>? ___) =>
             {
                 if (Interlocked.Increment(ref runAsyncCalls) == 1)
                 {
@@ -1286,7 +1286,7 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.Prompt = "a plain prompt";
 
         _mockJobRunner
-            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
 
         await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
@@ -1758,6 +1758,73 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.Resolution = "1440x2880";
 
         _viewModel.BuildEditorRoute().Should().Contain("resolution=1440x2880");
+    }
+
+    // --- Live job progress (ComfyUI ws → job card) ------------------------------------------
+
+    [Fact]
+    public async Task ProgressReports_UpdateJobCard_AndClearWithTheOutcome()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        _viewModel.Parameters.Prompt = "a cat";
+        IProgress<JobProgress>? sink = null;
+        var started = new TaskCompletionSource();
+        var gate = new TaskCompletionSource<JobOutcome>();
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .Returns((ImageGenerationParameters _, CancellationToken __, IProgress<JobProgress>? prog) =>
+            {
+                sink = prog;
+                started.TrySetResult();
+                return gate.Task;
+            });
+
+        var run = ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await started.Task;
+        var job = _viewModel.Jobs[0];
+
+        sink.Should().NotBeNull("the VM must hand the runner a progress sink");
+        sink!.Report(new JobProgress("Rendering… 5/20", 0.25));
+
+        // Progress<T> marshals through the ThreadPool in tests — wait for delivery.
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (job.StatusMessage != "Rendering… 5/20" && DateTime.UtcNow < deadline) await Task.Delay(10);
+
+        job.StatusMessage.Should().Be("Rendering… 5/20");
+        job.Progress.Should().Be(0.25);
+        job.HasProgress.Should().BeTrue();
+
+        gate.SetResult(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
+        await run;
+
+        job.HasProgress.Should().BeFalse("the bar must disappear with the final outcome");
+        job.StatusMessage.Should().Contain("Saved to");
+    }
+
+    [Fact]
+    public async Task ProgressReport_AfterCompletion_IsIgnored()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        _viewModel.Parameters.Prompt = "a cat";
+        IProgress<JobProgress>? sink = null;
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .Returns((ImageGenerationParameters _, CancellationToken __, IProgress<JobProgress>? prog) =>
+            {
+                sink = prog;
+                return Task.FromResult(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
+            });
+
+        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        var job = _viewModel.Jobs[0];
+        job.IsRunning.Should().BeFalse();
+
+        // A straggler ws frame delivered after the outcome landed must not overwrite it.
+        sink!.Report(new JobProgress("Rendering… 19/20", 0.95));
+        await Task.Delay(150);
+
+        job.StatusMessage.Should().Contain("Saved to");
+        job.HasProgress.Should().BeFalse();
     }
 
     // --- ComfyUI checkpoint picker ---------------------------------------------------------

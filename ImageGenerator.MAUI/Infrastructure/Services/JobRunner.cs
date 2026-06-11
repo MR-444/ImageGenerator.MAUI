@@ -1,5 +1,6 @@
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
@@ -22,9 +23,10 @@ public sealed class JobRunner : IJobRunner
         _logger = logger;
     }
 
-    public async Task<JobOutcome> RunAsync(ImageGenerationParameters parameters, CancellationToken ct)
+    public async Task<JobOutcome> RunAsync(
+        ImageGenerationParameters parameters, CancellationToken ct, IProgress<JobProgress>? progress = null)
     {
-        var result = await _imageService.GenerateImageAsync(parameters, ct);
+        var result = await _imageService.GenerateImageAsync(parameters, ct, progress);
 
         if (result.ImageData is null or { Length: 0 })
         {

@@ -1,4 +1,5 @@
 using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 
 namespace ImageGenerator.MAUI.Infrastructure.Interfaces;
 
@@ -9,7 +10,9 @@ namespace ImageGenerator.MAUI.Infrastructure.Interfaces;
 /// </summary>
 public interface IJobRunner
 {
-    Task<JobOutcome> RunAsync(ImageGenerationParameters parameters, CancellationToken ct);
+    /// <param name="progress">Optional live progress sink, forwarded to the generation service.</param>
+    Task<JobOutcome> RunAsync(
+        ImageGenerationParameters parameters, CancellationToken ct, IProgress<JobProgress>? progress = null);
 }
 
 public enum JobOutcomeKind { Saved, Failed }

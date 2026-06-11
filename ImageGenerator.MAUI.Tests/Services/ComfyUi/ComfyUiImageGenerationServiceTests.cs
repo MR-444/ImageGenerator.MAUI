@@ -78,8 +78,60 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
             NullLogger<ComfyUiImageGenerationService>.Instance,
             workflowsDirectoryOverride: _workflowDir,
             pollInterval: TimeSpan.FromMilliseconds(1),
-            maxPollDuration: TimeSpan.FromSeconds(5));
+            maxPollDuration: TimeSpan.FromSeconds(5),
+            socketFactory: () => _socket);
     }
+
+    // Default = ws unavailable, so every non-ws test keeps exercising the polling path (and
+    // never attempts a real TCP connect to test-host). Ws tests swap in a scripted fake.
+    private FakeComfyUiSocket _socket = new() { FailConnect = true };
+
+    private sealed class FakeComfyUiSocket : IComfyUiSocket
+    {
+        private readonly Queue<string?> _messages = new();
+
+        public bool FailConnect { get; init; }
+        public Uri? ConnectedUri { get; private set; }
+
+        /// <summary>A null entry simulates the server closing the connection.</summary>
+        public void Enqueue(params string?[] messages)
+        {
+            foreach (var m in messages) _messages.Enqueue(m);
+        }
+
+        public Task ConnectAsync(Uri uri, CancellationToken ct)
+        {
+            if (FailConnect) throw new InvalidOperationException("ws disabled for this test");
+            ConnectedUri = uri;
+            return Task.CompletedTask;
+        }
+
+        public async Task<string?> ReceiveTextAsync(CancellationToken ct)
+        {
+            if (_messages.Count > 0) return _messages.Dequeue();
+            // Drained: behave like a silent socket — block until the caller's ct fires.
+            await Task.Delay(Timeout.Infinite, ct);
+            return null;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    /// <summary>Progress&lt;T&gt; posts via SynchronizationContext (racy in tests); this reports inline.</summary>
+    private sealed class ImmediateProgress : IProgress<ImageGenerator.MAUI.Core.Domain.ValueObjects.JobProgress>
+    {
+        public List<ImageGenerator.MAUI.Core.Domain.ValueObjects.JobProgress> Reports { get; } = [];
+        public void Report(ImageGenerator.MAUI.Core.Domain.ValueObjects.JobProgress value) => Reports.Add(value);
+    }
+
+    private static string WsProgress(string promptId, int value, int max) =>
+        $$"""{ "type": "progress", "data": { "value": {{value}}, "max": {{max}}, "prompt_id": "{{promptId}}" } }""";
+
+    private static string WsCompleted(string promptId) =>
+        $$"""{ "type": "executing", "data": { "node": null, "prompt_id": "{{promptId}}" } }""";
+
+    private static string WsFailed(string promptId) =>
+        $$"""{ "type": "execution_error", "data": { "prompt_id": "{{promptId}}" } }""";
 
     public void Dispose()
     {
@@ -331,6 +383,116 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
         result.Message.Should().Be("Image generation was canceled.");
         _requests.Should().NotContain(r => r.RequestUri!.AbsolutePath == "/queue");
         _requests.Should().NotContain(r => r.RequestUri!.AbsolutePath == "/interrupt");
+    }
+
+    // ---- WebSocket progress (ws://host/ws?clientId=…) -------------------------------------
+    // The ws is the progress + completion signal; outputs still come from /history (which the
+    // poll loop fetches exactly once when the ws already saw completion). Any ws failure
+    // degrades silently to the 2 s polling pinned by the older tests above.
+
+    private int HistoryRequestCount => _requests.Count(r => r.RequestUri!.AbsolutePath.StartsWith("/history/"));
+
+    [Fact]
+    public async Task Ws_HappyPath_ReportsProgressAndFetchesHistoryOnce()
+    {
+        _socket = new FakeComfyUiSocket();
+        _socket.Enqueue(WsProgress(PromptId, 5, 20), WsCompleted(PromptId));
+        var progress = new ImmediateProgress();
+
+        var result = await _service.GenerateImageAsync(Parameters(), progress: progress);
+
+        result.ImageData.Should().NotBeNull();
+        HistoryRequestCount.Should().Be(1, "the ws already saw completion — no polling needed");
+        progress.Reports.Should().ContainSingle(p => p.Message == "Rendering… 5/20" && p.Percent == 0.25);
+
+        // The ws clientId is what routes events to us — it must match POST /prompt's client_id.
+        _socket.ConnectedUri.Should().NotBeNull();
+        _socket.ConnectedUri!.Scheme.Should().Be("ws");
+        _socket.ConnectedUri.Host.Should().Be("test-host");
+        _socket.ConnectedUri.AbsolutePath.Should().Be("/ws");
+        var postBody = JsonNode.Parse(_requestBodies[_requests.FindIndex(r => r.Method == HttpMethod.Post)])!;
+        _socket.ConnectedUri.Query.Should().Be("?clientId=" + postBody["client_id"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Ws_ForeignPromptEvents_AreIgnored()
+    {
+        _socket = new FakeComfyUiSocket();
+        _socket.Enqueue(
+            WsCompleted("someone-elses-render"),
+            WsProgress("someone-elses-render", 9, 10),
+            WsCompleted(PromptId));
+        var progress = new ImmediateProgress();
+
+        var result = await _service.GenerateImageAsync(Parameters(), progress: progress);
+
+        result.ImageData.Should().NotBeNull();
+        progress.Reports.Should().BeEmpty("foreign progress must never reach our job card");
+    }
+
+    [Fact]
+    public async Task Ws_ConnectFails_FallsBackToPolling()
+    {
+        // Fixture default socket refuses to connect.
+        _historyResponses.Enqueue(HistoryEmpty);
+        _historyResponses.Enqueue(HistoryDone);
+
+        var result = await _service.GenerateImageAsync(Parameters());
+
+        result.ImageData.Should().NotBeNull();
+        HistoryRequestCount.Should().BeGreaterThanOrEqualTo(2, "polling carried the job");
+    }
+
+    [Fact]
+    public async Task Ws_ClosesMidRun_FallsBackToPolling()
+    {
+        _socket = new FakeComfyUiSocket();
+        _socket.Enqueue(WsProgress(PromptId, 5, 20), null); // server closes after one report
+        _historyResponses.Enqueue(HistoryEmpty);
+        _historyResponses.Enqueue(HistoryDone);
+
+        var result = await _service.GenerateImageAsync(Parameters());
+
+        result.ImageData.Should().NotBeNull();
+        HistoryRequestCount.Should().BeGreaterThanOrEqualTo(2);
+    }
+
+    [Fact]
+    public async Task Ws_ExecutionError_SurfacesHistoryErrorDetail()
+    {
+        _socket = new FakeComfyUiSocket();
+        _socket.Enqueue(WsFailed(PromptId));
+        _historyResponses.Enqueue(() => Json(
+            $$"""
+            {
+              "{{PromptId}}": {
+                "outputs": {},
+                "status": {
+                  "status_str": "error", "completed": false,
+                  "messages": [ ["execution_error", { "node_type": "KSampler", "exception_message": "CUDA out of memory" }] ]
+                }
+              }
+            }
+            """));
+
+        var result = await _service.GenerateImageAsync(Parameters());
+
+        result.ImageData.Should().BeNull();
+        result.Message.Should().Contain("CUDA out of memory");
+    }
+
+    [Fact]
+    public async Task Ws_CanceledDuringReceive_StillNotifiesServerCancel()
+    {
+        _socket = new FakeComfyUiSocket(); // no messages — receive blocks until ct fires
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+
+        var result = await _service.GenerateImageAsync(Parameters(), cts.Token);
+
+        result.Message.Should().Be("Image generation was canceled.");
+        _requests.Should().Contain(r =>
+            r.Method == HttpMethod.Post && r.RequestUri!.AbsolutePath == "/queue",
+            "cancel during the ws wait must still tell the server to drop the prompt");
     }
 
     [Fact]

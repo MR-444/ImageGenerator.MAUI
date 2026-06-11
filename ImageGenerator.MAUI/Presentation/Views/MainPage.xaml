@@ -508,6 +508,12 @@
                                 <!-- Model · AR · seed -->
                                 <Label Text="{Binding MetaLine}" Style="{StaticResource HelperText}" />
 
+                                <!-- Live sampler progress (ComfyUI ws); appears with the first
+                                     step report, disappears with the final outcome. -->
+                                <ProgressBar Progress="{Binding Progress}"
+                                             IsVisible="{Binding HasProgress}"
+                                             AutomationId="JobProgressBar" />
+
                                 <!-- Status row: spinner (if running) + status text (always) + Cancel (if running) -->
                                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
                                     <ActivityIndicator Grid.Column="0"

@@ -1,6 +1,7 @@
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -28,7 +29,11 @@ public sealed class ReplicateImageGenerationService : IImageGenerationService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<GeneratedImage> GenerateImageAsync(ImageGenerationParameters parameters, CancellationToken cancellationToken = default)
+    // progress is unused: the Replicate create→poll flow has no step-level signal worth showing.
+    public async Task<GeneratedImage> GenerateImageAsync(
+        ImageGenerationParameters parameters,
+        CancellationToken cancellationToken = default,
+        IProgress<JobProgress>? progress = null)
     {
         try
         {
