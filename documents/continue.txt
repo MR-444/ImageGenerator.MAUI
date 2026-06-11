@@ -55,11 +55,28 @@ PARKED FEATURE POOL — ComfyUI Phase 2 (user picks when)
     ALLOWS optional args in Moq expression trees — stale 2-arg setups
     compile fine and mismatch at RUNTIME (progress==null pin); always
     pass It.IsAny explicitly. 732 tests.
-[ ] Auth header for proxied setups (LAN-only assumption today).
+[x] Auth header for proxied setups — DONE 8103d22 2026-06-11, user
+    verification PENDING (needs an auth-requiring proxy on fireEngine).
+    One secret field in the API Tokens picker ("ComfyUI") holds the FULL
+    Authorization value ("Bearer …"); empty = no header (LAN default).
+    ComfyUiAuthStore mirrors the Pollinations store (SecureStorage key
+    imggen.comfyui_auth_header, 500 ms debounce, shutdown flush). Applied
+    at the two CreateClient choke points (all 7 endpoints incl. the
+    cancel path) + ws Options.SetRequestHeader before connect; ws failure
+    still degrades silently to polling. 748 tests at commit.
 [ ] Multi-image outputs (one SaveImage node assumed today).
-[ ] Patch the workflow's quality-preset combo (CustomCombo Quality/Default/
-    Turbo) — needs a targeting convention, the class is too generic.
-    Zero-code workaround: export one file per preset; each becomes a model.
+[x] Quality-preset combo patching — DONE 077c656 2026-06-11,
+    USER-VERIFIED on fireEngine: Turbo render landed with choice="Turbo"
+    AND index=2, which CONFIRMS the 0-based index inference (the one
+    residual risk is closed). Convention: EXACTLY ONE CustomCombo with
+    literal choice (mirrors the UNETLoader rule), else picker hidden +
+    INFO log. Options from the node's own option1..4 (no server fetch);
+    baked choice first = no patch; patch sets choice AND 0-based index
+    together, link-driven index untouched; sticky per workflow
+    (imggen.comfyui_preset.<wf>); preset values stay opaque user strings
+    (NO enum — another workflow's combo may hold sampler names).
+    "Preset" picker under the checkpoint picker. 772 tests.
+    Zero-code workaround remains: export one file per preset.
 
     Watch item: ghost Generate activation (confirmed twice 2026-06-10, none
     since the forensics landed). If a job card appears without a click:
