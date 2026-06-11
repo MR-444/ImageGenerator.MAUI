@@ -1,12 +1,12 @@
 ImageGenerator.MAUI — Open Work Queue
 =====================================
 
-Last updated: 2026-06-11. v1.5.0 released (tag v1.5.0 "Structure Editor &
-ComfyUI"); post-release hotfixes + the full csharp-auditor pass (0 Critical /
-2 High / 3 Medium / 2 Low) are ALL shipped — nothing from the audit remains
-open. Full per-item forensics of completed work live in this file's git
-history (last full narrative version at commit 97cd2ab; audit report at
-documents/audit/csharp-audit-2026-06-11.md, untracked).
+Last updated: 2026-06-11 (evening). v1.5.0 released (tag v1.5.0 "Structure
+Editor & ComfyUI"); post-release hotfixes + the full csharp-auditor pass
+(0 Critical / 2 High / 3 Medium / 2 Low) are ALL shipped — nothing from the
+audit remains open. Full per-item forensics of completed work live in this
+file's git history (last full narrative version at commit 97cd2ab; audit
+report at documents/audit/csharp-audit-2026-06-11.md, untracked).
 
 This file holds ONLY the open backlog. Update it when you start an item
 (set [~]) and when you finish (set [x] + commit hash, then prune on the
@@ -15,68 +15,19 @@ next pass).
   [ ] = open      [~] = in progress (commit not yet on master)
 
 
-PARKED FEATURE POOL — ComfyUI Phase 2 (user picks when)
--------------------------------------------------------
+COMFYUI PHASE 2 POOL — CLOSED 2026-06-11
+----------------------------------------
 
-[x] Checkpoint lookup via GET /object_info — DONE d7d33ec 2026-06-11,
-    USER-VERIFIED on fireEngine: narrow /object_info/CheckpointLoaderSimple
-    fetch (5 s timeout, disk cache comfyui-checkpoints.json), picker on
-    model select (default = workflow's baked ckpt = no patch; hidden + INFO
-    log when no literal loader — e.g. split-loader graphs), per-workflow
-    sticky pick (imggen.comfyui_checkpoint.<wf>). Verified: Count=8 fetch,
-    sticky restore, zavychromaxl render via "Checkpoint Test.json" (user-
-    local Pictures file, not in repo), SD3.5 clip-missing error proved the
-    patched checkpoint really loads server-side. 693 tests.
-[x] UNETLoader extension — DONE 2417a07 2026-06-11, USER-VERIFIED on
-    fireEngine (picker shows the 24 diffusion models; dual-UNET
-    Ideogram_wf_san stays hidden). USER RULE baked in: multi-UNET graphs
-    are deliberate pairings — picker only when EXACTLY ONE literal
-    UNETLoader; CheckpointLoaderSimple wins when both kinds present.
-    ComfyUiModelSlot threads probe→fetch→patch; own cache
-    comfyui-unets.json; label "Checkpoint"/"Diffusion model". 705 tests.
-    "Unet Test.json" + "Checkpoint Test.json" remain user-local in
-    Pictures\comfy-workflows (delete or keep at will).
-[x] POST /interrupt on cancel — DONE 3b501e4 2026-06-11, USER-VERIFIED
-    (render stopped on fireEngine). Per-card Cancel notifies the server
-    (mirrors the ComfyUI UI's own cancel): POST /queue
-    {"delete":[prompt_id]} always, then POST /interrupt ONLY if GET /queue
-    shows OUR prompt in queue_running — /interrupt is GLOBAL, a blind one
-    would kill the user's browser-started renders. Best-effort (own 5 s
-    CTS, never throws); job message unchanged, app.log carries the detail.
-    Batch drain-only policy untouched. 710 tests.
-[x] WS /ws?clientId= progress — DONE 87312ea 2026-06-11, USER-VERIFIED
-    (bar + step text working on fireEngine). ProgressBar + "Rendering…
-    14/20" on the running job card. WS connects with the SAME clientId
-    BEFORE POST /prompt (5 s budget); events filtered by prompt_id;
-    outputs still via /history (poll loop's first iteration — parsing
-    path untouched); ANY ws failure degrades silently to the old 2 s
-    polling. Optional IProgress<JobProgress> threaded service→runner→VM
-    (Replicate/Pollinations ignore it). GOTCHA kept for posterity: C# 14
-    ALLOWS optional args in Moq expression trees — stale 2-arg setups
-    compile fine and mismatch at RUNTIME (progress==null pin); always
-    pass It.IsAny explicitly. 732 tests.
-[x] Auth header for proxied setups — DONE 8103d22 2026-06-11, user
-    verification PENDING (needs an auth-requiring proxy on fireEngine).
-    One secret field in the API Tokens picker ("ComfyUI") holds the FULL
-    Authorization value ("Bearer …"); empty = no header (LAN default).
-    ComfyUiAuthStore mirrors the Pollinations store (SecureStorage key
-    imggen.comfyui_auth_header, 500 ms debounce, shutdown flush). Applied
-    at the two CreateClient choke points (all 7 endpoints incl. the
-    cancel path) + ws Options.SetRequestHeader before connect; ws failure
-    still degrades silently to polling. 748 tests at commit.
-[ ] Multi-image outputs (one SaveImage node assumed today).
-[x] Quality-preset combo patching — DONE 077c656 2026-06-11,
-    USER-VERIFIED on fireEngine: Turbo render landed with choice="Turbo"
-    AND index=2, which CONFIRMS the 0-based index inference (the one
-    residual risk is closed). Convention: EXACTLY ONE CustomCombo with
-    literal choice (mirrors the UNETLoader rule), else picker hidden +
-    INFO log. Options from the node's own option1..4 (no server fetch);
-    baked choice first = no patch; patch sets choice AND 0-based index
-    together, link-driven index untouched; sticky per workflow
-    (imggen.comfyui_preset.<wf>); preset values stay opaque user strings
-    (NO enum — another workflow's combo may hold sampler names).
-    "Preset" picker under the checkpoint picker. 772 tests.
-    Zero-code workaround remains: export one file per preset.
+All six items shipped + USER-VERIFIED on fireEngine (772 tests at close;
+forensics in this file's git history):
+  checkpoint picker d7d33ec, UNETLoader extension 2417a07, POST /interrupt
+  on cancel 3b501e4, WS progress 87312ea, auth header 8103d22 (verified
+  2026-06-11 evening), quality-preset combo 077c656 (index 0-based
+  CONFIRMED live).
+
+Multi-image outputs REJECTED by user 2026-06-11: one image per "Generate
+Image" click IS the architecture — a count box under the button would only
+save clicks, not much gain. Do not re-suggest.
 
     Watch item: ghost Generate activation (confirmed twice 2026-06-10, none
     since the forensics landed). If a job card appears without a click:
