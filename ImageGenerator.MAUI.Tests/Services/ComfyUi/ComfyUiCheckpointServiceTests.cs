@@ -52,6 +52,7 @@ public sealed class ComfyUiCheckpointServiceTests : IDisposable
 
     private readonly Mock<HttpMessageHandler> _handler = new(MockBehavior.Loose);
     private readonly Mock<IUiStateStore> _uiState = new();
+    private readonly Mock<IComfyUiAuthStore> _authStore = new();
     private readonly List<HttpRequestMessage> _requests = [];
     private readonly string _cacheDir;
     private readonly string _workflowDir;
@@ -68,6 +69,7 @@ public sealed class ComfyUiCheckpointServiceTests : IDisposable
         Directory.CreateDirectory(_workflowDir);
 
         _uiState.Setup(s => s.LoadComfyUiBaseUrl()).Returns("http://test-host:8188");
+        _authStore.Setup(s => s.LoadAsync()).ReturnsAsync((string?)null);
 
         _handler
             .Protected()
@@ -81,6 +83,7 @@ public sealed class ComfyUiCheckpointServiceTests : IDisposable
         _service = new ComfyUiCheckpointService(
             new StubHttpClientFactory(() => new HttpClient(_handler.Object)),
             _uiState.Object,
+            _authStore.Object,
             NullLogger<ComfyUiCheckpointService>.Instance,
             cacheDirectoryOverride: _cacheDir,
             workflowsDirectoryOverride: _workflowDir);
@@ -170,6 +173,26 @@ public sealed class ComfyUiCheckpointServiceTests : IDisposable
 
         names.Should().Equal("cached.safetensors");
         _requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Checkpoints_AuthHeaderSet_ObjectInfoRequestCarriesIt()
+    {
+        _authStore.Setup(s => s.LoadAsync()).ReturnsAsync("Bearer abc123");
+
+        await _service.GetModelNamesAsync(ComfyUiLoaderKind.Checkpoint);
+
+        var request = _requests.Single();
+        request.Headers.TryGetValues("Authorization", out var values).Should().BeTrue();
+        values!.Single().Should().Be("Bearer abc123");
+    }
+
+    [Fact]
+    public async Task Checkpoints_AuthHeaderUnset_ObjectInfoRequestHasNone()
+    {
+        await _service.GetModelNamesAsync(ComfyUiLoaderKind.Checkpoint);
+
+        _requests.Single().Headers.Contains("Authorization").Should().BeFalse();
     }
 
     // ---- GetModelNamesAsync(Unet) ----------------------------------------------------------

@@ -30,6 +30,7 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
 
     private readonly Mock<HttpMessageHandler> _handler = new(MockBehavior.Loose);
     private readonly Mock<IUiStateStore> _uiState = new();
+    private readonly Mock<IComfyUiAuthStore> _authStore = new();
     private readonly List<HttpRequestMessage> _requests = [];
     private readonly List<string> _requestBodies = [];
     private readonly string _workflowDir;
@@ -57,6 +58,7 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
             """);
 
         _uiState.Setup(s => s.LoadComfyUiBaseUrl()).Returns("http://test-host:8188");
+        _authStore.Setup(s => s.LoadAsync()).ReturnsAsync((string?)null);
 
         _handler
             .Protected()
@@ -75,6 +77,7 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
             new StubHttpClientFactory(() => new HttpClient(_handler.Object)),
             ModelDescriptorRegistry.Default(),
             _uiState.Object,
+            _authStore.Object,
             NullLogger<ComfyUiImageGenerationService>.Instance,
             workflowsDirectoryOverride: _workflowDir,
             pollInterval: TimeSpan.FromMilliseconds(1),
@@ -92,6 +95,7 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
 
         public bool FailConnect { get; init; }
         public Uri? ConnectedUri { get; private set; }
+        public string? ConnectedAuthHeader { get; private set; }
 
         /// <summary>A null entry simulates the server closing the connection.</summary>
         public void Enqueue(params string?[] messages)
@@ -99,10 +103,11 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
             foreach (var m in messages) _messages.Enqueue(m);
         }
 
-        public Task ConnectAsync(Uri uri, CancellationToken ct)
+        public Task ConnectAsync(Uri uri, string? authorizationHeader, CancellationToken ct)
         {
             if (FailConnect) throw new InvalidOperationException("ws disabled for this test");
             ConnectedUri = uri;
+            ConnectedAuthHeader = authorizationHeader;
             return Task.CompletedTask;
         }
 
@@ -288,6 +293,7 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
             new StubHttpClientFactory(() => new HttpClient(_handler.Object)),
             ModelDescriptorRegistry.Default(),
             _uiState.Object,
+            _authStore.Object,
             NullLogger<ComfyUiImageGenerationService>.Instance,
             workflowsDirectoryOverride: _workflowDir,
             pollInterval: TimeSpan.FromMilliseconds(1),
@@ -574,5 +580,87 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
         result.ImageData.Should().BeNull();
         result.Message.Should().Contain("not a valid absolute URL");
         _requests.Should().BeEmpty();
+    }
+
+    // ---- optional Authorization header (proxied setups) ------------------------------------
+    // One stored value ("Bearer …", "Basic …") applied to the per-run client's default
+    // headers, so every endpoint — including the best-effort cancel path — carries it.
+    // Empty/unset = the LAN default: no header anywhere.
+
+    private static bool HasAuth(HttpRequestMessage r, string expected) =>
+        r.Headers.TryGetValues("Authorization", out var values) && values.Single() == expected;
+
+    [Fact]
+    public async Task AuthHeaderSet_EveryHttpRequestCarriesIt()
+    {
+        _authStore.Setup(s => s.LoadAsync()).ReturnsAsync("Bearer abc123");
+        _historyResponses.Enqueue(HistoryEmpty);
+        _historyResponses.Enqueue(HistoryDone);
+
+        var result = await _service.GenerateImageAsync(Parameters());
+
+        result.ImageData.Should().NotBeNull();
+        _requests.Should().NotBeEmpty()
+            .And.OnlyContain(r => HasAuth(r, "Bearer abc123"),
+                "/prompt, /history and /view all reuse the one per-run client");
+    }
+
+    [Fact]
+    public async Task AuthHeaderSet_CancelPathRequestsCarryItToo()
+    {
+        _authStore.Setup(s => s.LoadAsync()).ReturnsAsync("Bearer abc123");
+        _queueResponse = () => QueueWithRunning(PromptId);
+
+        await CancelMidPollAsync();
+
+        var cancelPaths = new[] { "/queue", "/interrupt" };
+        var cancelRequests = _requests.Where(r => cancelPaths.Contains(r.RequestUri!.AbsolutePath)).ToList();
+        cancelRequests.Should().NotBeEmpty()
+            .And.OnlyContain(r => HasAuth(r, "Bearer abc123"),
+                "an auth proxy would otherwise reject the dequeue/interrupt and the render would run on");
+    }
+
+    [Fact]
+    public async Task AuthHeaderUnset_NoRequestCarriesIt()
+    {
+        await _service.GenerateImageAsync(Parameters());
+
+        _requests.Should().NotBeEmpty()
+            .And.OnlyContain(r => !r.Headers.Contains("Authorization"));
+    }
+
+    [Fact]
+    public async Task AuthHeaderWhitespace_TreatedAsUnset()
+    {
+        _authStore.Setup(s => s.LoadAsync()).ReturnsAsync("   ");
+
+        await _service.GenerateImageAsync(Parameters());
+
+        _requests.Should().NotBeEmpty()
+            .And.OnlyContain(r => !r.Headers.Contains("Authorization"));
+    }
+
+    [Fact]
+    public async Task AuthHeaderSet_ReachesTheWebSocketConnect()
+    {
+        _authStore.Setup(s => s.LoadAsync()).ReturnsAsync("Bearer abc123");
+        _socket = new FakeComfyUiSocket();
+        _socket.Enqueue(WsCompleted(PromptId));
+
+        var result = await _service.GenerateImageAsync(Parameters());
+
+        result.ImageData.Should().NotBeNull();
+        _socket.ConnectedAuthHeader.Should().Be("Bearer abc123");
+    }
+
+    [Fact]
+    public async Task AuthHeaderUnset_WebSocketConnectGetsNull()
+    {
+        _socket = new FakeComfyUiSocket();
+        _socket.Enqueue(WsCompleted(PromptId));
+
+        await _service.GenerateImageAsync(Parameters());
+
+        _socket.ConnectedAuthHeader.Should().BeNull();
     }
 }

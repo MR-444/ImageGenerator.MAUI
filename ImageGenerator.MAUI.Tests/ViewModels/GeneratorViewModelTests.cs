@@ -23,6 +23,7 @@ public class GeneratorViewModelTests
     private readonly Mock<IJobRunner> _mockJobRunner;
     private readonly Mock<IApiTokenStore> _mockTokenStore;
     private readonly Mock<IPollinationsTokenStore> _mockPollinationsTokenStore;
+    private readonly Mock<IComfyUiAuthStore> _mockComfyUiAuthStore;
     private readonly Mock<IUiStateStore> _mockUiStateStore;
     private readonly Mock<IModelCatalogCoordinator> _mockCatalogCoordinator;
     private readonly Mock<IPromptBatchParser> _mockPromptBatchParser;
@@ -33,6 +34,7 @@ public class GeneratorViewModelTests
         _mockJobRunner = new Mock<IJobRunner>();
         _mockTokenStore = new Mock<IApiTokenStore>();
         _mockPollinationsTokenStore = new Mock<IPollinationsTokenStore>();
+        _mockComfyUiAuthStore = new Mock<IComfyUiAuthStore>();
         _mockUiStateStore = new Mock<IUiStateStore>();
         _mockCatalogCoordinator = new Mock<IModelCatalogCoordinator>();
         _mockPromptBatchParser = new Mock<IPromptBatchParser>();
@@ -42,6 +44,7 @@ public class GeneratorViewModelTests
             _mockJobRunner.Object,
             _mockTokenStore.Object,
             _mockPollinationsTokenStore.Object,
+            _mockComfyUiAuthStore.Object,
             _mockUiStateStore.Object,
             _mockCatalogCoordinator.Object,
             ModelDescriptorRegistry.Default(),
@@ -544,6 +547,24 @@ public class GeneratorViewModelTests
         _mockPollinationsTokenStore.Verify(x => x.LoadAsync(), Times.Once);
     }
 
+    [Fact]
+    public async Task TokenProvider_ComfyUiAuthRow_LoadsAndPersists_WithoutTouchingParameters()
+    {
+        // The ComfyUI services read the auth store directly per run — the value must never
+        // land in ImageGenerationParameters (ComfyUI stays tokenless for validation).
+        _mockComfyUiAuthStore.Setup(x => x.LoadAsync()).ReturnsAsync("Bearer saved");
+
+        await _viewModel.LoadAllTokensAsync();
+        var comfyui = _viewModel.TokenProviders.Single(p => p.Key == "comfyui");
+
+        comfyui.Value.Should().Be("Bearer saved");
+        comfyui.Value = "Bearer fresh";
+
+        _mockComfyUiAuthStore.Verify(x => x.Persist("Bearer fresh"), Times.Once);
+        _viewModel.Parameters.ApiToken.Should().BeEmpty();
+        _viewModel.Parameters.PollinationsApiToken.Should().BeNullOrEmpty();
+    }
+
     // --- Card title + strength gate state machine ---
 
     [Theory]
@@ -906,6 +927,7 @@ public class GeneratorViewModelTests
             new Mock<IJobRunner>().Object,
             new Mock<IApiTokenStore>().Object,
             new Mock<IPollinationsTokenStore>().Object,
+            new Mock<IComfyUiAuthStore>().Object,
             sharedStore.Object,
             coordinator1.Object,
             ModelDescriptorRegistry.Default(),
@@ -929,6 +951,7 @@ public class GeneratorViewModelTests
             new Mock<IJobRunner>().Object,
             new Mock<IApiTokenStore>().Object,
             new Mock<IPollinationsTokenStore>().Object,
+            new Mock<IComfyUiAuthStore>().Object,
             sharedStore.Object,
             coordinator2.Object,
             ModelDescriptorRegistry.Default(),

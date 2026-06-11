@@ -41,6 +41,7 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IModelDescriptorRegistry _registry;
     private readonly IUiStateStore _uiStateStore;
+    private readonly IComfyUiAuthStore _authStore;
     private readonly ILogger<ComfyUiImageGenerationService> _logger;
     private readonly string _workflowsDirectory;
     private readonly TimeSpan _pollInterval;
@@ -51,6 +52,7 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
         IHttpClientFactory httpClientFactory,
         IModelDescriptorRegistry registry,
         IUiStateStore uiStateStore,
+        IComfyUiAuthStore authStore,
         ILogger<ComfyUiImageGenerationService> logger,
         string? workflowsDirectoryOverride = null,
         TimeSpan? pollInterval = null,
@@ -60,6 +62,7 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
+        _authStore = authStore ?? throw new ArgumentNullException(nameof(authStore));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _workflowsDirectory = workflowsDirectoryOverride ?? OutputPaths.ComfyWorkflowsDirectory;
         _pollInterval = pollInterval ?? DefaultPollInterval;
@@ -111,12 +114,17 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
                 return Fail($"The ComfyUI server URL '{baseUrl}' is not a valid absolute URL — fix it in the ComfyUI server setting.");
             }
 
+            // Re-read per run like the base URL — a header edit applies to the next job
+            // without a restart. Empty = LAN setup, no header (Apply no-ops).
+            var authHeader = await _authStore.LoadAsync();
+
             using var httpClient = _httpClientFactory.CreateClient(HttpClientName);
+            ComfyUiAuthHeader.Apply(httpClient, authHeader);
 
             // The ws connection must exist with the SAME clientId BEFORE the prompt is queued,
             // or the server's early events (execution_start, first progress) are lost.
             var clientId = Guid.NewGuid().ToString("N");
-            await using var socket = await TryConnectSocketAsync(baseUri, clientId, cancellationToken);
+            await using var socket = await TryConnectSocketAsync(baseUri, clientId, authHeader, cancellationToken);
 
             var promptId = await QueuePromptAsync(httpClient, baseUri, patched.GraphJson, clientId, cancellationToken);
             if (promptId.Error is not null) return Fail(promptId.Error);
@@ -234,7 +242,8 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
     /// Null on any failure — the caller silently degrades to /history polling, so proxied or
     /// ws-blocked setups keep working.
     /// </summary>
-    private async Task<IComfyUiSocket?> TryConnectSocketAsync(Uri baseUri, string clientId, CancellationToken ct)
+    private async Task<IComfyUiSocket?> TryConnectSocketAsync(
+        Uri baseUri, string clientId, string? authHeader, CancellationToken ct)
     {
         var socket = _socketFactory();
         try
@@ -248,7 +257,7 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeoutCts.CancelAfter(WsConnectTimeout);
-            await socket.ConnectAsync(wsUri, timeoutCts.Token);
+            await socket.ConnectAsync(wsUri, authHeader, timeoutCts.Token);
 
             _logger.LogInformation("ComfyUI ws connected ClientId={ClientId}", clientId);
             return socket;

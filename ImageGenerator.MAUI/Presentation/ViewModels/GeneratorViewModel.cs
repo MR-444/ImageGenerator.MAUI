@@ -454,6 +454,7 @@ public partial class GeneratorViewModel : ObservableObject
         IJobRunner jobRunner,
         IApiTokenStore tokenStore,
         IPollinationsTokenStore pollinationsTokenStore,
+        IComfyUiAuthStore comfyUiAuthStore,
         IUiStateStore uiStateStore,
         IModelCatalogCoordinator catalogCoordinator,
         IModelDescriptorRegistry registry,
@@ -464,6 +465,7 @@ public partial class GeneratorViewModel : ObservableObject
         _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
         _pollinationsTokenStore = pollinationsTokenStore ?? throw new ArgumentNullException(nameof(pollinationsTokenStore));
+        if (comfyUiAuthStore is null) throw new ArgumentNullException(nameof(comfyUiAuthStore));
         _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
         _catalogCoordinator = catalogCoordinator ?? throw new ArgumentNullException(nameof(catalogCoordinator));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
@@ -611,6 +613,17 @@ public partial class GeneratorViewModel : ObservableObject
             helperText: "Optional. Anonymous mode is rate-limited (1 req / 15 s). Register at auth.pollinations.ai for higher limits.",
             store: _pollinationsTokenStore,
             syncToParameters: v => _parameters.PollinationsApiToken = v));
+        // No parameters slot: the ComfyUI services read the store directly per run (the
+        // checkpoint fetch has no ImageGenerationParameters at all), and ComfyUI must stay
+        // tokenless for validation — see TokenlessModel.
+        TokenProviders.Add(new TokenProviderViewModel(
+            key: "comfyui",
+            displayName: "ComfyUI",
+            placeholder: "Authorization header value (e.g. Bearer abc123)…",
+            helperText: "Optional. Sent verbatim as the Authorization header on every ComfyUI request "
+                        + "(HTTP + progress WebSocket) — for reverse-proxied servers. Leave empty on a LAN.",
+            store: comfyUiAuthStore,
+            syncToParameters: static _ => { }));
         _selectedTokenProvider = TokenProviders[0];
     }
 

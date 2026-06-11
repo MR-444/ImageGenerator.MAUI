@@ -24,6 +24,7 @@ public sealed class ComfyUiCheckpointService : IComfyUiCheckpointService
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IUiStateStore _uiStateStore;
+    private readonly IComfyUiAuthStore _authStore;
     private readonly ILogger<ComfyUiCheckpointService> _logger;
     private readonly string _cacheDirectory;
     private readonly string _workflowsDirectory;
@@ -31,12 +32,14 @@ public sealed class ComfyUiCheckpointService : IComfyUiCheckpointService
     public ComfyUiCheckpointService(
         IHttpClientFactory httpClientFactory,
         IUiStateStore uiStateStore,
+        IComfyUiAuthStore authStore,
         ILogger<ComfyUiCheckpointService> logger,
         string? cacheDirectoryOverride = null,
         string? workflowsDirectoryOverride = null)
     {
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
+        _authStore = authStore ?? throw new ArgumentNullException(nameof(authStore));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _cacheDirectory = cacheDirectoryOverride ?? FileSystem.AppDataDirectory;
         _workflowsDirectory = workflowsDirectoryOverride ?? OutputPaths.ComfyWorkflowsDirectory;
@@ -64,6 +67,7 @@ public sealed class ComfyUiCheckpointService : IComfyUiCheckpointService
         try
         {
             using var httpClient = _httpClientFactory.CreateClient(ComfyUiImageGenerationService.HttpClientName);
+            ComfyUiAuthHeader.Apply(httpClient, await _authStore.LoadAsync());
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeoutCts.CancelAfter(FetchTimeout);
 

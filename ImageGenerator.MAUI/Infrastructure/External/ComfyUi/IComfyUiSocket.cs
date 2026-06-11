@@ -9,7 +9,11 @@ namespace ImageGenerator.MAUI.Infrastructure.External.ComfyUi;
 /// </summary>
 public interface IComfyUiSocket : IAsyncDisposable
 {
-    Task ConnectAsync(Uri uri, CancellationToken ct);
+    /// <summary>
+    /// <paramref name="authorizationHeader"/> is the user's optional full Authorization
+    /// header value for proxied setups; null/whitespace = no header (LAN default).
+    /// </summary>
+    Task ConnectAsync(Uri uri, string? authorizationHeader, CancellationToken ct);
 
     /// <summary>
     /// The next complete TEXT message. Binary frames (ComfyUI streams live preview JPEGs on
@@ -23,7 +27,18 @@ public sealed class ClientWebSocketComfyUiSocket : IComfyUiSocket
 {
     private readonly ClientWebSocket _socket = new();
 
-    public Task ConnectAsync(Uri uri, CancellationToken ct) => _socket.ConnectAsync(uri, ct);
+    public Task ConnectAsync(Uri uri, string? authorizationHeader, CancellationToken ct)
+    {
+        // Must be set BEFORE ConnectAsync — ClientWebSocket options are frozen on connect.
+        // SetRequestHeader validates more strictly than the HTTP side's
+        // TryAddWithoutValidation; a throw here lands in the caller's catch-all and the job
+        // silently degrades to polling, which is the intended proxied-failure behavior.
+        if (!string.IsNullOrWhiteSpace(authorizationHeader))
+        {
+            _socket.Options.SetRequestHeader(ComfyUiAuthHeader.HeaderName, authorizationHeader.Trim());
+        }
+        return _socket.ConnectAsync(uri, ct);
+    }
 
     public async Task<string?> ReceiveTextAsync(CancellationToken ct)
     {

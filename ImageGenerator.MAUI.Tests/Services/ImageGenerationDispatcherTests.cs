@@ -54,6 +54,7 @@ public class ImageGenerationDispatcherTests
             new StubHttpClientFactory(new HttpClient(_comfyHandler.Object)),
             registry,
             Mock.Of<IUiStateStore>(),
+            Mock.Of<IComfyUiAuthStore>(),
             NullLogger<ComfyUiImageGenerationService>.Instance,
             workflowsDirectoryOverride: Path.Combine(Path.GetTempPath(), "imggen-dispatcher-tests-empty"));
 
