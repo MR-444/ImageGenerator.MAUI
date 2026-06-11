@@ -36,7 +36,14 @@ PARKED FEATURE POOL — ComfyUI Phase 2 (user picks when)
     comfyui-unets.json; label "Checkpoint"/"Diffusion model". 705 tests.
     "Unet Test.json" + "Checkpoint Test.json" remain user-local in
     Pictures\comfy-workflows (delete or keep at will).
-[ ] POST /interrupt on cancel (today the server finishes its render — known).
+[x] POST /interrupt on cancel — DONE 3b501e4 2026-06-11, USER-VERIFIED
+    (render stopped on fireEngine). Per-card Cancel notifies the server
+    (mirrors the ComfyUI UI's own cancel): POST /queue
+    {"delete":[prompt_id]} always, then POST /interrupt ONLY if GET /queue
+    shows OUR prompt in queue_running — /interrupt is GLOBAL, a blind one
+    would kill the user's browser-started renders. Best-effort (own 5 s
+    CTS, never throws); job message unchanged, app.log carries the detail.
+    Batch drain-only policy untouched. 710 tests.
 [ ] WS /ws?clientId= progress instead of 2 s /history polling.
 [ ] Auth header for proxied setups (LAN-only assumption today).
 [ ] Multi-image outputs (one SaveImage node assumed today).
