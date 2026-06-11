@@ -133,11 +133,13 @@ public partial class GalleryItemDetailViewModel : ObservableObject
         try
         {
             if (string.IsNullOrEmpty(FilePath)) return;
-            // Hand the path off to MainPage via the Shell route's QueryProperty. Using the
-            // absolute "//MainPage" form pops the gallery + detail off the stack so the user
-            // lands directly on the generator with the image already attached.
-            var encoded = Uri.EscapeDataString(FilePath);
-            await Shell.Current.GoToAsync($"//MainPage?addInput={encoded}");
+            // Hand the path off to MainPage's QueryProperty. The absolute "//MainPage" form
+            // pops the gallery + detail off the stack so the user lands directly on the
+            // generator with the image already attached. ShellNavigationQueryParameters is
+            // single-use: a string query suffix would be RE-applied on every later back
+            // navigation to MainPage, silently re-adding a removed input image.
+            await Shell.Current.GoToAsync("//MainPage",
+                new ShellNavigationQueryParameters { ["addInput"] = FilePath });
         }
         catch (Exception ex)
         {

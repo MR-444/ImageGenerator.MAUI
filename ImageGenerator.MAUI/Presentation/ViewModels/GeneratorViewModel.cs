@@ -642,7 +642,7 @@ public partial class GeneratorViewModel : ObservableObject
     /// The editor hand-off route. On a ComfyUI workflow the output shape lives in
     /// Parameters.AspectRatio (ResolutionSelector combo string), so that is what seeds the
     /// editor's picker; everywhere else it's the resolution. Internal: tests pin the shape
-    /// without Shell, mirroring the editor's BuildApplyRoute seam.
+    /// without Shell, mirroring the editor's ApplyToGenerator seam.
     /// </summary>
     internal string BuildEditorRoute()
     {

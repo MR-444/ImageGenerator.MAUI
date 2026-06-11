@@ -11,9 +11,12 @@ using WinDataPackageOperation = Windows.ApplicationModel.DataTransfer.DataPackag
 
 namespace ImageGenerator.MAUI.Presentation.Views;
 
+// The structure editor's Apply hands its JSON to the generator VM DIRECTLY (see
+// IdeogramStructureEditorViewModel.ApplyToGenerator) — never via a QueryProperty here.
+// Shell re-applies a page's string query parameters on every back navigation, so a
+// "//MainPage?ideogramJson=…" hand-off resurrected the stale JSON each time the user
+// backed out of the editor, stomping whatever was in the prompt box.
 [QueryProperty(nameof(AddInputPath), "addInput")]
-[QueryProperty(nameof(IdeogramJson), "ideogramJson")]
-[QueryProperty(nameof(IdeogramResolution), "ideogramResolution")]
 public partial class MainPage
 {
     private readonly GeneratorViewModel _viewModel;
@@ -21,48 +24,17 @@ public partial class MainPage
 
     /// <summary>
     /// Set by Shell when the user navigates back from the gallery detail page via the
-    /// "Use as input" button (which calls Shell.GoToAsync("//MainPage?addInput=…")).
+    /// "Use as input" button. Passed as single-use ShellNavigationQueryParameters (raw value,
+    /// no URL decoding) so back navigation can't re-apply it and resurrect a removed image.
     /// </summary>
     public string? AddInputPath
     {
         set
         {
             if (string.IsNullOrEmpty(value)) return;
-            var path = Uri.UnescapeDataString(value);
             // Fire-and-forget: AddAsInputAsync sets a status message internally and never
             // throws past its own catch. Awaiting from a property setter isn't possible.
-            _ = _viewModel.InputImages.AddAsInputAsync(path);
-        }
-    }
-
-    /// <summary>
-    /// Set by Shell when the structure editor's Apply navigates back with
-    /// "//MainPage?ideogramJson=…". The compact JSON string becomes the prompt and the
-    /// structured-JSON toggle turns on so IdeogramV4Descriptor.Build ships it as json_prompt.
-    /// Named IdeogramJson (not Json) to dodge a XAML-compile name collision — see NavPath.
-    /// </summary>
-    public string? IdeogramJson
-    {
-        set
-        {
-            if (string.IsNullOrEmpty(value)) return;
-            _viewModel.Parameters.Prompt = Uri.UnescapeDataString(value);
-            _viewModel.Parameters.UseJsonPrompt = true;
-        }
-    }
-
-    /// <summary>
-    /// The resolution chosen on the structure editor's canvas card, handed back together
-    /// with the JSON. Guarded against anything not in the current model's picker options.
-    /// </summary>
-    public string? IdeogramResolution
-    {
-        set
-        {
-            if (string.IsNullOrEmpty(value)) return;
-            var resolution = Uri.UnescapeDataString(value);
-            if (_viewModel.ResolutionOptions.Contains(resolution))
-                _viewModel.Parameters.Resolution = resolution;
+            _ = _viewModel.InputImages.AddAsInputAsync(value);
         }
     }
 

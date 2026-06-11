@@ -677,15 +677,13 @@ public class IdeogramStructureEditorViewModelTests
     }
 
     [Fact]
-    public void BuildApplyRoute_CarriesJsonAndResolution()
+    public void ApplyToGenerator_WithoutGenerator_IsANoOp()
     {
+        // The generator-coupled Apply behavior is pinned in GeneratorViewModelTests
+        // (EditorApply_*); stand-alone construction must simply do nothing.
         var sut = CreateSut();
         sut.SelectedResolution = "1440x2880";
 
-        var route = sut.BuildApplyRoute("{\"a\":1}");
-
-        route.Should().StartWith("//MainPage?ideogramJson=");
-        route.Should().Contain(Uri.EscapeDataString("{\"a\":1}"));
-        route.Should().EndWith("&ideogramResolution=1440x2880");
+        sut.Invoking(s => s.ApplyToGenerator("{\"a\":1}")).Should().NotThrow();
     }
 }

@@ -1564,7 +1564,7 @@ public class GeneratorViewModelTests
     [Fact]
     public void EditorResolutionPick_WritesThroughToGenerator_AndPersists()
     {
-        // The editor hands the resolution back via &ideogramResolution= only on Apply; a
+        // The editor hands the resolution back via ApplyToGenerator only on Apply; a
         // pick must ALSO reach the generator immediately so leaving via back navigation
         // doesn't discard it.
         SelectIdeogramTurbo();
@@ -1599,6 +1599,41 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.Resolution.Should().Be("1440x2880");
         _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880", It.IsAny<string?>()), Times.Once,
             "only the user's original pick persists");
+    }
+
+    [Fact]
+    public void EditorApply_WritesJsonPromptAndResolution_DirectlyToGenerator()
+    {
+        // Direct hand-off, NOT a //MainPage?ideogramJson=… route: Shell re-applies string
+        // query parameters on every back navigation, which used to resurrect the stale JSON
+        // over a freshly typed prompt whenever the user backed out of the editor.
+        SelectIdeogramTurbo();
+        var editor = CreateEditor();
+        editor.SelectedResolution = "1440x2880";
+        _viewModel.Parameters.Resolution = "Auto"; // changed behind the editor's back
+
+        editor.ApplyToGenerator("{\"a\":1}");
+
+        _viewModel.Parameters.Prompt.Should().Be("{\"a\":1}");
+        _viewModel.Parameters.UseJsonPrompt.Should().BeTrue();
+        _viewModel.Parameters.Resolution.Should().Be("1440x2880", "Apply re-adopts the editor's pick");
+    }
+
+    [Fact]
+    public void EditorApply_ArMode_LeavesGeneratorResolutionAlone()
+    {
+        // In AR mode SelectedResolution is an aspect-ratio combo string that isn't in the
+        // generator's ResolutionOptions — the membership guard must drop it (the live
+        // write-through already delivered the pick via Parameters.AspectRatio).
+        SelectComfyWorkflow();
+        var editor = CreateEditor();
+        var resolutionBefore = _viewModel.Parameters.Resolution;
+
+        editor.ApplyToGenerator("{\"a\":1}");
+
+        _viewModel.Parameters.Prompt.Should().Be("{\"a\":1}");
+        _viewModel.Parameters.UseJsonPrompt.Should().BeTrue();
+        _viewModel.Parameters.Resolution.Should().Be(resolutionBefore);
     }
 
     // --- Editor AR mode (host model = ComfyUI workflow) -----------------------------------

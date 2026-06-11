@@ -16,7 +16,7 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 
 /// <summary>
 /// Builds/edits an Ideogram V4 structured prompt visually. Two exits from one model:
-/// Apply serializes COMPACT into MainPage's prompt box via the Shell query-param hand-off
+/// Apply serializes COMPACT and writes it straight into the singleton generator VM's prompt
 /// (Replicate's cog wants json_prompt as a string), "Save JSON to file" writes the same model
 /// pretty-printed to disk for use outside this app. Transient like GalleryItemDetailViewModel;
 /// MainPage's singleton VM state survives the round-trip.
@@ -189,9 +189,9 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
         CanvasInvalidated?.Invoke();
 
         // Write the pick through to the generator immediately so it survives leaving the
-        // editor WITHOUT Apply (back navigation has no query-param hand-off). Membership
-        // guards mirror MainPage.IdeogramResolution. In AR mode the pick is an aspect-ratio
-        // combo string and lands on Parameters.AspectRatio — never on Resolution.
+        // editor WITHOUT Apply (back navigation carries nothing). Membership guards mirror
+        // ApplyToGenerator. In AR mode the pick is an aspect-ratio combo string and lands
+        // on Parameters.AspectRatio — never on Resolution.
         if (_suppressGeneratorSync || _generator is null) return;
         if (IsAspectRatioMode)
         {
@@ -563,8 +563,11 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Validate → serialize compact → hand the string back to MainPage. Blocks on validation
-    /// errors so an incomplete model can never reach the prompt box (the 422 stays dead).
+    /// Validate → serialize compact → write straight into the singleton generator VM, then pop.
+    /// Blocks on validation errors so an incomplete model can never reach the prompt box (the
+    /// 422 stays dead). Deliberately NOT a query-param hand-off: Shell re-applies a page's
+    /// string query parameters on every back navigation, so a "//MainPage?ideogramJson=…"
+    /// route resurrected the stale JSON whenever the user later backed out of the editor.
     /// </summary>
     [RelayCommand]
     private async Task ApplyAsync()
@@ -572,16 +575,32 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
         var model = BuildModel();
         if (!ReportValidation(model)) return;
 
-        var compact = V4JsonPromptSerializer.Serialize(model);
+        ApplyToGenerator(V4JsonPromptSerializer.Serialize(model));
         try
         {
-            await Shell.Current.GoToAsync(BuildApplyRoute(compact));
+            await Shell.Current.GoToAsync("..");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "IdeogramStructureEditorVM.{Op}", "Apply");
             SetStatus($"Couldn't return to the generator: {ex.Message}", StatusKind.Error);
         }
+    }
+
+    /// <summary>
+    /// The Apply hand-off: compact JSON becomes the prompt, the structured-JSON toggle turns
+    /// on so the descriptor ships it as json_prompt. Internal so tests can pin the contract
+    /// without Shell. In AR mode SelectedResolution is an aspect-ratio combo string that isn't
+    /// in ResolutionOptions — the membership guard drops it harmlessly; the live write-through
+    /// already delivered the pick.
+    /// </summary>
+    internal void ApplyToGenerator(string compactJson)
+    {
+        if (_generator is null) return;
+        _generator.Parameters.Prompt = compactJson;
+        _generator.Parameters.UseJsonPrompt = true;
+        if (_generator.ResolutionOptions.Contains(SelectedResolution))
+            _generator.Parameters.Resolution = SelectedResolution;
     }
 
     [RelayCommand]
@@ -632,16 +651,6 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
 
     [RelayCommand]
     private void SelectElement(ElementItemViewModel item) => SelectedElement = item;
-
-    /// <summary>
-    /// The Apply hand-off route: compact JSON plus the resolution chosen on the canvas card,
-    /// both consumed by MainPage QueryProperties. Internal so tests can pin the shape without Shell.
-    /// In AR mode the second param carries an aspect-ratio combo string; MainPage's membership
-    /// guard drops it harmlessly — the live write-through already delivered the pick.
-    /// </summary>
-    internal string BuildApplyRoute(string compactJson) =>
-        $"//MainPage?ideogramJson={Uri.EscapeDataString(compactJson)}" +
-        $"&ideogramResolution={Uri.EscapeDataString(SelectedResolution)}";
 
     private bool ReportValidation(V4JsonPrompt model)
     {
