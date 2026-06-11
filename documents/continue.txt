@@ -44,7 +44,17 @@ PARKED FEATURE POOL — ComfyUI Phase 2 (user picks when)
     would kill the user's browser-started renders. Best-effort (own 5 s
     CTS, never throws); job message unchanged, app.log carries the detail.
     Batch drain-only policy untouched. 710 tests.
-[ ] WS /ws?clientId= progress instead of 2 s /history polling.
+[x] WS /ws?clientId= progress — DONE 87312ea 2026-06-11, USER-VERIFIED
+    (bar + step text working on fireEngine). ProgressBar + "Rendering…
+    14/20" on the running job card. WS connects with the SAME clientId
+    BEFORE POST /prompt (5 s budget); events filtered by prompt_id;
+    outputs still via /history (poll loop's first iteration — parsing
+    path untouched); ANY ws failure degrades silently to the old 2 s
+    polling. Optional IProgress<JobProgress> threaded service→runner→VM
+    (Replicate/Pollinations ignore it). GOTCHA kept for posterity: C# 14
+    ALLOWS optional args in Moq expression trees — stale 2-arg setups
+    compile fine and mismatch at RUNTIME (progress==null pin); always
+    pass It.IsAny explicitly. 732 tests.
 [ ] Auth header for proxied setups (LAN-only assumption today).
 [ ] Multi-image outputs (one SaveImage node assumed today).
 [ ] Patch the workflow's quality-preset combo (CustomCombo Quality/Default/
