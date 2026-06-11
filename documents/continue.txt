@@ -27,12 +27,15 @@ PARKED FEATURE POOL — ComfyUI Phase 2 (user picks when)
     sticky restore, zavychromaxl render via "Checkpoint Test.json" (user-
     local Pictures file, not in repo), SD3.5 clip-missing error proved the
     patched checkpoint really loads server-side. 693 tests.
-[ ] UNETLoader extension (user-picked follow-up): same trick via
-    /object_info/UNETLoader → unet_name[0]. DESIGN WRINKLE: Ideogram_wf_san
-    has TWO UNETLoaders with DIFFERENT models (ideogram4 + ideogram4_
-    unconditional feeding DualModelGuider) — one shared pick would corrupt
-    the pair. Decide: picker per loader node vs lowest-id-only vs
-    only-when-exactly-one-loader.
+[x] UNETLoader extension — DONE 2417a07 2026-06-11, USER-VERIFIED on
+    fireEngine (picker shows the 24 diffusion models; dual-UNET
+    Ideogram_wf_san stays hidden). USER RULE baked in: multi-UNET graphs
+    are deliberate pairings — picker only when EXACTLY ONE literal
+    UNETLoader; CheckpointLoaderSimple wins when both kinds present.
+    ComfyUiModelSlot threads probe→fetch→patch; own cache
+    comfyui-unets.json; label "Checkpoint"/"Diffusion model". 705 tests.
+    "Unet Test.json" + "Checkpoint Test.json" remain user-local in
+    Pictures\comfy-workflows (delete or keep at will).
 [ ] POST /interrupt on cancel (today the server finishes its render — known).
 [ ] WS /ws?clientId= progress instead of 2 s /history polling.
 [ ] Auth header for proxied setups (LAN-only assumption today).
