@@ -262,12 +262,13 @@
                                     AutomationId="ResolutionPicker" />
                         </VerticalStackLayout>
 
-                        <!-- ComfyUI only: server checkpoints from /object_info (cache fallback).
-                             First entry is the workflow's own baked-in checkpoint = no patch.
-                             Binds the VM-level SelectedCheckpoint, never Parameters directly —
-                             see the livelock warning on the resolution picker above. -->
+                        <!-- ComfyUI only: server models from /object_info (cache fallback) —
+                             checkpoints OR the single swappable UNETLoader diffusion model
+                             (label switches by kind). First entry is the workflow's own
+                             baked-in file = no patch. Binds the VM-level SelectedCheckpoint,
+                             never Parameters directly — see the livelock warning above. -->
                         <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsCheckpoint}">
-                            <Label Text="Checkpoint" Style="{StaticResource FieldLabel}" />
+                            <Label Text="{Binding CheckpointLabel}" Style="{StaticResource FieldLabel}" />
                             <Picker ItemsSource="{Binding CheckpointOptions}"
                                     SelectedItem="{Binding SelectedCheckpoint}"
                                     MaximumWidthRequest="320"

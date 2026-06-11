@@ -45,6 +45,14 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
         _workflowDir = Path.Combine(Path.GetTempPath(), "imggen-comfy-tests-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_workflowDir);
         File.WriteAllText(Path.Combine(_workflowDir, "My Workflow.json"), Template);
+        File.WriteAllText(Path.Combine(_workflowDir, "Unet Workflow.json"),
+            """
+            {
+              "10": { "class_type": "UNETLoader", "inputs": { "unet_name": "flux-dev.safetensors" } },
+              "6":  { "class_type": "CLIPTextEncode", "inputs": { "text": "old" } },
+              "3":  { "class_type": "KSampler", "inputs": { "seed": 1 } }
+            }
+            """);
 
         _uiState.Setup(s => s.LoadComfyUiBaseUrl()).Returns("http://test-host:8188");
 
@@ -114,9 +122,9 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
         Content = new StringContent(body, Encoding.UTF8, "application/json")
     };
 
-    private static ImageGenerationParameters Parameters(bool json = true) => new()
+    private static ImageGenerationParameters Parameters(bool json = true, string model = "comfyui/My Workflow") => new()
     {
-        Model = "comfyui/My Workflow",
+        Model = model,
         Prompt = json ? """{"high_level_description":"x"}""" : "plain prompt",
         UseJsonPrompt = json,
         Seed = 777
@@ -160,6 +168,19 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
         var postBody = JsonNode.Parse(_requestBodies[_requests.FindIndex(r => r.Method == HttpMethod.Post)])!;
         postBody["prompt"]!["4"]!["inputs"]!["ckpt_name"]!.GetValue<string>()
             .Should().Be("server.safetensors");
+    }
+
+    [Fact]
+    public async Task Generate_SingleUnetWorkflowWithModelPick_PostsGraphWithPatchedUnetName()
+    {
+        var parameters = Parameters(json: false, model: "comfyui/Unet Workflow");
+        parameters.ComfyUiCheckpoint = "other-model.safetensors";
+
+        await _service.GenerateImageAsync(parameters);
+
+        var postBody = JsonNode.Parse(_requestBodies[_requests.FindIndex(r => r.Method == HttpMethod.Post)])!;
+        postBody["prompt"]!["10"]!["inputs"]!["unet_name"]!.GetValue<string>()
+            .Should().Be("other-model.safetensors");
     }
 
     [Fact]

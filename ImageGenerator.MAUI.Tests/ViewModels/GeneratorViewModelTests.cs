@@ -4,6 +4,7 @@ using Moq;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Application.Services;
+using ImageGenerator.MAUI.Core.Domain.ComfyUi;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.Enums;
@@ -1766,13 +1767,18 @@ public class GeneratorViewModelTests
 
     private const string ComfyWorkflowName = "Ideogram workflow_MR";
 
-    private void SetupCheckpointService(string? baked, params string[] server)
+    private void SetupCheckpointService(
+        string? baked, params string[] server) =>
+        SetupModelSlotService(
+            baked is null ? null : new ComfyUiModelSlot(ComfyUiLoaderKind.Checkpoint, baked), server);
+
+    private void SetupModelSlotService(ComfyUiModelSlot? slot, params string[] server)
     {
         _mockCheckpointService
-            .Setup(s => s.GetWorkflowCheckpointAsync(ComfyWorkflowName, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(baked);
+            .Setup(s => s.GetWorkflowModelSlotAsync(ComfyWorkflowName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(slot);
         _mockCheckpointService
-            .Setup(s => s.GetCheckpointsAsync(It.IsAny<CancellationToken>()))
+            .Setup(s => s.GetModelNamesAsync(It.IsAny<ComfyUiLoaderKind>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(server.Length == 0 ? null : server.ToList());
     }
 
@@ -1788,12 +1794,47 @@ public class GeneratorViewModelTests
         // The workflow default leads and the server's copy of it is deduplicated.
         _viewModel.CheckpointOptions.Should().Equal("baked.safetensors", "a.safetensors", "b.safetensors");
         _viewModel.SelectedCheckpoint.Should().Be("baked.safetensors");
+        _viewModel.CheckpointLabel.Should().Be("Checkpoint");
         _viewModel.Parameters.ComfyUiCheckpoint.Should().BeEmpty("the default selection means no patch");
     }
 
     [Fact]
-    public async Task ComfyModel_WithoutLoaderNode_HidesPicker()
+    public async Task ComfyModel_SingleUnetWorkflow_ShowsPickerLabeledDiffusionModel()
     {
+        SetupModelSlotService(
+            new ComfyUiModelSlot(ComfyUiLoaderKind.Unet, "ideogram4_fp8_scaled.safetensors"),
+            "flux-dev.safetensors", "ideogram4_fp8_scaled.safetensors");
+
+        SelectComfyWorkflow();
+        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
+
+        _viewModel.SupportsCheckpoint.Should().BeTrue();
+        _viewModel.CheckpointLabel.Should().Be("Diffusion model");
+        _viewModel.CheckpointOptions.Should().Equal("ideogram4_fp8_scaled.safetensors", "flux-dev.safetensors");
+        _mockCheckpointService.Verify(
+            s => s.GetModelNamesAsync(ComfyUiLoaderKind.Unet, It.IsAny<CancellationToken>()),
+            Times.AtLeastOnce, "the server list must come from the workflow's own loader kind");
+    }
+
+    [Fact]
+    public async Task NonComfyModel_ResetsCheckpointLabel()
+    {
+        SetupModelSlotService(new ComfyUiModelSlot(ComfyUiLoaderKind.Unet, "ideogram4_fp8_scaled.safetensors"));
+        SelectComfyWorkflow();
+        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
+        _viewModel.CheckpointLabel.Should().Be("Diffusion model");
+
+        SelectIdeogramTurbo();
+        await _viewModel.RefreshCheckpointOptionsAsync(ModelConstants.Ideogram.V4Turbo);
+
+        _viewModel.CheckpointLabel.Should().Be("Checkpoint");
+    }
+
+    [Fact]
+    public async Task ComfyModel_WithoutSwappableLoader_HidesPicker()
+    {
+        // Covers no-loader, link-only, AND multi-UNET pairings — the slot probe returns null
+        // for all of them.
         SetupCheckpointService(baked: null, "a.safetensors");
 
         SelectComfyWorkflow();

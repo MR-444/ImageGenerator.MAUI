@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Maui.ApplicationModel;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
+using ImageGenerator.MAUI.Core.Domain.ComfyUi;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
@@ -148,6 +149,11 @@ public partial class GeneratorViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _supportsCheckpoint;
+
+    // "Checkpoint" (CheckpointLoaderSimple) or "Diffusion model" (UNETLoader) — set per the
+    // selected workflow's loader kind.
+    [ObservableProperty]
+    private string _checkpointLabel = "Checkpoint";
 
     private string? _workflowDefaultCheckpoint;
     private bool _suppressCheckpointPersist;
@@ -299,18 +305,20 @@ public partial class GeneratorViewModel : ObservableObject
             }
 
             var workflowName = ModelConstants.ComfyUi.WorkflowName(modelValue!);
-            var baked = await _checkpointService.GetWorkflowCheckpointAsync(workflowName);
+            var slot = await _checkpointService.GetWorkflowModelSlotAsync(workflowName);
             if (version != _checkpointRefreshVersion) return;
-            if (baked is null)
+            if (slot is null)
             {
-                // Not an error: split-loader workflows (UNETLoader/CLIPLoader/VAELoader) have
-                // no CheckpointLoaderSimple — but say so, or a hidden picker looks like a bug.
+                // Not an error: link-driven loaders, or a multi-UNET pairing that must never
+                // be half-swapped — but say so, or a hidden picker looks like a bug.
                 _logger.LogInformation(
-                    "Checkpoint picker hidden: workflow {Workflow} has no CheckpointLoaderSimple with a literal ckpt_name",
+                    "Checkpoint picker hidden: workflow {Workflow} has no swappable model loader "
+                    + "(needs CheckpointLoaderSimple or exactly one UNETLoader with a literal name)",
                     workflowName);
                 HideCheckpointPicker();
                 return;
             }
+            var baked = slot.BakedName;
 
             // Show the default-only picker immediately — the server fetch below may take
             // seconds (offline host) and the workflow default is always a valid choice.
@@ -322,12 +330,13 @@ public partial class GeneratorViewModel : ObservableObject
                     _workflowDefaultCheckpoint = baked;
                     CheckpointOptions = [baked];
                     SelectedCheckpoint = baked;
+                    CheckpointLabel = slot.Kind == ComfyUiLoaderKind.Unet ? "Diffusion model" : "Checkpoint";
                     SupportsCheckpoint = true;
                 }
                 finally { _suppressCheckpointPersist = false; }
             });
 
-            var server = await _checkpointService.GetCheckpointsAsync();
+            var server = await _checkpointService.GetModelNamesAsync(slot.Kind);
             if (version != _checkpointRefreshVersion) return;
             if (server is null || server.Count == 0) return;
 
@@ -363,6 +372,7 @@ public partial class GeneratorViewModel : ObservableObject
             CheckpointOptions = [];
             _workflowDefaultCheckpoint = null;
             SelectedCheckpoint = null;
+            CheckpointLabel = "Checkpoint";
             // A stale checkpoint must not linger in Clone() snapshots of other models.
             Parameters.ComfyUiCheckpoint = string.Empty;
         }

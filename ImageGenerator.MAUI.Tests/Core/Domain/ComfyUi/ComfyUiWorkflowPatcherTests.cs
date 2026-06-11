@@ -328,18 +328,18 @@ public class ComfyUiWorkflowPatcherTests
         var result = ComfyUiWorkflowPatcher.Patch(
             PlainTemplate, Request(ckpt: "server.safetensors"));
 
-        result.PromptTargetDescription.Should().Contain("no CheckpointLoaderSimple");
+        result.PromptTargetDescription.Should().Contain("no unambiguous model loader");
     }
 
     [Fact]
-    public void FindBakedCheckpoint_ReturnsLowestIdLiteral()
+    public void FindBakedModelSlot_CheckpointTemplate_ReturnsLowestIdLiteralAsCheckpointKind()
     {
-        ComfyUiWorkflowPatcher.FindBakedCheckpoint(CheckpointTemplate)
-            .Should().Be("baked.safetensors");
+        ComfyUiWorkflowPatcher.FindBakedModelSlot(CheckpointTemplate)
+            .Should().Be(new ComfyUiModelSlot(ComfyUiLoaderKind.Checkpoint, "baked.safetensors"));
     }
 
     [Fact]
-    public void FindBakedCheckpoint_LinkOnlyOrAbsentLoader_ReturnsNull()
+    public void FindBakedModelSlot_LinkOnlyOrAbsentLoader_ReturnsNull()
     {
         const string linkOnlyLoader =
             """
@@ -349,15 +349,101 @@ public class ComfyUiWorkflowPatcherTests
             }
             """;
 
-        ComfyUiWorkflowPatcher.FindBakedCheckpoint(linkOnlyLoader).Should().BeNull();
-        ComfyUiWorkflowPatcher.FindBakedCheckpoint(PlainTemplate).Should().BeNull();
+        ComfyUiWorkflowPatcher.FindBakedModelSlot(linkOnlyLoader).Should().BeNull();
+        ComfyUiWorkflowPatcher.FindBakedModelSlot(PlainTemplate).Should().BeNull();
     }
 
     [Fact]
-    public void FindBakedCheckpoint_InvalidJsonOrUiFormat_ReturnsNullWithoutThrowing()
+    public void FindBakedModelSlot_InvalidJsonOrUiFormat_ReturnsNullWithoutThrowing()
     {
-        ComfyUiWorkflowPatcher.FindBakedCheckpoint("{ not json").Should().BeNull();
-        ComfyUiWorkflowPatcher.FindBakedCheckpoint("""{ "nodes": [ { "id": 1 } ] }""").Should().BeNull();
+        ComfyUiWorkflowPatcher.FindBakedModelSlot("{ not json").Should().BeNull();
+        ComfyUiWorkflowPatcher.FindBakedModelSlot("""{ "nodes": [ { "id": 1 } ] }""").Should().BeNull();
+    }
+
+    // ---- UNETLoader (split-loader workflows) ----------------------------------------------
+    // Mirrors the user's real Ideogram graph: when TWO UNETLoaders hold DIFFERENT models
+    // (conditional + unconditional feeding a DualModelGuider), the pair is deliberate and
+    // must never be half-swapped — no slot, no patch. Only an exactly-one literal UNETLoader
+    // qualifies as the workflow's swappable model.
+
+    // One literal UNETLoader; the link-driven second one must not count toward the
+    // exactly-one rule.
+    private const string SingleUnetTemplate =
+        """
+        {
+          "10": { "class_type": "UNETLoader",
+                  "inputs": { "unet_name": "flux-dev.safetensors", "weight_dtype": "default" } },
+          "11": { "class_type": "UNETLoader",
+                  "inputs": { "unet_name": ["20", 0], "weight_dtype": "default" } },
+          "6":  { "class_type": "CLIPTextEncode", "inputs": { "text": "old positive" } },
+          "3":  { "class_type": "KSampler", "inputs": { "seed": 7 } }
+        }
+        """;
+
+    private const string DualUnetTemplate =
+        """
+        {
+          "10": { "class_type": "UNETLoader",
+                  "inputs": { "unet_name": "ideogram4_fp8_scaled.safetensors", "weight_dtype": "default" } },
+          "12": { "class_type": "UNETLoader",
+                  "inputs": { "unet_name": "ideogram4_unconditional_fp8_scaled.safetensors", "weight_dtype": "default" } },
+          "6":  { "class_type": "CLIPTextEncode", "inputs": { "text": "old positive" } },
+          "3":  { "class_type": "KSampler", "inputs": { "seed": 7 } }
+        }
+        """;
+
+    [Fact]
+    public void FindBakedModelSlot_SingleLiteralUnet_ReturnsUnetKind()
+    {
+        ComfyUiWorkflowPatcher.FindBakedModelSlot(SingleUnetTemplate)
+            .Should().Be(new ComfyUiModelSlot(ComfyUiLoaderKind.Unet, "flux-dev.safetensors"));
+    }
+
+    [Fact]
+    public void FindBakedModelSlot_TwoLiteralUnets_ReturnsNull()
+    {
+        ComfyUiWorkflowPatcher.FindBakedModelSlot(DualUnetTemplate).Should().BeNull();
+    }
+
+    [Fact]
+    public void FindBakedModelSlot_CheckpointWinsOverUnet()
+    {
+        const string bothKinds =
+            """
+            {
+              "4":  { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "baked.safetensors" } },
+              "10": { "class_type": "UNETLoader", "inputs": { "unet_name": "flux-dev.safetensors" } },
+              "6":  { "class_type": "CLIPTextEncode", "inputs": { "text": "x" } }
+            }
+            """;
+
+        ComfyUiWorkflowPatcher.FindBakedModelSlot(bothKinds)
+            .Should().Be(new ComfyUiModelSlot(ComfyUiLoaderKind.Checkpoint, "baked.safetensors"));
+    }
+
+    [Fact]
+    public void Unet_SingleLiteralLoader_PatchesUnetName()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(
+            SingleUnetTemplate, Request(ckpt: "other-model.safetensors"));
+
+        var graph = JsonNode.Parse(result.GraphJson)!;
+        graph["10"]!["inputs"]!["unet_name"]!.GetValue<string>().Should().Be("other-model.safetensors");
+        graph["11"]!["inputs"]!["unet_name"]!.GetValueKind().Should().Be(JsonValueKind.Array,
+            "link-driven loaders are never touched");
+        result.PromptTargetDescription.Should().Contain("unet_name on UNETLoader node 10");
+    }
+
+    [Fact]
+    public void Unet_TwoLiteralLoaders_LeavesBothUntouchedAndNotesIt()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(
+            DualUnetTemplate, Request(ckpt: "other-model.safetensors"));
+
+        var graph = JsonNode.Parse(result.GraphJson)!;
+        graph["10"]!["inputs"]!["unet_name"]!.GetValue<string>().Should().Be("ideogram4_fp8_scaled.safetensors");
+        graph["12"]!["inputs"]!["unet_name"]!.GetValue<string>().Should().Be("ideogram4_unconditional_fp8_scaled.safetensors");
+        result.PromptTargetDescription.Should().Contain("no unambiguous model loader");
     }
 
     // ---- %date% expansion in filename_prefix --------------------------------------------

@@ -27,6 +27,7 @@ public static class ComfyUiWorkflowPatcher
     private const string TextEncodeClass = "CLIPTextEncode";
     private const string ResolutionSelectorClass = "ResolutionSelector";
     private const string CheckpointLoaderClass = "CheckpointLoaderSimple";
+    private const string UnetLoaderClass = "UNETLoader";
 
     public static ComfyUiPatchResult Patch(string templateJson, ComfyUiRequest request, DateTimeOffset? now = null)
     {
@@ -50,38 +51,57 @@ public static class ComfyUiWorkflowPatcher
 
         var seedNodeIds = PatchSeeds(nodes, request.Seed);
         var resolutionNote = PatchResolution(nodes, request.AspectRatio, request.Megapixels);
-        var checkpointNote = PatchCheckpoint(nodes, request.CheckpointName);
+        var modelNote = PatchModel(nodes, request.CheckpointName);
         var dateNote = PatchFilenamePrefixDates(nodes, now ?? DateTimeOffset.Now);
 
         return new ComfyUiPatchResult(
             root.ToJsonString(),
-            promptTarget + resolutionNote + checkpointNote + dateNote,
+            promptTarget + resolutionNote + modelNote + dateNote,
             seedNodeIds);
     }
 
     /// <summary>
-    /// The workflow's baked-in checkpoint: the lowest-id <c>CheckpointLoaderSimple</c> node's
-    /// LITERAL ckpt_name. Null when the template has none (link-driven, UI-format save, or
-    /// unparseable) — the UI hides the checkpoint picker then. A probe, so it never throws.
+    /// The workflow's swappable model slot: the lowest-id <c>CheckpointLoaderSimple</c> with a
+    /// LITERAL ckpt_name wins; otherwise EXACTLY ONE <c>UNETLoader</c> with a literal unet_name
+    /// qualifies (multi-UNET graphs are deliberate pairings — see <see cref="ComfyUiModelSlot"/>).
+    /// Null when neither exists (link-driven, UI-format save, or unparseable) — the UI hides
+    /// the model picker then. A probe, so it never throws.
     /// </summary>
-    public static string? FindBakedCheckpoint(string templateJson)
+    public static ComfyUiModelSlot? FindBakedModelSlot(string templateJson)
     {
         try
         {
             if (JsonNode.Parse(templateJson) is not JsonObject root || root["nodes"] is JsonArray)
                 return null;
 
-            return CollectNodes(root)
-                .Where(n => n.ClassType == CheckpointLoaderClass
-                            && n.Inputs["ckpt_name"]?.GetValueKind() == JsonValueKind.String)
-                .Select(n => n.Inputs["ckpt_name"]!.GetValue<string>())
-                .FirstOrDefault();
+            var nodes = CollectNodes(root);
+
+            var checkpoints = LiteralLoaders(nodes, CheckpointLoaderClass, "ckpt_name");
+            if (checkpoints.Count > 0)
+                return new ComfyUiModelSlot(
+                    ComfyUiLoaderKind.Checkpoint,
+                    checkpoints[0].Inputs["ckpt_name"]!.GetValue<string>());
+
+            var unets = LiteralLoaders(nodes, UnetLoaderClass, "unet_name");
+            if (unets.Count == 1)
+                return new ComfyUiModelSlot(
+                    ComfyUiLoaderKind.Unet,
+                    unets[0].Inputs["unet_name"]!.GetValue<string>());
+
+            return null;
         }
         catch (JsonException)
         {
             return null;
         }
     }
+
+    private static List<(string Id, string ClassType, JsonObject Inputs)> LiteralLoaders(
+        List<(string Id, string ClassType, JsonObject Inputs)> nodes, string classType, string inputKey) =>
+        nodes
+            .Where(n => n.ClassType == classType
+                        && n.Inputs[inputKey]?.GetValueKind() == JsonValueKind.String)
+            .ToList();
 
     private static List<(string Id, string ClassType, JsonObject Inputs)> CollectNodes(JsonObject root)
     {
@@ -207,23 +227,34 @@ public static class ComfyUiWorkflowPatcher
         return $"; resolution on {selectors.Count} ResolutionSelector node(s)";
     }
 
-    private static string PatchCheckpoint(
+    private static string PatchModel(
         List<(string Id, string ClassType, JsonObject Inputs)> nodes, string? checkpointName)
     {
         if (checkpointName is null) return string.Empty;
 
-        var loaders = nodes
-            .Where(n => n.ClassType == CheckpointLoaderClass
-                        && n.Inputs["ckpt_name"]?.GetValueKind() == JsonValueKind.String)
-            .ToList();
-        if (loaders.Count == 0)
-            return $"; no {CheckpointLoaderClass} node — workflow keeps its own checkpoint";
-
-        foreach (var (_, _, inputs) in loaders)
+        // Target selection mirrors FindBakedModelSlot so the picker's offer and the patch
+        // always agree on which node the name lands in.
+        var checkpoints = LiteralLoaders(nodes, CheckpointLoaderClass, "ckpt_name");
+        if (checkpoints.Count > 0)
         {
-            inputs["ckpt_name"] = checkpointName;
+            foreach (var (_, _, inputs) in checkpoints)
+            {
+                inputs["ckpt_name"] = checkpointName;
+            }
+            return $"; ckpt_name on {checkpoints.Count} {CheckpointLoaderClass} node(s)";
         }
-        return $"; ckpt_name on {loaders.Count} {CheckpointLoaderClass} node(s)";
+
+        var unets = LiteralLoaders(nodes, UnetLoaderClass, "unet_name");
+        if (unets.Count == 1)
+        {
+            unets[0].Inputs["unet_name"] = checkpointName;
+            return $"; unet_name on {UnetLoaderClass} node {unets[0].Id}";
+        }
+
+        // Zero loaders, or a multi-UNET pairing that must never be half-swapped. The picker
+        // is hidden in both cases — this is belt-and-braces for a template edited after
+        // selection.
+        return "; no unambiguous model loader — workflow keeps its own model(s)";
     }
 
     private static string PatchFilenamePrefixDates(

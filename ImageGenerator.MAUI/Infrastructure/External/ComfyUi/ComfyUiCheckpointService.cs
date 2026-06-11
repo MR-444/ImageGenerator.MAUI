@@ -9,15 +9,13 @@ using Microsoft.Maui.Storage;
 namespace ImageGenerator.MAUI.Infrastructure.External.ComfyUi;
 
 /// <summary>
-/// Fetches the server's installed checkpoints via GET /object_info/CheckpointLoaderSimple —
-/// the narrow per-class endpoint (a few KB) instead of the full /object_info dump (multi-MB
-/// on large installs). Successful fetches rewrite a disk cache so the picker stays populated
+/// Fetches the server's installed model files via the narrow GET /object_info/&lt;class&gt;
+/// endpoints (a few KB each) instead of the full /object_info dump (multi-MB on large
+/// installs). Successful fetches rewrite a per-kind disk cache so the picker stays populated
 /// while the server is offline; cache conventions mirror ModelCatalogService.
 /// </summary>
 public sealed class ComfyUiCheckpointService : IComfyUiCheckpointService
 {
-    private const string CacheFileName = "comfyui-checkpoints.json";
-
     // The shared "comfyui" resilience pipeline allows up to 3 minutes (sized for renders);
     // this fetch runs on model select, so a dead LAN host must fail fast into the cache.
     private static readonly TimeSpan FetchTimeout = TimeSpan.FromSeconds(5);
@@ -44,13 +42,23 @@ public sealed class ComfyUiCheckpointService : IComfyUiCheckpointService
         _workflowsDirectory = workflowsDirectoryOverride ?? OutputPaths.ComfyWorkflowsDirectory;
     }
 
-    public async Task<IReadOnlyList<string>?> GetCheckpointsAsync(CancellationToken ct = default)
+    /// <summary>One row per loader kind: where to fetch, what to drill, where to cache.</summary>
+    private static (string ClassName, string InputKey, string CacheFile) Map(ComfyUiLoaderKind kind) => kind switch
     {
+        ComfyUiLoaderKind.Checkpoint => ("CheckpointLoaderSimple", "ckpt_name", "comfyui-checkpoints.json"),
+        ComfyUiLoaderKind.Unet => ("UNETLoader", "unet_name", "comfyui-unets.json"),
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
+    };
+
+    public async Task<IReadOnlyList<string>?> GetModelNamesAsync(ComfyUiLoaderKind kind, CancellationToken ct = default)
+    {
+        var (className, inputKey, cacheFile) = Map(kind);
+
         var baseUrl = _uiStateStore.LoadComfyUiBaseUrl() ?? ModelConstants.ComfyUi.DefaultBaseUrl;
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
         {
-            _logger.LogWarning("ComfyUI checkpoint fetch skipped: invalid base URL '{BaseUrl}'", baseUrl);
-            return await LoadCachedAsync(ct);
+            _logger.LogWarning("ComfyUI model-list fetch skipped: invalid base URL '{BaseUrl}'", baseUrl);
+            return await LoadCachedAsync(cacheFile, ct);
         }
 
         try
@@ -60,21 +68,21 @@ public sealed class ComfyUiCheckpointService : IComfyUiCheckpointService
             timeoutCts.CancelAfter(FetchTimeout);
 
             using var response = await httpClient.GetAsync(
-                new Uri(baseUri, "object_info/CheckpointLoaderSimple"), timeoutCts.Token);
+                new Uri(baseUri, "object_info/" + className), timeoutCts.Token);
             response.EnsureSuccessStatusCode();
 
             await using var stream = await response.Content.ReadAsStreamAsync(timeoutCts.Token);
             using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: timeoutCts.Token);
 
-            var names = ParseCheckpointNames(doc);
+            var names = ParseModelNames(doc, className, inputKey);
             if (names is null)
             {
-                _logger.LogWarning("ComfyUI /object_info/CheckpointLoaderSimple had an unexpected shape");
-                return await LoadCachedAsync(ct);
+                _logger.LogWarning("ComfyUI /object_info/{ClassName} had an unexpected shape", className);
+                return await LoadCachedAsync(cacheFile, ct);
             }
 
-            _logger.LogInformation("ComfyUI checkpoints fetched Count={Count}", names.Count);
-            await SaveCachedAsync(names, ct);
+            _logger.LogInformation("ComfyUI model list fetched Kind={Kind} Count={Count}", kind, names.Count);
+            await SaveCachedAsync(names, cacheFile, ct);
             return names;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -83,12 +91,12 @@ public sealed class ComfyUiCheckpointService : IComfyUiCheckpointService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "ComfyUI checkpoint fetch failed, falling back to cache");
-            return await LoadCachedAsync(ct);
+            _logger.LogWarning(ex, "ComfyUI model-list fetch failed Kind={Kind}, falling back to cache", kind);
+            return await LoadCachedAsync(cacheFile, ct);
         }
     }
 
-    public async Task<string?> GetWorkflowCheckpointAsync(string workflowName, CancellationToken ct = default)
+    public async Task<ComfyUiModelSlot?> GetWorkflowModelSlotAsync(string workflowName, CancellationToken ct = default)
     {
         try
         {
@@ -96,7 +104,7 @@ public sealed class ComfyUiCheckpointService : IComfyUiCheckpointService
             if (!File.Exists(path)) return null;
 
             var template = await File.ReadAllTextAsync(path, ct);
-            return ComfyUiWorkflowPatcher.FindBakedCheckpoint(template);
+            return ComfyUiWorkflowPatcher.FindBakedModelSlot(template);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -104,37 +112,37 @@ public sealed class ComfyUiCheckpointService : IComfyUiCheckpointService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "ComfyUI workflow checkpoint probe failed Workflow={Workflow}", workflowName);
+            _logger.LogWarning(ex, "ComfyUI workflow model-slot probe failed Workflow={Workflow}", workflowName);
             return null;
         }
     }
 
-    /// <summary>Drills CheckpointLoaderSimple → input → required → ckpt_name → [0]; null on any mismatch.</summary>
-    private static List<string>? ParseCheckpointNames(JsonDocument doc)
+    /// <summary>Drills &lt;className&gt; → input → required → &lt;inputKey&gt; → [0]; null on any mismatch.</summary>
+    private static List<string>? ParseModelNames(JsonDocument doc, string className, string inputKey)
     {
         if (doc.RootElement.ValueKind != JsonValueKind.Object
-            || !doc.RootElement.TryGetProperty("CheckpointLoaderSimple", out var cls)
+            || !doc.RootElement.TryGetProperty(className, out var cls)
             || !cls.TryGetProperty("input", out var input)
             || !input.TryGetProperty("required", out var required)
-            || !required.TryGetProperty("ckpt_name", out var ckptName)
-            || ckptName.ValueKind != JsonValueKind.Array
-            || ckptName.GetArrayLength() == 0
-            || ckptName[0].ValueKind != JsonValueKind.Array)
+            || !required.TryGetProperty(inputKey, out var nameInput)
+            || nameInput.ValueKind != JsonValueKind.Array
+            || nameInput.GetArrayLength() == 0
+            || nameInput[0].ValueKind != JsonValueKind.Array)
         {
             return null;
         }
 
-        return ckptName[0].EnumerateArray()
+        return nameInput[0].EnumerateArray()
             .Where(e => e.ValueKind == JsonValueKind.String)
             .Select(e => e.GetString()!)
             .ToList();
     }
 
-    private async Task<IReadOnlyList<string>?> LoadCachedAsync(CancellationToken ct)
+    private async Task<IReadOnlyList<string>?> LoadCachedAsync(string cacheFile, CancellationToken ct)
     {
         try
         {
-            var path = CachePath();
+            var path = Path.Combine(_cacheDirectory, cacheFile);
             if (!File.Exists(path)) return null;
 
             await using var stream = File.OpenRead(path);
@@ -142,17 +150,17 @@ public sealed class ComfyUiCheckpointService : IComfyUiCheckpointService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "ComfyUI checkpoint cache load failed");
+            _logger.LogWarning(ex, "ComfyUI model-list cache load failed File={File}", cacheFile);
             return null;
         }
     }
 
-    private async Task SaveCachedAsync(IReadOnlyList<string> names, CancellationToken ct)
+    private async Task SaveCachedAsync(IReadOnlyList<string> names, string cacheFile, CancellationToken ct)
     {
         try
         {
             Directory.CreateDirectory(_cacheDirectory);
-            var path = CachePath();
+            var path = Path.Combine(_cacheDirectory, cacheFile);
             var tempPath = path + ".tmp";
 
             await using (var stream = File.Create(tempPath))
@@ -165,9 +173,7 @@ public sealed class ComfyUiCheckpointService : IComfyUiCheckpointService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "ComfyUI checkpoint cache save failed");
+            _logger.LogWarning(ex, "ComfyUI model-list cache save failed File={File}", cacheFile);
         }
     }
-
-    private string CachePath() => Path.Combine(_cacheDirectory, CacheFileName);
 }
