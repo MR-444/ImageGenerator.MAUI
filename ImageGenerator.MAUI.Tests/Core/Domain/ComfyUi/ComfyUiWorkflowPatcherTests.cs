@@ -52,10 +52,26 @@ public class ComfyUiWorkflowPatcherTests
         }
         """;
 
+    // Two literal loaders (out of id order to pin the lowest-id rule) plus a link-driven one
+    // that must never be touched.
+    private const string CheckpointTemplate =
+        """
+        {
+          "12": { "class_type": "CheckpointLoaderSimple",
+                  "inputs": { "ckpt_name": "refiner.safetensors" } },
+          "4":  { "class_type": "CheckpointLoaderSimple",
+                  "inputs": { "ckpt_name": "baked.safetensors" } },
+          "9":  { "class_type": "CheckpointLoaderSimple",
+                  "inputs": { "ckpt_name": ["20", 0] } },
+          "3":  { "class_type": "KSampler", "inputs": { "seed": 7 } },
+          "6":  { "class_type": "CLIPTextEncode", "inputs": { "text": "old positive" } }
+        }
+        """;
+
     private static ComfyUiRequest Request(
         string prompt = "p", bool json = false, long seed = 123,
-        string? ar = null, double? mp = null) =>
-        new("wf", prompt, json, seed, ar, mp);
+        string? ar = null, double? mp = null, string? ckpt = null) =>
+        new("wf", prompt, json, seed, ar, mp, ckpt);
 
     [Fact]
     public void JsonMode_PatchesImportJsonAndMode_OverwritingTheWiredLink()
@@ -269,6 +285,79 @@ public class ComfyUiWorkflowPatcherTests
         var graph = JsonNode.Parse(result.GraphJson)!;
         graph["200"]!["inputs"]!["filename_prefix"]!.GetValue<string>().Should().Be("Ideogram4");
         graph["200"]!["inputs"]!["images"]!.GetValueKind().Should().Be(JsonValueKind.Array);
+    }
+
+    // ---- checkpoint patching -------------------------------------------------------------
+
+    [Fact]
+    public void Checkpoint_Null_LeavesCkptNameUntouched()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(CheckpointTemplate, Request());
+
+        var graph = JsonNode.Parse(result.GraphJson)!;
+        graph["4"]!["inputs"]!["ckpt_name"]!.GetValue<string>().Should().Be("baked.safetensors");
+        graph["12"]!["inputs"]!["ckpt_name"]!.GetValue<string>().Should().Be("refiner.safetensors");
+        result.PromptTargetDescription.Should().NotContain("ckpt_name").And.NotContain("checkpoint");
+    }
+
+    [Fact]
+    public void Checkpoint_PatchesAllLiteralCkptNameLoaders()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(
+            CheckpointTemplate, Request(ckpt: "server.safetensors"));
+
+        var graph = JsonNode.Parse(result.GraphJson)!;
+        graph["4"]!["inputs"]!["ckpt_name"]!.GetValue<string>().Should().Be("server.safetensors");
+        graph["12"]!["inputs"]!["ckpt_name"]!.GetValue<string>().Should().Be("server.safetensors");
+        result.PromptTargetDescription.Should().Contain("ckpt_name on 2 CheckpointLoaderSimple node(s)");
+    }
+
+    [Fact]
+    public void Checkpoint_LeavesLinkDrivenCkptNameUntouched()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(
+            CheckpointTemplate, Request(ckpt: "server.safetensors"));
+
+        JsonNode.Parse(result.GraphJson)!["9"]!["inputs"]!["ckpt_name"]!
+            .GetValueKind().Should().Be(JsonValueKind.Array);
+    }
+
+    [Fact]
+    public void Checkpoint_WithoutLoaderNode_SkipsSilentlyAndNotesIt()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(
+            PlainTemplate, Request(ckpt: "server.safetensors"));
+
+        result.PromptTargetDescription.Should().Contain("no CheckpointLoaderSimple");
+    }
+
+    [Fact]
+    public void FindBakedCheckpoint_ReturnsLowestIdLiteral()
+    {
+        ComfyUiWorkflowPatcher.FindBakedCheckpoint(CheckpointTemplate)
+            .Should().Be("baked.safetensors");
+    }
+
+    [Fact]
+    public void FindBakedCheckpoint_LinkOnlyOrAbsentLoader_ReturnsNull()
+    {
+        const string linkOnlyLoader =
+            """
+            {
+              "4": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": ["20", 0] } },
+              "6": { "class_type": "CLIPTextEncode", "inputs": { "text": "x" } }
+            }
+            """;
+
+        ComfyUiWorkflowPatcher.FindBakedCheckpoint(linkOnlyLoader).Should().BeNull();
+        ComfyUiWorkflowPatcher.FindBakedCheckpoint(PlainTemplate).Should().BeNull();
+    }
+
+    [Fact]
+    public void FindBakedCheckpoint_InvalidJsonOrUiFormat_ReturnsNullWithoutThrowing()
+    {
+        ComfyUiWorkflowPatcher.FindBakedCheckpoint("{ not json").Should().BeNull();
+        ComfyUiWorkflowPatcher.FindBakedCheckpoint("""{ "nodes": [ { "id": 1 } ] }""").Should().BeNull();
     }
 
     // ---- %date% expansion in filename_prefix --------------------------------------------

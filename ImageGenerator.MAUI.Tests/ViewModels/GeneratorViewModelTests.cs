@@ -25,6 +25,7 @@ public class GeneratorViewModelTests
     private readonly Mock<IUiStateStore> _mockUiStateStore;
     private readonly Mock<IModelCatalogCoordinator> _mockCatalogCoordinator;
     private readonly Mock<IPromptBatchParser> _mockPromptBatchParser;
+    private readonly Mock<IComfyUiCheckpointService> _mockCheckpointService;
 
     public GeneratorViewModelTests()
     {
@@ -34,6 +35,7 @@ public class GeneratorViewModelTests
         _mockUiStateStore = new Mock<IUiStateStore>();
         _mockCatalogCoordinator = new Mock<IModelCatalogCoordinator>();
         _mockPromptBatchParser = new Mock<IPromptBatchParser>();
+        _mockCheckpointService = new Mock<IComfyUiCheckpointService>();
 
         _viewModel = new GeneratorViewModel(
             _mockJobRunner.Object,
@@ -43,6 +45,7 @@ public class GeneratorViewModelTests
             _mockCatalogCoordinator.Object,
             ModelDescriptorRegistry.Default(),
             _mockPromptBatchParser.Object,
+            _mockCheckpointService.Object,
             NullLogger<GeneratorViewModel>.Instance);
     }
 
@@ -906,6 +909,7 @@ public class GeneratorViewModelTests
             coordinator1.Object,
             ModelDescriptorRegistry.Default(),
             new Mock<IPromptBatchParser>().Object,
+            new Mock<IComfyUiCheckpointService>().Object,
             NullLogger<GeneratorViewModel>.Instance);
 
         await vm1.LoadCachedCatalogAsync();
@@ -928,6 +932,7 @@ public class GeneratorViewModelTests
             coordinator2.Object,
             ModelDescriptorRegistry.Default(),
             new Mock<IPromptBatchParser>().Object,
+            new Mock<IComfyUiCheckpointService>().Object,
             NullLogger<GeneratorViewModel>.Instance);
 
         await vm2.LoadCachedCatalogAsync();
@@ -1752,5 +1757,136 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.Resolution = "1440x2880";
 
         _viewModel.BuildEditorRoute().Should().Contain("resolution=1440x2880");
+    }
+
+    // --- ComfyUI checkpoint picker ---------------------------------------------------------
+    // Options[0] is always the workflow's baked-in checkpoint (= empty Parameters value = no
+    // patch); server names follow. Hidden when the workflow has no literal loader. The picker
+    // binds the VM-level SelectedCheckpoint, so the null-push tolerance lives in the VM.
+
+    private const string ComfyWorkflowName = "Ideogram workflow_MR";
+
+    private void SetupCheckpointService(string? baked, params string[] server)
+    {
+        _mockCheckpointService
+            .Setup(s => s.GetWorkflowCheckpointAsync(ComfyWorkflowName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(baked);
+        _mockCheckpointService
+            .Setup(s => s.GetCheckpointsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(server.Length == 0 ? null : server.ToList());
+    }
+
+    [Fact]
+    public async Task ComfyModel_WithBakedCheckpoint_ShowsPickerWithDefaultFirst()
+    {
+        SetupCheckpointService("baked.safetensors", "a.safetensors", "baked.safetensors", "b.safetensors");
+
+        SelectComfyWorkflow();
+        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
+
+        _viewModel.SupportsCheckpoint.Should().BeTrue();
+        // The workflow default leads and the server's copy of it is deduplicated.
+        _viewModel.CheckpointOptions.Should().Equal("baked.safetensors", "a.safetensors", "b.safetensors");
+        _viewModel.SelectedCheckpoint.Should().Be("baked.safetensors");
+        _viewModel.Parameters.ComfyUiCheckpoint.Should().BeEmpty("the default selection means no patch");
+    }
+
+    [Fact]
+    public async Task ComfyModel_WithoutLoaderNode_HidesPicker()
+    {
+        SetupCheckpointService(baked: null, "a.safetensors");
+
+        SelectComfyWorkflow();
+        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
+
+        _viewModel.SupportsCheckpoint.Should().BeFalse();
+        _viewModel.CheckpointOptions.Should().BeEmpty();
+        _viewModel.Parameters.ComfyUiCheckpoint.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ComfyModel_ServerUnreachable_ShowsOnlyTheWorkflowDefault()
+    {
+        SetupCheckpointService("baked.safetensors" /* no server list */);
+
+        SelectComfyWorkflow();
+        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
+
+        _viewModel.SupportsCheckpoint.Should().BeTrue();
+        _viewModel.CheckpointOptions.Should().Equal("baked.safetensors");
+        _viewModel.SelectedCheckpoint.Should().Be("baked.safetensors");
+    }
+
+    [Fact]
+    public async Task ExplicitCheckpointPick_WritesParametersAndPersists_DefaultPickWritesEmpty()
+    {
+        SetupCheckpointService("baked.safetensors", "a.safetensors");
+        SelectComfyWorkflow();
+        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
+
+        _viewModel.SelectedCheckpoint = "a.safetensors";
+
+        _viewModel.Parameters.ComfyUiCheckpoint.Should().Be("a.safetensors");
+        _mockUiStateStore.Verify(s => s.PersistComfyUiCheckpoint("a.safetensors", ComfyWorkflowName), Times.Once);
+
+        _viewModel.SelectedCheckpoint = "baked.safetensors";
+
+        _viewModel.Parameters.ComfyUiCheckpoint.Should().BeEmpty("re-picking the default means no patch again");
+    }
+
+    [Fact]
+    public async Task SavedCheckpoint_RestoredWhenStillOffered_ElseDefault()
+    {
+        SetupCheckpointService("baked.safetensors", "a.safetensors");
+        _mockUiStateStore.Setup(s => s.LoadComfyUiCheckpoint(ComfyWorkflowName)).Returns("a.safetensors");
+
+        SelectComfyWorkflow();
+        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
+
+        _viewModel.SelectedCheckpoint.Should().Be("a.safetensors");
+        _viewModel.Parameters.ComfyUiCheckpoint.Should().Be("a.safetensors");
+        // The restore is programmatic, not a user pick — it must not re-persist.
+        _mockUiStateStore.Verify(s => s.PersistComfyUiCheckpoint(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+
+        // A saved name the server no longer offers must never be invented into the selection.
+        _mockUiStateStore.Setup(s => s.LoadComfyUiCheckpoint(ComfyWorkflowName)).Returns("vanished.safetensors");
+        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
+
+        _viewModel.SelectedCheckpoint.Should().Be("baked.safetensors");
+        _viewModel.Parameters.ComfyUiCheckpoint.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task NonComfyModel_ClearsCheckpointState()
+    {
+        SetupCheckpointService("baked.safetensors", "a.safetensors");
+        SelectComfyWorkflow();
+        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
+        _viewModel.SelectedCheckpoint = "a.safetensors";
+
+        SelectIdeogramTurbo();
+        await _viewModel.RefreshCheckpointOptionsAsync(ModelConstants.Ideogram.V4Turbo);
+
+        _viewModel.SupportsCheckpoint.Should().BeFalse();
+        _viewModel.CheckpointOptions.Should().BeEmpty();
+        _viewModel.Parameters.ComfyUiCheckpoint.Should().BeEmpty(
+            "a stale checkpoint must not linger in Clone() snapshots of other models");
+    }
+
+    [Fact]
+    public async Task CheckpointNullSelectionPush_IsIgnored()
+    {
+        SetupCheckpointService("baked.safetensors", "a.safetensors");
+        SelectComfyWorkflow();
+        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
+        _viewModel.SelectedCheckpoint = "a.safetensors";
+
+        // The WinUI ComboBox pushes SelectedItem=null on ItemsSource swaps.
+        _viewModel.SelectedCheckpoint = null;
+
+        _viewModel.Parameters.ComfyUiCheckpoint.Should().Be("a.safetensors",
+            "a platform null push is a binding artifact, never a user pick");
+        _mockUiStateStore.Verify(s => s.PersistComfyUiCheckpoint("a.safetensors", ComfyWorkflowName), Times.Once,
+            "only the explicit pick persists");
     }
 }

@@ -21,12 +21,19 @@ public interface IUiStateStore
     bool LoadUseJsonPrompt();
     /// <summary>Null when never persisted — callers fall back to ModelConstants.ComfyUi.DefaultBaseUrl.</summary>
     string? LoadComfyUiBaseUrl();
+    /// <summary>
+    /// Per-workflow: checkpoints are architecture-bound, so one workflow's pick must never
+    /// leak into another. Null when the user never explicitly picked one for this workflow.
+    /// </summary>
+    string? LoadComfyUiCheckpoint(string workflowName);
     void PersistPrompt(string value);
     void PersistModel(string value);
     /// <inheritdoc cref="LoadResolution"/>
     void PersistResolution(string value, string? modelId);
     void PersistUseJsonPrompt(bool value);
     void PersistComfyUiBaseUrl(string value);
+    /// <inheritdoc cref="LoadComfyUiCheckpoint"/>
+    void PersistComfyUiCheckpoint(string value, string workflowName);
     /// <summary>Writes a still-pending debounced prompt immediately. Call on app shutdown.</summary>
     void FlushPendingWrites();
 }

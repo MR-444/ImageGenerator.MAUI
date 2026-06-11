@@ -65,4 +65,39 @@ public class FallbackComfyUiDescriptorTests
 
         request.Megapixels.Should().BeNull();
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Build_EmptyComfyUiCheckpoint_MapsToNullCheckpointName(string checkpoint)
+    {
+        var parameters = Parameters();
+        parameters.ComfyUiCheckpoint = checkpoint;
+
+        var request = (ComfyUiRequest)_sut.Build(parameters);
+
+        request.CheckpointName.Should().BeNull("empty means the workflow's own checkpoint, no patch");
+    }
+
+    [Fact]
+    public void Build_ComfyUiCheckpoint_FlowsIntoTheRequest()
+    {
+        var parameters = Parameters();
+        parameters.ComfyUiCheckpoint = "server.safetensors";
+
+        var request = (ComfyUiRequest)_sut.Build(parameters);
+
+        request.CheckpointName.Should().Be("server.safetensors");
+    }
+
+    [Fact]
+    public void Lines_IncludeTheCheckpointOnlyWhenSet()
+    {
+        var defaulted = Parameters();
+        var picked = Parameters();
+        picked.ComfyUiCheckpoint = "server.safetensors";
+
+        _sut.Lines(defaulted).Should().NotContain(l => l.StartsWith("Checkpoint:"));
+        _sut.Lines(picked).Should().Contain("Checkpoint: server.safetensors");
+    }
 }

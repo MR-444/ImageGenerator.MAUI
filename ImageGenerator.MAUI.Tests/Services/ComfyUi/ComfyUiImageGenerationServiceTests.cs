@@ -20,6 +20,7 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
     private const string Template =
         """
         {
+          "4":   { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "baked.safetensors" } },
           "6":   { "class_type": "CLIPTextEncode", "inputs": { "text": "old" } },
           "165": { "class_type": "RandomNoise", "inputs": { "noise_seed": 1 } },
           "179": { "class_type": "Ideogram4PromptBuilderKJ",
@@ -138,12 +139,27 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
         graph["179"]!["inputs"]!["import_json"]!.GetValue<string>().Should().Contain("high_level_description");
         graph["179"]!["inputs"]!["import_mode"]!.GetValue<string>().Should().Be("always");
         graph["165"]!["inputs"]!["noise_seed"]!.GetValue<long>().Should().Be(777);
+        graph["4"]!["inputs"]!["ckpt_name"]!.GetValue<string>().Should().Be("baked.safetensors",
+            "an empty ComfyUiCheckpoint parameter must never patch the loader");
 
         var viewRequest = _requests.Single(r => r.RequestUri!.AbsolutePath == "/view");
         viewRequest.RequestUri!.Query.Should().Contain("filename=Ideogram4_001.png",
             "the type=output image must win over the temp preview");
         viewRequest.RequestUri.Query.Should().Contain("type=output");
         viewRequest.RequestUri.Host.Should().Be("test-host", "base URL comes from the UI state store");
+    }
+
+    [Fact]
+    public async Task Generate_WithCheckpointParameter_PostsGraphWithPatchedCkptName()
+    {
+        var parameters = Parameters();
+        parameters.ComfyUiCheckpoint = "server.safetensors";
+
+        await _service.GenerateImageAsync(parameters);
+
+        var postBody = JsonNode.Parse(_requestBodies[_requests.FindIndex(r => r.Method == HttpMethod.Post)])!;
+        postBody["prompt"]!["4"]!["inputs"]!["ckpt_name"]!.GetValue<string>()
+            .Should().Be("server.safetensors");
     }
 
     [Fact]

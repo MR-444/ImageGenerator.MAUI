@@ -26,6 +26,7 @@ public static class ComfyUiWorkflowPatcher
     private const string PromptBuilderClass = "Ideogram4PromptBuilderKJ";
     private const string TextEncodeClass = "CLIPTextEncode";
     private const string ResolutionSelectorClass = "ResolutionSelector";
+    private const string CheckpointLoaderClass = "CheckpointLoaderSimple";
 
     public static ComfyUiPatchResult Patch(string templateJson, ComfyUiRequest request, DateTimeOffset? now = null)
     {
@@ -49,12 +50,37 @@ public static class ComfyUiWorkflowPatcher
 
         var seedNodeIds = PatchSeeds(nodes, request.Seed);
         var resolutionNote = PatchResolution(nodes, request.AspectRatio, request.Megapixels);
+        var checkpointNote = PatchCheckpoint(nodes, request.CheckpointName);
         var dateNote = PatchFilenamePrefixDates(nodes, now ?? DateTimeOffset.Now);
 
         return new ComfyUiPatchResult(
             root.ToJsonString(),
-            promptTarget + resolutionNote + dateNote,
+            promptTarget + resolutionNote + checkpointNote + dateNote,
             seedNodeIds);
+    }
+
+    /// <summary>
+    /// The workflow's baked-in checkpoint: the lowest-id <c>CheckpointLoaderSimple</c> node's
+    /// LITERAL ckpt_name. Null when the template has none (link-driven, UI-format save, or
+    /// unparseable) — the UI hides the checkpoint picker then. A probe, so it never throws.
+    /// </summary>
+    public static string? FindBakedCheckpoint(string templateJson)
+    {
+        try
+        {
+            if (JsonNode.Parse(templateJson) is not JsonObject root || root["nodes"] is JsonArray)
+                return null;
+
+            return CollectNodes(root)
+                .Where(n => n.ClassType == CheckpointLoaderClass
+                            && n.Inputs["ckpt_name"]?.GetValueKind() == JsonValueKind.String)
+                .Select(n => n.Inputs["ckpt_name"]!.GetValue<string>())
+                .FirstOrDefault();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static List<(string Id, string ClassType, JsonObject Inputs)> CollectNodes(JsonObject root)
@@ -179,6 +205,25 @@ public static class ComfyUiWorkflowPatcher
             if (megapixels is not null) inputs["megapixels"] = megapixels;
         }
         return $"; resolution on {selectors.Count} ResolutionSelector node(s)";
+    }
+
+    private static string PatchCheckpoint(
+        List<(string Id, string ClassType, JsonObject Inputs)> nodes, string? checkpointName)
+    {
+        if (checkpointName is null) return string.Empty;
+
+        var loaders = nodes
+            .Where(n => n.ClassType == CheckpointLoaderClass
+                        && n.Inputs["ckpt_name"]?.GetValueKind() == JsonValueKind.String)
+            .ToList();
+        if (loaders.Count == 0)
+            return $"; no {CheckpointLoaderClass} node — workflow keeps its own checkpoint";
+
+        foreach (var (_, _, inputs) in loaders)
+        {
+            inputs["ckpt_name"] = checkpointName;
+        }
+        return $"; ckpt_name on {loaders.Count} {CheckpointLoaderClass} node(s)";
     }
 
     private static string PatchFilenamePrefixDates(

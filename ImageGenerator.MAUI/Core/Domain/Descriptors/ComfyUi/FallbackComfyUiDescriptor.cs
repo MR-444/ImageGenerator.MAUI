@@ -49,7 +49,8 @@ public sealed class FallbackComfyUiDescriptor : IPayloadBuilder, ICapabilityProv
         AspectRatio: ResolutionSelectorAspectRatios.Contains(p.AspectRatio, StringComparer.Ordinal)
             ? p.AspectRatio
             : null,
-        Megapixels: ParseMegapixels(p.Resolution));
+        Megapixels: ParseMegapixels(p.Resolution),
+        CheckpointName: string.IsNullOrWhiteSpace(p.ComfyUiCheckpoint) ? null : p.ComfyUiCheckpoint);
 
     public IEnumerable<string> Lines(ImageGenerationParameters p)
     {
@@ -57,6 +58,8 @@ public sealed class FallbackComfyUiDescriptor : IPayloadBuilder, ICapabilityProv
         yield return $"JsonPrompt: {p.UseJsonPrompt}";
         if (ParseMegapixels(p.Resolution) is { } mp)
             yield return $"Megapixels: {mp.ToString(CultureInfo.InvariantCulture)}";
+        if (!string.IsNullOrWhiteSpace(p.ComfyUiCheckpoint))
+            yield return $"Checkpoint: {p.ComfyUiCheckpoint}";
     }
 
     /// <summary>"1.5 MP" → 1.5; anything unparseable → null (the workflow keeps its own value).</summary>

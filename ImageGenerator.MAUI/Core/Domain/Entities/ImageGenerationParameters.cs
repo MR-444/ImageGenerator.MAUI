@@ -104,6 +104,11 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private bool _enableCopyrightDetection;
 
+    // ComfyUI only: server checkpoint to patch into CheckpointLoaderSimple. Empty means the
+    // workflow's own baked-in checkpoint (no patch applied).
+    [ObservableProperty]
+    private string _comfyUiCheckpoint = string.Empty;
+
     public ImageGenerationParameters Clone()
     {
         var copy = new ImageGenerationParameters
@@ -131,6 +136,7 @@ public partial class ImageGenerationParameters : ObservableObject
             Safe             = Safe,
             UseJsonPrompt    = UseJsonPrompt,
             EnableCopyrightDetection = EnableCopyrightDetection,
+            ComfyUiCheckpoint = ComfyUiCheckpoint,
         };
         foreach (var p in ImagePrompts) copy.ImagePrompts.Add(p);
         return copy;

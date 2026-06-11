@@ -25,6 +25,7 @@ public partial class GeneratorViewModel : ObservableObject
     private readonly IUiStateStore _uiStateStore;
     private readonly IModelCatalogCoordinator _catalogCoordinator;
     private readonly IModelDescriptorRegistry _registry;
+    private readonly IComfyUiCheckpointService _checkpointService;
     private readonly ILogger<GeneratorViewModel> _logger;
 
     [ObservableProperty]
@@ -136,6 +137,42 @@ public partial class GeneratorViewModel : ObservableObject
     // a user pick, so it must not overwrite the persisted choice.
     private bool _suppressResolutionPersist;
 
+    // ComfyUI checkpoint picker. Options[0] is always the workflow's own baked-in checkpoint
+    // (= no patch); server checkpoints follow after the async fetch lands. Hidden whenever the
+    // selected workflow has no literal CheckpointLoaderSimple ckpt_name.
+    [ObservableProperty]
+    private List<string> _checkpointOptions = [];
+
+    [ObservableProperty]
+    private string? _selectedCheckpoint;
+
+    [ObservableProperty]
+    private bool _supportsCheckpoint;
+
+    private string? _workflowDefaultCheckpoint;
+    private bool _suppressCheckpointPersist;
+    // Monotonic token: a slower fetch for a previously selected model must not clobber the
+    // options of the model selected after it.
+    private int _checkpointRefreshVersion;
+
+    partial void OnSelectedCheckpointChanged(string? value)
+    {
+        // The WinUI ComboBox pushes SelectedItem=null on ItemsSource swaps; ignore it like
+        // OnSelectedModelChanged does — the real selection lands on a later tick.
+        if (value is null) return;
+
+        Parameters.ComfyUiCheckpoint =
+            value == _workflowDefaultCheckpoint ? string.Empty : value;
+
+        // Membership guard, same as resolution: only a value the picker actually offers can
+        // be a user pick.
+        if (!_suppressCheckpointPersist && CheckpointOptions.Contains(value))
+        {
+            _uiStateStore.PersistComfyUiCheckpoint(
+                value, ModelConstants.ComfyUi.WorkflowName(Parameters.Model));
+        }
+    }
+
     // Last Resolution value that was a member of the then-current ResolutionOptions. Used to
     // revert the WinUI ComboBox's DEFERRED null push: after an ItemsSource swap the platform
     // picker finishes rebuilding on a later dispatcher tick and pushes SelectedItem=null —
@@ -243,7 +280,94 @@ public partial class GeneratorViewModel : ObservableObject
 
         // Capabilities now reflect the new model, so the JSON-prompt validation gate is accurate.
         ValidateParameters();
+
+        // Fire-and-forget: the checkpoint picker hydrates asynchronously (file probe + server
+        // fetch) while the synchronous capability swap above stays instant. The method owns
+        // its try/catch and guards against stale completions via _checkpointRefreshVersion.
+        _ = RefreshCheckpointOptionsAsync(modelValue);
     }
+
+    internal async Task RefreshCheckpointOptionsAsync(string? modelValue)
+    {
+        var version = ++_checkpointRefreshVersion;
+        try
+        {
+            if (!ModelConstants.ComfyUi.IsId(modelValue))
+            {
+                HideCheckpointPicker();
+                return;
+            }
+
+            var workflowName = ModelConstants.ComfyUi.WorkflowName(modelValue!);
+            var baked = await _checkpointService.GetWorkflowCheckpointAsync(workflowName);
+            if (version != _checkpointRefreshVersion) return;
+            if (baked is null)
+            {
+                // Not an error: split-loader workflows (UNETLoader/CLIPLoader/VAELoader) have
+                // no CheckpointLoaderSimple — but say so, or a hidden picker looks like a bug.
+                _logger.LogInformation(
+                    "Checkpoint picker hidden: workflow {Workflow} has no CheckpointLoaderSimple with a literal ckpt_name",
+                    workflowName);
+                HideCheckpointPicker();
+                return;
+            }
+
+            // Show the default-only picker immediately — the server fetch below may take
+            // seconds (offline host) and the workflow default is always a valid choice.
+            DispatchToUi(() =>
+            {
+                _suppressCheckpointPersist = true;
+                try
+                {
+                    _workflowDefaultCheckpoint = baked;
+                    CheckpointOptions = [baked];
+                    SelectedCheckpoint = baked;
+                    SupportsCheckpoint = true;
+                }
+                finally { _suppressCheckpointPersist = false; }
+            });
+
+            var server = await _checkpointService.GetCheckpointsAsync();
+            if (version != _checkpointRefreshVersion) return;
+            if (server is null || server.Count == 0) return;
+
+            DispatchToUi(() =>
+            {
+                _suppressCheckpointPersist = true;
+                try
+                {
+                    CheckpointOptions =
+                        [baked, .. server.Where(n => !string.Equals(n, baked, StringComparison.Ordinal))];
+                    // Restore a previous explicit pick for THIS workflow — but only when the
+                    // server still offers it; never invent a selection.
+                    var saved = _uiStateStore.LoadComfyUiCheckpoint(workflowName);
+                    SelectedCheckpoint =
+                        saved is not null && CheckpointOptions.Contains(saved) ? saved : baked;
+                }
+                finally { _suppressCheckpointPersist = false; }
+            });
+        }
+        catch (Exception ex)
+        {
+            // Fire-and-forget caller — an unobserved throw here would be silent at best.
+            _logger.LogWarning(ex, "Checkpoint options refresh failed Model={Model}", modelValue);
+        }
+    }
+
+    private void HideCheckpointPicker() => DispatchToUi(() =>
+    {
+        _suppressCheckpointPersist = true;
+        try
+        {
+            SupportsCheckpoint = false;
+            CheckpointOptions = [];
+            _workflowDefaultCheckpoint = null;
+            SelectedCheckpoint = null;
+            // A stale checkpoint must not linger in Clone() snapshots of other models.
+            Parameters.ComfyUiCheckpoint = string.Empty;
+        }
+        finally { _suppressCheckpointPersist = false; }
+    });
 
     private void SetAspectRatioProgrammatically(string aspectRatio)
     {
@@ -324,6 +448,7 @@ public partial class GeneratorViewModel : ObservableObject
         IModelCatalogCoordinator catalogCoordinator,
         IModelDescriptorRegistry registry,
         IPromptBatchParser promptBatchParser,
+        IComfyUiCheckpointService checkpointService,
         ILogger<GeneratorViewModel> logger)
     {
         _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
@@ -332,6 +457,7 @@ public partial class GeneratorViewModel : ObservableObject
         _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
         _catalogCoordinator = catalogCoordinator ?? throw new ArgumentNullException(nameof(catalogCoordinator));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+        _checkpointService = checkpointService ?? throw new ArgumentNullException(nameof(checkpointService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         if (promptBatchParser is null) throw new ArgumentNullException(nameof(promptBatchParser));
 

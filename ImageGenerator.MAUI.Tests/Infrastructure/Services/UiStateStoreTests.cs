@@ -141,6 +141,21 @@ public class UiStateStoreTests
     }
 
     [Fact]
+    public void ComfyUiCheckpoint_RoundTripsPerWorkflowKeys()
+    {
+        // Per-workflow isolation: checkpoints are architecture-bound, so one workflow's
+        // pick must never surface for another.
+        _sut.PersistComfyUiCheckpoint("flux.safetensors", "Flux Workflow");
+        _sut.PersistComfyUiCheckpoint("sdxl.safetensors", "SDXL Workflow");
+
+        _sut.LoadComfyUiCheckpoint("Flux Workflow").Should().Be("flux.safetensors");
+        _sut.LoadComfyUiCheckpoint("SDXL Workflow").Should().Be("sdxl.safetensors");
+        _sut.LoadComfyUiCheckpoint("Never Picked").Should().BeNull();
+        _preferences.Get("imggen.comfyui_checkpoint.Flux Workflow", string.Empty)
+            .Should().Be("flux.safetensors", "the key shape is pinned like the others above");
+    }
+
+    [Fact]
     public void LoadUseJsonPrompt_KeyMissing_ReturnsFalse()
     {
         _sut.LoadUseJsonPrompt().Should().BeFalse();

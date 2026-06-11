@@ -262,6 +262,19 @@
                                     AutomationId="ResolutionPicker" />
                         </VerticalStackLayout>
 
+                        <!-- ComfyUI only: server checkpoints from /object_info (cache fallback).
+                             First entry is the workflow's own baked-in checkpoint = no patch.
+                             Binds the VM-level SelectedCheckpoint, never Parameters directly —
+                             see the livelock warning on the resolution picker above. -->
+                        <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsCheckpoint}">
+                            <Label Text="Checkpoint" Style="{StaticResource FieldLabel}" />
+                            <Picker ItemsSource="{Binding CheckpointOptions}"
+                                    SelectedItem="{Binding SelectedCheckpoint}"
+                                    MaximumWidthRequest="320"
+                                    HorizontalOptions="Start"
+                                    AutomationId="CheckpointPicker" />
+                        </VerticalStackLayout>
+
                         <!-- Ideogram V4: copyright detection -->
                         <HorizontalStackLayout Spacing="8" IsVisible="{Binding SupportsIdeogramOptions}">
                             <CheckBox IsChecked="{Binding Parameters.EnableCopyrightDetection}" VerticalOptions="Center"
