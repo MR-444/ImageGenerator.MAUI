@@ -39,6 +39,8 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
     private Func<HttpResponseMessage> _promptResponse = PromptOk;
     private readonly Queue<Func<HttpResponseMessage>> _historyResponses = new();
     private Func<HttpResponseMessage> _viewResponse = ViewOk;
+    private Func<HttpResponseMessage> _queueResponse = QueueEmpty;
+    private Func<HttpResponseMessage> _queueDeleteResponse = () => Json("{}");
 
     public ComfyUiImageGenerationServiceTests()
     {
@@ -90,8 +92,16 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
         if (path == "/prompt") return _promptResponse();
         if (path.StartsWith("/history/")) return _historyResponses.Count > 0 ? _historyResponses.Dequeue()() : HistoryDone();
         if (path == "/view") return _viewResponse();
+        if (path == "/queue") return req.Method == HttpMethod.Get ? _queueResponse() : _queueDeleteResponse();
+        if (path == "/interrupt") return new HttpResponseMessage(HttpStatusCode.OK);
         return new HttpResponseMessage(HttpStatusCode.NotFound);
     }
+
+    private static HttpResponseMessage QueueEmpty() =>
+        Json("""{ "queue_running": [], "queue_pending": [] }""");
+
+    private static HttpResponseMessage QueueWithRunning(string promptId) => Json(
+        $$"""{ "queue_running": [[0, "{{promptId}}", {}, {}, []]], "queue_pending": [] }""");
 
     private static HttpResponseMessage PromptOk() => Json($$"""{ "prompt_id": "{{PromptId}}" }""");
 
@@ -249,6 +259,78 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
 
         result.ImageData.Should().BeNull();
         result.Message.Should().Be("Image generation was canceled.");
+    }
+
+    // ---- server-side cancel (POST /queue delete + guarded POST /interrupt) ----------------
+    // Mirrors ComfyUI's own UI cancel. /interrupt is GLOBAL, so it is only sent when GET
+    // /queue shows OUR prompt as the running one — a blind interrupt would kill a render the
+    // user started from the ComfyUI browser UI.
+
+    private async Task<GeneratedImage> CancelMidPollAsync()
+    {
+        using var cts = new CancellationTokenSource();
+        _historyResponses.Enqueue(() => { cts.Cancel(); return HistoryEmpty(); });
+        for (var i = 0; i < 10; i++) _historyResponses.Enqueue(HistoryEmpty);
+        return await _service.GenerateImageAsync(Parameters(), cts.Token);
+    }
+
+    [Fact]
+    public async Task CanceledMidPoll_DeletesPromptFromServerQueue()
+    {
+        var result = await CancelMidPollAsync();
+
+        result.Message.Should().Be("Image generation was canceled.");
+        var deleteIndex = _requests.FindIndex(r =>
+            r.Method == HttpMethod.Post && r.RequestUri!.AbsolutePath == "/queue");
+        deleteIndex.Should().BeGreaterThan(-1, "cancel must ask the server to drop the pending prompt");
+        _requestBodies[deleteIndex].Should().Contain("delete").And.Contain(PromptId);
+    }
+
+    [Fact]
+    public async Task CanceledMidPoll_OurPromptRunning_PostsInterrupt()
+    {
+        _queueResponse = () => QueueWithRunning(PromptId);
+
+        await CancelMidPollAsync();
+
+        _requests.Should().Contain(r =>
+            r.Method == HttpMethod.Post && r.RequestUri!.AbsolutePath == "/interrupt");
+    }
+
+    [Fact]
+    public async Task CanceledMidPoll_AnotherPromptRunning_DoesNotInterrupt()
+    {
+        _queueResponse = () => QueueWithRunning("someone-elses-render");
+
+        await CancelMidPollAsync();
+
+        _requests.Should().NotContain(r => r.RequestUri!.AbsolutePath == "/interrupt",
+            "a foreign running prompt must never be interrupted — /interrupt is global");
+    }
+
+    [Fact]
+    public async Task CanceledMidPoll_CancelEndpointsUnreachable_StillReturnsCanceledMessage()
+    {
+        _queueDeleteResponse = () => throw new HttpRequestException("connection refused");
+
+        var result = await CancelMidPollAsync();
+
+        result.ImageData.Should().BeNull();
+        result.Message.Should().Be("Image generation was canceled.",
+            "the cancel notify is best-effort and must not surface a second error");
+    }
+
+    [Fact]
+    public async Task CanceledBeforeQueue_NoServerCancelCalls()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var result = await _service.GenerateImageAsync(Parameters(), cts.Token);
+
+        result.Message.Should().Be("Image generation was canceled.");
+        _requests.Should().NotContain(r => r.RequestUri!.AbsolutePath == "/queue");
+        _requests.Should().NotContain(r => r.RequestUri!.AbsolutePath == "/interrupt");
     }
 
     [Fact]
