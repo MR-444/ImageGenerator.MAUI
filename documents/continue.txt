@@ -2,10 +2,11 @@ ImageGenerator.MAUI — Open Work Queue
 =====================================
 
 Source of truth: AUDIT_REPORT.md (audit dated 2026-05-20 — predates v1.3.0+).
-Last updated: 2026-06-11 (ComfyUI test-feedback bundle user-confirmed working
-and PUSHED incl. persist hygiene; release-readiness item added — v1.5.0 tag
-deliberately deferred. Full per-item forensics of everything compressed below
-live in this file's git history, last full version at commit 97cd2ab).
+Last updated: 2026-06-11 (v1.5.0 readiness item DONE: README ComfyUI section
++ sanitized sample workflow shipped in comfy-workflows/; the v1.5.0 tag itself
+is the remaining user decision. Full per-item forensics of everything
+compressed below live in this file's git history, last full version at
+commit 97cd2ab).
 
 Format: each item has a status box, severity, a one-line hook, and
 file:line citations. Pick the top open item; keep this file in sync
@@ -205,27 +206,32 @@ OPEN — owed from the editor bundle
     in-app verify session.
 
 
-OPEN — v1.5.0 release readiness (tag deferred 2026-06-11, user decision)
+DONE — v1.5.0 release readiness (tag itself still deferred, user decision)
 ------------------------------------------------------------------------
 
-[ ] ComfyUI is BYO-workflow: the app ships NO workflow; a third party with
-    their own ComfyUI server gets an empty "ComfyUI" provider until they
-    export an API-format JSON into Pictures\ImageGenerator.MAUI\
-    comfy-workflows\. Before tagging, document (README section) what a
-    workflow needs to work with the app:
-      - MINIMUM (plain prompts): a literal-text CLIPTextEncode (lowest id
-        wins) + a SaveImage node; seeds re-roll automatically; %date% tokens
-        in filename_prefix are expanded app-side.
-      - STRUCTURED JSON mode: an Ideogram4PromptBuilderKJ node (kjnodes
-        pack) AND/OR a caption-JSON CLIPTextEncode literal.
-      - AR/megapixels patching: a ResolutionSelector node (else silently
-        skipped — workflow keeps its own resolution).
-      - Server side: ComfyUI started with --listen (LAN), the models the
-        workflow references must be installed; no auth (LAN-only assumption).
-    DECIDE: also ship a sanitized sample workflow export in the repo?
-    CAUTION: do NOT ship the current workflow_MR export as-is — its frozen
-    CLIPTextEncode/builder literals embed the user's private test prompt;
-    a clean re-export with a neutral prompt would be needed.
+[x] ComfyUI BYO-workflow documentation + shipped sample — DONE 2026-06-11
+    (this commit). README got the full ComfyUI treatment: three-provider
+    intro/features, "Generating via your own ComfyUI server" section
+    (server --listen setup, base-URL slot, workflows-as-models, what the
+    patcher does, minimum workflow requirements), sample link, stale test
+    count fixed (357 -> 653), project-structure tree updated.
+    SAMPLE SHIPPED: comfy-workflows/Ideogram4-Sample.json (repo root) —
+    decisions (user, 2026-06-11): repo file + README link (NO auto-copy
+    into the Pictures folder), full README section, preset "Default"
+    (20 steps). Base file: the USER's own sanitization (app-side
+    Ideogram_wf_san.json — builder + WAS "Random Number" stripped, neutral
+    coffee-mug caption-JSON on the 98:24 CLIPTextEncode literal); app-side
+    copy kept verbatim, repo copy additionally restores the raw
+    %date:yyyy-MM%/Ideogram4_%date:hhmmss% filename_prefix (the app
+    expands it). One orphaned stock PreviewAny (98:181, neutral content)
+    deliberately kept. /object_info check on fireEngine 2026-06-11: every
+    remaining class is core ComfyUI (nodes / comfy_extras.*) — the sample
+    needs ZERO custom node packs, only the 4 Ideogram-4 model files.
+    PINNED: ShippedSampleWorkflowTests (7 tests) load the real repo file —
+    both prompt modes patch 98:24, seed re-roll hits 98:18, ResolutionSelector
+    + %date% notes, no custom-pack class_types, and a sanitation guard (every
+    >200-char literal must be the neutral placeholder or the preset table).
+    646 -> 653 tests green.
 
 
 MISSING TESTS — open (audit §9)

@@ -31,4 +31,11 @@
       <ProjectReference Include="..\ImageGenerator.MAUI\ImageGenerator.MAUI.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <!-- The sample workflow shipped in the repo (README links it); tests pin its contract. -->
+      <Content Include="..\comfy-workflows\Ideogram4-Sample.json"
+               Link="TestAssets\Ideogram4-Sample.json"
+               CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
 </Project>
