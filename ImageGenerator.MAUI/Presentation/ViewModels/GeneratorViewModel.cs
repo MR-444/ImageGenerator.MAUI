@@ -110,7 +110,6 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SupportsCustomDimensions))]
     [NotifyPropertyChangedFor(nameof(SupportsResolution))]
-    [NotifyPropertyChangedFor(nameof(ShowSharedResolution))]
     [NotifyPropertyChangedFor(nameof(SupportsGptQuality))]
     [NotifyPropertyChangedFor(nameof(SupportsIdeogramOptions))]
     [NotifyPropertyChangedFor(nameof(SupportsJsonPromptEditor))]
@@ -154,8 +153,6 @@ public partial class GeneratorViewModel : ObservableObject
     // Structured-JSON checkbox + "Edit structure…" button: Ideogram V4 and ComfyUI workflow
     // models (whose graphs consume the caption JSON) both set this.
     public bool SupportsJsonPromptEditor => Capabilities.JsonPromptEditor;
-    // The Ideogram block renders its own resolution picker, so suppress the shared one there.
-    public bool ShowSharedResolution => SupportsResolution && !Capabilities.IdeogramOptions;
 
     partial void OnParametersChanged(ImageGenerationParameters value)
     {
@@ -186,15 +183,17 @@ public partial class GeneratorViewModel : ObservableObject
         }
 
         // The options swap must sit INSIDE the persist-suppression window: replacing the
-        // ItemsSource makes the two-way-bound Pickers push SelectedItem=null into
+        // ItemsSource makes the two-way-bound Picker push SelectedItem=null into
         // Parameters.Resolution synchronously whenever the old value isn't in the new list.
         // Outside the window that push looked user-driven and persisted null — deleting the
         // saved resolution before LoadSavedUiState could read it. (The model picker survives
-        // the same push only because OnSelectedModelChanged ignores null.)
+        // the same push only because OnSelectedModelChanged ignores null.) Exactly ONE Picker
+        // may bind Parameters.Resolution: two bound at once (2026-06-11, hidden Ideogram +
+        // shared) livelocked the UI thread in a synchronous null/value ping-pong here.
         _suppressResolutionPersist = true;
         try
         {
-            // Capture BEFORE the swap: the Pickers' synchronous null push lands in
+            // Capture BEFORE the swap: the Picker's synchronous null push lands in
             // Parameters.Resolution during the assignment below, so reading it afterwards
             // would always see null and slam a still-valid choice to the first option.
             var previousResolution = Parameters.Resolution;
@@ -278,9 +277,10 @@ public partial class GeneratorViewModel : ObservableObject
             || !string.IsNullOrWhiteSpace(Parameters.ApiToken);
         // In structured-JSON mode (Ideogram V4 / ComfyUI) the prompt box must contain valid JSON.
         var jsonModeActive = Capabilities.JsonPromptEditor && Parameters.UseJsonPrompt;
-        var jsonOk = !jsonModeActive || IsValidJson(Parameters.Prompt);
+        var jsonError = jsonModeActive ? JsonErrorDetail(Parameters.Prompt) : null;
+        var jsonOk = !jsonModeActive || jsonError is null;
         JsonPromptStateText = jsonModeActive
-            ? jsonOk ? "Structured JSON: valid ✓" : "Structured JSON: not valid JSON"
+            ? jsonError is null ? "Structured JSON: valid ✓" : $"Structured JSON: not valid — {jsonError}"
             : null;
         IsValid = tokenOk && !string.IsNullOrWhiteSpace(Parameters.Prompt) && jsonOk;
     }
@@ -288,11 +288,24 @@ public partial class GeneratorViewModel : ObservableObject
     private static bool TokenlessModel(string? model) =>
         ModelConstants.Pollinations.IsId(model) || ModelConstants.ComfyUi.IsId(model);
 
-    private static bool IsValidJson(string text)
+    // null = valid JSON. Otherwise a short human-readable reason, with line/position when
+    // available, so the user can find the break in a 1700-char compact blob (the 2026-06-11
+    // missing-root-brace hunt: "not valid JSON" alone cost a long checkbox-toggle session).
+    private static string? JsonErrorDetail(string text)
     {
-        if (string.IsNullOrWhiteSpace(text)) return false;
-        try { using var _ = JsonDocument.Parse(text); return true; }
-        catch (JsonException) { return false; }
+        if (string.IsNullOrWhiteSpace(text)) return "prompt is empty";
+        try { using var _ = JsonDocument.Parse(text); return null; }
+        catch (JsonException ex)
+        {
+            // ex.Message ends with " LineNumber: 0 | BytePositionInLine: 1792." — redundant
+            // with the friendlier suffix below, so cut it.
+            var msg = ex.Message;
+            var cut = msg.IndexOf(" LineNumber:", StringComparison.Ordinal);
+            if (cut > 0) msg = msg[..cut].TrimEnd();
+            return ex.LineNumber is { } line && ex.BytePositionInLine is { } pos
+                ? $"{msg} (line {line + 1}, pos {pos})"
+                : msg;
+        }
     }
 
     public bool IsPollinationsSelected => ModelConstants.Pollinations.IsId(Parameters.Model);
@@ -394,7 +407,7 @@ public partial class GeneratorViewModel : ObservableObject
                 case nameof(ImageGenerationParameters.Resolution):
                     // Revert the deferred null push (see _lastValidResolution). Unsuppressed
                     // null/empty while the model still offers options is never a user pick —
-                    // the Pickers only offer list members.
+                    // the Picker only offers list members.
                     if (!_suppressResolutionPersist
                         && string.IsNullOrEmpty(_parameters.Resolution)
                         && ResolutionOptions.Contains(_lastValidResolution))
@@ -478,9 +491,10 @@ public partial class GeneratorViewModel : ObservableObject
             return;
         }
 
-        if (Capabilities.JsonPromptEditor && Parameters.UseJsonPrompt && !IsValidJson(Parameters.Prompt))
+        if (Capabilities.JsonPromptEditor && Parameters.UseJsonPrompt
+            && JsonErrorDetail(Parameters.Prompt) is { } jsonError)
         {
-            SetStatus("Structured JSON prompt is not valid JSON.", StatusKind.Error);
+            SetStatus($"Structured JSON prompt is not valid JSON: {jsonError}", StatusKind.Error);
             return;
         }
 

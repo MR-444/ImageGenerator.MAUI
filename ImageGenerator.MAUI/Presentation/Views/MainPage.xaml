@@ -243,32 +243,28 @@
                                     AutomationId="AspectRatioPicker" />
                         </VerticalStackLayout>
 
-                        <VerticalStackLayout Spacing="4" IsVisible="{Binding ShowSharedResolution}">
+                        <!-- Single resolution picker for ALL models. NEVER add a second Picker
+                             two-way bound to Parameters.Resolution: two simultaneously bound WinUI
+                             ComboBoxes ping-pong null/value through the shared source in a
+                             synchronous livelock (IsVisible only hides; bindings stay live). The
+                             converter decorates WxH values (Ideogram) and passes everything else
+                             ("Auto", "1K", "4.0 MP") through unchanged. -->
+                        <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsResolution}">
                             <Label Text="Resolution" Style="{StaticResource FieldLabel}" />
                             <Picker ItemsSource="{Binding ResolutionOptions}"
                                     SelectedItem="{Binding Parameters.Resolution}"
-                                    MaximumWidthRequest="140"
+                                    ItemDisplayBinding="{Binding Path=., Converter={StaticResource ResolutionAspectRatio}, x:DataType='x:String'}"
+                                    MaximumWidthRequest="190"
                                     HorizontalOptions="Start"
                                     AutomationId="ResolutionPicker" />
                         </VerticalStackLayout>
 
-                        <!-- Ideogram V4: resolution + copyright detection (custom grouped layout) -->
-                        <VerticalStackLayout Spacing="12" IsVisible="{Binding SupportsIdeogramOptions}">
-                            <VerticalStackLayout Spacing="4">
-                                <Label Text="Resolution" Style="{StaticResource FieldLabel}" />
-                                <Picker ItemsSource="{Binding ResolutionOptions}"
-                                        SelectedItem="{Binding Parameters.Resolution}"
-                                        ItemDisplayBinding="{Binding Path=., Converter={StaticResource ResolutionAspectRatio}, x:DataType='x:String'}"
-                                        MaximumWidthRequest="190"
-                                        HorizontalOptions="Start"
-                                        AutomationId="IdeogramResolutionPicker" />
-                            </VerticalStackLayout>
-                            <HorizontalStackLayout Spacing="8">
-                                <CheckBox IsChecked="{Binding Parameters.EnableCopyrightDetection}" VerticalOptions="Center"
-                                          AutomationId="CopyrightDetectionCheckBox" />
-                                <Label Text="Enable copyright detection" VerticalOptions="Center" />
-                            </HorizontalStackLayout>
-                        </VerticalStackLayout>
+                        <!-- Ideogram V4: copyright detection -->
+                        <HorizontalStackLayout Spacing="8" IsVisible="{Binding SupportsIdeogramOptions}">
+                            <CheckBox IsChecked="{Binding Parameters.EnableCopyrightDetection}" VerticalOptions="Center"
+                                      AutomationId="CopyrightDetectionCheckBox" />
+                            <Label Text="Enable copyright detection" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
 
                         <VerticalStackLayout Spacing="8" IsVisible="{Binding SupportsCustomDimensions}">
                             <Label Text="Custom dimensions (px)" Style="{StaticResource FieldLabel}" />

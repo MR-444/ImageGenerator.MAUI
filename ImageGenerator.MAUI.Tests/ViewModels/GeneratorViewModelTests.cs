@@ -941,13 +941,12 @@ public class GeneratorViewModelTests
         vm.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Ideogram.V4Quality);
 
     [Fact]
-    public void SelectIdeogram_ShowsIdeogramOptions_AndHidesSharedResolution()
+    public void SelectIdeogram_ShowsIdeogramOptions_AndResolutionPicker()
     {
         _viewModel.ProviderFilter.SelectedModel = IdeogramOption(_viewModel);
 
         _viewModel.SupportsIdeogramOptions.Should().BeTrue();
-        _viewModel.SupportsResolution.Should().BeTrue();
-        _viewModel.ShowSharedResolution.Should().BeFalse("the Ideogram block renders its own picker");
+        _viewModel.SupportsResolution.Should().BeTrue("the single shared picker is visible for Ideogram too");
     }
 
     [Fact]
@@ -1343,10 +1342,24 @@ public class GeneratorViewModelTests
         _viewModel.JsonPromptStateText.Should().Contain("not valid");
     }
 
+    [Fact]
+    public void JsonPromptStateText_InvalidJson_ShowsParseDetailWithPosition()
+    {
+        // "not valid JSON" alone sent the user hunting through a 1700-char compact blob for
+        // a missing root brace (2026-06-11); the label must say what broke and where.
+        SelectIdeogramTurbo();
+        _viewModel.Parameters.UseJsonPrompt = true;
+
+        _viewModel.Parameters.Prompt = "{\"a\":1"; // unclosed root object
+
+        _viewModel.JsonPromptStateText.Should().Contain("not valid");
+        _viewModel.JsonPromptStateText.Should().Contain("pos", "the parse-error position guides the fix");
+    }
+
     // The four tests below pin the view-layer interaction that broke resolution persistence
-    // in-app while every pure-VM test stayed green: the two MainPage Pickers two-way bind
-    // SelectedItem to Parameters.Resolution, and replacing their ItemsSource (the
-    // ResolutionOptions swap in RefreshCapabilities) makes them push null — synchronously,
+    // in-app while every pure-VM test stayed green: the MainPage Picker two-way binds
+    // SelectedItem to Parameters.Resolution, and replacing its ItemsSource (the
+    // ResolutionOptions swap in RefreshCapabilities) makes it push null — synchronously,
     // from inside the ResolutionOptions PropertyChanged cascade. Unsuppressed, that push
     // persisted null and deleted the saved key before LoadSavedUiState could read it.
 
@@ -1528,6 +1541,23 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.Resolution.Should().Be("1440x2880",
             "an unsuppressed null while the model offers options is a binding artifact, never a user pick");
         _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880", It.IsAny<string?>()), Times.Once,
+            "the revert is a restore and must not double-persist");
+    }
+
+    [Fact]
+    public void Resolution_ComfyDeferredNullPush_IsReverted()
+    {
+        // Same deferred-null-push guard as above, pinned for the ComfyUI megapixel family —
+        // the 2026-06-11 livelock froze the app exactly on this value family, and the single
+        // surviving picker relies on this revert after every ItemsSource swap.
+        SelectComfyWorkflow();
+        _viewModel.Parameters.Resolution = "4.0 MP"; // user pick
+
+        _viewModel.Parameters.Resolution = null!; // the deferred platform push
+
+        _viewModel.Parameters.Resolution.Should().Be("4.0 MP",
+            "an unsuppressed null while the model offers options is a binding artifact, never a user pick");
+        _mockUiStateStore.Verify(s => s.PersistResolution("4.0 MP", It.IsAny<string?>()), Times.Once,
             "the revert is a restore and must not double-persist");
     }
 
