@@ -276,6 +276,19 @@
                                     AutomationId="CheckpointPicker" />
                         </VerticalStackLayout>
 
+                        <!-- ComfyUI only: quality preset from the workflow's single CustomCombo
+                             node. Options come from the file itself (option1..option4); first
+                             entry is the baked-in choice = no patch. Binds the VM-level
+                             SelectedQualityPreset, never Parameters directly. -->
+                        <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsQualityPreset}">
+                            <Label Text="Preset" Style="{StaticResource FieldLabel}" />
+                            <Picker ItemsSource="{Binding QualityPresetOptions}"
+                                    SelectedItem="{Binding SelectedQualityPreset}"
+                                    MaximumWidthRequest="320"
+                                    HorizontalOptions="Start"
+                                    AutomationId="QualityPresetPicker" />
+                        </VerticalStackLayout>
+
                         <!-- Ideogram V4: copyright detection -->
                         <HorizontalStackLayout Spacing="8" IsVisible="{Binding SupportsIdeogramOptions}">
                             <CheckBox IsChecked="{Binding Parameters.EnableCopyrightDetection}" VerticalOptions="Center"

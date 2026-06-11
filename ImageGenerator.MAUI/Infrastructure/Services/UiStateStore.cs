@@ -114,6 +114,25 @@ public sealed class UiStateStore : IUiStateStore
     private static string ComfyUiCheckpointKeyFor(string workflowName) =>
         $"imggen.comfyui_checkpoint.{workflowName}";
 
+    public string? LoadComfyUiPreset(string workflowName)
+    {
+        var key = ComfyUiPresetKeyFor(workflowName);
+        var v = SafeGet(key);
+        _logger.LogDebug("UiStateStore.LoadComfyUiPreset[{Key}] -> {Value}", key, Quote(v));
+        return v;
+    }
+
+    public void PersistComfyUiPreset(string value, string workflowName)
+    {
+        var key = ComfyUiPresetKeyFor(workflowName);
+        if (SafeSet(key, value))
+            _logger.LogDebug("UiStateStore.PersistComfyUiPreset[{Key}]({Value})", key, Quote(value));
+    }
+
+    // Per-workflow like checkpoints: the labels are the workflow's own CustomCombo options.
+    private static string ComfyUiPresetKeyFor(string workflowName) =>
+        $"imggen.comfyui_preset.{workflowName}";
+
     public string? LoadComfyUiBaseUrl()
     {
         var v = SafeGet(ComfyUiBaseUrlKey);

@@ -26,6 +26,11 @@ public interface IUiStateStore
     /// leak into another. Null when the user never explicitly picked one for this workflow.
     /// </summary>
     string? LoadComfyUiCheckpoint(string workflowName);
+    /// <summary>
+    /// Per-workflow: preset labels are the workflow's own CustomCombo options, so one
+    /// workflow's pick must never leak into another. Null when never explicitly picked.
+    /// </summary>
+    string? LoadComfyUiPreset(string workflowName);
     void PersistPrompt(string value);
     void PersistModel(string value);
     /// <inheritdoc cref="LoadResolution"/>
@@ -34,6 +39,8 @@ public interface IUiStateStore
     void PersistComfyUiBaseUrl(string value);
     /// <inheritdoc cref="LoadComfyUiCheckpoint"/>
     void PersistComfyUiCheckpoint(string value, string workflowName);
+    /// <inheritdoc cref="LoadComfyUiPreset"/>
+    void PersistComfyUiPreset(string value, string workflowName);
     /// <summary>Writes a still-pending debounced prompt immediately. Call on app shutdown.</summary>
     void FlushPendingWrites();
 }

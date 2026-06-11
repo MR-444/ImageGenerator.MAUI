@@ -277,4 +277,37 @@ public sealed class ComfyUiCheckpointServiceTests : IDisposable
         (await _service.GetWorkflowModelSlotAsync("does-not-exist")).Should().BeNull();
         (await _service.GetWorkflowModelSlotAsync("No Loader")).Should().BeNull();
     }
+
+    // ---- GetWorkflowQualityPresetSlotAsync ---------------------------------------------------
+
+    [Fact]
+    public async Task PresetSlot_SingleComboTemplate_ReturnsBakedChoiceAndOptions()
+    {
+        File.WriteAllText(Path.Combine(_workflowDir, "Combo Workflow.json"),
+            """
+            {
+              "98:156": { "class_type": "CustomCombo",
+                          "inputs": { "choice": "Default", "index": 1,
+                                      "option1": "Quality", "option2": "Default",
+                                      "option3": "Turbo", "option4": "" } },
+              "6": { "class_type": "CLIPTextEncode", "inputs": { "text": "x" } }
+            }
+            """);
+
+        var slot = await _service.GetWorkflowQualityPresetSlotAsync("Combo Workflow");
+
+        slot.Should().NotBeNull();
+        slot!.BakedChoice.Should().Be("Default");
+        slot.Options.Should().Equal("Quality", "Default", "Turbo");
+    }
+
+    [Fact]
+    public async Task PresetSlot_MissingFileOrNoCombo_ReturnsNull()
+    {
+        File.WriteAllText(Path.Combine(_workflowDir, "No Combo.json"),
+            """{ "6": { "class_type": "CLIPTextEncode", "inputs": { "text": "x" } } }""");
+
+        (await _service.GetWorkflowQualityPresetSlotAsync("does-not-exist")).Should().BeNull();
+        (await _service.GetWorkflowQualityPresetSlotAsync("No Combo")).Should().BeNull();
+    }
 }

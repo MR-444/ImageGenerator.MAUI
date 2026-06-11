@@ -7,7 +7,8 @@ namespace ImageGenerator.MAUI.Core.Domain.ValueObjects.ComfyUi;
 /// OutputPaths.ComfyWorkflowsDirectory. <see cref="AspectRatio"/> must be one of ComfyUI's
 /// ResolutionSelector combo strings (patched verbatim); <see cref="Megapixels"/> is that
 /// node's quality knob (1.0 ≈ 1024×1024). Null AR/MP means "leave the workflow's own value",
-/// as does a null <see cref="CheckpointName"/> (the workflow's baked-in checkpoint loads).
+/// as does a null <see cref="CheckpointName"/> (the workflow's baked-in checkpoint loads)
+/// and a null <see cref="PresetChoice"/> (the CustomCombo keeps its baked-in choice).
 /// </para>
 /// </summary>
 public sealed record ComfyUiRequest(
@@ -17,4 +18,5 @@ public sealed record ComfyUiRequest(
     long Seed,
     string? AspectRatio,
     double? Megapixels,
-    string? CheckpointName = null);
+    string? CheckpointName = null,
+    string? PresetChoice = null);

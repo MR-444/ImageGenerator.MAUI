@@ -109,6 +109,11 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private string _comfyUiCheckpoint = string.Empty;
 
+    // ComfyUI only: quality preset to patch into the workflow's single CustomCombo node.
+    // Empty means the workflow's own baked-in choice (no patch applied).
+    [ObservableProperty]
+    private string _comfyUiPreset = string.Empty;
+
     public ImageGenerationParameters Clone()
     {
         var copy = new ImageGenerationParameters
@@ -137,6 +142,7 @@ public partial class ImageGenerationParameters : ObservableObject
             UseJsonPrompt    = UseJsonPrompt,
             EnableCopyrightDetection = EnableCopyrightDetection,
             ComfyUiCheckpoint = ComfyUiCheckpoint,
+            ComfyUiPreset    = ComfyUiPreset,
         };
         foreach (var p in ImagePrompts) copy.ImagePrompts.Add(p);
         return copy;

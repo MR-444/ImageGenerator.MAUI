@@ -100,4 +100,39 @@ public class FallbackComfyUiDescriptorTests
         _sut.Lines(defaulted).Should().NotContain(l => l.StartsWith("Checkpoint:"));
         _sut.Lines(picked).Should().Contain("Checkpoint: server.safetensors");
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Build_EmptyComfyUiPreset_MapsToNullPresetChoice(string preset)
+    {
+        var parameters = Parameters();
+        parameters.ComfyUiPreset = preset;
+
+        var request = (ComfyUiRequest)_sut.Build(parameters);
+
+        request.PresetChoice.Should().BeNull("empty means the workflow's own baked choice, no patch");
+    }
+
+    [Fact]
+    public void Build_ComfyUiPreset_FlowsIntoTheRequest()
+    {
+        var parameters = Parameters();
+        parameters.ComfyUiPreset = "Turbo";
+
+        var request = (ComfyUiRequest)_sut.Build(parameters);
+
+        request.PresetChoice.Should().Be("Turbo");
+    }
+
+    [Fact]
+    public void Lines_IncludeThePresetOnlyWhenSet()
+    {
+        var defaulted = Parameters();
+        var picked = Parameters();
+        picked.ComfyUiPreset = "Turbo";
+
+        _sut.Lines(defaulted).Should().NotContain(l => l.StartsWith("Preset:"));
+        _sut.Lines(picked).Should().Contain("Preset: Turbo");
+    }
 }

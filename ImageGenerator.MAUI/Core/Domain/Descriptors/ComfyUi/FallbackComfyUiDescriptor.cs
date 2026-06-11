@@ -50,7 +50,8 @@ public sealed class FallbackComfyUiDescriptor : IPayloadBuilder, ICapabilityProv
             ? p.AspectRatio
             : null,
         Megapixels: ParseMegapixels(p.Resolution),
-        CheckpointName: string.IsNullOrWhiteSpace(p.ComfyUiCheckpoint) ? null : p.ComfyUiCheckpoint);
+        CheckpointName: string.IsNullOrWhiteSpace(p.ComfyUiCheckpoint) ? null : p.ComfyUiCheckpoint,
+        PresetChoice: string.IsNullOrWhiteSpace(p.ComfyUiPreset) ? null : p.ComfyUiPreset);
 
     public IEnumerable<string> Lines(ImageGenerationParameters p)
     {
@@ -60,6 +61,8 @@ public sealed class FallbackComfyUiDescriptor : IPayloadBuilder, ICapabilityProv
             yield return $"Megapixels: {mp.ToString(CultureInfo.InvariantCulture)}";
         if (!string.IsNullOrWhiteSpace(p.ComfyUiCheckpoint))
             yield return $"Checkpoint: {p.ComfyUiCheckpoint}";
+        if (!string.IsNullOrWhiteSpace(p.ComfyUiPreset))
+            yield return $"Preset: {p.ComfyUiPreset}";
     }
 
     /// <summary>"1.5 MP" → 1.5; anything unparseable → null (the workflow keeps its own value).</summary>

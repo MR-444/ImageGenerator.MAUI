@@ -28,6 +28,15 @@ public static class ComfyUiWorkflowPatcher
     private const string ResolutionSelectorClass = "ResolutionSelector";
     private const string CheckpointLoaderClass = "CheckpointLoaderSimple";
     private const string UnetLoaderClass = "UNETLoader";
+    private const string CustomComboClass = "CustomCombo";
+
+    // CustomCombo's input names. The option VALUES (e.g. "Quality"/"Default"/"Turbo" in the
+    // Ideogram4 sample) are deliberately NOT an enum anywhere in the app: they are arbitrary
+    // user-authored workflow data — another workflow's combo may say "euler"/"dpmpp_2m" —
+    // so the app treats them as opaque strings end to end.
+    private const string ComboChoiceKey = "choice";
+    private const string ComboIndexKey = "index";
+    private static readonly string[] ComboOptionKeys = ["option1", "option2", "option3", "option4"];
 
     public static ComfyUiPatchResult Patch(string templateJson, ComfyUiRequest request, DateTimeOffset? now = null)
     {
@@ -52,11 +61,12 @@ public static class ComfyUiWorkflowPatcher
         var seedNodeIds = PatchSeeds(nodes, request.Seed);
         var resolutionNote = PatchResolution(nodes, request.AspectRatio, request.Megapixels);
         var modelNote = PatchModel(nodes, request.CheckpointName);
+        var presetNote = PatchQualityPreset(nodes, request.PresetChoice);
         var dateNote = PatchFilenamePrefixDates(nodes, now ?? DateTimeOffset.Now);
 
         return new ComfyUiPatchResult(
             root.ToJsonString(),
-            promptTarget + resolutionNote + modelNote + dateNote,
+            promptTarget + resolutionNote + modelNote + presetNote + dateNote,
             seedNodeIds);
     }
 
@@ -102,6 +112,88 @@ public static class ComfyUiWorkflowPatcher
             .Where(n => n.ClassType == classType
                         && n.Inputs[inputKey]?.GetValueKind() == JsonValueKind.String)
             .ToList();
+
+    /// <summary>
+    /// The workflow's quality-preset slot: EXACTLY ONE <c>CustomCombo</c> node (counting all
+    /// of them — the class is generic, so two combos make the target ambiguous) whose
+    /// <c>choice</c> is a literal string and which carries at least one non-empty literal
+    /// option1..option4. Null otherwise — the UI hides the preset picker then. A probe, so it
+    /// never throws.
+    /// </summary>
+    public static ComfyUiQualityPresetSlot? FindQualityPresetSlot(string templateJson)
+    {
+        try
+        {
+            if (JsonNode.Parse(templateJson) is not JsonObject root || root["nodes"] is JsonArray)
+                return null;
+
+            var combo = SingleLiteralCombo(CollectNodes(root));
+            if (combo is null) return null;
+
+            // The picker wants labels only; the positional (possibly empty) slots stay an
+            // implementation detail of the index computation in PatchQualityPreset.
+            return new ComfyUiQualityPresetSlot(
+                combo.Value.Baked,
+                combo.Value.Options.Where(o => !string.IsNullOrEmpty(o)).ToList());
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Shared by probe and patch so the picker's offer and the patch always agree on the
+    /// target node — same invariant as FindBakedModelSlot/PatchModel. Null when the workflow
+    /// has zero or multiple CustomCombo nodes, a link-driven choice, or no usable options.
+    /// </summary>
+    private static (string Id, JsonObject Inputs, string Baked, List<string> Options)? SingleLiteralCombo(
+        List<(string Id, string ClassType, JsonObject Inputs)> nodes)
+    {
+        var combos = nodes.Where(n => n.ClassType == CustomComboClass).ToList();
+        if (combos.Count != 1) return null;
+
+        var (id, _, inputs) = combos[0];
+        if (inputs[ComboChoiceKey]?.GetValueKind() != JsonValueKind.String) return null;
+
+        // Option slots are positional widgets; empty string = unused slot. Order matters —
+        // the slot position is what the node's index input encodes (0-based).
+        var options = ComboOptionKeys
+            .Select(key => inputs[key]?.GetValueKind() == JsonValueKind.String
+                ? inputs[key]!.GetValue<string>()
+                : string.Empty)
+            .ToList();
+        if (options.All(string.IsNullOrEmpty)) return null;
+
+        return (id, inputs, inputs[ComboChoiceKey]!.GetValue<string>(), options);
+    }
+
+    private static string PatchQualityPreset(
+        List<(string Id, string ClassType, JsonObject Inputs)> nodes, string? presetChoice)
+    {
+        if (presetChoice is null) return string.Empty;
+
+        // Belt-and-braces for a template edited after selection — the picker is hidden when
+        // no slot qualifies, mirroring PatchModel's no-op note.
+        var combo = SingleLiteralCombo(nodes);
+        if (combo is null)
+            return "; no unambiguous CustomCombo — workflow keeps its own preset";
+
+        var (id, inputs, _, options) = combo.Value;
+        var slotPosition = options.IndexOf(presetChoice);
+        if (slotPosition < 0)
+            return "; preset not among the CustomCombo options — workflow keeps its own preset";
+
+        // The node carries BOTH a choice string and a 0-based slot index; which one its
+        // execution reads is implementation-defined, so set the pair consistently. A
+        // link-driven index stays untouched (same rule as link-driven seeds).
+        inputs[ComboChoiceKey] = presetChoice;
+        if (inputs[ComboIndexKey]?.GetValueKind() == JsonValueKind.Number)
+        {
+            inputs[ComboIndexKey] = slotPosition;
+        }
+        return $"; choice+index on {CustomComboClass} node {id}";
+    }
 
     private static List<(string Id, string ClassType, JsonObject Inputs)> CollectNodes(JsonObject root)
     {

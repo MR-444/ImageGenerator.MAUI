@@ -156,6 +156,21 @@ public class UiStateStoreTests
     }
 
     [Fact]
+    public void ComfyUiPreset_RoundTripsPerWorkflowKeys()
+    {
+        // Per-workflow isolation: preset labels are the workflow's own CustomCombo options,
+        // so one workflow's pick must never surface for another.
+        _sut.PersistComfyUiPreset("Turbo", "Ideogram4-Sample");
+        _sut.PersistComfyUiPreset("Quality", "Other Workflow");
+
+        _sut.LoadComfyUiPreset("Ideogram4-Sample").Should().Be("Turbo");
+        _sut.LoadComfyUiPreset("Other Workflow").Should().Be("Quality");
+        _sut.LoadComfyUiPreset("Never Picked").Should().BeNull();
+        _preferences.Get("imggen.comfyui_preset.Ideogram4-Sample", string.Empty)
+            .Should().Be("Turbo", "the key shape is pinned like the others above");
+    }
+
+    [Fact]
     public void LoadUseJsonPrompt_KeyMissing_ReturnsFalse()
     {
         _sut.LoadUseJsonPrompt().Should().BeFalse();

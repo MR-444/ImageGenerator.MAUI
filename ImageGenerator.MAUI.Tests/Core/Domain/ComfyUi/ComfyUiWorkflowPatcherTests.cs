@@ -70,8 +70,8 @@ public class ComfyUiWorkflowPatcherTests
 
     private static ComfyUiRequest Request(
         string prompt = "p", bool json = false, long seed = 123,
-        string? ar = null, double? mp = null, string? ckpt = null) =>
-        new("wf", prompt, json, seed, ar, mp, ckpt);
+        string? ar = null, double? mp = null, string? ckpt = null, string? preset = null) =>
+        new("wf", prompt, json, seed, ar, mp, ckpt, preset);
 
     [Fact]
     public void JsonMode_PatchesImportJsonAndMode_OverwritingTheWiredLink()
@@ -444,6 +444,166 @@ public class ComfyUiWorkflowPatcherTests
         graph["10"]!["inputs"]!["unet_name"]!.GetValue<string>().Should().Be("ideogram4_fp8_scaled.safetensors");
         graph["12"]!["inputs"]!["unet_name"]!.GetValue<string>().Should().Be("ideogram4_unconditional_fp8_scaled.safetensors");
         result.PromptTargetDescription.Should().Contain("no unambiguous model loader");
+    }
+
+    // ---- CustomCombo quality preset --------------------------------------------------------
+    // Mirrors the Ideogram4 sample's node 98:156: choice + 0-based index over option1..option4
+    // (empty = unused slot). The class is generic, so only an EXACTLY-ONE CustomCombo graph
+    // exposes a slot; probe and patch share the targeting so offer and patch always agree.
+
+    private const string ComboTemplate =
+        """
+        {
+          "98:156": { "class_type": "CustomCombo",
+                      "inputs": { "choice": "Default", "index": 1,
+                                  "option1": "Quality", "option2": "Default",
+                                  "option3": "Turbo", "option4": "" } },
+          "6":  { "class_type": "CLIPTextEncode", "inputs": { "text": "old positive" } },
+          "3":  { "class_type": "KSampler", "inputs": { "seed": 7 } }
+        }
+        """;
+
+    private const string DualComboTemplate =
+        """
+        {
+          "20": { "class_type": "CustomCombo",
+                  "inputs": { "choice": "Default", "index": 1,
+                              "option1": "Quality", "option2": "Default", "option3": "", "option4": "" } },
+          "21": { "class_type": "CustomCombo",
+                  "inputs": { "choice": "euler", "index": 0,
+                              "option1": "euler", "option2": "dpmpp_2m", "option3": "", "option4": "" } },
+          "6":  { "class_type": "CLIPTextEncode", "inputs": { "text": "old positive" } },
+          "3":  { "class_type": "KSampler", "inputs": { "seed": 7 } }
+        }
+        """;
+
+    [Fact]
+    public void FindQualityPresetSlot_SingleCombo_ReturnsBakedChoiceAndNonEmptyOptions()
+    {
+        var slot = ComfyUiWorkflowPatcher.FindQualityPresetSlot(ComboTemplate);
+
+        slot.Should().NotBeNull();
+        slot!.BakedChoice.Should().Be("Default");
+        slot.Options.Should().Equal("Quality", "Default", "Turbo");
+    }
+
+    [Fact]
+    public void FindQualityPresetSlot_NoCombo_ReturnsNull()
+    {
+        ComfyUiWorkflowPatcher.FindQualityPresetSlot(PlainTemplate).Should().BeNull();
+    }
+
+    [Fact]
+    public void FindQualityPresetSlot_TwoCombos_ReturnsNull()
+    {
+        // The class is generic (the second combo here picks a sampler) — with two of them the
+        // quality target is ambiguous, so neither is offered.
+        ComfyUiWorkflowPatcher.FindQualityPresetSlot(DualComboTemplate).Should().BeNull();
+    }
+
+    [Fact]
+    public void FindQualityPresetSlot_LinkDrivenChoice_ReturnsNull()
+    {
+        const string linkDriven =
+            """
+            {
+              "20": { "class_type": "CustomCombo",
+                      "inputs": { "choice": ["9", 0], "index": 1,
+                                  "option1": "Quality", "option2": "Default", "option3": "", "option4": "" } },
+              "3":  { "class_type": "KSampler", "inputs": { "seed": 7 } }
+            }
+            """;
+
+        ComfyUiWorkflowPatcher.FindQualityPresetSlot(linkDriven).Should().BeNull();
+    }
+
+    [Fact]
+    public void FindQualityPresetSlot_AllOptionsEmpty_ReturnsNull()
+    {
+        const string optionless =
+            """
+            {
+              "20": { "class_type": "CustomCombo",
+                      "inputs": { "choice": "x", "index": 0,
+                                  "option1": "", "option2": "", "option3": "", "option4": "" } },
+              "3":  { "class_type": "KSampler", "inputs": { "seed": 7 } }
+            }
+            """;
+
+        ComfyUiWorkflowPatcher.FindQualityPresetSlot(optionless).Should().BeNull();
+    }
+
+    [Fact]
+    public void FindQualityPresetSlot_InvalidJsonOrUiFormat_ReturnsNullWithoutThrowing()
+    {
+        ComfyUiWorkflowPatcher.FindQualityPresetSlot("not json at all").Should().BeNull();
+        ComfyUiWorkflowPatcher.FindQualityPresetSlot("""{ "nodes": [ { "id": 1 } ] }""").Should().BeNull();
+    }
+
+    [Fact]
+    public void Preset_PatchesChoiceAndMatchingZeroBasedIndex()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(ComboTemplate, Request(preset: "Turbo"));
+
+        var inputs = JsonNode.Parse(result.GraphJson)!["98:156"]!["inputs"]!;
+        inputs["choice"]!.GetValue<string>().Should().Be("Turbo");
+        inputs["index"]!.GetValue<int>().Should().Be(2, "Turbo is option3 = slot position 2 (0-based)");
+        result.PromptTargetDescription.Should().Contain("choice+index on CustomCombo node 98:156");
+    }
+
+    [Fact]
+    public void Preset_Null_LeavesComboUntouched()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(ComboTemplate, Request());
+
+        var inputs = JsonNode.Parse(result.GraphJson)!["98:156"]!["inputs"]!;
+        inputs["choice"]!.GetValue<string>().Should().Be("Default");
+        inputs["index"]!.GetValue<int>().Should().Be(1);
+        result.PromptTargetDescription.Should().NotContain("CustomCombo");
+    }
+
+    [Fact]
+    public void Preset_NotAmongOptions_LeavesComboUntouchedAndNotesIt()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(ComboTemplate, Request(preset: "Ludicrous"));
+
+        var inputs = JsonNode.Parse(result.GraphJson)!["98:156"]!["inputs"]!;
+        inputs["choice"]!.GetValue<string>().Should().Be("Default");
+        result.PromptTargetDescription.Should().Contain("preset not among the CustomCombo options");
+    }
+
+    [Fact]
+    public void Preset_TwoCombos_LeavesBothUntouchedAndNotesIt()
+    {
+        // Belt-and-braces for a template edited after selection — same invariant as the
+        // multi-UNET no-op.
+        var result = ComfyUiWorkflowPatcher.Patch(DualComboTemplate, Request(preset: "Quality"));
+
+        var graph = JsonNode.Parse(result.GraphJson)!;
+        graph["20"]!["inputs"]!["choice"]!.GetValue<string>().Should().Be("Default");
+        graph["21"]!["inputs"]!["choice"]!.GetValue<string>().Should().Be("euler");
+        result.PromptTargetDescription.Should().Contain("no unambiguous CustomCombo");
+    }
+
+    [Fact]
+    public void Preset_LinkDrivenIndex_PatchesChoiceButPreservesTheLink()
+    {
+        const string linkIndex =
+            """
+            {
+              "20": { "class_type": "CustomCombo",
+                      "inputs": { "choice": "Default", "index": ["9", 0],
+                                  "option1": "Quality", "option2": "Default", "option3": "Turbo", "option4": "" } },
+              "6":  { "class_type": "CLIPTextEncode", "inputs": { "text": "old positive" } },
+              "3":  { "class_type": "KSampler", "inputs": { "seed": 7 } }
+            }
+            """;
+
+        var result = ComfyUiWorkflowPatcher.Patch(linkIndex, Request(preset: "Turbo"));
+
+        var inputs = JsonNode.Parse(result.GraphJson)!["20"]!["inputs"]!;
+        inputs["choice"]!.GetValue<string>().Should().Be("Turbo");
+        inputs["index"]!.GetValueKind().Should().Be(JsonValueKind.Array, "link-driven inputs are never touched");
     }
 
     // ---- %date% expansion in filename_prefix --------------------------------------------

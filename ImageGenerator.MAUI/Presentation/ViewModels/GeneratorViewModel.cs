@@ -179,6 +179,38 @@ public partial class GeneratorViewModel : ObservableObject
         }
     }
 
+    // ComfyUI quality-preset picker (the workflow's single CustomCombo node). Options come
+    // from the file itself — option1..option4 — with the baked-in choice first (= no patch);
+    // no server fetch. Hidden whenever the workflow has no unambiguous CustomCombo.
+    [ObservableProperty]
+    private List<string> _qualityPresetOptions = [];
+
+    [ObservableProperty]
+    private string? _selectedQualityPreset;
+
+    [ObservableProperty]
+    private bool _supportsQualityPreset;
+
+    private string? _workflowDefaultPreset;
+    private bool _suppressPresetPersist;
+    // Monotonic token, same role as _checkpointRefreshVersion.
+    private int _presetRefreshVersion;
+
+    partial void OnSelectedQualityPresetChanged(string? value)
+    {
+        // Same WinUI null-push tolerance as OnSelectedCheckpointChanged.
+        if (value is null) return;
+
+        Parameters.ComfyUiPreset =
+            value == _workflowDefaultPreset ? string.Empty : value;
+
+        if (!_suppressPresetPersist && QualityPresetOptions.Contains(value))
+        {
+            _uiStateStore.PersistComfyUiPreset(
+                value, ModelConstants.ComfyUi.WorkflowName(Parameters.Model));
+        }
+    }
+
     // Last Resolution value that was a member of the then-current ResolutionOptions. Used to
     // revert the WinUI ComboBox's DEFERRED null push: after an ItemsSource swap the platform
     // picker finishes rebuilding on a later dispatcher tick and pushes SelectedItem=null —
@@ -291,6 +323,8 @@ public partial class GeneratorViewModel : ObservableObject
         // fetch) while the synchronous capability swap above stays instant. The method owns
         // its try/catch and guards against stale completions via _checkpointRefreshVersion.
         _ = RefreshCheckpointOptionsAsync(modelValue);
+        // Same shape for the quality-preset picker — file probe only, no server fetch.
+        _ = RefreshQualityPresetOptionsAsync(modelValue);
     }
 
     internal async Task RefreshCheckpointOptionsAsync(string? modelValue)
@@ -377,6 +411,75 @@ public partial class GeneratorViewModel : ObservableObject
             Parameters.ComfyUiCheckpoint = string.Empty;
         }
         finally { _suppressCheckpointPersist = false; }
+    });
+
+    internal async Task RefreshQualityPresetOptionsAsync(string? modelValue)
+    {
+        var version = ++_presetRefreshVersion;
+        try
+        {
+            if (!ModelConstants.ComfyUi.IsId(modelValue))
+            {
+                HideQualityPresetPicker();
+                return;
+            }
+
+            var workflowName = ModelConstants.ComfyUi.WorkflowName(modelValue!);
+            var slot = await _checkpointService.GetWorkflowQualityPresetSlotAsync(workflowName);
+            if (version != _presetRefreshVersion) return;
+            if (slot is null)
+            {
+                // Not an error — most workflows simply have no (single) CustomCombo. Say so,
+                // or a hidden picker looks like a bug.
+                _logger.LogInformation(
+                    "Preset picker hidden: workflow {Workflow} does not have exactly one "
+                    + "CustomCombo node with a literal choice",
+                    workflowName);
+                HideQualityPresetPicker();
+                return;
+            }
+            var baked = slot.BakedChoice;
+
+            // Single UI update — the options live in the file, so unlike the checkpoint
+            // picker there is no async second phase to wait for.
+            DispatchToUi(() =>
+            {
+                _suppressPresetPersist = true;
+                try
+                {
+                    _workflowDefaultPreset = baked;
+                    QualityPresetOptions =
+                        [baked, .. slot.Options.Where(o => !string.Equals(o, baked, StringComparison.Ordinal))];
+                    // Restore a previous explicit pick for THIS workflow — but only when the
+                    // workflow still offers it; never invent a selection.
+                    var saved = _uiStateStore.LoadComfyUiPreset(workflowName);
+                    SelectedQualityPreset =
+                        saved is not null && QualityPresetOptions.Contains(saved) ? saved : baked;
+                    SupportsQualityPreset = true;
+                }
+                finally { _suppressPresetPersist = false; }
+            });
+        }
+        catch (Exception ex)
+        {
+            // Fire-and-forget caller — an unobserved throw here would be silent at best.
+            _logger.LogWarning(ex, "Quality-preset options refresh failed Model={Model}", modelValue);
+        }
+    }
+
+    private void HideQualityPresetPicker() => DispatchToUi(() =>
+    {
+        _suppressPresetPersist = true;
+        try
+        {
+            SupportsQualityPreset = false;
+            QualityPresetOptions = [];
+            _workflowDefaultPreset = null;
+            SelectedQualityPreset = null;
+            // A stale preset must not linger in Clone() snapshots of other models.
+            Parameters.ComfyUiPreset = string.Empty;
+        }
+        finally { _suppressPresetPersist = false; }
     });
 
     private void SetAspectRatioProgrammatically(string aspectRatio)

@@ -2020,4 +2020,119 @@ public class GeneratorViewModelTests
         _mockUiStateStore.Verify(s => s.PersistComfyUiCheckpoint("a.safetensors", ComfyWorkflowName), Times.Once,
             "only the explicit pick persists");
     }
+
+    // --- ComfyUI quality-preset picker (workflow's single CustomCombo node) -----------------
+    // Mirrors the checkpoint picker, minus the async server fetch: the options come from the
+    // workflow file itself, baked choice first (= no patch).
+
+    private void SetupPresetService(ComfyUiQualityPresetSlot? slot) =>
+        _mockCheckpointService
+            .Setup(s => s.GetWorkflowQualityPresetSlotAsync(ComfyWorkflowName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(slot);
+
+    private static ComfyUiQualityPresetSlot SamplePresetSlot() =>
+        new("Default", ["Quality", "Default", "Turbo"]);
+
+    [Fact]
+    public async Task ComfyModel_WithSingleCombo_ShowsPresetPickerWithBakedChoiceFirst()
+    {
+        SetupPresetService(SamplePresetSlot());
+
+        SelectComfyWorkflow();
+        await _viewModel.RefreshQualityPresetOptionsAsync(ComfyModelId);
+
+        _viewModel.SupportsQualityPreset.Should().BeTrue();
+        // The baked choice leads and its duplicate among the options is removed.
+        _viewModel.QualityPresetOptions.Should().Equal("Default", "Quality", "Turbo");
+        _viewModel.SelectedQualityPreset.Should().Be("Default");
+        _viewModel.Parameters.ComfyUiPreset.Should().BeEmpty("the baked selection means no patch");
+    }
+
+    [Fact]
+    public async Task ComfyModel_WithoutSingleCombo_HidesPresetPicker()
+    {
+        // Covers no-combo, multi-combo, and link-driven choice — the probe returns null for
+        // all of them.
+        SetupPresetService(null);
+
+        SelectComfyWorkflow();
+        await _viewModel.RefreshQualityPresetOptionsAsync(ComfyModelId);
+
+        _viewModel.SupportsQualityPreset.Should().BeFalse();
+        _viewModel.QualityPresetOptions.Should().BeEmpty();
+        _viewModel.Parameters.ComfyUiPreset.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExplicitPresetPick_WritesParametersAndPersists_BakedPickWritesEmpty()
+    {
+        SetupPresetService(SamplePresetSlot());
+        SelectComfyWorkflow();
+        await _viewModel.RefreshQualityPresetOptionsAsync(ComfyModelId);
+
+        _viewModel.SelectedQualityPreset = "Turbo";
+
+        _viewModel.Parameters.ComfyUiPreset.Should().Be("Turbo");
+        _mockUiStateStore.Verify(s => s.PersistComfyUiPreset("Turbo", ComfyWorkflowName), Times.Once);
+
+        _viewModel.SelectedQualityPreset = "Default";
+
+        _viewModel.Parameters.ComfyUiPreset.Should().BeEmpty("re-picking the baked choice means no patch again");
+    }
+
+    [Fact]
+    public async Task SavedPreset_RestoredWhenStillOffered_ElseBakedChoice()
+    {
+        SetupPresetService(SamplePresetSlot());
+        _mockUiStateStore.Setup(s => s.LoadComfyUiPreset(ComfyWorkflowName)).Returns("Turbo");
+
+        SelectComfyWorkflow();
+        await _viewModel.RefreshQualityPresetOptionsAsync(ComfyModelId);
+
+        _viewModel.SelectedQualityPreset.Should().Be("Turbo");
+        _viewModel.Parameters.ComfyUiPreset.Should().Be("Turbo");
+        // The restore is programmatic, not a user pick — it must not re-persist.
+        _mockUiStateStore.Verify(s => s.PersistComfyUiPreset(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+
+        // A saved label the workflow no longer offers must never be invented into the selection.
+        _mockUiStateStore.Setup(s => s.LoadComfyUiPreset(ComfyWorkflowName)).Returns("Vanished");
+        await _viewModel.RefreshQualityPresetOptionsAsync(ComfyModelId);
+
+        _viewModel.SelectedQualityPreset.Should().Be("Default");
+        _viewModel.Parameters.ComfyUiPreset.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task NonComfyModel_ClearsPresetState()
+    {
+        SetupPresetService(SamplePresetSlot());
+        SelectComfyWorkflow();
+        await _viewModel.RefreshQualityPresetOptionsAsync(ComfyModelId);
+        _viewModel.SelectedQualityPreset = "Turbo";
+
+        SelectIdeogramTurbo();
+        await _viewModel.RefreshQualityPresetOptionsAsync(ModelConstants.Ideogram.V4Turbo);
+
+        _viewModel.SupportsQualityPreset.Should().BeFalse();
+        _viewModel.QualityPresetOptions.Should().BeEmpty();
+        _viewModel.Parameters.ComfyUiPreset.Should().BeEmpty(
+            "a stale preset must not linger in Clone() snapshots of other models");
+    }
+
+    [Fact]
+    public async Task PresetNullSelectionPush_IsIgnored()
+    {
+        SetupPresetService(SamplePresetSlot());
+        SelectComfyWorkflow();
+        await _viewModel.RefreshQualityPresetOptionsAsync(ComfyModelId);
+        _viewModel.SelectedQualityPreset = "Turbo";
+
+        // The WinUI ComboBox pushes SelectedItem=null on ItemsSource swaps.
+        _viewModel.SelectedQualityPreset = null;
+
+        _viewModel.Parameters.ComfyUiPreset.Should().Be("Turbo",
+            "a platform null push is a binding artifact, never a user pick");
+        _mockUiStateStore.Verify(s => s.PersistComfyUiPreset("Turbo", ComfyWorkflowName), Times.Once,
+            "only the explicit pick persists");
+    }
 }
