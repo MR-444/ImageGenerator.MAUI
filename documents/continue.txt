@@ -1,344 +1,49 @@
 ImageGenerator.MAUI — Open Work Queue
 =====================================
 
-Source of truth: AUDIT_REPORT.md (audit dated 2026-05-20 — predates v1.3.0+).
-Last updated: 2026-06-11 (v1.5.0 RELEASED — tag v1.5.0 "Structure Editor &
-ComfyUI", exe attached, --latest:
-https://github.com/MR-444/ImageGenerator.MAUI/releases/tag/v1.5.0
-118.2 MB publish.ps1 exe; readiness item + regression pass were closed the
-same day. Full per-item forensics of everything compressed below live in
-this file's git history, last full version at commit 97cd2ab).
+Last updated: 2026-06-11. v1.5.0 released (tag v1.5.0 "Structure Editor &
+ComfyUI"); post-release hotfixes + the full csharp-auditor pass (0 Critical /
+2 High / 3 Medium / 2 Low) are ALL shipped — nothing from the audit remains
+open. Full per-item forensics of completed work live in this file's git
+history (last full narrative version at commit 97cd2ab; audit report at
+documents/audit/csharp-audit-2026-06-11.md, untracked).
 
-Format: each item has a status box, severity, a one-line hook, and
-file:line citations. Pick the top open item; keep this file in sync
-when you finish or split work.
+This file holds ONLY the open backlog. Update it when you start an item
+(set [~]) and when you finish (set [x] + commit hash, then prune on the
+next pass).
 
   [ ] = open      [~] = in progress (commit not yet on master)
-  [x] = done      [-] = won't fix / superseded
 
 
-NEXT FEATURE — ComfyUI as a local provider (plan next context)
---------------------------------------------------------------
+PARKED FEATURE POOL — ComfyUI Phase 2 (user picks when)
+-------------------------------------------------------
 
-[x] (Feature) ComfyUI provider PHASE 1 DONE 2026-06-10 — USER VERIFIED on
-    fireEngine ("it works, the image matches my structure", smoke round 2
-    incl. the cfca177 caption-literal fix). Commits 91bee4a..8c93af4 +
-    cfca177; 593 tests green. Implementation commits, each suite-green:
-      91bee4a A: ModelConstants.ComfyUi + JsonPromptEditor capability +
-              FallbackComfyUiDescriptor (one descriptor for all comfyui/* ids;
-              AR = ResolutionSelector combo strings verbatim, megapixel presets
-              via the shared resolution picker) + registry routing BEFORE the
-              Replicate owner/name heuristic.
-      0deef58 B: ComfyUiWorkflowPatcher (pure, Core/Domain/ComfyUi): JSON mode
-              sets import_json + import_mode="always" on every
-              Ideogram4PromptBuilderKJ (overwrites wired links — intended);
-              plain mode = lowest-id literal CLIPTextEncode; ALL literal
-              seed/noise_seed re-rolled (API runs don't randomize!);
-              ResolutionSelector gets aspect_ratio/megapixels; UI-format saves
-              throw with Export (API) guidance. 15 tests.
-      082cc34 C: imggen.comfyui_base_url setting (UiStateStore/Preferences,
-              NOT a token store) + GeneratorViewModel.ComfyUiBaseUrl + Entry in
-              the tokens card. Default http://127.0.0.1:8188 — USER MUST ENTER
-              http://fireEngine:8188 once in the app.
-      18740c2 D: ComfyUiImageGenerationService (template load -> patch ->
-              POST /prompt -> poll /history 2s/10min -> prefer type=output ->
-              GET /view; Pollinations error conventions; named client
-              "comfyui" with NO BaseAddress) + dispatcher route + DI. 11 tests.
-      65aecb4 E: comfy-workflows folder scan -> "comfyui/<stem>" picker entries
-              under provider "ComfyUI"; live scan on load+refresh, NEVER
-              disk-cached; appears on first launch; folder auto-created.
-      6d65390 F: JSON checkbox + "Edit structure…" re-gated on JsonPromptEditor
-              (UseJsonPrompt survives Ideogram->ComfyUI switches, clears on
-              Flux); token gates exempt comfyui/* like pollinations/* in BOTH
-              ValidateParameters and GenerateImageAsync.
-    541 -> 590 tests green; Debug + Release rebuilt, 0 warnings.
+[ ] Checkpoint lookup via GET /object_info — CheckpointLoaderSimple.input.
+    required.ckpt_name[0] is the list of local checkpoints (same trick for
+    LoRAs, samplers, VAEs); patch into the template's CheckpointLoaderSimple.
+[ ] POST /interrupt on cancel (today the server finishes its render — known).
+[ ] WS /ws?clientId= progress instead of 2 s /history polling.
+[ ] Auth header for proxied setups (LAN-only assumption today).
+[ ] Multi-image outputs (one SaveImage node assumed today).
+[ ] Patch the workflow's quality-preset combo (CustomCombo Quality/Default/
+    Turbo) — needs a targeting convention, the class is too generic.
+    Zero-code workaround: export one file per preset; each becomes a model.
 
-    ORIGINAL SMOKE CHECKLIST (fireEngine):
-      1. In ComfyUI: open "Ideogram workflow_MR" -> Workflow > Export (API) ->
-         save into Pictures\ImageGenerator.MAUI\comfy-workflows\.
-      2. In the app: set ComfyUI server = http://fireEngine:8188 (tokens card).
-      3. Model picker -> provider "ComfyUI" -> "Ideogram workflow_MR (ComfyUI)".
-      4. Build a structure in the editor -> Apply (JSON checkbox stays ON) ->
-         pick AR "3:4 (Portrait Standard)" + Resolution "1.5 MP" -> Generate.
-         Expect: portrait image ~1.5 MP in the gallery with metadata.
-      5. Generate twice -> DIFFERENT images (seed re-roll).
-      6. Negative: drop a normal (UI-format) save in the folder -> friendly
-         "Export (API)" error; wrong base URL -> friendly error; cancel
-         mid-generation -> "canceled" (server finishes its render — known).
-    SMOKE ROUND 1 (2026-06-10 ~21:20): pipeline end-to-end OK (queue, poll,
-    image back into the gallery) BUT the image used the workflow's OWN prompt.
-    Root cause from the actual export + app.log: in workflow_MR the builder
-    node is a VIEWER (prompt output -> PreviewAny only); the REAL prompt is a
-    frozen caption-JSON literal on the flattened-subgraph CLIPTextEncode
-    ("98:24") feeding DualModelGuider. FIX cfca177: JSON mode now ALSO replaces
-    every CLIPTextEncode literal that parses as a JSON object (non-JSON
-    literals like negative prompts untouched); plain mode on such a graph
-    patches that literal instead of refusing. 590 -> 593 tests.
-    SMOKE ROUND 2 PASSED 2026-06-10 ~21:40: generated image matches the
-    editor structure. Phase 1 closed.
-
-    PHASE 2 (parked): checkpoint lookup via /object_info; /interrupt on
-    cancel; ws progress; auth header for proxied setups; multi-image outputs;
-    patch the workflow's quality preset combo (CustomCombo Quality/Default/
-    Turbo — needs a targeting convention, class is too generic; zero-code
-    workaround: export one file per preset, each becomes a picker model).
-    OBSERVED 2026-06-10 (user, 2 MP test) — ROOT-CAUSED 2026-06-10 late: the
-    "2 images from 1 generate" was NOT multi-image output. app.log shows TWO
-    full independent runs in session pid=12432: POST 21:43:43 (prompt_id
-    f818e58a, seed 32219809) and a second POST 21:46:48 — 12 s after run 1's
-    download, empty log gap between — (prompt_id 3cacda5d, seed 2358881113);
-    both 1776x1184 (2.0 MP, the user's new setting). Workflow has exactly ONE
-    SaveImage node (158; DualModelGuider's two UNets feed ONE sampler) and the
-    server /history confirms one image per run (Ideogram4_211449_00003/00004).
-    Code provably can't self-fire (no retry anywhere; Generate button is the
-    only command binding; batch needs a file pick; every activation inserts a
-    job card). User confirms one window + one click → a second IN-WINDOW
-    command activation of unknown origin; prime suspect: WinUI re-fires the
-    still-focused Generate button on a later Space/Enter press (the new card
-    inserts at the top and is easy to miss). DIAGNOSTICS SHIPPED (this
-    commit): ${processid} in the NLog layout, "Generate activated …
-    JobCount=…" / "Job started/finished" INFO lines in GeneratorViewModel
-    (JobCount=2 after one click = ghost-activation smoking gun), and a
-    "shutdown pid=…" line on Window.Destroying pairing with "startup OK".
-    Repro probe if it recurs: generate, wait, press Space — if a card +
-    "Generate activated" appears, fix by moving focus off the button.
-    Multi-image output support itself stays parked above on its own merits.
-
-    TEST ROUND 2 (2026-06-10 ~22:51-23:07, pid 4120) — diagnostics worked,
-    five fixes shipped as the follow-up bundle (commit pending below):
-      - Both runs failed server-side: re-exported workflow carries the RAW
-        %date:yyyy-MM% filename_prefix token; the ComfyUI SERVER never
-        expands %date% (frontend-only) and the ':' is path-invalid on
-        Windows (WinError 267). Earlier exports worked only because they
-        froze the EXPANDED text at export time ("2026-06/Ideogram4_211449",
-        21:14:49 = export moment). FIX: patcher expands %date:SPEC% (and
-        bare %date%) in every literal filename_prefix input, frontend
-        format chars yyyy yy MM M dd d hh(24h) h mm m ss s, injected-clock
-        testable (Patch gained optional DateTimeOffset? now).
-      - GHOST CONFIRMED AGAIN: "Generate activated JobCount=1" 22:51:38,
-        18 s after startup, stale persisted prompt, user did NOT click.
-        FIX (diagnostics): WinUI platform hooks on GenerateButton —
-        PointerPressed (AddHandler handledEventsToo:true, WinUI marks it
-        handled internally), PreviewKeyDown, GotFocus(Debug) — classify
-        every activation as pointer/keyboard/programmatic. Views.* Debug
-        NLog rule added.
-      - Editor↔ComfyUI mismatch: editor picker was hardcoded to Ideogram's
-        23 WxH strings. FIX: AR mode — on comfyui/* the picker lists the
-        generator's 8 ResolutionSelector combo strings, canvas parses the
-        "W:H" prefix (CanvasCoordinateMapper.TryParseAspectRatioLabel),
-        picks write through to Parameters.AspectRatio; BuildEditorRoute
-        sends the AR for comfyui models. Ideogram behavior unchanged.
-      - Model switches slammed resolution to options[0] (format families
-        differ). FIX: per-family persistence — UiStateStore keys
-        imggen.last_resolution (legacy, default family) vs
-        imggen.last_resolution.comfyui; Load/Persist take the model id.
-      - app.log ~900 lines/run: HttpClient.*/Polly INFO chatter. FIX:
-        final no-target NLog blackhole rules (Trace..Info; Warn+ still
-        lands; NOTE LoggingRule's string ctor sets RuleName, NOT the
-        pattern — use LoggerNamePattern) + two service INFO lines
-        ("ComfyUI queued PromptId", "finished, downloading <file>").
-    594 -> 640 tests green; Debug + Release rebuilt, 0 warnings.
-    USER ACTION on next smoke: none for the workflow file — the raw-token
-    export now works as-is via the app.
-
-    2026-06-11: USER CONFIRMED WORKING ("don't know what it was, but it is
-    working now") — the %date% fix unblocked generation; no ghost activation
-    since the forensics landed. Follow-up persist hygiene, same night:
-      9965d48 UiStateStore skips identical persists (every startup Load
-              echoed straight back through the VM persist hooks — wasted
-              Preferences I/O) + Quote() truncates logged values to 100 chars
-              (the multi-KB JSON prompt was dumped into app.log per call).
-      16d97fe PersistPrompt debounced 500 ms via DebouncedSecureStorageWriter
-              (per-keystroke writes collapse to the last value; an EMPTY
-              prompt writes immediately AND cancels the pending value so a
-              clear can't resurrect stale text after the delay).
-    640 -> 646 tests green. ALL PUSHED 2026-06-11 (user).
-
-    HOW A COMFYUI WORKFLOW IS USED VIA API (the user's question):
-      A workflow is the node graph built on ComfyUI's canvas. For API use it is
-      exported ONCE as "API format" JSON (Workflow menu > Export (API); on old
-      UIs enable dev mode first). That JSON maps node-id -> {class_type,
-      inputs}. The app never builds graphs — it PATCHES a few input fields in
-      the template (prompt text, seed, width/height, ckpt_name) and POSTs it.
-      Normal saves / PNG-embedded workflows are the UI format and are NOT
-      accepted by POST /prompt.
-
-    API surface (stable knowledge; verify against the live instance early):
-      - POST /prompt {"prompt": <api-format graph>, "client_id": id}
-        -> {prompt_id}; 400 carries node-level validation errors.
-      - GET /history/{prompt_id} -> outputs incl. image filenames when done.
-      - GET /view?filename=&subfolder=&type=output -> image bytes.
-      - GET /object_info -> every installed node + its valid enum values;
-        CheckpointLoaderSimple.input.required.ckpt_name[0] IS the list of
-        local checkpoints (same trick for LoRAs, samplers, VAEs).
-      - WS /ws?clientId= pushes progress; polling /history also works and
-        matches the existing Replicate create->poll shape.
-      - GET /system_stats -> cheap "is fireEngine up" health check.
-
-    DESIGN SKETCH (settle in the planning session):
-      - Workflow templates: user exports API-format .json into
-        Pictures\ImageGenerator.MAUI\comfy-workflows\; app lists them in a
-        picker. Patch-target discovery: prefer a node-TITLE convention
-        (_meta.title "PROMPT"/"NEGATIVE"/...), fall back to class_type
-        heuristics (CLIPTextEncode wired to KSampler.positive; KSampler.seed;
-        EmptyLatentImage width/height).
-      - Model lookup: /object_info checkpoint list -> model picker; patched
-        into the template's CheckpointLoaderSimple.ckpt_name.
-      - Provider integration: follow the Pollinations precedent — descriptor +
-        IImageGenerationService impl + named HttpClient ("comfyui", base URL
-        from a settings card; no token). Save through the existing
-        SaveImageWithMetadataAsync path so gallery metadata works.
-      - OPEN DECISIONS: full provider vs minimal hand-off first (user
-        undecided); ship a stock starter template vs user-exported-only;
-        how to surface per-workflow extra inputs.
-
-    RISKS / UNKNOWNS: fireEngine reachability (ComfyUI must run with --listen
-    so it binds 0.0.0.0, plus firewall + actual port — verify with
-    GET /system_stats before writing code); API-format export location varies
-    by ComfyUI version; generations take minutes on local GPUs (generous Polly
-    timeouts on the named client); no auth by default — LAN-only assumption.
+    Watch item: ghost Generate activation (confirmed twice 2026-06-10, none
+    since the forensics landed). If a job card appears without a click:
+    app.log "Generate activated" lines now classify pointer/keyboard/
+    programmatic; JobCount=2 after one click = smoking gun; fix = move focus
+    off the button after click.
 
 
-DONE — owed from the editor bundle
-----------------------------------
+INERT UNTIL THE USER ASKS (project memory: don't suggest unused features)
+-------------------------------------------------------------------------
 
-[x] Quick Flux/GPT/Pollinations regression pass — PASSED 2026-06-11 (user,
-    in-app): Flux + GPT legs OK, Pollinations flux + zimage generate fine,
-    "everything else is OK". One NON-regression fail observed on a
-    Bedrock-backed Pollinations model: upstream 400
-    "textToImageParams/text maxLength 1024, actual 1992" — a per-model
-    upstream prompt cap that /models does not advertise; app error path
-    behaved correctly (logged body, job card Failed, queue unaffected).
-    Decided with user: NO app-side prompt-length clamping (caps are
-    unpublished; would be guesswork hardcoding).
-
-
-DONE — v1.5.0 release readiness (tag itself still deferred, user decision)
-------------------------------------------------------------------------
-
-[x] ComfyUI BYO-workflow documentation + shipped sample — DONE 2026-06-11
-    (this commit). README got the full ComfyUI treatment: three-provider
-    intro/features, "Generating via your own ComfyUI server" section
-    (server --listen setup, base-URL slot, workflows-as-models, what the
-    patcher does, minimum workflow requirements), sample link, stale test
-    count fixed (357 -> 653), project-structure tree updated.
-    SAMPLE SHIPPED: comfy-workflows/Ideogram4-Sample.json (repo root) —
-    decisions (user, 2026-06-11): repo file + README link (NO auto-copy
-    into the Pictures folder), full README section, preset "Default"
-    (20 steps). Base file: the USER's own sanitization (app-side
-    Ideogram_wf_san.json — builder + WAS "Random Number" stripped, neutral
-    coffee-mug caption-JSON on the 98:24 CLIPTextEncode literal); app-side
-    copy kept verbatim, repo copy additionally restores the raw
-    %date:yyyy-MM%/Ideogram4_%date:hhmmss% filename_prefix (the app
-    expands it). One orphaned stock PreviewAny (98:181, neutral content)
-    deliberately kept. /object_info check on fireEngine 2026-06-11: every
-    remaining class is core ComfyUI (nodes / comfy_extras.*) — the sample
-    needs ZERO custom node packs, only the 4 Ideogram-4 model files.
-    PINNED: ShippedSampleWorkflowTests (7 tests) load the real repo file —
-    both prompt modes patch 98:24, seed re-roll hits 98:18, ResolutionSelector
-    + %date% notes, no custom-pack class_types, and a sanitation guard (every
-    >200-char literal must be the neutral placeholder or the preset table).
-    646 -> 653 tests green.
-
-
-MISSING TESTS — open (audit §9)
--------------------------------
-
-[ ] (Minor) ModelDescriptorRegistry.Default() omits the Pollinations (and
-    check: Ideogram?) descriptors that MauiProgram registers.
-    Core/Domain/Descriptors/ModelDescriptorRegistry.cs / MauiProgram.cs
-    Audit counted 9 vs 12; Ideogram V4 later added 3 more, so RE-DERIVE the
-    real lists before fixing. Tests relying on Default() route Pollinations
-    IDs through FallbackPollinationsDescriptor instead of the concrete types.
-    Fix: align ProductionDescriptors() with MauiProgram + add
-    Default_RegistersAllProductionDescriptors pinning the count.
-    Pairs naturally with any descriptor-surface commit.
-
-
-TRACKED-OPEN BUT NOT NEW (inert until the user asks — project memory)
----------------------------------------------------------------------
-
-[ ] Feature: kontext (image-prompt for kontext models) — descriptor pattern,
+[ ] kontext (image-prompt for kontext models) — descriptor pattern,
     near-zero structural impact.
-[ ] Feature: negative_prompt — same.
-[ ] Feature: Pollinations image-input — descriptors inherit ImagePrompt:false;
+[ ] negative_prompt for Pollinations flux/zimage — same.
+[ ] Pollinations image-input — descriptors inherit ImagePrompt:false; the
     API supports input images (documents/Pollinations API Reference.html).
     Gap: per-model ImagePrompt:true, BuildUrl image= param (encoding unknown:
     GET-only API vs the app's base64 — data: URI or host-first?), and
     MaxImageInputs > 0 where supported.
-
-
-SHIPPED 2026-06-10 — Ideogram V4 Structure Editor (compressed)
---------------------------------------------------------------
-
-[x] Visual json_prompt builder for Ideogram V4 — 4 commits, all user-verified
-    in-app (incl. live generate, no 422), pushed:
-      be4a54f  P1: typed model + compact serializer + validator (Core/Domain/
-               Ideogram/), editor page/VM, render canvas + per-axis mapping,
-               Apply hand-off via Shell query params, pretty-.json export —
-               plus follow-ups A-E (canvas/resolution AR, prompt-Editor split
-               binding, UseJsonPrompt persist, palette swatches + RGB picker,
-               resolution persistence x3 rounds) and the MEL/NLog Trace fix.
-      c255c31  Phase 2: drag-move + corner-resize canvas gestures (VM state
-               machine, pixel-space corner hit-test, clamps).
-      0efd069  Follow-up F: palette Entry view->VM dropout — re-diagnosed (the
-               "RGB number entries" premise was false; those are Labels), fixed
-               with the OneWay + TextChanged split on both palette Entries.
-      97cd2ab  Follow-up G: palette hex auto-uppercases (VM re-set pattern);
-               "Examples" suggestion Pickers on all five style fields —
-               insert-into-Entry, fields stay free-form; Medium's trained
-               vocabulary [photograph, illustration, 3d_render, painting,
-               graphic_design] pinned by test (src: ideogram-oss/ideogram4
-               docs/prompting.md + developer.ideogram.ai/llms-full.txt).
-    371 -> 541 tests across the bundle; Debug + Release both 0 warnings.
-
-    CONSTRAINTS THAT MUST OUTLIVE THIS ENTRY:
-      - Replicate's ideogram-v4 cog types json_prompt as a STRING: always
-        serialize COMPACT into Parameters.Prompt with UseJsonPrompt=true
-        (a typed object 422s). IdeogramV4Descriptor.Build is unchanged.
-      - Palette caps 16 (style) / 5 (element) are SCHEMA constants
-        (V4JsonPrompt.cs MaxPaletteColors), not app choices.
-
-    LESSONS (suspect these FIRST on similar symptoms):
-      - WinUI Entry/Editor TwoWay view->VM bindings can silently stop pushing
-        (paste/clear/paste class). Fix: Mode=OneWay + explicit TextChanged
-        push. Done: MainPage prompt Editor (B), both palette Entries (F).
-        Any future "typing does nothing" report -> this, before VM debugging.
-      - WinUI ComboBox pushes SelectedItem=null on a LATER dispatcher tick
-        after an ItemsSource swap; suppression windows can't catch it. Keep
-        the _lastValidResolution-style revert (GeneratorViewModel).
-      - MEL's default Information filter eats LogDebug before NLog sees it:
-        builder.Logging.SetMinimumLevel(Trace); NLog rules are the filter.
-      - STALE BINARY trap: the user launches the bin\Debug exe — rebuild BOTH
-        configs before believing a "fix refuted" re-test.
-
-
-OLDER COMPLETED (full details in this file's git history @ 97cd2ab)
--------------------------------------------------------------------
-
-[x] 2026-05-25 cosmetic cluster — 588fc48 (2nd /select call site, UiDispatcher
-    extract, named-client consts wired, 5x sealed); won't-fix: suppression-flag
-    asymmetry (decided with user — host-owned flag guards both callers),
-    per-item mirror during TruncateToMaxInputs (negligible until cap >> 14).
-[x] 2026-05-20 audit wave — 2d96a6d (.Result tuple-await), 65e27b9 (XamlC
-    XC0022), 82cc571 (store-wrapper tests + Stub{SecureStorage,Preferences}),
-    a74ba00 (Pollinations service/catalog tests), 8691056 (F6: GeneratorVM ->
-    3 coordinators), 49f68a7 (F4: IHttpClientFactory + named clients),
-    29fd6d1 (F8: idempotent loads), 8551d31 (cosmetic bundle F9/F10/QW4-6),
-    d77d180 (F1: seed clamp), 50317a1 (F7: partial-file cleanup),
-    c446d35 (F2/F3/F5: DebouncedSecureStorageWriter, singleton VM, query-prop).
-
-
-HOW TO PICK THE NEXT ITEM
--------------------------
-
-1. v1.5.0 RELEASED 2026-06-11 — nothing release-blocking remains; next
-   work is whatever the user picks (ComfyUI phase 2 is the parked feature
-   pool, the Default()-registry test the parked hygiene item).
-2. The Default()-registry test item pairs with any descriptor-surface
-   commit (ComfyUI phase 2 would be one).
-3. ComfyUI phase 2 is parked until the user asks (see the PHASE 2 block).
-4. kontext / negative_prompt / Pollinations image-input stay inert until the
-   user asks (project memory: don't suggest unused features).
-5. Update this file when you start (set [~]) and when you finish
-   (set [x] + commit hash).
