@@ -8,9 +8,9 @@ namespace ImageGenerator.MAUI.Core.Application.Interfaces;
 /// </summary>
 public interface IModelCatalogService
 {
-    Task<IReadOnlyList<ModelOption>> FetchAsync(string apiToken);
+    Task<IReadOnlyList<ModelOption>> FetchAsync(string apiToken, CancellationToken ct = default);
 
     Task<IReadOnlyList<ModelOption>?> LoadCachedAsync(CancellationToken ct = default);
 
-    Task SaveCachedAsync(IReadOnlyList<ModelOption> models);
+    Task SaveCachedAsync(IReadOnlyList<ModelOption> models, CancellationToken ct = default);
 }

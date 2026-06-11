@@ -96,6 +96,9 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
         new NanoBanana2Descriptor(),
         new IdeogramV4BalancedDescriptor(),
         new IdeogramV4TurboDescriptor(),
-        new IdeogramV4QualityDescriptor()
+        new IdeogramV4QualityDescriptor(),
+        new PollinationsFluxDescriptor(),
+        new PollinationsZimageDescriptor(),
+        new PollinationsQwenImageDescriptor()
     ];
 }

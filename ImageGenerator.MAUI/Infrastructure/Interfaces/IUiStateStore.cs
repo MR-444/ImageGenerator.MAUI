@@ -27,4 +27,6 @@ public interface IUiStateStore
     void PersistResolution(string value, string? modelId);
     void PersistUseJsonPrompt(bool value);
     void PersistComfyUiBaseUrl(string value);
+    /// <summary>Writes a still-pending debounced prompt immediately. Call on app shutdown.</summary>
+    void FlushPendingWrites();
 }

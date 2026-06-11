@@ -24,6 +24,7 @@ public interface IReplicateApi
 
     [Get("/v1/collections/text-to-image")]
     Task<ReplicateCollectionResponse> GetTextToImageCollectionAsync(
-        [Header("Authorization")] string bearerToken
+        [Header("Authorization")] string bearerToken,
+        CancellationToken cancellationToken = default
     );
 }

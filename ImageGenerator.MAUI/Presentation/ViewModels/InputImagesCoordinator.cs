@@ -169,14 +169,14 @@ public sealed partial class InputImagesCoordinator : ObservableObject
     {
         if (item is null) return;
         SelectedImages.Remove(item);
-        _setStatus(string.Empty, StatusKind.None);
+        _setStatus($"Removed {item.FileName}.", StatusKind.Info);
     }
 
     [RelayCommand]
     private void ClearImages()
     {
         SelectedImages.Clear();
-        _setStatus(string.Empty, StatusKind.None);
+        _setStatus("Input images cleared.", StatusKind.Info);
     }
 
     /// <summary>

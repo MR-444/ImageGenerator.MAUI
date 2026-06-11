@@ -40,6 +40,9 @@ public sealed class ApiTokenStore : IApiTokenStore
 
     public void Forget()
     {
+        // Cancel any pending debounced write first — otherwise it (or a shutdown flush)
+        // would re-persist the token the user just forgot.
+        _writer.Schedule(string.Empty);
         try
         {
             _secureStorage.Remove(TokenStorageKey);
@@ -49,4 +52,6 @@ public sealed class ApiTokenStore : IApiTokenStore
             _logger.LogWarning(ex, "SecureStorage.{Op} failed", "Remove");
         }
     }
+
+    public void FlushPendingWrites() => _writer.Flush();
 }

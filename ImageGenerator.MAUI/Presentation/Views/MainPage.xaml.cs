@@ -118,6 +118,15 @@ public partial class MainPage
         _viewModel.Parameters.Prompt = e.NewTextValue ?? string.Empty;
     }
 
+    // Same split-binding pattern for the API-token Entry. Provider switches are safe: the
+    // Picker swaps SelectedTokenProvider BEFORE the binding rewrites the Entry text, so this
+    // echoes the new provider's own value (the [ObservableProperty] equality check stops it).
+    private void OnTokenTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (_viewModel.SelectedTokenProvider is { } provider)
+            provider.Value = e.NewTextValue ?? string.Empty;
+    }
+
     // Code-behind because RelativeSource lookups inside a CollectionView.ItemTemplate
     // don't reliably cross the DataTemplate scope under MAUI's compiled bindings.
     private void OnRemoveImageClicked(object sender, EventArgs e)

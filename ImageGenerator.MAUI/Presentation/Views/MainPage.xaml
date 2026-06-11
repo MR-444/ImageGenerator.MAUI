@@ -64,7 +64,10 @@
                         <Label Text="{Binding SelectedTokenProvider.HelperText}"
                                Style="{StaticResource HelperText}" />
 
-                        <Entry Text="{Binding SelectedTokenProvider.Value, Mode=TwoWay}"
+                        <!-- Same split binding as the prompt Editor: WinUI TwoWay Text bindings can stop
+                             pushing view->VM after paste/clear/paste, and a token field is all paste. -->
+                        <Entry Text="{Binding SelectedTokenProvider.Value, Mode=OneWay}"
+                               TextChanged="OnTokenTextChanged"
                                Placeholder="{Binding SelectedTokenProvider.Placeholder}"
                                IsPassword="True"
                                SemanticProperties.Description="API token for the selected provider"

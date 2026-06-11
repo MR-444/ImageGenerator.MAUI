@@ -60,9 +60,8 @@ public class GeneratorViewModelTests
     [Fact]
     public void Providers_ShouldIncludeAllAndDistinctProviders()
     {
-        // The hardcoded seeds are all Replicate-hosted, so they collapse to one provider.
-        // (Pollinations models are DI-registered, not part of ModelDescriptorRegistry.Default().)
-        _viewModel.ProviderFilter.Providers.Should().BeEquivalentTo(["All providers", "Replicate"]);
+        // Default() now mirrors the DI set (audit fix), so the seeds span both hosted providers.
+        _viewModel.ProviderFilter.Providers.Should().BeEquivalentTo(["All providers", "Replicate", "Pollinations"]);
     }
 
     [Fact]
@@ -333,7 +332,7 @@ public class GeneratorViewModelTests
             new("gpt-image-1.5", "openai/gpt-image-1.5", "Replicate")
         };
         _mockCatalogCoordinator
-            .Setup(x => x.RefreshAsync("valid-token"))
+            .Setup(x => x.RefreshAsync("valid-token", It.IsAny<CancellationToken>()))
             .ReturnsAsync(merged);
 
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
@@ -407,7 +406,7 @@ public class GeneratorViewModelTests
             new("nano-banana-2", "google/nano-banana-2", "Replicate")
         };
         _mockCatalogCoordinator
-            .Setup(x => x.RefreshAsync("valid-token"))
+            .Setup(x => x.RefreshAsync("valid-token", It.IsAny<CancellationToken>()))
             .ReturnsAsync(merged);
 
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
@@ -433,12 +432,12 @@ public class GeneratorViewModelTests
             new("Flux (Pollinations)", ModelConstants.Pollinations.Flux, ProviderConstants.Pollinations)
         };
         _mockCatalogCoordinator
-            .Setup(x => x.RefreshAsync(""))
+            .Setup(x => x.RefreshAsync("", It.IsAny<CancellationToken>()))
             .ReturnsAsync(pollinationsOnly);
 
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
 
-        _mockCatalogCoordinator.Verify(x => x.RefreshAsync(""), Times.Once);
+        _mockCatalogCoordinator.Verify(x => x.RefreshAsync("", It.IsAny<CancellationToken>()), Times.Once);
         _viewModel.StatusKind.Should().Be(StatusKind.Success);
         _viewModel.ProviderFilter.AllModels.Select(m => m.Value).Should().Contain(ModelConstants.Pollinations.Flux);
     }
@@ -449,7 +448,7 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.ApiToken = "valid-token";
         var originalModels = _viewModel.ProviderFilter.AllModels.ToList();
         _mockCatalogCoordinator
-            .Setup(x => x.RefreshAsync("valid-token"))
+            .Setup(x => x.RefreshAsync("valid-token", It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<ModelOption>?)null);
 
         await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
@@ -609,6 +608,9 @@ public class GeneratorViewModelTests
 
         _viewModel.InputImages.SelectedImages.Should().ContainInOrder(a, c);
         _viewModel.InputImages.SelectedImages.Should().NotContain(b);
+        // Audit finding: Remove used to blank the status line, wiping active warnings.
+        _viewModel.StatusMessage.Should().Be("Removed b.png.");
+        _viewModel.StatusKind.Should().Be(StatusKind.Info);
     }
 
     [Fact]
@@ -620,6 +622,8 @@ public class GeneratorViewModelTests
         _viewModel.InputImages.ClearImagesCommand.Execute(null);
 
         _viewModel.InputImages.SelectedImages.Should().BeEmpty();
+        _viewModel.StatusMessage.Should().Be("Input images cleared.");
+        _viewModel.StatusKind.Should().Be(StatusKind.Info);
     }
 
     [Fact]

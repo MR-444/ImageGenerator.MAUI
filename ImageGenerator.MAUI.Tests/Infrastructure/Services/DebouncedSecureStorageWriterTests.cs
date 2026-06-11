@@ -132,6 +132,73 @@ public class DebouncedSecureStorageWriterTests
     }
 
     [Fact]
+    public async Task Flush_WritesPendingValueImmediately()
+    {
+        // Shutdown contract: a value still inside the debounce window must reach the
+        // store synchronously when Flush is called (the app-close path).
+        var writes = new ConcurrentBag<(string Key, string Value)>();
+        var sut = new DebouncedSecureStorageWriter(
+            "k", TimeSpan.FromMinutes(5), NullLogger.Instance,
+            (k, v) => { writes.Add((k, v)); return Task.CompletedTask; });
+
+        sut.Schedule("about-to-close");
+        sut.Flush();
+
+        writes.Should().ContainSingle()
+            .Which.Should().Be(("k", "about-to-close"));
+
+        // And the flushed value must not land a second time via the (cancelled) timer.
+        await Task.Delay(WaitPastDelayMs);
+        writes.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Flush_WithoutPending_DoesNothing()
+    {
+        var writes = new ConcurrentBag<(string Key, string Value)>();
+        var sut = new DebouncedSecureStorageWriter(
+            "k", DebounceDelay, NullLogger.Instance,
+            (k, v) => { writes.Add((k, v)); return Task.CompletedTask; });
+
+        sut.Flush();
+
+        writes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Flush_AfterEmptySchedule_DoesNothing()
+    {
+        // Forget()/clear path: Schedule("") cancels the pending value, so a later
+        // shutdown Flush must NOT resurrect it.
+        var writes = new ConcurrentBag<(string Key, string Value)>();
+        var sut = new DebouncedSecureStorageWriter(
+            "k", TimeSpan.FromMinutes(5), NullLogger.Instance,
+            (k, v) => { writes.Add((k, v)); return Task.CompletedTask; });
+
+        sut.Schedule("typed");
+        sut.Schedule(string.Empty);
+        sut.Flush();
+
+        writes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Flush_AfterCompletedWrite_DoesNotDuplicate()
+    {
+        // Once the timer has fired and written, a later Flush has nothing pending.
+        var writes = new ConcurrentBag<(string Key, string Value)>();
+        var sut = new DebouncedSecureStorageWriter(
+            "k", DebounceDelay, NullLogger.Instance,
+            (k, v) => { writes.Add((k, v)); return Task.CompletedTask; });
+
+        sut.Schedule("settled");
+        await Task.Delay(WaitPastDelayMs);
+        sut.Flush();
+
+        writes.Should().ContainSingle();
+    }
+
+    [Fact]
     public async Task Schedule_SupersededValue_DoesNotLogCancellation()
     {
         // OCE on the inner Task.Delay is the normal debounce path on every keystroke

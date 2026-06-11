@@ -99,14 +99,14 @@ public class ModelCatalogCoordinatorTests
     [Fact]
     public async Task RefreshAsync_EmptyResult_ReturnsNull_AndDoesNotSave()
     {
-        _catalogService.Setup(x => x.FetchAsync("token"))
+        _catalogService.Setup(x => x.FetchAsync("token", It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<ModelOption>());
 
         var result = await _sut.RefreshAsync("token");
 
         result.Should().BeNull();
         _catalogService.Verify(
-            x => x.SaveCachedAsync(It.IsAny<IReadOnlyList<ModelOption>>()),
+            x => x.SaveCachedAsync(It.IsAny<IReadOnlyList<ModelOption>>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -117,7 +117,7 @@ public class ModelCatalogCoordinatorTests
         {
             new("flux-2", "black-forest-labs/flux-2", ProviderConstants.Replicate)
         };
-        _catalogService.Setup(x => x.FetchAsync("token"))
+        _catalogService.Setup(x => x.FetchAsync("token", It.IsAny<CancellationToken>()))
             .ReturnsAsync(fetched);
 
         var merged = await _sut.RefreshAsync("token");
@@ -131,7 +131,8 @@ public class ModelCatalogCoordinatorTests
         // surface freshly-added seeds even when this cache was written earlier).
         _catalogService.Verify(
             x => x.SaveCachedAsync(
-                It.Is<IReadOnlyList<ModelOption>>(l => l.SequenceEqual(fetched))),
+                It.Is<IReadOnlyList<ModelOption>>(l => l.SequenceEqual(fetched)),
+                It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -176,7 +177,7 @@ public class ModelCatalogCoordinatorTests
         {
             new("flux-2", "black-forest-labs/flux-2", ProviderConstants.Replicate)
         };
-        _catalogService.Setup(x => x.FetchAsync("token")).ReturnsAsync(fetched);
+        _catalogService.Setup(x => x.FetchAsync("token", It.IsAny<CancellationToken>())).ReturnsAsync(fetched);
         _comfyCatalogService.Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync([ComfyEntry()]);
 
@@ -187,14 +188,14 @@ public class ModelCatalogCoordinatorTests
         // load, so caching its entries would only let deleted workflows linger.
         _catalogService.Verify(
             x => x.SaveCachedAsync(It.Is<IReadOnlyList<ModelOption>>(
-                l => l.SequenceEqual(fetched))),
+                l => l.SequenceEqual(fetched)), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
     [Fact]
     public async Task RefreshAsync_OnlyComfyEntries_ReturnsThemWithoutSaving()
     {
-        _catalogService.Setup(x => x.FetchAsync("token"))
+        _catalogService.Setup(x => x.FetchAsync("token", It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<ModelOption>());
         _comfyCatalogService.Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync([ComfyEntry()]);
@@ -204,7 +205,7 @@ public class ModelCatalogCoordinatorTests
         merged.Should().NotBeNull();
         merged!.Select(m => m.Value).Should().Contain("comfyui/Ideogram workflow_MR");
         _catalogService.Verify(
-            x => x.SaveCachedAsync(It.IsAny<IReadOnlyList<ModelOption>>()),
+            x => x.SaveCachedAsync(It.IsAny<IReadOnlyList<ModelOption>>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 }

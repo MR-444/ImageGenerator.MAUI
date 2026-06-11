@@ -65,6 +65,8 @@ public sealed class UiStateStore : IUiStateStore
             _logger.LogDebug("UiStateStore.PersistPrompt({Value})", Quote(value));
     }
 
+    public void FlushPendingWrites() => _promptWriter.Flush();
+
     public void PersistModel(string value)
     {
         if (SafeSet(ModelKey, value))

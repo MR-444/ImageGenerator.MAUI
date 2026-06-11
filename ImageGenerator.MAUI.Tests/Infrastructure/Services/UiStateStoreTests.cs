@@ -51,6 +51,20 @@ public class UiStateStoreTests
         _sut.LoadPrompt().Should().BeNull();
     }
 
+    [Fact]
+    public void FlushPendingWrites_PersistsScheduledPromptImmediately()
+    {
+        // App-close path: a prompt still inside the debounce window must reach
+        // Preferences synchronously when Window.Destroying flushes the store.
+        var sut = new UiStateStore(
+            NullLogger<UiStateStore>.Instance, _preferences, TimeSpan.FromMinutes(5));
+        sut.PersistPrompt("typed just before closing");
+
+        sut.FlushPendingWrites();
+
+        _preferences.Get(PromptKey, string.Empty).Should().Be("typed just before closing");
+    }
+
     // Resolution is persisted per option-format family: ComfyUI models ("comfyui/*") get
     // their own key; every other model shares the legacy key so old saved data stays valid.
     private const string ResolutionKey = "imggen.last_resolution";

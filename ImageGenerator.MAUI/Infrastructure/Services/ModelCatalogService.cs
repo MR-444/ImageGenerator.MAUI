@@ -33,19 +33,19 @@ public sealed class ModelCatalogService : IModelCatalogService
         _cacheDirectory = cacheDirectoryOverride ?? FileSystem.AppDataDirectory;
     }
 
-    public async Task<IReadOnlyList<ModelOption>> FetchAsync(string apiToken)
+    public async Task<IReadOnlyList<ModelOption>> FetchAsync(string apiToken, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(apiToken)) return [];
 
         var bearer = $"Bearer {apiToken}";
-        return await SafeFetchReplicateAsync(bearer);
+        return await SafeFetchReplicateAsync(bearer, ct);
     }
 
-    private async Task<IReadOnlyList<ModelOption>> SafeFetchReplicateAsync(string bearer)
+    private async Task<IReadOnlyList<ModelOption>> SafeFetchReplicateAsync(string bearer, CancellationToken ct)
     {
         try
         {
-            var coll = await _replicateApi.GetTextToImageCollectionAsync(bearer);
+            var coll = await _replicateApi.GetTextToImageCollectionAsync(bearer, ct);
             // Scope the catalog to the supported owners only. The curated text-to-image
             // collection hosts many other owners (stability-ai, bytedance, etc.) that this app
             // doesn't support — including them clutters the picker. Every surviving owner is
@@ -82,7 +82,7 @@ public sealed class ModelCatalogService : IModelCatalogService
         }
     }
 
-    public async Task SaveCachedAsync(IReadOnlyList<ModelOption> models)
+    public async Task SaveCachedAsync(IReadOnlyList<ModelOption> models, CancellationToken ct = default)
     {
         try
         {
@@ -92,7 +92,7 @@ public sealed class ModelCatalogService : IModelCatalogService
 
             await using (var stream = File.Create(tempPath))
             {
-                await JsonSerializer.SerializeAsync(stream, models, CacheJsonOptions);
+                await JsonSerializer.SerializeAsync(stream, models, CacheJsonOptions, ct);
             }
 
             // File.Move(overwrite: true) is atomic on NTFS and avoids File.Replace's

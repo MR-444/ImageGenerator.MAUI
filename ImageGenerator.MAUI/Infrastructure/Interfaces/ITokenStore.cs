@@ -13,4 +13,7 @@ public interface ITokenStore
     void Persist(string value);
 
     void Forget();
+
+    /// <summary>Writes any still-pending debounced value immediately. Call on app shutdown.</summary>
+    void FlushPendingWrites();
 }

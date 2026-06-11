@@ -72,6 +72,9 @@ public class ModelDescriptorRegistryTests
         seedIds.Should().Contain(ModelConstants.Ideogram.V4Balanced);
         seedIds.Should().Contain(ModelConstants.Ideogram.V4Turbo);
         seedIds.Should().Contain(ModelConstants.Ideogram.V4Quality);
+        seedIds.Should().Contain(ModelConstants.Pollinations.Flux);
+        seedIds.Should().Contain(ModelConstants.Pollinations.Zimage);
+        seedIds.Should().Contain(ModelConstants.Pollinations.QwenImage);
         // Flex/Pro/Max are NOT seeded — they only appear after Refresh Models hydrates.
         seedIds.Should().NotContain(ModelConstants.Flux.Flex2);
         seedIds.Should().NotContain(ModelConstants.Flux.Pro2);
@@ -79,11 +82,24 @@ public class ModelDescriptorRegistryTests
     }
 
     [Fact]
-    public void Seeds_CountMatchesPreM2Behavior()
+    public void Seeds_CountMatchesProductionDescriptorSet()
     {
         // 6 originals (GPT 1.5, GPT 2, Flux Pro, Flux Pro Ultra, Klein4b, NanoBanana2)
-        // + 3 pinned Ideogram V4 (balanced/turbo/quality) = 9.
-        _registry.Seeds.Should().HaveCount(9);
+        // + 3 pinned Ideogram V4 (balanced/turbo/quality)
+        // + 3 Pollinations (flux/zimage/qwen-image) = 12.
+        _registry.Seeds.Should().HaveCount(12);
+    }
+
+    [Fact]
+    public void Default_RegistersPollinationsDescriptors_NotJustTheFallback()
+    {
+        // Default() must mirror MauiProgram's DI set: the typed Pollinations descriptors
+        // (audit finding — they were missing, so registry tests ran a different production
+        // set than the app shipped).
+        _registry.PayloadFor(ModelConstants.Pollinations.Flux).ModelId.Should().Be(ModelConstants.Pollinations.Flux);
+        _registry.PayloadFor(ModelConstants.Pollinations.Zimage).ModelId.Should().Be(ModelConstants.Pollinations.Zimage);
+        _registry.PayloadFor(ModelConstants.Pollinations.QwenImage).ModelId.Should().Be(ModelConstants.Pollinations.QwenImage);
+        _registry.CapabilitiesFor(ModelConstants.Pollinations.Flux).ModelId.Should().Be(ModelConstants.Pollinations.Flux);
     }
 
     [Fact]

@@ -37,25 +37,25 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
         return MergeWithSeeds(combined);
     }
 
-    public async Task<IReadOnlyList<ModelOption>?> RefreshAsync(string apiToken)
+    public async Task<IReadOnlyList<ModelOption>?> RefreshAsync(string apiToken, CancellationToken ct = default)
     {
         // Fan out to both remote providers in parallel — the Pollinations call is anonymous and
         // independent of the Replicate token, so it shouldn't be gated by Replicate's auth.
         // Tuple-await synchronises both already-running tasks without the .Result anti-pattern
         // that a separate WhenAll would otherwise leave behind.
-        var replicateTask = _catalogService.FetchAsync(apiToken);
-        var pollinationsTask = _pollinationsCatalogService.FetchAsync();
+        var replicateTask = _catalogService.FetchAsync(apiToken, ct);
+        var pollinationsTask = _pollinationsCatalogService.FetchAsync(ct);
         var (replicate, pollinations) = (await replicateTask, await pollinationsTask);
 
         var fetched = replicate.Concat(pollinations).ToList();
-        var comfy = await _comfyUiWorkflowCatalogService.FetchAsync();
+        var comfy = await _comfyUiWorkflowCatalogService.FetchAsync(ct);
         if (fetched.Count == 0 && comfy.Count == 0) return null;
 
         // Cache the raw merged-fetched list (not seeds, not comfy — the workflow folder is
         // rescanned live every time, so caching it would only let stale entries linger).
         // Load-time merge keeps any freshly-added seed entries surfacing even when the cache
         // was written before they existed.
-        if (fetched.Count > 0) await _catalogService.SaveCachedAsync(fetched);
+        if (fetched.Count > 0) await _catalogService.SaveCachedAsync(fetched, ct);
         return MergeWithSeeds(fetched.Concat(comfy).ToList());
     }
 

@@ -1,4 +1,5 @@
 ﻿using ImageGenerator.MAUI.Infrastructure.Diagnostics;
+using ImageGenerator.MAUI.Infrastructure.Interfaces;
 
 namespace ImageGenerator.MAUI;
 
@@ -14,9 +15,19 @@ public partial class App
     /// <remarks>
     /// This class is responsible for initializing the application and configuring the main window properties such as size and minimum dimensions.
     /// </remarks>
-    public App()
+    private readonly IUiStateStore _uiStateStore;
+    private readonly IApiTokenStore _apiTokenStore;
+    private readonly IPollinationsTokenStore _pollinationsTokenStore;
+
+    public App(
+        IUiStateStore uiStateStore,
+        IApiTokenStore apiTokenStore,
+        IPollinationsTokenStore pollinationsTokenStore)
     {
         InitializeComponent();
+        _uiStateStore = uiStateStore;
+        _apiTokenStore = apiTokenStore;
+        _pollinationsTokenStore = pollinationsTokenStore;
     }
 
     /// <summary>
@@ -41,8 +52,16 @@ public partial class App
         window.Y = Math.Max(0, (screenHeight - window.Height) / 2);
 
         // Several instances may share one app.log; the shutdown line pairs with "startup OK"
-        // so the log shows which instances were alive when.
-        window.Destroying += (_, _) => CrashLogger.WriteShutdownLine();
+        // so the log shows which instances were alive when. Flush the debounced writers
+        // first: a prompt or token scheduled within the 500 ms window of closing would
+        // otherwise never reach storage.
+        window.Destroying += (_, _) =>
+        {
+            _uiStateStore.FlushPendingWrites();
+            _apiTokenStore.FlushPendingWrites();
+            _pollinationsTokenStore.FlushPendingWrites();
+            CrashLogger.WriteShutdownLine();
+        };
 
         return window;
     }

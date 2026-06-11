@@ -10,5 +10,5 @@ namespace ImageGenerator.MAUI.Infrastructure.Interfaces;
 public interface IModelCatalogCoordinator
 {
     Task<IReadOnlyList<ModelOption>?> LoadCachedAsync(CancellationToken ct = default);
-    Task<IReadOnlyList<ModelOption>?> RefreshAsync(string apiToken);
+    Task<IReadOnlyList<ModelOption>?> RefreshAsync(string apiToken, CancellationToken ct = default);
 }

@@ -44,7 +44,7 @@ public class ModelCatalogServiceTests : IDisposable
     [Fact]
     public async Task FetchAsync_ReplicateSucceeds_ReturnsFilteredModels()
     {
-        _replicate.Setup(x => x.GetTextToImageCollectionAsync(It.IsAny<string>()))
+        _replicate.Setup(x => x.GetTextToImageCollectionAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ReplicateCollectionResponse
             {
                 Models =
@@ -64,7 +64,7 @@ public class ModelCatalogServiceTests : IDisposable
     [Fact]
     public async Task FetchAsync_ReplicateFails_ReturnsEmpty()
     {
-        _replicate.Setup(x => x.GetTextToImageCollectionAsync(It.IsAny<string>()))
+        _replicate.Setup(x => x.GetTextToImageCollectionAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpRequestException("401"));
 
         var result = await _sut.FetchAsync("token");
@@ -75,7 +75,7 @@ public class ModelCatalogServiceTests : IDisposable
     [Fact]
     public async Task FetchAsync_FiltersReplicateToAllowlist()
     {
-        _replicate.Setup(x => x.GetTextToImageCollectionAsync(It.IsAny<string>()))
+        _replicate.Setup(x => x.GetTextToImageCollectionAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ReplicateCollectionResponse
             {
                 Models =

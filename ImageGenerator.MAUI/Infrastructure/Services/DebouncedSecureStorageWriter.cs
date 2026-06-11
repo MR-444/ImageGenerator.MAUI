@@ -22,6 +22,7 @@ internal sealed class DebouncedSecureStorageWriter
     private readonly Func<string, string, Task> _writer;
     private readonly object _lock = new();
     private CancellationTokenSource? _cts;
+    private string? _pending;
 
     public DebouncedSecureStorageWriter(
         string key,
@@ -46,10 +47,12 @@ internal sealed class DebouncedSecureStorageWriter
             if (string.IsNullOrEmpty(value))
             {
                 _cts = null;
+                _pending = null;
                 return;
             }
 
             _cts = new CancellationTokenSource();
+            _pending = value;
             token = _cts.Token;
         }
 
@@ -59,6 +62,11 @@ internal sealed class DebouncedSecureStorageWriter
             {
                 await Task.Delay(_delay, token);
                 await _writer(_key, value);
+                lock (_lock)
+                {
+                    // Only clear if no newer Schedule replaced it meanwhile.
+                    if (_pending == value) _pending = null;
+                }
             }
             catch (OperationCanceledException)
             {
@@ -69,5 +77,34 @@ internal sealed class DebouncedSecureStorageWriter
                 _logger.LogWarning(ex, "SecureStorage.{Op} failed", "Set");
             }
         }, token);
+    }
+
+    /// <summary>
+    /// Shutdown path: cancel the timer and write whatever is still pending, blocking until
+    /// the store accepted it. Without this, a value scheduled within the debounce window of
+    /// app close (paste-and-quit) never reaches storage. Racing an in-flight timer write at
+    /// worst double-writes the same value — both backing stores treat that as a no-op.
+    /// </summary>
+    public void Flush()
+    {
+        string? value;
+        lock (_lock)
+        {
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _cts = null;
+            value = _pending;
+            _pending = null;
+        }
+        if (value is null) return;
+
+        try
+        {
+            _writer(_key, value).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SecureStorage.{Op} failed", "Flush");
+        }
     }
 }
