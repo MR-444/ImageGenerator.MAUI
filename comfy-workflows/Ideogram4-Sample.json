@@ -2,7 +2,7 @@
   "37": {
     "inputs": {
       "aspect_ratio": "2:3 (Portrait Photo)",
-      "megapixels": 2
+      "megapixels": 4
     },
     "class_type": "ResolutionSelector",
     "_meta": {
@@ -188,28 +188,36 @@
   },
   "98:31": {
     "inputs": {
-      "expression": "max(((a + 15) // 16) * 16, 256)",
+      "expression": "max(((a * min(1, 3072 / max(a, b)) + 15) // 16) * 16, 256)",
       "values.a": [
         "98:27",
         0
-      ]
-    },
-    "class_type": "ComfyMathExpression",
-    "_meta": {
-      "title": "Math Expression"
-    }
-  },
-  "98:32": {
-    "inputs": {
-      "expression": "max(((a + 15) // 16) * 16, 256)",
-      "values.a": [
+      ],
+      "values.b": [
         "98:28",
         0
       ]
     },
     "class_type": "ComfyMathExpression",
     "_meta": {
-      "title": "Math Expression"
+      "title": "Math Expression (Width, 3072 cap)"
+    }
+  },
+  "98:32": {
+    "inputs": {
+      "expression": "max(((a * min(1, 3072 / max(a, b)) + 15) // 16) * 16, 256)",
+      "values.a": [
+        "98:28",
+        0
+      ],
+      "values.b": [
+        "98:27",
+        0
+      ]
+    },
+    "class_type": "ComfyMathExpression",
+    "_meta": {
+      "title": "Math Expression (Height, 3072 cap)"
     }
   },
   "98:144": {
@@ -251,7 +259,7 @@
   },
   "98:147": {
     "inputs": {
-      "json_string": "{\n  \"Quality\": {\n    \"num_steps\": 48,\n    \"mu\": 0.0,\n    \"std\": 1.5,\n    \"preset_id\": \"V4_QUALITY_48\"\n  },\n  \"Default\": {\n    \"num_steps\": 20,\n    \"mu\": 0.0,\n    \"std\": 1.75,\n    \"preset_id\": \"V4_DEFAULT_20\"\n  },\n  \"Turbo\": {\n    \"num_steps\": 12,\n    \"mu\": 0.5,\n    \"std\": 1.75,\n    \"preset_id\": \"V4_TURBO_12\"\n  }\n}",
+      "json_string": "{\n  \"Quality\": {\n    \"num_steps\": 48,\n    \"mu\": 0.0,\n    \"std\": 1.5,\n    \"preset_id\": \"V4_QUALITY_48\"\n  },\n  \"Default\": {\n    \"num_steps\": 20,\n    \"mu\": 0.0,\n    \"std\": 1.75,\n    \"preset_id\": \"V4_DEFAULT_20\"\n  },\n  \"Turbo\": {\n    \"num_steps\": 12,\n    \"mu\": 0.5,\n    \"std\": 1.75,\n    \"preset_id\": \"V4_TURBO_12\"\n  },\n  \"Ultra\": {\n    \"num_steps\": 60,\n    \"mu\": 0.0,\n    \"std\": 1.75,\n    \"preset_id\": \"V4_ULTRA_60\"\n  }\n}",
       "key": [
         "98:156",
         0
@@ -384,12 +392,12 @@
   },
   "98:156": {
     "inputs": {
-      "choice": "Default",
-      "index": 1,
+      "choice": "Quality",
+      "index": 0,
       "option1": "Quality",
       "option2": "Default",
       "option3": "Turbo",
-      "option4": ""
+      "option4": "Ultra"
     },
     "class_type": "CustomCombo",
     "_meta": {
