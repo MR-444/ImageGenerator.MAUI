@@ -17,7 +17,10 @@ public class ShellPreviewConverter : IValueConverter
     {
         if (value is not string path || string.IsNullOrEmpty(path)) return null;
 
-        return ImageSource.FromStream(async ct =>
+        // Task.Run is load-bearing — same UI-thread COM-pumping fail-fast as
+        // ShellThumbnailConverter (see the comment there; confirmed by crash-dump analysis
+        // 2026-06-13). The brokered GetFileFromPathAsync call must not start on the STA thread.
+        return ImageSource.FromStream(ct => Task.Run(async () =>
         {
             try
             {
@@ -38,7 +41,7 @@ public class ShellPreviewConverter : IValueConverter
             {
                 return Stream.Null;
             }
-        });
+        }, ct));
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

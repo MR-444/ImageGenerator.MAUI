@@ -16,7 +16,15 @@ public class ShellThumbnailConverter : IValueConverter
     {
         if (value is not string path || string.IsNullOrEmpty(path)) return null;
 
-        return ImageSource.FromStream(async ct =>
+        // Task.Run is load-bearing, not an optimization: MAUI invokes this lambda's synchronous
+        // head on the UI (STA) thread during CollectionView tile realization, and
+        // GetFileFromPathAsync brokers a cross-apartment COM call whose STA modal loop PUMPS
+        // the message queue. If that pump lands inside a reentrancy-protected XAML window
+        // message, Microsoft.UI.Xaml fail-fasts the whole process (0xc000027b stowed exception,
+        // CXcpDispatcher::OnReentrancyProtectedWindowMessage — confirmed by crash-dump analysis
+        // 2026-06-13). On an MTA threadpool thread the same call doesn't pump, so the race
+        // cannot occur.
+        return ImageSource.FromStream(ct => Task.Run(async () =>
         {
             try
             {
@@ -41,7 +49,7 @@ public class ShellThumbnailConverter : IValueConverter
                 // placeholder rather than crashing the whole page.
                 return Stream.Null;
             }
-        });
+        }, ct));
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
