@@ -75,7 +75,7 @@ The ComfyUI provider talks to a [ComfyUI](https://github.com/comfyanonymous/Comf
 **Server setup**
 
 1. Run a reasonably current ComfyUI build. If the server is on another machine, start it with `--listen` so it binds to the LAN (default is localhost-only), and make sure the port (default `8188`) is open in its firewall.
-2. In the app, select **ComfyUI** in the API Tokens picker and enter the server's base URL, e.g. `http://192.168.1.50:8188` (default is `http://127.0.0.1:8188`). There is no auth — the provider assumes a trusted LAN; don't expose a ComfyUI port to the internet.
+2. In the app, select **ComfyUI** in the API Tokens picker and enter the server's base URL, e.g. `http://192.168.1.50:8188` (default is `http://127.0.0.1:8188`). On a plain LAN no auth is needed. If your server sits behind an authenticating reverse proxy, paste the full `Authorization` header value (scheme included, e.g. `Bearer eyJ…` or `Basic dXNlcjpwYXNz`) into the ComfyUI token field — it's sent verbatim on every HTTP request and the WebSocket connect. Either way, don't expose a bare ComfyUI port to the internet.
 
 **Workflows as models**
 
@@ -86,15 +86,17 @@ At generation time the app patches the exported graph and submits it:
 - **Prompt** — plain mode writes your prompt into the lowest-id `CLIPTextEncode` node with a literal text value. With **Structured JSON prompt** checked, the JSON goes into every `Ideogram4PromptBuilderKJ` node (kjnodes pack) and/or replaces any `CLIPTextEncode` literal that is itself a JSON object (a frozen caption from an Ideogram-style workflow).
 - **Seeds** — every literal `seed` / `noise_seed` is re-rolled per run. ComfyUI's "randomize after generate" lives in the browser frontend, so API submissions would otherwise reproduce the identical image forever.
 - **Aspect ratio + resolution** — if the workflow has a `ResolutionSelector` node, the app's aspect-ratio and megapixels pickers write into it; without one the workflow keeps its own resolution (silently).
+- **Model** — a workflow with a baked `CheckpointLoaderSimple` (or exactly one literal `UNETLoader`) gets a model picker fed live from the server's `/object_info`; your pick is patched in, remembered per workflow. Multi-UNET graphs (deliberate pairings like Ideogram 4's dual model) keep their baked models and hide the picker.
+- **Quality preset** — a workflow with exactly one `CustomCombo` node (like the sample's Quality / Default / Turbo / Ultra table) gets a preset picker; choice and slot index are patched together. The option values are your workflow's own strings — the app treats them as opaque.
 - **`%date:...%` filename tokens** — expanded app-side. The ComfyUI server takes `filename_prefix` literally (token expansion is frontend-only), and the `:` in an unexpanded token is path-invalid on Windows servers.
 
 So the minimum a workflow needs: a `CLIPTextEncode` with a literal text prompt and a `SaveImage` node. Everything else is optional.
 
 **Sample workflow**
 
-[`comfy-workflows/Ideogram4-Sample.json`](comfy-workflows/Ideogram4-Sample.json) is a ready-to-use Ideogram 4 text-to-image workflow using **stock ComfyUI nodes only** (no custom node packs). Copy it into `Pictures\ImageGenerator.MAUI\comfy-workflows\`, and it appears in the picker as "Ideogram4-Sample (ComfyUI)". It supports both plain prompts and the structured-JSON mode (including the in-app visual structure editor), aspect-ratio/megapixels selection, and dated output subfolders on the server. Your server needs the Ideogram 4 model files the graph references, in the usual ComfyUI model folders: `ideogram4_fp8_scaled.safetensors` + `ideogram4_unconditional_fp8_scaled.safetensors` (diffusion models), `qwen3vl_8b_fp8_scaled.safetensors` (text encoder), `flux2-vae.safetensors` (VAE) — the same files ComfyUI's built-in Ideogram 4 template uses.
+[`comfy-workflows/Ideogram4-Sample.json`](comfy-workflows/Ideogram4-Sample.json) is a ready-to-use Ideogram 4 text-to-image workflow using **stock ComfyUI nodes only** (no custom node packs). Copy it into `Pictures\ImageGenerator.MAUI\comfy-workflows\`, and it appears in the picker as "Ideogram4-Sample (ComfyUI)". It supports both plain prompts and the structured-JSON mode (including the in-app visual structure editor), aspect-ratio/megapixels selection (4 MP default with an aspect-preserving 3072 px long-side cap), the quality-preset picker (Quality default · Default · Turbo · Ultra), and dated output subfolders on the server. Your server needs the Ideogram 4 model files the graph references, in the usual ComfyUI model folders: `ideogram4_fp8_scaled.safetensors` + `ideogram4_unconditional_fp8_scaled.safetensors` (diffusion models), `qwen3vl_8b_fp8_scaled.safetensors` (text encoder), `flux2-vae.safetensors` (VAE) — the same files ComfyUI's built-in Ideogram 4 template uses.
 
-Generations run on your GPU and can take minutes; the job card polls the server and shows progress like any other provider. Canceling in the app stops the polling, but the server finishes its render (interrupt support is on the roadmap).
+Generations run on your GPU and can take minutes; the job card shows live per-step progress streamed over the server's WebSocket. Canceling in the app removes pending jobs from the server queue and interrupts the active render when it's the app's own job — no orphaned GPU work.
 
 ### Costs
 
