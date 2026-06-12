@@ -24,6 +24,8 @@ public class GeneratorViewModelTests
     private readonly Mock<IApiTokenStore> _mockTokenStore;
     private readonly Mock<IPollinationsTokenStore> _mockPollinationsTokenStore;
     private readonly Mock<IComfyUiAuthStore> _mockComfyUiAuthStore;
+    private readonly Mock<ICivitaiTokenStore> _mockCivitaiTokenStore;
+    private readonly Mock<ICivitaiPostingService> _mockCivitaiPostingService;
     private readonly Mock<IUiStateStore> _mockUiStateStore;
     private readonly Mock<IModelCatalogCoordinator> _mockCatalogCoordinator;
     private readonly Mock<IPromptBatchParser> _mockPromptBatchParser;
@@ -35,6 +37,8 @@ public class GeneratorViewModelTests
         _mockTokenStore = new Mock<IApiTokenStore>();
         _mockPollinationsTokenStore = new Mock<IPollinationsTokenStore>();
         _mockComfyUiAuthStore = new Mock<IComfyUiAuthStore>();
+        _mockCivitaiTokenStore = new Mock<ICivitaiTokenStore>();
+        _mockCivitaiPostingService = new Mock<ICivitaiPostingService>();
         _mockUiStateStore = new Mock<IUiStateStore>();
         _mockCatalogCoordinator = new Mock<IModelCatalogCoordinator>();
         _mockPromptBatchParser = new Mock<IPromptBatchParser>();
@@ -45,6 +49,8 @@ public class GeneratorViewModelTests
             _mockTokenStore.Object,
             _mockPollinationsTokenStore.Object,
             _mockComfyUiAuthStore.Object,
+            _mockCivitaiTokenStore.Object,
+            _mockCivitaiPostingService.Object,
             _mockUiStateStore.Object,
             _mockCatalogCoordinator.Object,
             ModelDescriptorRegistry.Default(),
@@ -958,6 +964,8 @@ public class GeneratorViewModelTests
             new Mock<IApiTokenStore>().Object,
             new Mock<IPollinationsTokenStore>().Object,
             new Mock<IComfyUiAuthStore>().Object,
+            new Mock<ICivitaiTokenStore>().Object,
+            new Mock<ICivitaiPostingService>().Object,
             sharedStore.Object,
             coordinator1.Object,
             ModelDescriptorRegistry.Default(),
@@ -982,6 +990,8 @@ public class GeneratorViewModelTests
             new Mock<IApiTokenStore>().Object,
             new Mock<IPollinationsTokenStore>().Object,
             new Mock<IComfyUiAuthStore>().Object,
+            new Mock<ICivitaiTokenStore>().Object,
+            new Mock<ICivitaiPostingService>().Object,
             sharedStore.Object,
             coordinator2.Object,
             ModelDescriptorRegistry.Default(),
@@ -2164,5 +2174,232 @@ public class GeneratorViewModelTests
             "a platform null push is a binding artifact, never a user pick");
         _mockUiStateStore.Verify(s => s.PersistComfyUiPreset("Turbo", ComfyWorkflowName), Times.Once,
             "only the explicit pick persists");
+    }
+
+    // --- CivitAI posting ---
+
+    [Fact]
+    public async Task Generate_WithPostToCivitaiChecked_PostsAfterSave()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        _viewModel.Parameters.Prompt = "test prompt";
+        _viewModel.Parameters.PostToCivitai = true;
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
+        var posted = new TaskCompletionSource();
+        _mockCivitaiPostingService
+            .Setup(s => s.PostImageAsync(FakeSavePath, It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CivitaiPostResult(true, 1, "https://civitai.com/posts/1", "Posted to CivitAI (draft)."))
+            .Callback(() => posted.TrySetResult());
+
+        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        // The posting hook is fire-and-forget by design; wait for the service call to land.
+        await posted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        _viewModel.Jobs[0].Parameters.PostToCivitai.Should().BeTrue("the checkbox must survive the Clone() snapshot");
+        _mockCivitaiPostingService.Verify(
+            s => s.PostImageAsync(FakeSavePath, It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Generate_WithPostToCivitaiUnchecked_NeverCallsThePostingService()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        _viewModel.Parameters.Prompt = "test prompt";
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
+
+        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+
+        _mockCivitaiPostingService.Verify(
+            s => s.PostImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task PostJobToCivitai_Success_SetsStatusAndUrlOnTheJob()
+    {
+        var job = new GenerationJob(new ImageGenerationParameters { Prompt = "p", CivitaiIncludeMeta = true });
+        _mockCivitaiPostingService
+            .Setup(s => s.PostImageAsync(FakeSavePath, It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CivitaiPostResult(true, 42, "https://civitai.com/posts/42", "Posted to CivitAI (draft)."));
+
+        await _viewModel.PostJobToCivitaiAsync(job, FakeSavePath);
+
+        job.CivitaiStatusMessage.Should().Be("Posted to CivitAI (draft).");
+        job.CivitaiPostUrl.Should().Be("https://civitai.com/posts/42");
+        // CivitaiIncludeMeta=true must translate into a non-null meta dictionary.
+        _mockCivitaiPostingService.Verify(
+            s => s.PostImageAsync(FakeSavePath, It.IsAny<string>(), It.Is<IReadOnlyDictionary<string, object>?>(m => m != null && (string)m["prompt"] == "p"), It.IsAny<int?>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task PostJobToCivitai_MetaUnchecked_PassesNullMeta()
+    {
+        var job = new GenerationJob(new ImageGenerationParameters { Prompt = "p", CivitaiIncludeMeta = false });
+        _mockCivitaiPostingService
+            .Setup(s => s.PostImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CivitaiPostResult(true, 1, "u", "ok"));
+
+        await _viewModel.PostJobToCivitaiAsync(job, FakeSavePath);
+
+        _mockCivitaiPostingService.Verify(
+            s => s.PostImageAsync(FakeSavePath, It.IsAny<string>(), null, It.IsAny<int?>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task PostJobToCivitai_Failure_LeavesJobStatusUntouched()
+    {
+        var job = new GenerationJob(new ImageGenerationParameters { Prompt = "p" })
+        {
+            StatusKind = StatusKind.Success,
+            StatusMessage = "Saved.",
+        };
+        _mockCivitaiPostingService
+            .Setup(s => s.PostImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CivitaiPostResult(false, null, null, "HTTP 500"));
+
+        await _viewModel.PostJobToCivitaiAsync(job, FakeSavePath);
+
+        job.CivitaiStatusMessage.Should().Be("CivitAI post failed: HTTP 500");
+        job.CivitaiPostUrl.Should().BeNull();
+        job.StatusKind.Should().Be(StatusKind.Success, "a failed CivitAI post must never demote a saved image");
+        job.StatusMessage.Should().Be("Saved.");
+    }
+
+    [Fact]
+    public async Task PostJobToCivitai_ServiceThrows_IsSwallowedIntoTheStatusLine()
+    {
+        var job = new GenerationJob(new ImageGenerationParameters { Prompt = "p" });
+        _mockCivitaiPostingService
+            .Setup(s => s.PostImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("boom"));
+
+        var act = () => _viewModel.PostJobToCivitaiAsync(job, FakeSavePath);
+
+        await act.Should().NotThrowAsync("a fire-and-forget continuation must never take the app down");
+        job.CivitaiStatusMessage.Should().Contain("boom");
+    }
+
+    [Fact]
+    public async Task PostJobToCivitai_ModelRefSet_PassesParsedVersionId()
+    {
+        var job = new GenerationJob(new ImageGenerationParameters
+        {
+            Prompt = "p",
+            CivitaiModelRef = "https://civitai.com/posts/create?modelId=2676710&modelVersionId=3005491&returnUrl=x",
+        });
+        _mockCivitaiPostingService
+            .Setup(s => s.PostImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CivitaiPostResult(true, 1, "u", "Posted to CivitAI (draft)."));
+
+        await _viewModel.PostJobToCivitaiAsync(job, FakeSavePath);
+
+        _mockCivitaiPostingService.Verify(
+            s => s.PostImageAsync(FakeSavePath, It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), 3005491, It.IsAny<CancellationToken>()),
+            Times.Once);
+        job.CivitaiStatusMessage.Should().Be("Posted to CivitAI (draft).");
+    }
+
+    [Fact]
+    public async Task PostJobToCivitai_UnrecognizableModelRef_PostsWithoutLinkAndSaysSo()
+    {
+        var job = new GenerationJob(new ImageGenerationParameters { Prompt = "p", CivitaiModelRef = "typo!!" });
+        _mockCivitaiPostingService
+            .Setup(s => s.PostImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CivitaiPostResult(true, 1, "u", "Posted to CivitAI (draft)."));
+
+        await _viewModel.PostJobToCivitaiAsync(job, FakeSavePath);
+
+        _mockCivitaiPostingService.Verify(
+            s => s.PostImageAsync(FakeSavePath, It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), null, It.IsAny<CancellationToken>()),
+            Times.Once);
+        job.CivitaiStatusMessage.Should().Contain("Model reference not recognized");
+    }
+
+    [Fact]
+    public void CivitaiModelRef_Changed_PersistsViaUiStateStore()
+    {
+        _viewModel.Parameters.CivitaiModelRef = "3005491";
+
+        _mockUiStateStore.Verify(s => s.PersistCivitaiModelRef("3005491"), Times.Once);
+    }
+
+    [Fact]
+    public void LoadSavedUiState_RestoresCivitaiModelRef()
+    {
+        _mockUiStateStore.Setup(s => s.LoadCivitaiModelRef()).Returns("3005491");
+
+        _viewModel.LoadSavedUiState();
+
+        _viewModel.Parameters.CivitaiModelRef.Should().Be("3005491");
+    }
+
+    [Theory]
+    [InlineData("", "")]
+    [InlineData("   \t\n ", "")]
+    [InlineData("a red fox", "a red fox")]
+    [InlineData("a   red\n\nfox", "a red fox")]
+    public void BuildCivitaiTitle_CollapsesWhitespace_EmptyMeansNoTitle(string prompt, string expected)
+    {
+        GeneratorViewModel.BuildCivitaiTitle(prompt).Should().Be(expected);
+    }
+
+    [Fact]
+    public void BuildCivitaiTitle_JsonPrompt_UsesHighLevelDescription()
+    {
+        const string json = """{"high_level_description":"A dark-haired woman at dusk","style":"photo"}""";
+
+        GeneratorViewModel.BuildCivitaiTitle(json).Should().Be("A dark-haired woman at dusk");
+    }
+
+    [Fact]
+    public void BuildCivitaiTitle_JsonPrompt_FallsBackThroughKnownKeys()
+    {
+        GeneratorViewModel.BuildCivitaiTitle("""{"style":"photo","caption":"A red fox"}""")
+            .Should().Be("A red fox");
+    }
+
+    [Fact]
+    public void BuildCivitaiTitle_JsonPromptWithoutUsableField_ReturnsEmpty()
+    {
+        GeneratorViewModel.BuildCivitaiTitle("""{"style":"photo","steps":30}""")
+            .Should().BeEmpty("no title beats a raw JSON blob as the post title");
+    }
+
+    [Fact]
+    public void BuildCivitaiTitle_MalformedJson_ReturnsEmpty()
+    {
+        GeneratorViewModel.BuildCivitaiTitle("{\"broken\": ").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildCivitaiTitle_LongPrompt_CutsAtWordBoundaryWithEllipsis()
+    {
+        var prompt = "A cinematic in-camera double-exposure photograph at eye level of a young woman";
+
+        var title = GeneratorViewModel.BuildCivitaiTitle(prompt);
+
+        title.Length.Should().BeLessThanOrEqualTo(61);
+        title.Should().EndWith("…");
+        title.Should().NotContain("  ");
+        prompt.Should().StartWith(title[..^1], "the cut must happen at a word boundary, not mid-word");
+    }
+
+    [Fact]
+    public async Task TestCivitaiConnection_WritesResultMessageToStatus()
+    {
+        _mockCivitaiPostingService
+            .Setup(s => s.TestConnectionAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new CivitaiConnectionResult(true, "Connected as Silmas."));
+
+        await ((IAsyncRelayCommand)_viewModel.TestCivitaiConnectionCommand).ExecuteAsync(null);
+
+        _viewModel.CivitaiConnectionStatus.Should().Be("Connected as Silmas.");
     }
 }

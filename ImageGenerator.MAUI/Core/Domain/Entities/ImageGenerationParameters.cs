@@ -114,6 +114,24 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private string _comfyUiPreset = string.Empty;
 
+    // Post the saved image to CivitAI as an unpublished draft after generation. Session-only
+    // (defaults OFF every launch, never persisted): it triggers an upload side effect, so a
+    // sticky-on across sessions would be worse than re-checking it.
+    [ObservableProperty]
+    private bool _postToCivitai;
+
+    // Attach structured generation metadata (prompt, seed, model) to the CivitAI post.
+    // Same session-only rationale as PostToCivitai; the local file is never modified.
+    [ObservableProperty]
+    private bool _civitaiIncludeMeta;
+
+    // Raw CivitAI model reference (model URL or version id) the post should be associated
+    // with — landing it in that model's gallery. Unlike the checkboxes this IS persisted
+    // (via UiStateStore; the VM restores it on launch): the target model rarely changes,
+    // and the off-by-default checkbox still gates any actual upload.
+    [ObservableProperty]
+    private string _civitaiModelRef = string.Empty;
+
     public ImageGenerationParameters Clone()
     {
         var copy = new ImageGenerationParameters
@@ -143,6 +161,9 @@ public partial class ImageGenerationParameters : ObservableObject
             EnableCopyrightDetection = EnableCopyrightDetection,
             ComfyUiCheckpoint = ComfyUiCheckpoint,
             ComfyUiPreset    = ComfyUiPreset,
+            PostToCivitai    = PostToCivitai,
+            CivitaiIncludeMeta = CivitaiIncludeMeta,
+            CivitaiModelRef  = CivitaiModelRef,
         };
         foreach (var p in ImagePrompts) copy.ImagePrompts.Add(p);
         return copy;

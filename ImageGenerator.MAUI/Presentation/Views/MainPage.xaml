@@ -333,6 +333,38 @@
                                     <Label Text="Randomize on each generation" VerticalOptions="Center" />
                                 </HorizontalStackLayout>
                             </VerticalStackLayout>
+
+                            <!-- CivitAI draft posting (provider-independent; defaults off each launch). -->
+                            <VerticalStackLayout Spacing="2">
+                                <HorizontalStackLayout Spacing="8">
+                                    <CheckBox IsChecked="{Binding Parameters.PostToCivitai}"
+                                              VerticalOptions="Center"
+                                              AutomationId="PostToCivitaiCheckBox" />
+                                    <Label Text="Post to CivitAI" VerticalOptions="Center" />
+                                </HorizontalStackLayout>
+                                <Label Text="Publishes the saved image on CivitAI right after generation — one step, no manual publish. Needs a CivitAI API key (Settings)."
+                                       Style="{StaticResource HelperText}" />
+                                <HorizontalStackLayout Spacing="8" Margin="36,0,0,0">
+                                    <CheckBox IsChecked="{Binding Parameters.CivitaiIncludeMeta}"
+                                              IsEnabled="{Binding Parameters.PostToCivitai}"
+                                              VerticalOptions="Center"
+                                              AutomationId="CivitaiIncludeMetaCheckBox" />
+                                    <Label Text="Include generation data (prompt, seed, model)" VerticalOptions="Center" />
+                                </HorizontalStackLayout>
+                                <Label Text="Sent as structured metadata with the post; the local file is never modified."
+                                       Style="{StaticResource HelperText}"
+                                       Margin="36,0,0,0" />
+                                <VerticalStackLayout Spacing="4" Margin="36,8,0,0">
+                                    <Label Text="Post to model gallery (optional)" Style="{StaticResource FieldLabel}" />
+                                    <Entry Text="{Binding Parameters.CivitaiModelRef}"
+                                           IsEnabled="{Binding Parameters.PostToCivitai}"
+                                           Placeholder="Model URL with modelVersionId=… or the bare version id"
+                                           SemanticProperties.Description="CivitAI model the post should be associated with"
+                                           AutomationId="CivitaiModelRefEntry" />
+                                    <Label Text="Paste the model page URL (it carries modelVersionId) — posts land in that model's gallery. Empty = plain profile post. Remembered across sessions."
+                                           Style="{StaticResource HelperText}" />
+                                </VerticalStackLayout>
+                            </VerticalStackLayout>
                         </VerticalStackLayout>
                     </Border>
 
@@ -507,6 +539,22 @@
                                                     Command="{Binding ShowInFolderCommand}"
                                                     Style="{StaticResource SecondaryButton}"
                                                     AutomationId="JobShowInFolderButton" />
+                                        </HorizontalStackLayout>
+
+                                        <!-- CivitAI posting status (post-save side effect; collapsed unless posting ran) -->
+                                        <HorizontalStackLayout Spacing="8"
+                                                               IsVisible="{Binding CivitaiStatusMessage, Converter={StaticResource NonEmptyStringToBool}}">
+                                            <Label Text="{Binding CivitaiStatusMessage}"
+                                                   Style="{StaticResource HelperText}"
+                                                   VerticalOptions="Center"
+                                                   LineBreakMode="TailTruncation"
+                                                   MaxLines="2"
+                                                   AutomationId="JobCivitaiStatusLabel" />
+                                            <Button Text="Open post"
+                                                    Command="{Binding OpenCivitaiPostCommand}"
+                                                    Style="{StaticResource SecondaryButton}"
+                                                    IsVisible="{Binding CivitaiPostUrl, Converter={StaticResource NonEmptyStringToBool}}"
+                                                    AutomationId="JobOpenCivitaiPostButton" />
                                         </HorizontalStackLayout>
 
                                     </VerticalStackLayout>

@@ -23,6 +23,11 @@ public partial class GenerationJob : ObservableObject
     [ObservableProperty] private double _progress;
     [ObservableProperty] private bool _hasProgress;
 
+    // CivitAI posting is a post-save side effect with its own status line on the job card —
+    // it never touches StatusKind, so a failed post can't make a saved image look failed.
+    [ObservableProperty] private string? _civitaiStatusMessage;
+    [ObservableProperty] private string? _civitaiPostUrl;
+
     public CancellationTokenSource Cts { get; } = new();
 
     public GenerationJob(ImageGenerationParameters parameters, Func<string, Task>? useAsInput = null)
@@ -87,5 +92,19 @@ public partial class GenerationJob : ObservableObject
     {
         if (_useAsInput is null || ResultPath is null) return;
         await _useAsInput(ResultPath);
+    }
+
+    [RelayCommand]
+    private void OpenCivitaiPost()
+    {
+        if (CivitaiPostUrl is null) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = CivitaiPostUrl, UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"OpenCivitaiPost failed for '{CivitaiPostUrl}': {ex.Message}");
+        }
     }
 }

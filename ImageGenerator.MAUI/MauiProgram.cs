@@ -4,6 +4,7 @@ using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Descriptors.Pollinations;
 using ImageGenerator.MAUI.Extensions;
 using ImageGenerator.MAUI.Infrastructure.Diagnostics;
+using ImageGenerator.MAUI.Infrastructure.External.Civitai;
 using ImageGenerator.MAUI.Infrastructure.External.ComfyUi;
 using ImageGenerator.MAUI.Infrastructure.External.Pollinations;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate;
@@ -80,6 +81,17 @@ public static class MauiProgram
                 perAttemptTimeout: TimeSpan.FromSeconds(60),
                 totalTimeout: TimeSpan.FromMinutes(3));
 
+        // No BaseAddress: the service talks to two hosts (mcp.civitai.com for upload/whoami,
+        // civitai.com for the tRPC post creation). 120 s per attempt because upload_image
+        // carries the whole image as base64 (~4-11 MB for a 4 MP PNG). Note the standard
+        // retry (5xx/408/429) can in rare cases duplicate a post if create succeeded but the
+        // response was lost — accepted: posts publish immediately (user decision), so a
+        // duplicate is visible right away and deleted on the site in one click.
+        builder.Services.AddHttpClient(CivitaiPostingService.HttpClientName)
+            .ConfigureStandardResilience(
+                perAttemptTimeout: TimeSpan.FromSeconds(120),
+                totalTimeout: TimeSpan.FromMinutes(5));
+
         // 2) Per-model descriptors. Each registers as itself + every narrow interface it
         //    implements, forwarded to the same singleton instance. Adding a new model is now
         //    a single-line edit here plus one new descriptor file.
@@ -125,6 +137,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<IApiTokenStore, ApiTokenStore>();
         builder.Services.AddSingleton<IPollinationsTokenStore, PollinationsTokenStore>();
         builder.Services.AddSingleton<IComfyUiAuthStore, ComfyUiAuthStore>();
+        builder.Services.AddSingleton<ICivitaiTokenStore, CivitaiTokenStore>();
+        builder.Services.AddSingleton<ICivitaiPostingService, CivitaiPostingService>();
         builder.Services.AddSingleton<IUiStateStore, UiStateStore>();
         builder.Services.AddSingleton<IJobRunner, JobRunner>();
         builder.Services.AddSingleton<IModelCatalogCoordinator, ModelCatalogCoordinator>();

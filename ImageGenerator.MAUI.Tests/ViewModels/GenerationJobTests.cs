@@ -134,6 +134,25 @@ public class GenerationJobTests
     }
 
     [Fact]
+    public void OpenCivitaiPost_WhenUrlNull_IsNoOpAndDoesNotThrow()
+    {
+        var job = new GenerationJob(MakeParameters());
+
+        var act = () => job.OpenCivitaiPostCommand.Execute(null);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void CivitaiState_StartsEmpty()
+    {
+        var job = new GenerationJob(MakeParameters());
+
+        job.CivitaiStatusMessage.Should().BeNull("the job card's CivitAI row must stay collapsed unless posting ran");
+        job.CivitaiPostUrl.Should().BeNull();
+    }
+
+    [Fact]
     public void Parameters_AreSnapshot_NotSharedWithTheOriginal()
     {
         var p = MakeParameters(prompt: "A");

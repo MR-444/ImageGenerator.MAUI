@@ -74,6 +74,26 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- CARD: CivitAI -->
+            <Border Style="{StaticResource Card}"
+                    VerticalOptions="Start">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="CivitAI" Style="{StaticResource CardTitle}" />
+                    <Label Text="Set the API key under API Tokens above (CivitAI tab). Posting needs the Media Write scope — a 'Full' key works; a free account is enough."
+                           Style="{StaticResource HelperText}" />
+                    <Button Text="Test connection"
+                            Command="{Binding TestCivitaiConnectionCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            HorizontalOptions="Start"
+                            SemanticProperties.Description="Verify the saved CivitAI API key"
+                            AutomationId="CivitaiTestConnectionButton" />
+                    <Label Text="{Binding CivitaiConnectionStatus}"
+                           Style="{StaticResource HelperText}"
+                           IsVisible="{Binding CivitaiConnectionStatus, Converter={StaticResource NonEmptyStringToBool}}"
+                           AutomationId="CivitaiConnectionStatusLabel" />
+                </VerticalStackLayout>
+            </Border>
+
             <Label Text="Changes are saved as you type — tokens to OS secure storage, the server URL to app preferences."
                    Style="{StaticResource HelperText}" />
 

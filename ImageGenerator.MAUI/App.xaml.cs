@@ -19,18 +19,21 @@ public partial class App
     private readonly IApiTokenStore _apiTokenStore;
     private readonly IPollinationsTokenStore _pollinationsTokenStore;
     private readonly IComfyUiAuthStore _comfyUiAuthStore;
+    private readonly ICivitaiTokenStore _civitaiTokenStore;
 
     public App(
         IUiStateStore uiStateStore,
         IApiTokenStore apiTokenStore,
         IPollinationsTokenStore pollinationsTokenStore,
-        IComfyUiAuthStore comfyUiAuthStore)
+        IComfyUiAuthStore comfyUiAuthStore,
+        ICivitaiTokenStore civitaiTokenStore)
     {
         InitializeComponent();
         _uiStateStore = uiStateStore;
         _apiTokenStore = apiTokenStore;
         _pollinationsTokenStore = pollinationsTokenStore;
         _comfyUiAuthStore = comfyUiAuthStore;
+        _civitaiTokenStore = civitaiTokenStore;
     }
 
     /// <summary>
@@ -85,6 +88,7 @@ public partial class App
             _apiTokenStore.FlushPendingWrites();
             _pollinationsTokenStore.FlushPendingWrites();
             _comfyUiAuthStore.FlushPendingWrites();
+            _civitaiTokenStore.FlushPendingWrites();
             CrashLogger.WriteShutdownLine();
         };
 

@@ -22,6 +22,12 @@ public interface IUiStateStore
     /// <summary>Null when never persisted — callers fall back to ModelConstants.ComfyUi.DefaultBaseUrl.</summary>
     string? LoadComfyUiBaseUrl();
     /// <summary>
+    /// The raw CivitAI model reference text (URL or version id) for gallery-targeted posting.
+    /// Persisted across sessions — unlike the post checkboxes — because the target model rarely
+    /// changes; the off-by-default checkbox still gates any actual upload. Null when never set.
+    /// </summary>
+    string? LoadCivitaiModelRef();
+    /// <summary>
     /// Per-workflow: checkpoints are architecture-bound, so one workflow's pick must never
     /// leak into another. Null when the user never explicitly picked one for this workflow.
     /// </summary>
@@ -37,6 +43,8 @@ public interface IUiStateStore
     void PersistResolution(string value, string? modelId);
     void PersistUseJsonPrompt(bool value);
     void PersistComfyUiBaseUrl(string value);
+    /// <inheritdoc cref="LoadCivitaiModelRef"/>
+    void PersistCivitaiModelRef(string value);
     /// <inheritdoc cref="LoadComfyUiCheckpoint"/>
     void PersistComfyUiCheckpoint(string value, string workflowName);
     /// <inheritdoc cref="LoadComfyUiPreset"/>

@@ -13,6 +13,7 @@ public sealed class UiStateStore : IUiStateStore
     private const string ResolutionKey = "imggen.last_resolution";
     private const string ComfyUiResolutionKey = "imggen.last_resolution.comfyui";
     private const string ComfyUiBaseUrlKey = "imggen.comfyui_base_url";
+    private const string CivitaiModelRefKey = "imggen.civitai_model_ref";
     private const string WindowBoundsKey = "imggen.window_bounds";
 
     private static readonly TimeSpan PromptDebounceDelay = TimeSpan.FromMilliseconds(500);
@@ -173,6 +174,19 @@ public sealed class UiStateStore : IUiStateStore
     {
         if (SafeSet(ComfyUiBaseUrlKey, value))
             _logger.LogDebug("UiStateStore.PersistComfyUiBaseUrl({Value})", Quote(value));
+    }
+
+    public string? LoadCivitaiModelRef()
+    {
+        var v = SafeGet(CivitaiModelRefKey);
+        _logger.LogDebug("UiStateStore.LoadCivitaiModelRef -> {Value}", Quote(v));
+        return v;
+    }
+
+    public void PersistCivitaiModelRef(string value)
+    {
+        if (SafeSet(CivitaiModelRefKey, value))
+            _logger.LogDebug("UiStateStore.PersistCivitaiModelRef({Value})", Quote(value));
     }
 
     public bool LoadUseJsonPrompt()

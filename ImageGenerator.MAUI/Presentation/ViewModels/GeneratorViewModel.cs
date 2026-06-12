@@ -9,6 +9,7 @@ using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.ComfyUi;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Enums;
+using ImageGenerator.MAUI.Core.Domain.Services;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
@@ -23,6 +24,7 @@ public partial class GeneratorViewModel : ObservableObject
     private readonly IJobRunner _jobRunner;
     private readonly IApiTokenStore _tokenStore;
     private readonly IPollinationsTokenStore _pollinationsTokenStore;
+    private readonly ICivitaiPostingService _civitaiPostingService;
     private readonly IUiStateStore _uiStateStore;
     private readonly IModelCatalogCoordinator _catalogCoordinator;
     private readonly IModelDescriptorRegistry _registry;
@@ -564,6 +566,8 @@ public partial class GeneratorViewModel : ObservableObject
         IApiTokenStore tokenStore,
         IPollinationsTokenStore pollinationsTokenStore,
         IComfyUiAuthStore comfyUiAuthStore,
+        ICivitaiTokenStore civitaiTokenStore,
+        ICivitaiPostingService civitaiPostingService,
         IUiStateStore uiStateStore,
         IModelCatalogCoordinator catalogCoordinator,
         IModelDescriptorRegistry registry,
@@ -575,6 +579,8 @@ public partial class GeneratorViewModel : ObservableObject
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
         _pollinationsTokenStore = pollinationsTokenStore ?? throw new ArgumentNullException(nameof(pollinationsTokenStore));
         if (comfyUiAuthStore is null) throw new ArgumentNullException(nameof(comfyUiAuthStore));
+        if (civitaiTokenStore is null) throw new ArgumentNullException(nameof(civitaiTokenStore));
+        _civitaiPostingService = civitaiPostingService ?? throw new ArgumentNullException(nameof(civitaiPostingService));
         _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
         _catalogCoordinator = catalogCoordinator ?? throw new ArgumentNullException(nameof(catalogCoordinator));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
@@ -690,6 +696,11 @@ public partial class GeneratorViewModel : ObservableObject
                         _uiStateStore.PersistResolution(_parameters.Resolution!, _parameters.Model);
                     }
                     break;
+                case nameof(ImageGenerationParameters.CivitaiModelRef):
+                    // Persist unconditionally: the launch restore writes the value just loaded,
+                    // which the store's skip-identical rule turns into a no-op.
+                    _uiStateStore.PersistCivitaiModelRef(_parameters.CivitaiModelRef ?? string.Empty);
+                    break;
                 case nameof(ImageGenerationParameters.Model):
                     ProviderFilter.SyncSelectionFromParameters(_parameters.Model);
                     if (!ProviderFilter.SuppressModelPersist) _uiStateStore.PersistModel(_parameters.Model);
@@ -732,6 +743,16 @@ public partial class GeneratorViewModel : ObservableObject
             helperText: "Optional. Sent verbatim as the Authorization header on every ComfyUI request "
                         + "(HTTP + progress WebSocket) — for reverse-proxied servers. Leave empty on a LAN.",
             store: comfyUiAuthStore,
+            syncToParameters: static _ => { }));
+        // No parameters slot either: CivitaiPostingService reads the store per request (posting
+        // happens after the job's parameter snapshot, and Test connection has no parameters).
+        TokenProviders.Add(new TokenProviderViewModel(
+            key: "civitai",
+            displayName: "CivitAI",
+            placeholder: "Paste your CivitAI API key…",
+            helperText: "Optional. Needed only for \"Post to CivitAI\". Create a Full API key at "
+                        + "civitai.com/user/account (a free account works). Stored in OS secure storage.",
+            store: civitaiTokenStore,
             syncToParameters: static _ => { }));
         _selectedTokenProvider = TokenProviders[0];
     }
@@ -822,6 +843,16 @@ public partial class GeneratorViewModel : ObservableObject
                     _ => StatusKind.Error
                 };
             });
+
+            // Post-save side effect, deliberately fire-and-forget: a slow CivitAI upload must
+            // not delay the next batch job, and its failure must never touch the job outcome
+            // above. Internal method so tests can await it directly.
+            if (outcome.Kind == JobOutcomeKind.Saved
+                && outcome.SavedPath is not null
+                && job.Parameters.PostToCivitai)
+            {
+                _ = PostJobToCivitaiAsync(job, outcome.SavedPath);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -851,6 +882,98 @@ public partial class GeneratorViewModel : ObservableObject
             });
             job.Cts.Dispose();
         }
+    }
+
+    internal async Task PostJobToCivitaiAsync(GenerationJob job, string savedPath)
+    {
+        DispatchToUi(() => job.CivitaiStatusMessage = "Posting to CivitAI…");
+        try
+        {
+            var meta = job.Parameters.CivitaiIncludeMeta
+                ? CivitaiMetaBuilder.Build(job.Parameters)
+                : null;
+            var modelVersionId = CivitaiModelReference.ParseVersionId(job.Parameters.CivitaiModelRef);
+            // Non-empty text that parses to nothing is a typo, not a "no model" choice — say so
+            // instead of silently posting to the profile.
+            var refNotRecognized =
+                !string.IsNullOrWhiteSpace(job.Parameters.CivitaiModelRef) && modelVersionId is null;
+
+            var result = await _civitaiPostingService.PostImageAsync(
+                savedPath, BuildCivitaiTitle(job.Prompt), meta, modelVersionId);
+
+            _logger.LogInformation(
+                "CivitAI post finished Success={Success} PostId={PostId} ModelVersionId={ModelVersionId}",
+                result.Success, result.PostId, modelVersionId);
+            DispatchToUi(() =>
+            {
+                job.CivitaiPostUrl = result.PostUrl;
+                job.CivitaiStatusMessage = result.Success
+                    ? refNotRecognized
+                        ? $"{result.Message} Model reference not recognized — posted without model link."
+                        : result.Message
+                    : $"CivitAI post failed: {result.Message}";
+            });
+        }
+        catch (Exception ex)
+        {
+            // Belt-and-braces: the service already returns failures as results; whatever still
+            // throws (a bug, an unexpected cancellation) must not take the app down from a
+            // fire-and-forget continuation — and the job stays Saved either way.
+            _logger.LogWarning(ex, "CivitAI posting threw Path={Path}", savedPath);
+            DispatchToUi(() => job.CivitaiStatusMessage = $"CivitAI post failed: {ex.Message}");
+        }
+    }
+
+    // Post title from the prompt: collapse whitespace, cut at a word boundary near 60 chars.
+    // Structured-JSON prompts (Ideogram / ComfyUI) would otherwise yield a raw
+    // '{"high_level_description":…' blob as the title — extract the human description field
+    // instead; when none is usable, return empty and the service omits the title entirely.
+    internal static string BuildCivitaiTitle(string prompt)
+    {
+        var text = prompt.TrimStart().StartsWith('{') ? ExtractJsonDescription(prompt) : prompt;
+
+        const int maxLength = 60;
+        var collapsed = string.Join(' ', (text ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (collapsed.Length <= maxLength) return collapsed;
+
+        var cut = collapsed.LastIndexOf(' ', maxLength);
+        return collapsed[..(cut > 0 ? cut : maxLength)] + "…";
+    }
+
+    private static string? ExtractJsonDescription(string jsonPrompt)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(jsonPrompt);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+            // Priority order matches the prompt schemas in use: the Ideogram4 workflows carry
+            // high_level_description; the rest are generic fallbacks for other JSON shapes.
+            foreach (var key in (string[])["high_level_description", "description", "caption", "prompt", "title"])
+            {
+                if (doc.RootElement.TryGetProperty(key, out var value)
+                    && value.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(value.GetString()))
+                {
+                    return value.GetString();
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Not valid JSON after all — no title is better than a brace blob.
+        }
+        return null;
+    }
+
+    [ObservableProperty]
+    private string? _civitaiConnectionStatus;
+
+    [RelayCommand]
+    private async Task TestCivitaiConnectionAsync()
+    {
+        CivitaiConnectionStatus = "Testing…";
+        var result = await _civitaiPostingService.TestConnectionAsync();
+        CivitaiConnectionStatus = result.Message;
     }
 
     private async Task FlashAsync(string message, int durationMs = 2500)
@@ -990,6 +1113,12 @@ public partial class GeneratorViewModel : ObservableObject
     {
         if (_uiStateLoaded) return;
         _uiStateLoaded = true;
+
+        var savedModelRef = _uiStateStore.LoadCivitaiModelRef();
+        if (!string.IsNullOrEmpty(savedModelRef))
+        {
+            Parameters.CivitaiModelRef = savedModelRef;
+        }
 
         var savedPrompt = _uiStateStore.LoadPrompt();
         if (!string.IsNullOrEmpty(savedPrompt))
