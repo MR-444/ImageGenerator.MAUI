@@ -168,7 +168,7 @@ public partial class MainPage
     {
         var message =
             $"Version {_viewModel.AppVersion}\n\n" +
-            "A hobby MAUI desktop app for Replicate-based image generation.\n\n" +
+            "A hobby MAUI desktop app for image generation via Replicate, Pollinations.ai, and your own ComfyUI server.\n\n" +
             "MIT License\n" +
             "https://github.com/MR-444/ImageGenerator.MAUI";
         await DisplayAlertAsync("About AI Image Generator", message, "OK");
