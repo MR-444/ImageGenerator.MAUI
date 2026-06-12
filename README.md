@@ -30,6 +30,8 @@ A Windows desktop image generation app built on .NET MAUI with three image provi
 
 ![Main page — settings cards on the left, Latest result hero preview and generation queue on the right, always-visible action bar with Generate (Ctrl+Enter) at the bottom](<documents/MainPage_Screenshot 2026-06-12.png>)
 
+![Ideogram structure editor — visual builder for the structured JSON prompt: description and style fields with example pickers, a layout grid for positioning text elements, and one-click Apply to prompt / Save JSON to file](<documents/Ideogram_structure_editor.png>)
+
 ![In-app gallery — tile grid with sort modes, live FileSystemWatcher updates, and a detail page with copyable metadata](<documents/Gallery_Screenshot 2026-05-04 193429.png>)
 
 ## 🖥️ Using the app (end users)
