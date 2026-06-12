@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:converters="clr-namespace:ImageGenerator.MAUI.Presentation.Converters"
+             xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
+             x:Class="ImageGenerator.MAUI.Presentation.Views.SettingsPage"
+             x:DataType="vm:GeneratorViewModel"
+             Title="Settings"
+             Shell.NavBarIsVisible="True"
+             Padding="0">
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24"
+                             Spacing="20"
+                             MaximumWidthRequest="560"
+                             HorizontalOptions="Start">
+
+            <!-- CARD: API Tokens (one row per provider, switch via the picker) -->
+            <Border Style="{StaticResource Card}"
+                    VerticalOptions="Start">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="API Tokens" Style="{StaticResource CardTitle}" />
+                    <Label Text="Each provider has its own token slot, stored separately in OS secure storage. Switch tabs to edit a different one."
+                           Style="{StaticResource HelperText}" />
+
+                    <Picker ItemsSource="{Binding TokenProviders}"
+                            SelectedItem="{Binding SelectedTokenProvider}"
+                            AutomationId="TokenProviderPicker">
+                        <Picker.ItemDisplayBinding>
+                            <Binding Path="DisplayName" x:DataType="vm:TokenProviderViewModel" />
+                        </Picker.ItemDisplayBinding>
+                    </Picker>
+
+                    <Label Text="{Binding SelectedTokenProvider.HelperText}"
+                           Style="{StaticResource HelperText}" />
+
+                    <!-- Same split binding as the prompt Editor: WinUI TwoWay Text bindings can stop
+                         pushing view->VM after paste/clear/paste, and a token field is all paste. -->
+                    <Entry Text="{Binding SelectedTokenProvider.Value, Mode=OneWay}"
+                           TextChanged="OnTokenTextChanged"
+                           Placeholder="{Binding SelectedTokenProvider.Placeholder}"
+                           IsPassword="True"
+                           SemanticProperties.Description="API token for the selected provider"
+                           AutomationId="ApiTokenEntry" />
+
+                    <Button Text="{Binding SelectedTokenProvider.ForgetButtonText}"
+                            Command="{Binding ForgetSelectedTokenCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            IsEnabled="{Binding SelectedTokenProvider.Value, Converter={StaticResource NonEmptyStringToBool}}"
+                            HorizontalOptions="Start"
+                            SemanticProperties.Description="Clear the selected provider's saved token from secure storage"
+                            AutomationId="ForgetTokenButton" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- CARD: ComfyUI server -->
+            <Border Style="{StaticResource Card}"
+                    VerticalOptions="Start">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="ComfyUI server" Style="{StaticResource CardTitle}" />
+                    <!-- Non-secret server setting, not a token: plain Preferences-backed Entry. -->
+                    <Label Text="URL of your ComfyUI instance (no token needed) — local default, or a LAN host started with --listen."
+                           Style="{StaticResource HelperText}" />
+                    <Entry Text="{Binding ComfyUiBaseUrl, Mode=TwoWay}"
+                           Placeholder="http://127.0.0.1:8188"
+                           Keyboard="Url"
+                           SemanticProperties.Description="Base URL of the ComfyUI server"
+                           AutomationId="ComfyUiBaseUrlEntry" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Label Text="Changes are saved as you type — tokens to OS secure storage, the server URL to app preferences."
+                   Style="{StaticResource HelperText}" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

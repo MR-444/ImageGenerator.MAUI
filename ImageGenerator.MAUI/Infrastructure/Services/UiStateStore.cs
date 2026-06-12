@@ -1,3 +1,4 @@
+using System.Globalization;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui.Storage;
@@ -12,6 +13,7 @@ public sealed class UiStateStore : IUiStateStore
     private const string ResolutionKey = "imggen.last_resolution";
     private const string ComfyUiResolutionKey = "imggen.last_resolution.comfyui";
     private const string ComfyUiBaseUrlKey = "imggen.comfyui_base_url";
+    private const string WindowBoundsKey = "imggen.window_bounds";
 
     private static readonly TimeSpan PromptDebounceDelay = TimeSpan.FromMilliseconds(500);
 
@@ -132,6 +134,33 @@ public sealed class UiStateStore : IUiStateStore
     // Per-workflow like checkpoints: the labels are the workflow's own CustomCombo options.
     private static string ComfyUiPresetKeyFor(string workflowName) =>
         $"imggen.comfyui_preset.{workflowName}";
+
+    public (double Width, double Height, double X, double Y)? LoadWindowBounds()
+    {
+        var raw = SafeGet(WindowBoundsKey);
+        _logger.LogDebug("UiStateStore.LoadWindowBounds -> {Value}", Quote(raw));
+        if (raw is null) return null;
+
+        // "w;h;x;y" in invariant culture. Anything malformed (old format, manual edit,
+        // culture drift) degrades to "never persisted" rather than throwing at startup.
+        var parts = raw.Split(';');
+        if (parts.Length != 4) return null;
+        var values = new double[4];
+        for (var i = 0; i < 4; i++)
+        {
+            if (!double.TryParse(parts[i], NumberStyles.Float, CultureInfo.InvariantCulture, out values[i])
+                || !double.IsFinite(values[i]))
+                return null;
+        }
+        return (values[0], values[1], values[2], values[3]);
+    }
+
+    public void PersistWindowBounds(double width, double height, double x, double y)
+    {
+        var value = string.Create(CultureInfo.InvariantCulture, $"{width};{height};{x};{y}");
+        if (SafeSet(WindowBoundsKey, value))
+            _logger.LogDebug("UiStateStore.PersistWindowBounds({Value})", value);
+    }
 
     public string? LoadComfyUiBaseUrl()
     {

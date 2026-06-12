@@ -117,6 +117,36 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
+    public async Task GenerateImage_SavedOutcome_SetsLatestCompletedJob()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        _viewModel.Parameters.Prompt = "test prompt";
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
+
+        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+
+        // Drives the hero "Latest result" preview on the main page.
+        _viewModel.LatestCompletedJob.Should().BeSameAs(_viewModel.Jobs[0]);
+    }
+
+    [Fact]
+    public async Task GenerateImage_FailedOutcome_LeavesLatestCompletedJobNull()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        _viewModel.Parameters.Prompt = "test prompt";
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .ReturnsAsync(new JobOutcome(JobOutcomeKind.Failed, null, "boom"));
+
+        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+
+        // A failed/canceled job must never become the hero image.
+        _viewModel.LatestCompletedJob.Should().BeNull();
+    }
+
+    [Fact]
     public async Task GenerateImage_WithMissingFields_ShouldShowError()
     {
         _viewModel.Parameters.ApiToken = "";

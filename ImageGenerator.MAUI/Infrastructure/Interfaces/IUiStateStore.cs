@@ -41,6 +41,14 @@ public interface IUiStateStore
     void PersistComfyUiCheckpoint(string value, string workflowName);
     /// <inheritdoc cref="LoadComfyUiPreset"/>
     void PersistComfyUiPreset(string value, string workflowName);
+    /// <summary>
+    /// Last window size/position in DIPs. Null when never persisted or unparseable —
+    /// callers fall back to a screen-relative first-launch size. Values may describe a
+    /// monitor that no longer exists; callers must clamp to the current screen.
+    /// </summary>
+    (double Width, double Height, double X, double Y)? LoadWindowBounds();
+    /// <inheritdoc cref="LoadWindowBounds"/>
+    void PersistWindowBounds(double width, double height, double x, double y);
     /// <summary>Writes a still-pending debounced prompt immediately. Call on app shutdown.</summary>
     void FlushPendingWrites();
 }

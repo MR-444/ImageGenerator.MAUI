@@ -358,4 +358,55 @@ public class UiStateStoreTests
 
         act.Should().NotThrow();
     }
+
+    // Window bounds persist as "w;h;x;y" (invariant culture, DIPs) under a single key.
+    // Anything malformed must degrade to null = "never persisted", never throw at startup.
+    private const string WindowBoundsKey = "imggen.window_bounds";
+
+    [Fact]
+    public void LoadWindowBounds_KeyMissing_ReturnsNull()
+    {
+        _sut.LoadWindowBounds().Should().BeNull();
+    }
+
+    [Fact]
+    public void WindowBounds_RoundTrip_PreservesFractionalDips()
+    {
+        _sut.PersistWindowBounds(2064.5, 835.25, 114.5, 0);
+
+        _sut.LoadWindowBounds().Should().Be((2064.5, 835.25, 114.5, 0d));
+    }
+
+    [Fact]
+    public void PersistWindowBounds_WritesInvariantCulture()
+    {
+        // A comma decimal separator (de-DE) would corrupt the ';'-separated format.
+        _sut.PersistWindowBounds(1500.5, 1000, 10, 20);
+
+        _preferences.Get(WindowBoundsKey, string.Empty).Should().Be("1500.5;1000;10;20");
+    }
+
+    [Theory]
+    [InlineData("garbage")]
+    [InlineData("1;2;3")]
+    [InlineData("1;2;3;4;5")]
+    [InlineData("1;zwei;3;4")]
+    [InlineData("NaN;2;3;4")]
+    [InlineData("Infinity;2;3;4")]
+    public void LoadWindowBounds_Malformed_ReturnsNull(string raw)
+    {
+        _preferences.Seed(WindowBoundsKey, raw);
+
+        _sut.LoadWindowBounds().Should().BeNull();
+    }
+
+    [Fact]
+    public void PersistWindowBounds_SetThrows_SwallowedSilently()
+    {
+        _preferences.ThrowOnSet = new InvalidOperationException("backend down");
+
+        var act = () => _sut.PersistWindowBounds(1, 2, 3, 4);
+
+        act.Should().NotThrow();
+    }
 }

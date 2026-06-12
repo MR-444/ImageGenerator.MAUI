@@ -55,6 +55,46 @@ public partial class MainPage
         // activated" line as pointer vs keyboard vs neither (= programmatic).
         _generatePointerPressedHandler = new Microsoft.UI.Xaml.Input.PointerEventHandler(OnGenerateButtonPointerPressed);
         GenerateButton.HandlerChanged += OnGenerateButtonHandlerChanged;
+        HandlerChanged += OnPageHandlerChanged;
+    }
+
+    // --- Ctrl+Enter = Generate (page-root tunnel handler) ---
+
+    private Microsoft.UI.Xaml.UIElement? _pageRoot;
+
+    // Page-scoped: fires only while focus is inside MainPage (ContentDialogs have their own
+    // XAML root, so the About/batch-confirm dialogs never reach this handler). PreviewKeyDown
+    // TUNNELS from the root before the focused element sees the key. A KeyboardAccelerator on
+    // the Generate button was tried first and provably never fired (zero Invoked log lines)
+    // while the raw Enter invoked whatever control had focus — don't reintroduce it.
+    private void OnPageHandlerChanged(object? sender, EventArgs e)
+    {
+        if (_pageRoot is not null)
+        {
+            _pageRoot.PreviewKeyDown -= OnPagePreviewKeyDown;
+            _pageRoot = null;
+        }
+        if (Handler?.PlatformView is Microsoft.UI.Xaml.UIElement root)
+        {
+            _pageRoot = root;
+            root.PreviewKeyDown += OnPagePreviewKeyDown;
+        }
+    }
+
+    private void OnPagePreviewKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key != Windows.System.VirtualKey.Enter) return;
+        var ctrl = Microsoft.UI.Input.InputKeyboardSource
+            .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+        if (!ctrl) return;        // plain Enter stays with the focused control (Editor newline)
+        e.Handled = true;         // no newline, no focused-button invoke
+        // The IsValid gate is mandatory: GenerateImageCommand declares no CanExecute (only the
+        // button's IsEnabled binding gates it). Activation forensics: this path raises no
+        // PointerPressed/PreviewKeyDown on the button, so this log line classifies it.
+        _logger.LogInformation("Generate hotkey Ctrl+Enter IsValid={IsValid}", _viewModel.IsValid);
+        if (!_viewModel.IsValid) return;
+        _viewModel.GenerateImageCommand.Execute(null);
     }
 
     // --- Generate-button activation instrumentation (diagnostics only, never sets Handled) ---
@@ -116,15 +156,6 @@ public partial class MainPage
     private void OnPromptTextChanged(object? sender, TextChangedEventArgs e)
     {
         _viewModel.Parameters.Prompt = e.NewTextValue ?? string.Empty;
-    }
-
-    // Same split-binding pattern for the API-token Entry. Provider switches are safe: the
-    // Picker swaps SelectedTokenProvider BEFORE the binding rewrites the Entry text, so this
-    // echoes the new provider's own value (the [ObservableProperty] equality check stops it).
-    private void OnTokenTextChanged(object? sender, TextChangedEventArgs e)
-    {
-        if (_viewModel.SelectedTokenProvider is { } provider)
-            provider.Value = e.NewTextValue ?? string.Empty;
     }
 
     // Code-behind because RelativeSource lookups inside a CollectionView.ItemTemplate

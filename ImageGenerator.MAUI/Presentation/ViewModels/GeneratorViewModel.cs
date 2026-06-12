@@ -101,6 +101,12 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private string? _jsonPromptStateText;
 
+    // The newest successfully saved job — drives the main page's hero "Latest result"
+    // preview. Only Saved outcomes update it (see RunJobAsync); canceled/failed jobs never
+    // become the hero.
+    [ObservableProperty]
+    private GenerationJob? _latestCompletedJob;
+
     // Non-secret server setting (first of its kind) — Preferences-backed, not a token store.
     // The ComfyUI generation service re-reads the store per request, so edits apply instantly.
     [ObservableProperty]
@@ -803,6 +809,7 @@ public partial class GeneratorViewModel : ObservableObject
             DispatchToUi(() =>
             {
                 job.ResultPath = outcome.SavedPath;
+                if (outcome.SavedPath is not null) LatestCompletedJob = job;
                 job.StatusMessage = outcome.Message;
                 job.StatusKind = outcome.Kind switch
                 {
@@ -890,6 +897,20 @@ public partial class GeneratorViewModel : ObservableObject
         catch (Exception ex)
         {
             SetStatus($"Couldn't open Gallery: {ex.Message}", StatusKind.Error);
+        }
+    }
+
+    [RelayCommand]
+    private async Task OpenSettingsAsync()
+    {
+        // Same Shell.Current rationale as OpenGalleryAsync above.
+        try
+        {
+            await Shell.Current.GoToAsync("settings");
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Couldn't open Settings: {ex.Message}", StatusKind.Error);
         }
     }
 

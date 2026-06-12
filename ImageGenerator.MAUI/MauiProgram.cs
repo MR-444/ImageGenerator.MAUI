@@ -147,6 +147,9 @@ public static class MauiProgram
         builder.Services.AddTransient<GalleryPage>();
         builder.Services.AddTransient<GalleryItemDetailPage>();
         builder.Services.AddTransient<IdeogramStructureEditorPage>();
+        // SettingsPage binds the singleton GeneratorViewModel (tokens drive IsValid there);
+        // the page itself is cheap to rebuild per navigation.
+        builder.Services.AddTransient<SettingsPage>();
 
         return builder.Build();
     }
