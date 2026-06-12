@@ -1,6 +1,6 @@
 # 🎨 Image Generator MAUI
 
-A Windows desktop image generation app built on .NET MAUI with three image providers — **Replicate** (Flux, Replicate-hosted OpenAI, Google, Ideogram), **Pollinations.ai** (Flux, Zimage, Qwen Image, plus any free image model their `/models` endpoint surfaces), and **ComfyUI** (your own local or LAN server — every API-format workflow export you drop into a folder becomes a selectable model). Configure each provider once on the Settings page, then route requests just by picking a model; saved images carry the full prompt and generation parameters as EXIF / PNG-Comment metadata so every output is reproducible.
+A Windows desktop image generation app built on .NET MAUI with three image providers — **Replicate** (Flux, Replicate-hosted OpenAI, Google, Ideogram), **Pollinations.ai** (Flux, Zimage, Qwen Image, plus any free image model their `/models` endpoint surfaces), and **ComfyUI** (your own local or LAN server — every API-format workflow export you drop into a folder becomes a selectable model). Configure each provider once on the Settings page, then route requests just by picking a model; saved images carry the full prompt and generation parameters as EXIF / PNG-Comment metadata so every output is reproducible. Optionally, a checkbox publishes each finished image straight to **CivitAI** — into a model's gallery, generation data included.
 
 ## 🌟 Features
 
@@ -12,6 +12,7 @@ A Windows desktop image generation app built on .NET MAUI with three image provi
 - **Concurrent generation queue** — click Generate (or hit Ctrl+Enter) while a previous job is still running; each click snapshots the current parameters into its own in-flight job. The results pane shows per-job prompt, status, spinner, thumbnail, and independent Cancel / Open / Show-in-folder / Use-as-input actions, scrolling independently of the settings.
 - **Batch from textfile** — point **Import prompts…** at a `.txt` of prompts separated by lines containing only `---`. Lines starting with `#` are ignored, so you can label or disable prompts without deleting them. The batch runs sequentially with the currently-selected model and parameters; failed prompts don't abort the queue. **Cancel batch** drains the remaining queue but lets the in-flight job finish — once a Replicate prediction is created, you're paying for it either way. 100-prompt hard cap.
 - **In-app gallery** — browse previously generated images without leaving the app. Tile grid with sortable order (newest/oldest, name A→Z / Z→A, largest/smallest), live updates via `FileSystemWatcher` when new images are saved or removed, and a detail page with a larger preview, copyable metadata, and one-click **Use as input**, **Open in viewer**, and **Show in folder** actions. Thumbnails come from the Windows shell cache so a directory of multi-megabyte PNGs doesn't blow process memory.
+- **Post to CivitAI** — check **Post to CivitAI** and every finished image is published on [CivitAI](https://civitai.com) in one step, no manual upload or publish click. Paste a model page URL into the optional **Post to model gallery** field (remembered across sessions) and posts land in that model's gallery; an opt-in sub-checkbox attaches the generation data (prompt, seed, model) as structured metadata — the saved local file is never modified. Posting is a fire-and-forget side effect: a slow or failed post never touches the generation job, it just reports on the job card (with an **Open post** link on success). Works with a free CivitAI account — see [Posting to CivitAI](#posting-to-civitai-optional).
 - **Persisted UI state** — the last prompt, selected model, resolution, and window size/position are restored on next launch (per-user `Preferences`). Pick up where you left off.
 - **Dynamic model catalog** — "Refresh Models" queries Replicate's `text-to-image` collection (filtered to `black-forest-labs`, `openai`, and `google` owners) **and** Pollinations' `/models` endpoint (image-only, free-tier) in parallel, then merges with the hardcoded seed entries (the Ideogram V4 family is pinned here — Replicate's collection doesn't list it). Every Replicate-hosted model groups under a single **Replicate** entry in the provider filter. New models surface without recompiling. The catalog is cached to `FileSystem.AppDataDirectory/model-catalog.json` and restored on launch.
 - **Flux 2 family** — `flux-2-klein-4b`, `flux-2-flex`, `flux-2-pro`, `flux-2-max` with per-model payload shaping and optional `images` input
@@ -48,7 +49,7 @@ If you'd rather not click through a SmartScreen warning, you can always [build f
 
 ### Picking a provider
 
-The **Settings** button (top right) opens the configuration page. Its **API Tokens** card has a provider dropdown — switch between **Replicate**, **Pollinations**, and **ComfyUI** to edit each slot independently (ComfyUI needs a server base URL instead of a token). All slots are stored separately and save as you type, so you can keep them all configured and just flip the selected model on the main page to route requests one way or the other.
+The **Settings** button (top right) opens the configuration page. Its **API Tokens** card has a provider dropdown — switch between **Replicate**, **Pollinations**, **ComfyUI**, and **CivitAI** to edit each slot independently (ComfyUI needs a server base URL instead of a token; the CivitAI slot is for publishing finished images, not generating). All slots are stored separately and save as you type, so you can keep them all configured and just flip the selected model on the main page to route requests one way or the other.
 
 ### Getting a Replicate API token
 
@@ -99,6 +100,24 @@ So the minimum a workflow needs: a `CLIPTextEncode` with a literal text prompt a
 
 Generations run on your GPU and can take minutes; the job card shows live per-step progress streamed over the server's WebSocket. Canceling in the app removes pending jobs from the server queue and interrupts the active render when it's the app's own job — no orphaned GPU work.
 
+### Posting to CivitAI (optional)
+
+Check **Post to CivitAI** in the output options and every finished image is published on your CivitAI profile the moment it's saved — one step, no manual upload or publish click. A free account is enough.
+
+**Setup (once):**
+
+1. On [civitai.com/user/account](https://civitai.com/user/account), create an API key. A **Full** key works; a scoped key needs at least **Media Write**.
+2. In **Settings**, pick "CivitAI" in the API Tokens dropdown and paste the key (same per-slot DPAPI secure storage as the other providers).
+3. Click **Test connection** on the CivitAI card — it should greet you by username.
+
+**Per generation:**
+
+- **Post to model gallery (optional)** — paste a CivitAI model page URL (it carries `modelVersionId=…`) or the bare version id, and the post is associated with that model, appearing in its gallery. The field is remembered across sessions; leave it empty for a plain profile post.
+- **Include generation data** — attaches prompt, seed, and model as structured metadata so the post shows proper generation info on CivitAI. This travels in the API call only; the saved local file keeps the app's own metadata format untouched. (Note: CivitAI never parses metadata out of API-uploaded files — structured metadata is the only way generation data reaches a post.)
+- The post title is derived from the prompt (for structured-JSON prompts, from its description field); the upload is the saved file, byte-identical.
+
+Posting runs after the image is safely on disk and never blocks or fails the generation itself — the job card gets its own status line and an **Open post** button. The checkboxes reset to off on every launch, so nothing is ever published by accident. Under the hood this uses CivitAI's official [MCP server](https://mcp.civitai.com/) for the upload plus one direct API call for the post itself — plain HTTP either way, your key never goes anywhere but civitai.com.
+
 ### Costs
 
 **Replicate**: roughly **$0.003 – $0.05** per generation depending on the model — Flux Pro is on the cheaper end; `gpt-image-1.5` at high quality and `nano-banana-2` at 4K land on the higher end. See [replicate.com/pricing](https://replicate.com/pricing) for current per-model rates. Pay-as-you-go — no monthly commitment.
@@ -136,7 +155,7 @@ Click **Cancel batch** at any time to stop the queue from starting any further p
 
 ### Reading back the embedded metadata
 
-The app embeds the full prompt and generation parameters into the saved file so you can recover the recipe months later. For **PNG** the metadata lives in the standard `Comment` text chunk; for **JPG/WebP** it's written as EXIF `UserComment`. The fastest way to inspect it is the in-app gallery's **Show metadata** button (also lets you copy it to the clipboard); externally, **[MediaInfo](https://mediaarea.net/en/MediaInfo)** (GUI + CLI, cross-platform, free) or `exiftool` work too. Besides the prompt and seed you'll see the actual pixel dimensions produced by the API and the model-specific options (GPT quality/background/moderation/input-fidelity, nano-banana resolution, Flux Ultra raw/image-prompt-strength, Ideogram resolution/JSON-mode/copyright-detection) so two people with the metadata can reproduce the same image.
+The app embeds the full prompt and generation parameters into the saved file so you can recover the recipe months later. For **PNG** the metadata lives in the standard `Comment` text chunk; for **JPG/WebP** it's written as EXIF `UserComment`. (CivitAI posting doesn't rely on this — it sends the generation data as structured fields in the API call, because CivitAI ignores file metadata on API uploads.) The fastest way to inspect it is the in-app gallery's **Show metadata** button (also lets you copy it to the clipboard); externally, **[MediaInfo](https://mediaarea.net/en/MediaInfo)** (GUI + CLI, cross-platform, free) or `exiftool` work too. Besides the prompt and seed you'll see the actual pixel dimensions produced by the API and the model-specific options (GPT quality/background/moderation/input-fidelity, nano-banana resolution, Flux Ultra raw/image-prompt-strength, Ideogram resolution/JSON-mode/copyright-detection) so two people with the metadata can reproduce the same image.
 
 ## 🛠️ Technologies
 
@@ -209,7 +228,7 @@ ImageGenerator.MAUI/
 dotnet test
 ```
 
-784 tests covering: model factory payload shapes, the ComfyUI provider (workflow patcher incl. seed re-roll / `%date%` expansion / structured-JSON targeting, the shipped sample workflow's contract, catalog folder scan, HTTP service flows), Replicate service HTTP flows (via Refit mocks), the `NullSkippingDictionaryConverter`, model catalog filtering and persistence (both Replicate + Pollinations branches), the Ideogram V4 payload (prompt vs `json_prompt` string, resolution omit-on-`Auto`, PNG-locked output, structured-JSON validation), image file naming + EXIF round-trip, GeneratorViewModel commands and state machine (including batch order, partial failure, distinct seeds, Cancel-batch leaves the in-flight job alone, the latest-result hero tracking, and the tabbed token slots stay independent across providers), UI-state persistence (prompt debounce, per-family resolution keys, window bounds round-trip incl. malformed-value fallback), prompt batch parser (delimiter, comments, multi-line, BOM, CRLF, hard-cap), GalleryService enumeration + metadata reads + partial-write guard, GalleryViewModel sort modes + watcher debounce, GalleryItemDetailViewModel actions, and CrashLogger smoke + concurrency.
+842 tests covering: model factory payload shapes, the ComfyUI provider (workflow patcher incl. seed re-roll / `%date%` expansion / structured-JSON targeting, the shipped sample workflow's contract, catalog folder scan, HTTP service flows), Replicate service HTTP flows (via Refit mocks), the `NullSkippingDictionaryConverter`, model catalog filtering and persistence (both Replicate + Pollinations branches), the Ideogram V4 payload (prompt vs `json_prompt` string, resolution omit-on-`Auto`, PNG-locked output, structured-JSON validation), image file naming + EXIF round-trip, the CivitAI posting pipeline (JSON-RPC envelope + Bearer auth, upload→create ordering, structured meta and model-gallery association, model-URL parsing, JSON-prompt title derivation, the local file staying byte-identical, failures never demoting a saved job), GeneratorViewModel commands and state machine (including batch order, partial failure, distinct seeds, Cancel-batch leaves the in-flight job alone, the latest-result hero tracking, and the tabbed token slots stay independent across providers), UI-state persistence (prompt debounce, per-family resolution keys, window bounds round-trip incl. malformed-value fallback), prompt batch parser (delimiter, comments, multi-line, BOM, CRLF, hard-cap), GalleryService enumeration + metadata reads + partial-write guard, GalleryViewModel sort modes + watcher debounce, GalleryItemDetailViewModel actions, and CrashLogger smoke + concurrency.
 
 ## 📱 Supported Platforms
 
