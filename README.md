@@ -1,17 +1,18 @@
 # 🎨 Image Generator MAUI
 
-A Windows desktop image generation app built on .NET MAUI with three image providers — **Replicate** (Flux, Replicate-hosted OpenAI, Google, Ideogram), **Pollinations.ai** (Flux, Zimage, Qwen Image, plus any free image model their `/models` endpoint surfaces), and **ComfyUI** (your own local or LAN server — every API-format workflow export you drop into a folder becomes a selectable model). Switch providers in-app via a tabbed token picker; saved images carry the full prompt and generation parameters as EXIF / PNG-Comment metadata so every output is reproducible.
+A Windows desktop image generation app built on .NET MAUI with three image providers — **Replicate** (Flux, Replicate-hosted OpenAI, Google, Ideogram), **Pollinations.ai** (Flux, Zimage, Qwen Image, plus any free image model their `/models` endpoint surfaces), and **ComfyUI** (your own local or LAN server — every API-format workflow export you drop into a folder becomes a selectable model). Configure each provider once on the Settings page, then route requests just by picking a model; saved images carry the full prompt and generation parameters as EXIF / PNG-Comment metadata so every output is reproducible.
 
 ## 🌟 Features
 
 - Windows 10/11 desktop (MAUI Windows target, `net10.0-windows10.0.22621.0`)
-- **Three providers, one app** — switch between Replicate, Pollinations.ai, and ComfyUI via a tabbed token picker. Each provider's token persists independently in OS secure storage; anonymous Pollinations also works (just rate-limited). The active provider is inferred from the selected model, so picking a `pollinations/...` model routes to Pollinations without further clicks. Extensible: adding another provider is one entry in the `TokenProviders` collection — no XAML changes.
+- **Desktop-grade layout** — settings cards on the left, a results pane on the right (the newest render shows as a large **Latest result** preview with tap-to-open / Use-as-input / Show-in-folder, the job queue below it), and an always-visible bottom action bar with Generate, batch import, output folder, and gallery — nothing scrolls out of reach. **Ctrl+Enter generates** from anywhere on the page, including mid-typing in the prompt box. The window remembers its size and position between launches; first launch sizes itself to your screen.
+- **Three providers, one app** — switch between Replicate, Pollinations.ai, and ComfyUI on the **Settings** page (tabbed token picker). Each provider's token persists independently in OS secure storage; anonymous Pollinations also works (just rate-limited). The active provider is inferred from the selected model, so picking a `pollinations/...` model routes to Pollinations without further clicks. Extensible: adding another provider is one entry in the `TokenProviders` collection — no XAML changes.
   - **Pollinations.ai** — `flux`, `zimage`, `qwen-image` seeded offline; **Refresh Models** fetches `gen.pollinations.ai/models` and surfaces any additional free image models (`output_modalities` includes `image` AND not `paid_only`). Optional Bearer token from [auth.pollinations.ai](https://auth.pollinations.ai) raises the rate limit from 1 req / 15 s anonymous → 1 req / 5 s on the Seed tier. Seeds and pixel parameters are clamped to the documented bounds (e.g. seed ≤ `2147483647`, the positive int32 max — Replicate's wider uint32 range still works unaffected).
   - **ComfyUI (local / LAN)** — point the app at your own ComfyUI server (no token, no cloud). Workflows-as-models: every API-format workflow JSON in `Pictures\ImageGenerator.MAUI\comfy-workflows\` appears in the model picker under provider "ComfyUI". The app patches your prompt (plain text or Ideogram-style structured JSON) into the exported graph, re-rolls every literal seed per run (API submissions don't randomize server-side), applies aspect ratio + megapixels when the workflow has a `ResolutionSelector` node, and expands `%date:...%` filename tokens the server would otherwise choke on. A ready-to-use [sample workflow](comfy-workflows/Ideogram4-Sample.json) (Ideogram 4, stock ComfyUI nodes only) ships in this repo — see [Generating via your own ComfyUI server](#generating-via-your-own-comfyui-server).
-- **Concurrent generation queue** — click Generate while a previous job is still running; each click snapshots the current parameters into its own in-flight job. A scrollable queue below the form shows per-job prompt, status, spinner, thumbnail, and independent Cancel / Open / Show-in-folder / Use-as-input actions.
+- **Concurrent generation queue** — click Generate (or hit Ctrl+Enter) while a previous job is still running; each click snapshots the current parameters into its own in-flight job. The results pane shows per-job prompt, status, spinner, thumbnail, and independent Cancel / Open / Show-in-folder / Use-as-input actions, scrolling independently of the settings.
 - **Batch from textfile** — point **Import prompts…** at a `.txt` of prompts separated by lines containing only `---`. Lines starting with `#` are ignored, so you can label or disable prompts without deleting them. The batch runs sequentially with the currently-selected model and parameters; failed prompts don't abort the queue. **Cancel batch** drains the remaining queue but lets the in-flight job finish — once a Replicate prediction is created, you're paying for it either way. 100-prompt hard cap.
 - **In-app gallery** — browse previously generated images without leaving the app. Tile grid with sortable order (newest/oldest, name A→Z / Z→A, largest/smallest), live updates via `FileSystemWatcher` when new images are saved or removed, and a detail page with a larger preview, copyable metadata, and one-click **Use as input**, **Open in viewer**, and **Show in folder** actions. Thumbnails come from the Windows shell cache so a directory of multi-megabyte PNGs doesn't blow process memory.
-- **Persisted UI state** — the last prompt and selected model are restored on next launch (per-user `Preferences`). Pick up where you left off.
+- **Persisted UI state** — the last prompt, selected model, resolution, and window size/position are restored on next launch (per-user `Preferences`). Pick up where you left off.
 - **Dynamic model catalog** — "Refresh Models" queries Replicate's `text-to-image` collection (filtered to `black-forest-labs`, `openai`, and `google` owners) **and** Pollinations' `/models` endpoint (image-only, free-tier) in parallel, then merges with the hardcoded seed entries (the Ideogram V4 family is pinned here — Replicate's collection doesn't list it). Every Replicate-hosted model groups under a single **Replicate** entry in the provider filter. New models surface without recompiling. The catalog is cached to `FileSystem.AppDataDirectory/model-catalog.json` and restored on launch.
 - **Flux 2 family** — `flux-2-klein-4b`, `flux-2-flex`, `flux-2-pro`, `flux-2-max` with per-model payload shaping and optional `images` input
 - **OpenAI** — `openai/gpt-image-1.5` and `openai/gpt-image-2` (via Replicate). The UI exposes the model-specific knobs: `quality`, `background` (incl. transparent PNGs), `moderation`, `input_fidelity`.
@@ -27,9 +28,7 @@ A Windows desktop image generation app built on .NET MAUI with three image provi
 
 ## 📸 Screenshots
 
-![Initial state — three-column layout: API token + input images, prompt + output settings, run/result column](<documents/Initial_Screenshot 2026-05-04 194431.png>)
-
-![After generation — completed job card with thumbnail, status, and per-job Use as input / Open / Show in folder actions](<documents/Result_Screenshot 2026-05-04 1941259.png>)
+![Main page — settings cards on the left, Latest result hero preview and generation queue on the right, always-visible action bar with Generate (Ctrl+Enter) at the bottom](<documents/MainPage_Screenshot 2026-06-12.png>)
 
 ![In-app gallery — tile grid with sort modes, live FileSystemWatcher updates, and a detail page with copyable metadata](<documents/Gallery_Screenshot 2026-05-04 193429.png>)
 
@@ -47,7 +46,7 @@ If you'd rather not click through a SmartScreen warning, you can always [build f
 
 ### Picking a provider
 
-The **API Tokens** card at the top of the form has a provider dropdown — switch between **Replicate**, **Pollinations**, and **ComfyUI** to edit each slot independently (the ComfyUI slot holds a server base URL instead of a token). All slots are stored separately, so you can keep them all configured and just flip the selected model to route requests one way or the other.
+The **Settings** button (top right) opens the configuration page. Its **API Tokens** card has a provider dropdown — switch between **Replicate**, **Pollinations**, and **ComfyUI** to edit each slot independently (ComfyUI needs a server base URL instead of a token). All slots are stored separately and save as you type, so you can keep them all configured and just flip the selected model on the main page to route requests one way or the other.
 
 ### Getting a Replicate API token
 
@@ -56,7 +55,7 @@ The Replicate branch covers the Flux family, the OpenAI-hosted `gpt-image-1.5` /
 1. Sign up at [replicate.com](https://replicate.com).
 2. Go to **Account → API tokens** (or directly [replicate.com/account/api-tokens](https://replicate.com/account/api-tokens)).
 3. Create a token, copy it.
-4. With "Replicate" selected in the API Tokens picker, paste it into the **API Token** field. It's stored locally with Windows `SecureStorage` (DPAPI, per-user) — never leaves your machine except to call Replicate.
+4. In **Settings**, with "Replicate" selected in the API Tokens picker, paste it into the **API Token** field. It's stored locally with Windows `SecureStorage` (DPAPI, per-user) — never leaves your machine except to call Replicate.
 
 ### Getting a Pollinations token (optional)
 
@@ -64,7 +63,7 @@ Pollinations works anonymously — pick a `pollinations/...` model in the picker
 
 1. Sign up at [auth.pollinations.ai](https://auth.pollinations.ai).
 2. Generate a token in your account dashboard.
-3. With "Pollinations" selected in the API Tokens picker, paste it into the field. Same DPAPI-backed secure storage as the Replicate slot, just keyed independently.
+3. In **Settings**, with "Pollinations" selected in the API Tokens picker, paste it into the field. Same DPAPI-backed secure storage as the Replicate slot, just keyed independently.
 
 Note on reproducibility: per Pollinations' own spec, the `seed` parameter is honored only by `flux`, `zimage`, `seedream`, `klein`, `seedance`, `nova-reel`. Other models silently ignore it, so re-running the same prompt+seed pair won't produce the same image on `qwen-image` etc.
 
@@ -75,7 +74,7 @@ The ComfyUI provider talks to a [ComfyUI](https://github.com/comfyanonymous/Comf
 **Server setup**
 
 1. Run a reasonably current ComfyUI build. If the server is on another machine, start it with `--listen` so it binds to the LAN (default is localhost-only), and make sure the port (default `8188`) is open in its firewall.
-2. In the app, select **ComfyUI** in the API Tokens picker and enter the server's base URL, e.g. `http://192.168.1.50:8188` (default is `http://127.0.0.1:8188`). On a plain LAN no auth is needed. If your server sits behind an authenticating reverse proxy, paste the full `Authorization` header value (scheme included, e.g. `Bearer eyJ…` or `Basic dXNlcjpwYXNz`) into the ComfyUI token field — it's sent verbatim on every HTTP request and the WebSocket connect. Either way, don't expose a bare ComfyUI port to the internet.
+2. In the app's **Settings** page, enter the server's base URL into the ComfyUI server field, e.g. `http://192.168.1.50:8188` (default is `http://127.0.0.1:8188`). On a plain LAN no auth is needed. If your server sits behind an authenticating reverse proxy, paste the full `Authorization` header value (scheme included, e.g. `Bearer eyJ…` or `Basic dXNlcjpwYXNz`) into the ComfyUI token field — it's sent verbatim on every HTTP request and the WebSocket connect. Either way, don't expose a bare ComfyUI port to the internet.
 
 **Workflows as models**
 
@@ -106,7 +105,7 @@ Generations run on your GPU and can take minutes; the job card shows live per-st
 
 ### Where images are saved
 
-Generated images land in `%USERPROFILE%\Pictures\ImageGenerator.MAUI\` with collision-safe filenames (timestamp + truncated prompt + seed). Each completed job card has its own **Show in folder** button that opens Explorer with that specific file highlighted; the Run card also has an **Open output folder** shortcut and a **Gallery** button that opens the in-app browser.
+Generated images land in `%USERPROFILE%\Pictures\ImageGenerator.MAUI\` with collision-safe filenames (timestamp + truncated prompt + seed). Each completed job card has its own **Show in folder** button that opens Explorer with that specific file highlighted; the bottom action bar also has an **Open output folder** shortcut and a **Gallery** button that opens the in-app browser.
 
 ### Browsing past images (gallery)
 
@@ -114,7 +113,7 @@ The **Gallery** button on the main page opens an in-app grid of every image in t
 
 ### Running a batch from a textfile
 
-Pick a model and configure the parameters you want to apply to the batch (aspect ratio, output format, seed mode, and so on), then click **Import prompts…** in the Run column. Choose a `.txt` file shaped like this:
+Pick a model and configure the parameters you want to apply to the batch (aspect ratio, output format, seed mode, and so on), then click **Import prompts…** in the bottom action bar. Choose a `.txt` file shaped like this:
 
 ```
 A young woman holding a bouquet,
@@ -189,14 +188,16 @@ ImageGenerator.MAUI/
 │                             # ImageGenerationDispatcher (routes by model-id prefix),
 │                             # FileLauncher, ClipboardService
 ├── Presentation/
-│   ├── ViewModels/           # GeneratorViewModel, GalleryViewModel, GalleryItemDetailViewModel
-│   ├── Views/                # MainPage, GalleryPage, GalleryItemDetailPage (.xaml + .cs)
+│   ├── ViewModels/           # GeneratorViewModel, GalleryViewModel, GalleryItemDetailViewModel,
+│   │                         # IdeogramStructureEditorViewModel
+│   ├── Views/                # MainPage, SettingsPage, GalleryPage, GalleryItemDetailPage,
+│   │                         # IdeogramStructureEditorPage (.xaml + .cs)
 │   ├── Behaviors/            # NumericOnlyBehavior
 │   └── Converters/           # ShellThumbnail / ShellPreview / StringToEnum / Inverse / NonEmptyString
 ├── Shared/Constants/         # ModelConstants, ValidationConstants, OutputPaths
 ├── Resources/                # Styles, Colors, Fonts, Images
 ├── Extensions/               # RefitServiceExtensions (serializer + resilience pipeline)
-├── AppShell.xaml             # Shell + route registration (gallery, detail)
+├── AppShell.xaml             # Shell + route registration (gallery, detail, ideogram-editor, settings)
 └── MauiProgram.cs            # DI registration + app bootstrap
 ```
 
@@ -206,7 +207,7 @@ ImageGenerator.MAUI/
 dotnet test
 ```
 
-653 tests covering: model factory payload shapes, the ComfyUI provider (workflow patcher incl. seed re-roll / `%date%` expansion / structured-JSON targeting, the shipped sample workflow's contract, catalog folder scan, HTTP service flows), Replicate service HTTP flows (via Refit mocks), the `NullSkippingDictionaryConverter`, model catalog filtering and persistence (both Replicate + Pollinations branches), the Ideogram V4 payload (prompt vs `json_prompt` string, resolution omit-on-`Auto`, PNG-locked output, structured-JSON validation), image file naming + EXIF round-trip, GeneratorViewModel commands and state machine (including batch order, partial failure, distinct seeds, Cancel-batch leaves the in-flight job alone, and the tabbed token slots stay independent across providers), prompt batch parser (delimiter, comments, multi-line, BOM, CRLF, hard-cap), GalleryService enumeration + metadata reads + partial-write guard, GalleryViewModel sort modes + watcher debounce, GalleryItemDetailViewModel actions, and CrashLogger smoke + concurrency.
+784 tests covering: model factory payload shapes, the ComfyUI provider (workflow patcher incl. seed re-roll / `%date%` expansion / structured-JSON targeting, the shipped sample workflow's contract, catalog folder scan, HTTP service flows), Replicate service HTTP flows (via Refit mocks), the `NullSkippingDictionaryConverter`, model catalog filtering and persistence (both Replicate + Pollinations branches), the Ideogram V4 payload (prompt vs `json_prompt` string, resolution omit-on-`Auto`, PNG-locked output, structured-JSON validation), image file naming + EXIF round-trip, GeneratorViewModel commands and state machine (including batch order, partial failure, distinct seeds, Cancel-batch leaves the in-flight job alone, the latest-result hero tracking, and the tabbed token slots stay independent across providers), UI-state persistence (prompt debounce, per-family resolution keys, window bounds round-trip incl. malformed-value fallback), prompt batch parser (delimiter, comments, multi-line, BOM, CRLF, hard-cap), GalleryService enumeration + metadata reads + partial-write guard, GalleryViewModel sort modes + watcher debounce, GalleryItemDetailViewModel actions, and CrashLogger smoke + concurrency.
 
 ## 📱 Supported Platforms
 
