@@ -1,5 +1,6 @@
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Enums;
+using ImageGenerator.MAUI.Infrastructure.Imaging;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
@@ -37,55 +38,91 @@ public sealed class ImageFileService : IImageFileService
         var outputFormat = parameters.OutputFormat;
         var outputQuality = parameters.OutputQuality;
 
-        // ImageSharp does not dispose streams it didn't own — wrap explicitly so a 4-15 MB
-        // image buffer isn't held until the next GC2 (matters under the concurrent queue).
+        // Fast path: when the requested format is PNG and the API already handed us PNG bytes,
+        // splice the Comment chunk straight into the original stream — no decode, no re-encode,
+        // so the saved pixels stay byte-identical to the provider's output (and CivitAI uploads,
+        // which read these bytes off disk, get the exact original image). Falls through to the
+        // decode+re-encode path below for JPG/WebP, or when a PNG request yielded non-PNG bytes
+        // (a provider returning JPEG/WebP) that genuinely need transcoding.
+        var isPngFastPath = outputFormat == ImageOutputFormat.Png && PngTextChunkWriter.IsPng(imageBytes);
+
+        // Dimensions for the metadata line: IdentifyAsync reads only the header blocks (no pixel
+        // decode, no SIMD working buffers) on the fast path. On the fallback path we still need a
+        // full decode to transcode, so we reuse that decoded image for dimensions instead.
+        // ImageSharp does not dispose streams it didn't own — wrap explicitly so a 4-15 MB image
+        // buffer isn't held until the next GC2 (matters under the concurrent queue).
         using var ms = new MemoryStream(imageBytes);
-        using var image = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(ms);
-
-        // Actual pixel dimensions — Parameters.Width/Height are only meaningful for models
-        // that size via explicit width/height (Flux with custom dimensions). For aspect_ratio
-        // models (gpt-image-*, nano-banana, Flux presets) they reflect the UI control, not the
-        // produced image, and would be misleading.
-        var lines = new List<string>
+        SixLabors.ImageSharp.Image<Rgba32>? image = null;
+        int width, height;
+        try
         {
-            $"Prompt: {prompt}",
-            $"ModelName: {model}",
-            $"Seed: {seed}",
-            $"AspectRatio: {aspectRatio}",
-            $"Dimensions: {image.Width}x{image.Height}",
-            $"Format: {outputFormat}",
-            $"Quality: {outputQuality}",
-        };
+            if (isPngFastPath)
+            {
+                var info = await SixLabors.ImageSharp.Image.IdentifyAsync(ms);
+                (width, height) = (info.Width, info.Height);
+            }
+            else
+            {
+                image = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(ms);
+                (width, height) = (image.Width, image.Height);
+            }
 
-        // Per-model metadata extras (Upsampling for Flux Pro, Raw/ImagePromptStrength for
-        // Ultra, GPT knobs, NanoBanana resolution, ...) come from each model's IMetadataDescriber.
-        // Unknown models contribute no extras (registry returns null).
-        var extras = _registry.MetadataFor(model)?.Lines(parameters);
-        if (extras != null) lines.AddRange(extras);
+            // Actual pixel dimensions — Parameters.Width/Height are only meaningful for models
+            // that size via explicit width/height (Flux with custom dimensions). For aspect_ratio
+            // models (gpt-image-*, nano-banana, Flux presets) they reflect the UI control, not the
+            // produced image, and would be misleading.
+            var lines = new List<string>
+            {
+                $"Prompt: {prompt}",
+                $"ModelName: {model}",
+                $"Seed: {seed}",
+                $"AspectRatio: {aspectRatio}",
+                $"Dimensions: {width}x{height}",
+                $"Format: {outputFormat}",
+                $"Quality: {outputQuality}",
+            };
 
-        var metadataText = string.Join(Environment.NewLine, lines);
+            // Per-model metadata extras (Upsampling for Flux Pro, Raw/ImagePromptStrength for
+            // Ultra, GPT knobs, NanoBanana resolution, ...) come from each model's IMetadataDescriber.
+            // Unknown models contribute no extras (registry returns null).
+            var extras = _registry.MetadataFor(model)?.Lines(parameters);
+            if (extras != null) lines.AddRange(extras);
 
-        // Use each format's native metadata mechanism and drop anything the API source
-        // may have embedded, so the prompt never shows up twice in a viewer.
-        if (outputFormat == ImageOutputFormat.Png)
-        {
-            image.Metadata.ExifProfile = null;
-            var pngMeta = image.Metadata.GetPngMetadata();
-            pngMeta.TextData.Clear();
-            pngMeta.TextData.Add(new PngTextData("Comment", metadataText, "en", string.Empty));
+            var metadataText = string.Join(Environment.NewLine, lines);
+
+            if (isPngFastPath)
+            {
+                var spliced = PngTextChunkWriter.WriteComment(imageBytes, "Comment", metadataText);
+                await File.WriteAllBytesAsync(imagePath, spliced);
+                return;
+            }
+
+            // Use each format's native metadata mechanism and drop anything the API source
+            // may have embedded, so the prompt never shows up twice in a viewer.
+            if (outputFormat == ImageOutputFormat.Png)
+            {
+                image!.Metadata.ExifProfile = null;
+                var pngMeta = image.Metadata.GetPngMetadata();
+                pngMeta.TextData.Clear();
+                pngMeta.TextData.Add(new PngTextData("Comment", metadataText, "en", string.Empty));
+            }
+            else
+            {
+                // EncodedString writes the 8-byte UNICODE\0 charset prefix required by the EXIF 2.3 spec
+                // so third-party readers (IrfanView, Explorer Properties) see a proper UTF-16 string.
+                image!.Metadata.ExifProfile = new ExifProfile();
+                image.Metadata.ExifProfile.SetValue(
+                    ExifTag.UserComment,
+                    new EncodedString(EncodedString.CharacterCode.Unicode, metadataText));
+            }
+
+            var encoder = _encoderProvider.GetImageEncoder(outputFormat, outputQuality);
+            await image.SaveAsync(imagePath, encoder);
         }
-        else
+        finally
         {
-            // EncodedString writes the 8-byte UNICODE\0 charset prefix required by the EXIF 2.3 spec
-            // so third-party readers (IrfanView, Explorer Properties) see a proper UTF-16 string.
-            image.Metadata.ExifProfile = new ExifProfile();
-            image.Metadata.ExifProfile.SetValue(
-                ExifTag.UserComment,
-                new EncodedString(EncodedString.CharacterCode.Unicode, metadataText));
+            image?.Dispose();
         }
-
-        var encoder = _encoderProvider.GetImageEncoder(outputFormat, outputQuality);
-        await image.SaveAsync(imagePath, encoder);
     }
 
     public string BuildFileName(ImageGenerationParameters parameters)

@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.Text;
 using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
@@ -6,6 +8,7 @@ using ImageGenerator.MAUI.Infrastructure.Services;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Formats.Png.Chunks;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -167,6 +170,68 @@ public class ImageFileServiceTests : IDisposable
         comment.Should().Contain("ImagePromptStrength:");
     }
 
+    [Fact]
+    public async Task SaveImageWithMetadataAsync_ForPng_PreservesOriginalPixelStreamByteForByte()
+    {
+        // The fast path must splice metadata without re-encoding — the provider's exact IDAT
+        // (compressed pixel) stream has to survive untouched so CivitAI uploads stay faithful.
+        var parameters = SampleParameters();
+        var bytes = BuildContentPng(8, 8);
+        var path = _sut.GetUniqueSavePath(_tempDir, parameters);
+
+        await _sut.SaveImageWithMetadataAsync(path, bytes, parameters);
+
+        var saved = await File.ReadAllBytesAsync(path);
+        ExtractIdat(saved).Should().Equal(ExtractIdat(bytes));
+    }
+
+    [Fact]
+    public async Task SaveImageWithMetadataAsync_ForPng_UnicodePromptRoundTripsThroughITxt()
+    {
+        var parameters = SampleParameters();
+        parameters.Prompt = "café 🐱 日本語";
+        var bytes = BuildContentPng(4, 4);
+        var path = _sut.GetUniqueSavePath(_tempDir, parameters);
+
+        await _sut.SaveImageWithMetadataAsync(path, bytes, parameters);
+
+        using var saved = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(path);
+        var comment = saved.Metadata.GetPngMetadata().TextData.Single(t => t.Keyword == "Comment").Value;
+        comment.Should().Contain("Prompt: café 🐱 日本語");
+    }
+
+    [Fact]
+    public async Task SaveImageWithMetadataAsync_ForPng_WithExistingComment_DeduplicatesToOne()
+    {
+        // A provider PNG that already carries a Comment chunk must not produce a second copy.
+        var parameters = SampleParameters();
+        var bytes = BuildContentPng(4, 4, existingComment: "Prompt: stale");
+        var path = _sut.GetUniqueSavePath(_tempDir, parameters);
+
+        await _sut.SaveImageWithMetadataAsync(path, bytes, parameters);
+
+        using var saved = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(path);
+        var comments = saved.Metadata.GetPngMetadata().TextData.Where(t => t.Keyword == "Comment").ToList();
+        comments.Should().ContainSingle();
+        comments[0].Value.Should().Contain("Prompt: a cat").And.NotContain("stale");
+    }
+
+    [Fact]
+    public async Task SaveImageWithMetadataAsync_PngRequestedButSourceIsJpeg_FallsBackAndTranscodes()
+    {
+        // Defensive fallback: a provider returning JPEG bytes for a PNG request must still yield
+        // a valid PNG carrying the Comment chunk (the decode+re-encode path, not the splice).
+        var parameters = SampleParameters();
+        parameters.OutputFormat = ImageOutputFormat.Png;
+        var jpegBytes = Build1x1Image(ImageOutputFormat.Jpg);
+        var path = _sut.GetUniqueSavePath(_tempDir, parameters);
+
+        await _sut.SaveImageWithMetadataAsync(path, jpegBytes, parameters);
+
+        using var saved = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(path);
+        saved.Metadata.GetPngMetadata().TextData.Should().ContainSingle(t => t.Keyword == "Comment");
+    }
+
     private static byte[] Build1x1Image(ImageOutputFormat format)
     {
         using var image = new SixLabors.ImageSharp.Image<Rgba32>(1, 1);
@@ -174,6 +239,36 @@ public class ImageFileServiceTests : IDisposable
         if (format == ImageOutputFormat.Png) image.Save(memory, new PngEncoder());
         else image.Save(memory, new JpegEncoder());
         return memory.ToArray();
+    }
+
+    private static byte[] BuildContentPng(int width, int height, string? existingComment = null)
+    {
+        using var image = new SixLabors.ImageSharp.Image<Rgba32>(width, height);
+        for (var y = 0; y < height; y++)
+            for (var x = 0; x < width; x++)
+                image[x, y] = new Rgba32((byte)(x * 17), (byte)(y * 23), (byte)((x + y) * 7), 255);
+
+        if (existingComment is not null)
+            image.Metadata.GetPngMetadata().TextData.Add(new PngTextData("Comment", existingComment, "en", string.Empty));
+
+        using var memory = new MemoryStream();
+        image.Save(memory, new PngEncoder());
+        return memory.ToArray();
+    }
+
+    // Concatenated data of every IDAT chunk — the compressed pixel stream.
+    private static byte[] ExtractIdat(byte[] png)
+    {
+        using var ms = new MemoryStream();
+        var offset = 8; // skip signature
+        while (offset + 8 <= png.Length)
+        {
+            var length = (int)BinaryPrimitives.ReadUInt32BigEndian(png.AsSpan(offset, 4));
+            var type = Encoding.ASCII.GetString(png, offset + 4, 4);
+            if (type == "IDAT") ms.Write(png, offset + 8, length);
+            offset += 12 + length;
+        }
+        return ms.ToArray();
     }
 
     [Fact]
