@@ -14,9 +14,23 @@ public partial class GenerationJob : ObservableObject
     public string MetaLine { get; }
 
     [ObservableProperty] private string _statusMessage = "Generating image…";
-    [ObservableProperty] private StatusKind _statusKind = StatusKind.Info;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFinished))]
+    private StatusKind _statusKind = StatusKind.Info;
+
     [ObservableProperty] private string? _resultPath;
-    [ObservableProperty] private bool _isRunning = true;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFinished))]
+    private bool _isRunning = true;
+
+    // A job is "finished" once its outcome has landed: not running AND carrying a terminal
+    // StatusKind. The terminal-kind check is load-bearing — a QUEUED batch job is also
+    // !IsRunning but sits at StatusKind.Info until it starts (BatchCoordinator), so !IsRunning
+    // alone would wrongly count pending jobs as finished. Drives "Clear finished jobs".
+    public bool IsFinished =>
+        !IsRunning && StatusKind is StatusKind.Success or StatusKind.Error or StatusKind.Canceled;
 
     // Live sampler progress (ComfyUI ws). HasProgress gates the card's ProgressBar: it flips
     // on with the first percent report and off again with the final outcome.

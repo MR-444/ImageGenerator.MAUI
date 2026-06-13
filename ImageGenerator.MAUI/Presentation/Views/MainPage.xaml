@@ -414,9 +414,22 @@
             <ScrollView Grid.Column="1">
                 <VerticalStackLayout Spacing="12" Padding="0,0,12,16">
 
-                    <Label Text="Generation Queue"
-                           Style="{StaticResource CardTitle}"
-                           IsVisible="{Binding HasJobs}" />
+                    <!-- Queue header: title + a right-aligned "Clear finished" control. The whole
+                         row hides until there are jobs; the button's CanExecute (HasFinishedJobs)
+                         keeps it disabled while only running/queued jobs remain. -->
+                    <Grid ColumnDefinitions="*,Auto"
+                          ColumnSpacing="8"
+                          IsVisible="{Binding HasJobs}">
+                        <Label Grid.Column="0"
+                               Text="Generation Queue"
+                               Style="{StaticResource CardTitle}"
+                               VerticalOptions="Center" />
+                        <Button Grid.Column="1"
+                                Text="Clear finished"
+                                Style="{StaticResource SecondaryButton}"
+                                Command="{Binding ClearFinishedJobsCommand}"
+                                AutomationId="ClearFinishedJobsButton" />
+                    </Grid>
                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding Jobs}" Spacing="12">
                         <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="vm:GenerationJob">

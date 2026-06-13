@@ -2523,4 +2523,59 @@ public class GeneratorViewModelTests
         captured.Should().NotBeNull();
         captured!.Seed.Should().Be(123456);
     }
+
+    // ---- Clear finished jobs ----------------------------------------------------------------
+
+    private static GenerationJob Job(bool isRunning, StatusKind kind, string? resultPath = null) =>
+        new(new ImageGenerationParameters()) { IsRunning = isRunning, StatusKind = kind, ResultPath = resultPath };
+
+    [Fact]
+    public void ClearFinishedJobs_RemovesTerminalJobs_KeepsRunningAndQueued()
+    {
+        var running = Job(isRunning: true, StatusKind.Info);
+        var queued = Job(isRunning: false, StatusKind.Info);   // batch "Queued (i/n)" shape
+        var saved = Job(isRunning: false, StatusKind.Success, resultPath: "x.png");
+        var failed = Job(isRunning: false, StatusKind.Error);
+        var canceled = Job(isRunning: false, StatusKind.Canceled);
+        foreach (var j in new[] { running, queued, saved, failed, canceled }) _viewModel.Jobs.Add(j);
+
+        _viewModel.ClearFinishedJobsCommand.Execute(null);
+
+        _viewModel.Jobs.Should().HaveCount(2);
+        _viewModel.Jobs.Should().Contain(running).And.Contain(queued);
+        _viewModel.Jobs.Should().NotContain(saved).And.NotContain(failed).And.NotContain(canceled);
+    }
+
+    [Fact]
+    public async Task ClearFinishedJobs_ResetsLatestCompletedJobAndEmptiesQueue()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        _viewModel.Parameters.Prompt = "p";
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, "ok"));
+        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        _viewModel.LatestCompletedJob.Should().NotBeNull();
+
+        _viewModel.ClearFinishedJobsCommand.Execute(null);
+
+        _viewModel.Jobs.Should().BeEmpty();
+        _viewModel.LatestCompletedJob.Should().BeNull("clearing finished jobs removes the featured card");
+        _viewModel.HasJobs.Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasFinishedJobs_GatesTheClearCommand()
+    {
+        _viewModel.ClearFinishedJobsCommand.CanExecute(null).Should().BeFalse("empty queue");
+
+        _viewModel.Jobs.Add(Job(isRunning: true, StatusKind.Info));
+        _viewModel.Jobs.Add(Job(isRunning: false, StatusKind.Info));   // queued
+        _viewModel.HasFinishedJobs.Should().BeFalse();
+        _viewModel.ClearFinishedJobsCommand.CanExecute(null).Should().BeFalse();
+
+        _viewModel.Jobs.Add(Job(isRunning: false, StatusKind.Success, resultPath: "x.png"));
+        _viewModel.HasFinishedJobs.Should().BeTrue();
+        _viewModel.ClearFinishedJobsCommand.CanExecute(null).Should().BeTrue();
+    }
 }

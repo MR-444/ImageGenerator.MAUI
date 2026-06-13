@@ -50,6 +50,11 @@ public partial class GeneratorViewModel : ObservableObject
     public ObservableCollection<GenerationJob> Jobs { get; } = [];
     public bool HasJobs => Jobs.Count > 0;
 
+    // Gates the "Clear finished jobs" command. Recomputed from the live collection whenever a
+    // job is added/removed or transitions to a terminal state (see the CollectionChanged +
+    // per-job PropertyChanged wiring in the ctor).
+    public bool HasFinishedJobs => Jobs.Any(j => j.IsFinished);
+
     public ProviderFilterCoordinator ProviderFilter { get; }
     public BatchCoordinator Batch { get; }
 
@@ -563,6 +568,48 @@ public partial class GeneratorViewModel : ObservableObject
         StatusKind = kind;
     }
 
+    // Keep HasJobs/HasFinishedJobs and the Clear-finished command's CanExecute in sync as the
+    // queue mutates. Per-job PropertyChanged is attached/detached here so a running→terminal
+    // transition (which flips IsFinished) re-evaluates the gate without polling.
+    private void OnJobsCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        => DispatchToUi(() =>
+        {
+            if (e.OldItems is not null)
+                foreach (GenerationJob job in e.OldItems) job.PropertyChanged -= OnJobPropertyChanged;
+            if (e.NewItems is not null)
+                foreach (GenerationJob job in e.NewItems) job.PropertyChanged += OnJobPropertyChanged;
+
+            OnPropertyChanged(nameof(HasJobs));
+            RaiseFinishedJobsChanged();
+        });
+
+    private void OnJobPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(GenerationJob.IsFinished))
+            DispatchToUi(RaiseFinishedJobsChanged);
+    }
+
+    private void RaiseFinishedJobsChanged()
+    {
+        OnPropertyChanged(nameof(HasFinishedJobs));
+        ClearFinishedJobsCommand.NotifyCanExecuteChanged();
+    }
+
+    // Queue-eviction control: drop every finished (terminal) card, leaving running and queued
+    // jobs in place. Clearing all finished jobs removes every featured candidate (a featured
+    // card is always a Saved ⇒ terminal job), so LatestCompletedJob falls back to null.
+    [RelayCommand(CanExecute = nameof(HasFinishedJobs))]
+    private void ClearFinishedJobs()
+    {
+        var finished = Jobs.Where(j => j.IsFinished).ToList();
+        foreach (var job in finished) Jobs.Remove(job);
+
+        if (LatestCompletedJob is not null && !Jobs.Contains(LatestCompletedJob))
+            LatestCompletedJob = null;
+
+        _ = FlashAsync($"Cleared {finished.Count} finished job{(finished.Count == 1 ? "" : "s")}.");
+    }
+
     public GeneratorViewModel(
         IJobRunner jobRunner,
         IApiTokenStore tokenStore,
@@ -592,7 +639,7 @@ public partial class GeneratorViewModel : ObservableObject
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         if (promptBatchParser is null) throw new ArgumentNullException(nameof(promptBatchParser));
 
-        Jobs.CollectionChanged += (_, _) => DispatchToUi(() => OnPropertyChanged(nameof(HasJobs)));
+        Jobs.CollectionChanged += OnJobsCollectionChanged;
 
         // Hydrate capabilities + AR options from the registry. The model catalog itself lives
         // on ProviderFilterCoordinator (constructed below).

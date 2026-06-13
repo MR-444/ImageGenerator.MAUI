@@ -60,6 +60,44 @@ public class GenerationJobTests
     }
 
     [Fact]
+    public void IsFinished_NewlyConstructedRunningJob_IsFalse()
+    {
+        new GenerationJob(MakeParameters()).IsFinished.Should().BeFalse("a running job hasn't landed yet");
+    }
+
+    [Fact]
+    public void IsFinished_QueuedBatchJob_IsFalse()
+    {
+        // A queued batch job is !IsRunning but still at StatusKind.Info (BatchCoordinator).
+        // It must NOT count as finished, or Clear-finished would evict pending work.
+        var job = new GenerationJob(MakeParameters()) { IsRunning = false, StatusKind = StatusKind.Info };
+
+        job.IsFinished.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(StatusKind.Success)]
+    [InlineData(StatusKind.Error)]
+    [InlineData(StatusKind.Canceled)]
+    public void IsFinished_TerminalOutcome_IsTrue(StatusKind kind)
+    {
+        var job = new GenerationJob(MakeParameters()) { IsRunning = false, StatusKind = kind };
+
+        job.IsFinished.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsFinished_RaisesPropertyChanged_WhenIsRunningFlips()
+    {
+        var job = new GenerationJob(MakeParameters()) { StatusKind = StatusKind.Success };
+        using var monitor = job.Monitor();
+
+        job.IsRunning = false;
+
+        monitor.Should().RaisePropertyChangeFor(j => j.IsFinished);
+    }
+
+    [Fact]
     public void Cancel_FlipsCancellationToken()
     {
         var job = new GenerationJob(MakeParameters());
