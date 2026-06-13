@@ -1,7 +1,8 @@
 ImageGenerator.MAUI — Open Work Queue
 =====================================
 
-Last updated: 2026-06-13. v1.8.0 RELEASED (CivitAI posting: one-click publish +
+Last updated: 2026-06-13 (Configurable output folder shipped 8480c40).
+v1.8.0 RELEASED (CivitAI posting: one-click publish +
 Gallery multi-select → one draft post). Custom app icon shipped (framed-scene
 glyph replacing the .NET template, commit 01a75cd). The v1.5.0 Structure-Editor
 & ComfyUI work and the full csharp-auditor pass (0 Critical / 2 High / 3 Medium
@@ -18,40 +19,21 @@ next pass).
 RECENTLY DONE
 -------------
 
-[x] Clear finished jobs — commit df1b1b0 (2026-06-13), user-verified ("it works").
-    "Clear finished" button in the Generation Queue header drops terminal cards, keeps
-    running + queued. GenerationJob.IsFinished = !IsRunning AND terminal StatusKind
-    (Success/Error/Canceled) — the kind check is load-bearing: a QUEUED batch job is
-    also !IsRunning but stays StatusKind.Info, so !IsRunning alone would evict pending
-    work. GeneratorViewModel.HasFinishedJobs gates the command (live via per-job
-    PropertyChanged through the Jobs CollectionChanged handler); clearing nulls
-    LatestCompletedJob (featured card is always Saved => terminal). 892 tests (+9).
-
-[x] Remix from an image (FLAGSHIP) — commit 15e955b (2026-06-13), user-verified
-    ("it works"). "Remix" button on the gallery DETAIL page reloads a saved image's
-    embedded recipe into the generator. Inverse mirrors the write split: common lines
-    (Prompt/ModelName/Seed/AspectRatio/Dimensions/Format/Quality) applied in
-    GeneratorViewModel.RemixFromImageAsync (model first, then resolution/JSON-prompt
-    under the existing suppression windows); per-model extras via a new
-    IMetadataDescriber.Apply(p, meta) co-located with each Lines writer. Nav mirrors
-    UseAsInput/addInput (//MainPage?remixFrom=<path>, single-use QueryProperty).
-    Critical: sets RandomizeSeed=false (else the seed re-rolls at generate). AR applied
-    only if the model offers it; Format skipped on PNG-pinned models. Unknown/uncached
-    model -> best-effort prompt+seed + warning. ComfyUI restores Workflow+megapixels+
-    JSON-prompt only — NO checkpoint/preset (picker is async + Preferences-backed; user
-    runs Ideogram via a ComfyUI workflow, not the 3 pinned Replicate ideogram-ai seeds,
-    which STAY — pre-existing, commit 69a4db0, unrelated). En route fixed a real
-    portability bug: ImagePromptStrength was written culture-dependently ("0,5" on de-DE)
-    — now InvariantCulture (Megapixels already was). RULE: ALL numeric metadata must be
-    written InvariantCulture so recipes round-trip across locales. 883 tests (+25).
-
-[x] README streamline + Roadmap/Outlook — commit 94a5f8d (2026-06-13).
-    De-duped Features vs "Using the app" and the 3× metadata story (now
-    canonical in "Reading back the embedded metadata"); folded the five
-    per-model bullets into one Models line; fixed stale facts (test count
-    842→858, gallery multi-select now noted as existing, dropped the "1.0 /
-    this build" framing); added the "## 🔭 Roadmap / Outlook" section sourced
-    from the six items below.
+[x] Configurable output folder — commit 8480c40 (2026-06-13), user-verified
+    ("seems to work"). Settings → "Output folder" card: editable path Entry + Browse…
+    (native WinRT folder dialog via new IFolderPicker/FolderPickerService, #if WINDOWS,
+    HWND-initialized). Persisted as imggen.output_folder in UiStateStore (mirrors
+    ComfyUiBaseUrl). OutputPaths gained a static override seam (SetGeneratedImagesOverride)
+    + a fixed DefaultGeneratedImagesDirectory. NARROW SCOPE (user decision): only generated
+    images AND their json-prompts/ follow the setting; comfy-workflows/ (picker-model INPUTS)
+    is re-anchored to the default and app.log stays at the default too (CrashLogger runs
+    pre-DI; diagnostics shouldn't move to a user-chosen/flaky drive). Override applied at the
+    composition root (MauiProgram, after Build) so saves/gallery honor it from first use, and
+    LIVE on change (OnOutputFolderChanged). Live apply: GalleryService resolves its root per
+    enumeration (singleton); GalleryViewModel re-points its FileSystemWatcher on appearing
+    (Transient VM + OnAppearing per nav). Tests: the override is process-global static state —
+    mutating test classes share the "OutputPathsState" xUnit collection + reset in finally.
+    904 tests (+12).
 
 
 ROADMAP / OUTLOOK — recorded forward plan (each = its own future task)
@@ -60,15 +42,13 @@ ROADMAP / OUTLOOK — recorded forward plan (each = its own future task)
 User-selected 2026-06-13 from a grounded brainstorm. Respect scope rules
 (no multi-image-per-click; no kontext/negative_prompt/A1111-in-saved-files).
 These go INTO the README Outlook AND are the backlog for future contexts.
-(Remix from an image + Clear finished jobs — SHIPPED, see RECENTLY DONE above.)
+(Remix from an image + Clear finished jobs + Configurable output folder — all
+SHIPPED; forensics in this file's git history.)
 
 [ ] One-click upscale of a result — route a finished image through an existing
     provider (a Replicate upscaler model, or a ComfyUI upscale workflow). New
     operation type but reuses dispatch/provider plumbing.
 [ ] Saved parameter presets — name + recall a model+params combo.
-[ ] Configurable output folder — currently hard-pinned in
-    Shared/Constants/OutputPaths.cs (GeneratedImagesDirectory =
-    %USERPROFILE%\Pictures\ImageGenerator.MAUI\). Make it a setting.
 [ ] Faster, byte-identical PNG saves (efficiency) — ImageFileService.
     SaveImageWithMetadataAsync fully decodes to Rgba32 just to read dimensions
     + attach a Comment chunk, then re-encodes. Splice the tEXt chunk into the
