@@ -18,6 +18,24 @@ next pass).
 RECENTLY DONE
 -------------
 
+[x] Remix from an image (FLAGSHIP) — commit 15e955b (2026-06-13), user-verified
+    ("it works"). "Remix" button on the gallery DETAIL page reloads a saved image's
+    embedded recipe into the generator. Inverse mirrors the write split: common lines
+    (Prompt/ModelName/Seed/AspectRatio/Dimensions/Format/Quality) applied in
+    GeneratorViewModel.RemixFromImageAsync (model first, then resolution/JSON-prompt
+    under the existing suppression windows); per-model extras via a new
+    IMetadataDescriber.Apply(p, meta) co-located with each Lines writer. Nav mirrors
+    UseAsInput/addInput (//MainPage?remixFrom=<path>, single-use QueryProperty).
+    Critical: sets RandomizeSeed=false (else the seed re-rolls at generate). AR applied
+    only if the model offers it; Format skipped on PNG-pinned models. Unknown/uncached
+    model -> best-effort prompt+seed + warning. ComfyUI restores Workflow+megapixels+
+    JSON-prompt only — NO checkpoint/preset (picker is async + Preferences-backed; user
+    runs Ideogram via a ComfyUI workflow, not the 3 pinned Replicate ideogram-ai seeds,
+    which STAY — pre-existing, commit 69a4db0, unrelated). En route fixed a real
+    portability bug: ImagePromptStrength was written culture-dependently ("0,5" on de-DE)
+    — now InvariantCulture (Megapixels already was). RULE: ALL numeric metadata must be
+    written InvariantCulture so recipes round-trip across locales. 883 tests (+25).
+
 [x] README streamline + Roadmap/Outlook — commit 94a5f8d (2026-06-13).
     De-duped Features vs "Using the app" and the 3× metadata story (now
     canonical in "Reading back the embedded metadata"); folded the five
@@ -33,12 +51,8 @@ ROADMAP / OUTLOOK — recorded forward plan (each = its own future task)
 User-selected 2026-06-13 from a grounded brainstorm. Respect scope rules
 (no multi-image-per-click; no kontext/negative_prompt/A1111-in-saved-files).
 These go INTO the README Outlook AND are the backlog for future contexts.
+(Remix from an image — SHIPPED, see RECENTLY DONE above.)
 
-[ ] Remix from an image — reload a saved image's embedded recipe (prompt, seed,
-    model, params) back into the generator. Reader exists: GalleryService.
-    ReadMetadataAsync parses the key:value lines; this maps them back onto
-    ImageGenerationParameters + selects the model. Closes the reproducibility
-    loop the app is built around. FLAGSHIP.
 [ ] One-click upscale of a result — route a finished image through an existing
     provider (a Replicate upscaler model, or a ComfyUI upscale workflow). New
     operation type but reuses dispatch/provider plumbing.
