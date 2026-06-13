@@ -1,7 +1,7 @@
 ImageGenerator.MAUI — Open Work Queue
 =====================================
 
-Last updated: 2026-06-13 (Configurable output folder shipped 8480c40).
+Last updated: 2026-06-13 (Faster byte-identical PNG saves shipped 8f32b87).
 v1.8.0 RELEASED (CivitAI posting: one-click publish +
 Gallery multi-select → one draft post). Custom app icon shipped (framed-scene
 glyph replacing the .NET template, commit 01a75cd). The v1.5.0 Structure-Editor
@@ -19,21 +19,24 @@ next pass).
 RECENTLY DONE
 -------------
 
-[x] Configurable output folder — commit 8480c40 (2026-06-13), user-verified
-    ("seems to work"). Settings → "Output folder" card: editable path Entry + Browse…
-    (native WinRT folder dialog via new IFolderPicker/FolderPickerService, #if WINDOWS,
-    HWND-initialized). Persisted as imggen.output_folder in UiStateStore (mirrors
-    ComfyUiBaseUrl). OutputPaths gained a static override seam (SetGeneratedImagesOverride)
-    + a fixed DefaultGeneratedImagesDirectory. NARROW SCOPE (user decision): only generated
-    images AND their json-prompts/ follow the setting; comfy-workflows/ (picker-model INPUTS)
-    is re-anchored to the default and app.log stays at the default too (CrashLogger runs
-    pre-DI; diagnostics shouldn't move to a user-chosen/flaky drive). Override applied at the
-    composition root (MauiProgram, after Build) so saves/gallery honor it from first use, and
-    LIVE on change (OnOutputFolderChanged). Live apply: GalleryService resolves its root per
-    enumeration (singleton); GalleryViewModel re-points its FileSystemWatcher on appearing
-    (Transient VM + OnAppearing per nav). Tests: the override is process-global static state —
-    mutating test classes share the "OutputPathsState" xUnit collection + reset in finally.
-    904 tests (+12).
+[x] Faster, byte-identical PNG saves — commit 8f32b87 (2026-06-13), user-verified
+    (posted images render on CivitAI after a post). New PngTextChunkWriter
+    (Infrastructure/Imaging) splices a single uncompressed iTXt "Comment" chunk
+    straight into the original PNG bytes: validates the signature, walks chunks,
+    strips any pre-existing text/eXIf chunks (dedup — no double prompt), inserts the
+    new chunk before IEND, hand-rolled CRC32 (no System.IO.Hashing dep). iTXt+UTF-8
+    so emoji/non-Latin prompts survive (ImageSharp already emitted iTXt because the
+    old code set language tag "en", so the reader is unchanged). ImageFileService.
+    SaveImageWithMetadataAsync now fast-paths PNG output when the source is genuine
+    PNG (IsPng): dimensions header-only via Image.IdentifyAsync (the GalleryService
+    pattern), then splice + File.WriteAllBytesAsync — NO decode, NO re-encode, pixels
+    byte-identical to the provider. Metadata-text build is byte-for-byte unchanged so
+    every key + InvariantCulture value round-trips identically; readers (Remix,
+    CivitaiMetaBuilder) untouched. FALLBACK to the old decode+re-encode path for
+    JPG/WebP and for PNG-requested-but-source-is-not-PNG (a provider returning
+    JPEG/WebP still transcodes correctly). Win: CivitAI uploads (read off disk) now
+    carry the exact original image, and the heaviest op (Rgba32 decode) is skipped on
+    the common PNG save. 914 tests (+10).
 
 
 ROADMAP / OUTLOOK — recorded forward plan (each = its own future task)
@@ -49,12 +52,7 @@ SHIPPED; forensics in this file's git history.)
     provider (a Replicate upscaler model, or a ComfyUI upscale workflow). New
     operation type but reuses dispatch/provider plumbing.
 [ ] Saved parameter presets — name + recall a model+params combo.
-[ ] Faster, byte-identical PNG saves (efficiency) — ImageFileService.
-    SaveImageWithMetadataAsync fully decodes to Rgba32 just to read dimensions
-    + attach a Comment chunk, then re-encodes. Splice the tEXt chunk into the
-    original bytes instead (dimensions header-only via Image.Identify, as
-    GalleryService already does) → faster AND keeps the API's exact bytes, so
-    CivitAI uploads become truly byte-identical.
+(Faster, byte-identical PNG saves — SHIPPED 8f32b87, see RECENTLY DONE.)
 
 NOT selected (record so they aren't re-pitched as new): gallery delete/search/
 favorites, compare/A-B view. Excluded by scope: seed-variation "more like this"
