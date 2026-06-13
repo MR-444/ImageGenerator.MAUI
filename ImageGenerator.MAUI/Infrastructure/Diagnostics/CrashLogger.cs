@@ -58,7 +58,11 @@ public static class CrashLogger
     {
         try
         {
-            var preferred = rootDir ?? OutputPaths.GeneratedImagesDirectory;
+            // Anchored at the DEFAULT location, not the configurable output folder: the log is
+            // diagnostics, and keeping it at a stable, known path means it never moves to a
+            // user-chosen (possibly flaky/network) drive — and it's written here pre-DI before
+            // any output-folder override is even loaded.
+            var preferred = rootDir ?? OutputPaths.DefaultGeneratedImagesDirectory;
             Directory.CreateDirectory(preferred);
             _logPath = Path.Combine(preferred, LogFileName);
         }

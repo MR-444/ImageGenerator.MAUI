@@ -22,6 +22,13 @@ public interface IUiStateStore
     /// <summary>Null when never persisted — callers fall back to ModelConstants.ComfyUi.DefaultBaseUrl.</summary>
     string? LoadComfyUiBaseUrl();
     /// <summary>
+    /// The user's configured output folder for generated images. Null when never set — callers
+    /// fall back to <c>OutputPaths.DefaultGeneratedImagesDirectory</c>. Only the images and their
+    /// json-prompt exports follow this; the ComfyUI workflow templates and app.log stay anchored
+    /// at the default location.
+    /// </summary>
+    string? LoadOutputFolder();
+    /// <summary>
     /// The raw CivitAI model reference text (URL or version id) for gallery-targeted posting.
     /// Persisted across sessions — unlike the post checkboxes — because the target model rarely
     /// changes; the off-by-default checkbox still gates any actual upload. Null when never set.
@@ -43,6 +50,8 @@ public interface IUiStateStore
     void PersistResolution(string value, string? modelId);
     void PersistUseJsonPrompt(bool value);
     void PersistComfyUiBaseUrl(string value);
+    /// <inheritdoc cref="LoadOutputFolder"/>
+    void PersistOutputFolder(string value);
     /// <inheritdoc cref="LoadCivitaiModelRef"/>
     void PersistCivitaiModelRef(string value);
     /// <inheritdoc cref="LoadComfyUiCheckpoint"/>

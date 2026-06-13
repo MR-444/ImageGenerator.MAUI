@@ -23,7 +23,10 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
     private readonly ICivitaiPostingService _civitaiPostingService;
     private readonly IUiStateStore _uiStateStore;
     private readonly ILogger<GalleryViewModel> _logger;
-    private readonly string _watchDirectory;
+
+    // Resolved live (not captured at construction) so the gallery follows a configurable
+    // output-folder change: navigating away + back recreates the watcher on the current path.
+    private static string WatchDirectory => OutputPaths.GeneratedImagesDirectory;
 
     private FileSystemWatcher? _watcher;
     private CancellationTokenSource? _debounceCts;
@@ -110,7 +113,6 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
         _civitaiPostingService = civitaiPostingService ?? throw new ArgumentNullException(nameof(civitaiPostingService));
         _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _watchDirectory = OutputPaths.GeneratedImagesDirectory;
 
         Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsEmpty));
         // SelectedItems is mutated by the CollectionView (multi-select); recompute the gating
@@ -317,10 +319,11 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
     {
         try
         {
+            var dir = WatchDirectory;
             await Task.Run(() =>
             {
-                Directory.CreateDirectory(_watchDirectory);
-                _fileLauncher.Launch(_watchDirectory);
+                Directory.CreateDirectory(dir);
+                _fileLauncher.Launch(dir);
             });
         }
         catch (Exception ex)
@@ -331,12 +334,19 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
 
     private void StartWatcher()
     {
-        if (_watcher is not null) return;
+        var dir = WatchDirectory;
+        // Already watching the current folder — nothing to do. If the output folder changed
+        // while we held a watcher on the old path, tear it down and rebind below.
+        if (_watcher is not null)
+        {
+            if (string.Equals(_watcher.Path, dir, StringComparison.OrdinalIgnoreCase)) return;
+            StopWatcher();
+        }
         try
         {
-            if (!Directory.Exists(_watchDirectory)) return;
+            if (!Directory.Exists(dir)) return;
 
-            var watcher = new FileSystemWatcher(_watchDirectory)
+            var watcher = new FileSystemWatcher(dir)
             {
                 IncludeSubdirectories = false,
                 NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size

@@ -141,6 +141,20 @@ public class UiStateStoreTests
     }
 
     [Fact]
+    public void LoadOutputFolder_KeyMissing_ReturnsNull()
+    {
+        _sut.LoadOutputFolder().Should().BeNull();
+    }
+
+    [Fact]
+    public void OutputFolder_RoundTripsThroughPreferences()
+    {
+        _sut.PersistOutputFolder(@"D:\images");
+
+        _sut.LoadOutputFolder().Should().Be(@"D:\images");
+    }
+
+    [Fact]
     public void ComfyUiCheckpoint_RoundTripsPerWorkflowKeys()
     {
         // Per-workflow isolation: checkpoints are architecture-bound, so one workflow's

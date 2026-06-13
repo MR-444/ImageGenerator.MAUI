@@ -15,6 +15,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
 
+[Collection("OutputPathsState")]
 public class GeneratorViewModelTests
 {
     private const string FakeSavePath = @"C:\fake\generated.png";
@@ -31,6 +32,7 @@ public class GeneratorViewModelTests
     private readonly Mock<IPromptBatchParser> _mockPromptBatchParser;
     private readonly Mock<IComfyUiCheckpointService> _mockCheckpointService;
     private readonly Mock<IGalleryService> _mockGalleryService;
+    private readonly Mock<IFolderPicker> _mockFolderPicker;
 
     public GeneratorViewModelTests()
     {
@@ -45,6 +47,7 @@ public class GeneratorViewModelTests
         _mockPromptBatchParser = new Mock<IPromptBatchParser>();
         _mockCheckpointService = new Mock<IComfyUiCheckpointService>();
         _mockGalleryService = new Mock<IGalleryService>();
+        _mockFolderPicker = new Mock<IFolderPicker>();
 
         _viewModel = new GeneratorViewModel(
             _mockJobRunner.Object,
@@ -59,6 +62,7 @@ public class GeneratorViewModelTests
             _mockPromptBatchParser.Object,
             _mockCheckpointService.Object,
             _mockGalleryService.Object,
+            _mockFolderPicker.Object,
             NullLogger<GeneratorViewModel>.Instance);
     }
 
@@ -71,6 +75,59 @@ public class GeneratorViewModelTests
         values.Should().Contain(ModelConstants.Flux.Pro11Ultra);
         values.Should().Contain(ModelConstants.Flux.Klein4b);
         values.Should().Contain(ModelConstants.Google.NanoBanana2);
+    }
+
+    // --- Configurable output folder ---
+
+    [Fact]
+    public async Task BrowseOutputFolder_WhenUserPicksFolder_SetsPersistsAndAppliesOverride()
+    {
+        const string picked = @"D:\my images\out";
+        _mockFolderPicker.Setup(p => p.PickFolderAsync(It.IsAny<string?>())).ReturnsAsync(picked);
+        try
+        {
+            await _viewModel.BrowseOutputFolderCommand.ExecuteAsync(null);
+
+            _viewModel.OutputFolder.Should().Be(picked);
+            _mockUiStateStore.Verify(s => s.PersistOutputFolder(picked), Times.Once);
+            OutputPaths.GeneratedImagesDirectory.Should().Be(picked);
+        }
+        finally
+        {
+            // Process-global static state — never leak the override into sibling tests.
+            OutputPaths.SetGeneratedImagesOverride(null);
+        }
+    }
+
+    [Fact]
+    public async Task BrowseOutputFolder_WhenCancelled_LeavesValueUnchanged()
+    {
+        var original = _viewModel.OutputFolder;
+        _mockFolderPicker.Setup(p => p.PickFolderAsync(It.IsAny<string?>())).ReturnsAsync((string?)null);
+
+        await _viewModel.BrowseOutputFolderCommand.ExecuteAsync(null);
+
+        _viewModel.OutputFolder.Should().Be(original);
+        _mockUiStateStore.Verify(s => s.PersistOutputFolder(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public void OutputFolder_WhenSet_AppliesOverrideToOutputPaths()
+    {
+        try
+        {
+            _viewModel.OutputFolder = @"E:\elsewhere";
+
+            OutputPaths.GeneratedImagesDirectory.Should().Be(@"E:\elsewhere");
+            // json-prompts follow the override; comfy-workflows stay at the default.
+            OutputPaths.JsonPromptsDirectory.Should().StartWith(@"E:\elsewhere");
+            OutputPaths.ComfyWorkflowsDirectory.Should().Be(
+                Path.Combine(OutputPaths.DefaultGeneratedImagesDirectory, "comfy-workflows"));
+        }
+        finally
+        {
+            OutputPaths.SetGeneratedImagesOverride(null);
+        }
     }
 
     [Fact]
@@ -1007,6 +1064,7 @@ public class GeneratorViewModelTests
             new Mock<IPromptBatchParser>().Object,
             new Mock<IComfyUiCheckpointService>().Object,
             new Mock<IGalleryService>().Object,
+            new Mock<IFolderPicker>().Object,
             NullLogger<GeneratorViewModel>.Instance);
 
         await vm1.LoadCachedCatalogAsync();
@@ -1034,6 +1092,7 @@ public class GeneratorViewModelTests
             new Mock<IPromptBatchParser>().Object,
             new Mock<IComfyUiCheckpointService>().Object,
             new Mock<IGalleryService>().Object,
+            new Mock<IFolderPicker>().Object,
             NullLogger<GeneratorViewModel>.Instance);
 
         await vm2.LoadCachedCatalogAsync();

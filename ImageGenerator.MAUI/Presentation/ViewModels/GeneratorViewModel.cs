@@ -31,6 +31,7 @@ public partial class GeneratorViewModel : ObservableObject
     private readonly IModelDescriptorRegistry _registry;
     private readonly IComfyUiCheckpointService _checkpointService;
     private readonly IGalleryService _galleryService;
+    private readonly IFolderPicker _folderPicker;
     private readonly ILogger<GeneratorViewModel> _logger;
 
     [ObservableProperty]
@@ -123,6 +124,36 @@ public partial class GeneratorViewModel : ObservableObject
 
     partial void OnComfyUiBaseUrlChanged(string value) =>
         _uiStateStore.PersistComfyUiBaseUrl(value ?? string.Empty);
+
+    // The configurable output folder (where generated images are saved). Preferences-backed like
+    // the ComfyUI URL; the change hook also applies the override to OutputPaths so saves, the
+    // gallery and "Open output folder" follow it live. Defaults to the fixed Pictures location
+    // for display until the user picks another.
+    [ObservableProperty]
+    private string _outputFolder = OutputPaths.DefaultGeneratedImagesDirectory;
+
+    partial void OnOutputFolderChanged(string value)
+    {
+        var trimmed = value?.Trim();
+        _uiStateStore.PersistOutputFolder(trimmed ?? string.Empty);
+        OutputPaths.SetGeneratedImagesOverride(trimmed);
+    }
+
+    [RelayCommand]
+    private async Task BrowseOutputFolderAsync()
+    {
+        try
+        {
+            var picked = await _folderPicker.PickFolderAsync(OutputFolder);
+            // Null => the user cancelled; leave the current value untouched.
+            if (!string.IsNullOrWhiteSpace(picked))
+                OutputFolder = picked;
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Couldn't open the folder picker: {ex.Message}", StatusKind.Error);
+        }
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SupportsCustomDimensions))]
@@ -623,6 +654,7 @@ public partial class GeneratorViewModel : ObservableObject
         IPromptBatchParser promptBatchParser,
         IComfyUiCheckpointService checkpointService,
         IGalleryService galleryService,
+        IFolderPicker folderPicker,
         ILogger<GeneratorViewModel> logger)
     {
         _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
@@ -636,6 +668,7 @@ public partial class GeneratorViewModel : ObservableObject
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _checkpointService = checkpointService ?? throw new ArgumentNullException(nameof(checkpointService));
         _galleryService = galleryService ?? throw new ArgumentNullException(nameof(galleryService));
+        _folderPicker = folderPicker ?? throw new ArgumentNullException(nameof(folderPicker));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         if (promptBatchParser is null) throw new ArgumentNullException(nameof(promptBatchParser));
 
@@ -1153,6 +1186,14 @@ public partial class GeneratorViewModel : ObservableObject
         if (!string.IsNullOrEmpty(savedComfyUrl))
         {
             ComfyUiBaseUrl = savedComfyUrl;
+        }
+
+        // The override was already applied at the composition root; this just echoes the saved
+        // value into the bound field so Settings shows it. OnChanged re-applies harmlessly.
+        var savedOutputFolder = _uiStateStore.LoadOutputFolder();
+        if (!string.IsNullOrEmpty(savedOutputFolder))
+        {
+            OutputFolder = savedOutputFolder;
         }
 
         var savedModel = _uiStateStore.LoadModel();

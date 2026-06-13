@@ -11,6 +11,7 @@ using SixLabors.ImageSharp.PixelFormats;
 
 namespace ImageGenerator.MAUI.Tests.Services;
 
+[Collection("OutputPathsState")]
 public class GalleryServiceTests : IDisposable
 {
     private readonly string _tempDir;
@@ -96,6 +97,29 @@ public class GalleryServiceTests : IDisposable
         // Clock 5s ahead → cutoff well past the file's mtime → file is included.
         var stable = new GalleryService(_tempDir, () => mtime.AddSeconds(5));
         (await CollectAsync(stable.EnumerateAsync())).Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task EnumerateAsync_WithNoExplicitRoot_FollowsLiveOutputFolderOverride()
+    {
+        await SaveImageAsync(SampleParams("override-me", 1, ImageOutputFormat.Png));
+
+        // No ctor directory => production behaviour: resolve OutputPaths live per enumeration.
+        var sut = new GalleryService(rootDirectory: null, () => _imageClock.AddYears(1));
+        try
+        {
+            ImageGenerator.MAUI.Shared.Constants.OutputPaths.SetGeneratedImagesOverride(_tempDir);
+
+            var items = await CollectAsync(sut.EnumerateAsync());
+
+            items.Should().HaveCount(1);
+            items[0].FileName.Should().Contain("override-me");
+        }
+        finally
+        {
+            // Process-global static state — reset so sibling tests see the default.
+            ImageGenerator.MAUI.Shared.Constants.OutputPaths.SetGeneratedImagesOverride(null);
+        }
     }
 
     [Fact]

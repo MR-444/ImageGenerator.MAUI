@@ -26,17 +26,25 @@ public sealed class GalleryService : IGalleryService
     private static readonly TimeSpan InFlightGuard = TimeSpan.FromSeconds(2);
 
     private readonly Func<DateTime> _clock;
-    private readonly string _rootDirectory;
+    private readonly string? _rootDirectoryOverride;
 
     public GalleryService(string? rootDirectory = null, Func<DateTime>? clock = null)
     {
-        _rootDirectory = rootDirectory ?? OutputPaths.GeneratedImagesDirectory;
+        // Tests pin an explicit directory; production passes null and resolves the configurable
+        // output folder LIVE per enumeration (below) so this singleton follows a setting change
+        // without a restart.
+        _rootDirectoryOverride = rootDirectory;
         _clock = clock ?? (() => DateTime.Now);
     }
 
+    private string RootDirectory => _rootDirectoryOverride ?? OutputPaths.GeneratedImagesDirectory;
+
     public async IAsyncEnumerable<GalleryItem> EnumerateAsync([EnumeratorCancellation] CancellationToken ct = default)
     {
-        if (!Directory.Exists(_rootDirectory))
+        // Resolve once per enumeration so a live output-folder change is picked up on the next
+        // refresh without rebuilding this singleton.
+        var rootDirectory = RootDirectory;
+        if (!Directory.Exists(rootDirectory))
         {
             yield break;
         }
@@ -44,7 +52,7 @@ public sealed class GalleryService : IGalleryService
         // Materialize once so we can sort. The output dir is small (hundreds, maybe low
         // thousands) — virtualizing the walk would only matter for tens of thousands.
         var paths = Directory
-            .EnumerateFiles(_rootDirectory)
+            .EnumerateFiles(rootDirectory)
             .Where(p => ImageExtensions.Contains(Path.GetExtension(p)))
             .ToList();
 

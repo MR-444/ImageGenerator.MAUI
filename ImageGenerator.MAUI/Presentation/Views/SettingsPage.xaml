@@ -74,6 +74,29 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- CARD: Output folder -->
+            <Border Style="{StaticResource Card}"
+                    VerticalOptions="Start">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Output folder" Style="{StaticResource CardTitle}" />
+                    <Label Text="Where generated images (and their JSON-prompt exports) are saved. ComfyUI workflow templates and the log stay in the default Pictures folder."
+                           Style="{StaticResource HelperText}" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Entry Grid.Column="0"
+                               Text="{Binding OutputFolder, Mode=TwoWay}"
+                               Placeholder="Pictures\ImageGenerator.MAUI"
+                               SemanticProperties.Description="Folder where generated images are saved"
+                               AutomationId="OutputFolderEntry" />
+                        <Button Grid.Column="1"
+                                Text="Browse…"
+                                Command="{Binding BrowseOutputFolderCommand}"
+                                Style="{StaticResource SecondaryButton}"
+                                SemanticProperties.Description="Choose the output folder"
+                                AutomationId="OutputFolderBrowseButton" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
             <!-- CARD: CivitAI -->
             <Border Style="{StaticResource Card}"
                     VerticalOptions="Start">

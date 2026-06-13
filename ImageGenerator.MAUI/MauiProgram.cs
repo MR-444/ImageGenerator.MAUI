@@ -130,6 +130,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IComfyUiCheckpointService, ComfyUiCheckpointService>();
         builder.Services.AddSingleton<IGalleryService>(_ => new GalleryService());
         builder.Services.AddSingleton<IFileLauncher, FileLauncher>();
+        builder.Services.AddSingleton<IFolderPicker, FolderPickerService>();
         builder.Services.AddSingleton<IClipboardService, ClipboardService>();
         builder.Services.AddSingleton<IJsonPromptFileService, JsonPromptFileService>();
 
@@ -165,6 +166,14 @@ public static class MauiProgram
         // the page itself is cheap to rebuild per navigation.
         builder.Services.AddTransient<SettingsPage>();
 
-        return builder.Build();
+        var app = builder.Build();
+
+        // Apply the persisted output-folder setting before any save/gallery use, independent of
+        // VM init order. CrashLogger already configured app.log against the fixed default above —
+        // intended: the log stays anchored regardless of this setting.
+        var savedOutputFolder = app.Services.GetRequiredService<IUiStateStore>().LoadOutputFolder();
+        Shared.Constants.OutputPaths.SetGeneratedImagesOverride(savedOutputFolder);
+
+        return app;
     }
 }
