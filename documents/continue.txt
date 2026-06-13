@@ -1,8 +1,10 @@
 ImageGenerator.MAUI — Open Work Queue
 =====================================
 
-Last updated: 2026-06-13 (Faster byte-identical PNG saves shipped 8f32b87).
-v1.8.0 RELEASED (CivitAI posting: one-click publish +
+Last updated: 2026-06-14 (v1.9.0 RELEASED). v1.9.0 bundles the post-1.8.0 work:
+Remix from an image (flagship), Gallery multi-select → one CivitAI draft post,
+Configurable output folder, Clear finished jobs, Faster byte-identical PNG saves,
+and the custom app icon. Earlier: v1.8.0 (CivitAI posting: one-click publish +
 Gallery multi-select → one draft post). Custom app icon shipped (framed-scene
 glyph replacing the .NET template, commit 01a75cd). The v1.5.0 Structure-Editor
 & ComfyUI work and the full csharp-auditor pass (0 Critical / 2 High / 3 Medium

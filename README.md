@@ -254,12 +254,8 @@ If you hit any of the above, please [open an issue](https://github.com/MR-444/Im
 
 This is a small side project, so treat these as directions under consideration rather than commitments or a dated plan — roughly in order of interest:
 
-- **Remix from an image** — reload a saved image's embedded recipe (prompt, seed, model, parameters) straight back into the generator, closing the reproducibility loop the app is built around.
 - **One-click upscale** — upscale a finished result through an existing provider (a Replicate upscaler, or a ComfyUI upscale workflow), reusing plumbing that's already there.
 - **Saved parameter presets** — name and recall a model + parameters combo.
-- **Clear finished jobs** — a queue-eviction control so completed cards don't pile up over a long session.
-- **Configurable output folder** — choose where images are saved instead of the fixed `Pictures\ImageGenerator.MAUI\`.
-- **Faster, byte-identical saves** — splice the metadata into the PNG instead of decoding and re-encoding it: quicker, and it keeps the API's exact bytes (so a CivitAI upload is truly byte-for-byte the original).
 
 Got a feature request? [Open an issue](https://github.com/MR-444/ImageGenerator.MAUI/issues) — see [Feedback & contributions](#-feedback--contributions).
 
