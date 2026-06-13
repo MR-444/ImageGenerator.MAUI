@@ -1,18 +1,63 @@
 ImageGenerator.MAUI — Open Work Queue
 =====================================
 
-Last updated: 2026-06-11 (evening). v1.5.0 released (tag v1.5.0 "Structure
-Editor & ComfyUI"); post-release hotfixes + the full csharp-auditor pass
-(0 Critical / 2 High / 3 Medium / 2 Low) are ALL shipped — nothing from the
-audit remains open. Full per-item forensics of completed work live in this
-file's git history (last full narrative version at commit 97cd2ab; audit
-report at documents/audit/csharp-audit-2026-06-11.md, untracked).
+Last updated: 2026-06-13. v1.8.0 RELEASED (CivitAI posting: one-click publish +
+Gallery multi-select → one draft post). Custom app icon shipped (framed-scene
+glyph replacing the .NET template, commit 01a75cd). The v1.5.0 Structure-Editor
+& ComfyUI work and the full csharp-auditor pass (0 Critical / 2 High / 3 Medium
+/ 2 Low) are ALL shipped. Full per-item forensics of completed work live in this
+file's git history (audit report at documents/audit/csharp-audit-2026-06-11.md).
 
 This file holds ONLY the open backlog. Update it when you start an item
 (set [~]) and when you finish (set [x] + commit hash, then prune on the
 next pass).
 
   [ ] = open      [~] = in progress (commit not yet on master)
+
+
+RECENTLY DONE
+-------------
+
+[x] README streamline + Roadmap/Outlook — commit 94a5f8d (2026-06-13).
+    De-duped Features vs "Using the app" and the 3× metadata story (now
+    canonical in "Reading back the embedded metadata"); folded the five
+    per-model bullets into one Models line; fixed stale facts (test count
+    842→858, gallery multi-select now noted as existing, dropped the "1.0 /
+    this build" framing); added the "## 🔭 Roadmap / Outlook" section sourced
+    from the six items below.
+
+
+ROADMAP / OUTLOOK — recorded forward plan (each = its own future task)
+---------------------------------------------------------------------
+
+User-selected 2026-06-13 from a grounded brainstorm. Respect scope rules
+(no multi-image-per-click; no kontext/negative_prompt/A1111-in-saved-files).
+These go INTO the README Outlook AND are the backlog for future contexts.
+
+[ ] Remix from an image — reload a saved image's embedded recipe (prompt, seed,
+    model, params) back into the generator. Reader exists: GalleryService.
+    ReadMetadataAsync parses the key:value lines; this maps them back onto
+    ImageGenerationParameters + selects the model. Closes the reproducibility
+    loop the app is built around. FLAGSHIP.
+[ ] One-click upscale of a result — route a finished image through an existing
+    provider (a Replicate upscaler model, or a ComfyUI upscale workflow). New
+    operation type but reuses dispatch/provider plumbing.
+[ ] Saved parameter presets — name + recall a model+params combo.
+[ ] Clear finished jobs — queue-eviction control (cards never evict today;
+    GeneratorViewModel.Jobs). Was a Known-issues "v1.x candidate".
+[ ] Configurable output folder — currently hard-pinned in
+    Shared/Constants/OutputPaths.cs (GeneratedImagesDirectory =
+    %USERPROFILE%\Pictures\ImageGenerator.MAUI\). Make it a setting.
+[ ] Faster, byte-identical PNG saves (efficiency) — ImageFileService.
+    SaveImageWithMetadataAsync fully decodes to Rgba32 just to read dimensions
+    + attach a Comment chunk, then re-encodes. Splice the tEXt chunk into the
+    original bytes instead (dimensions header-only via Image.Identify, as
+    GalleryService already does) → faster AND keeps the API's exact bytes, so
+    CivitAI uploads become truly byte-identical.
+
+NOT selected (record so they aren't re-pitched as new): gallery delete/search/
+favorites, compare/A-B view. Excluded by scope: seed-variation "more like this"
+(only OK as a sequential batch, never multi-output).
 
 
 COMFYUI PHASE 2 POOL — CLOSED 2026-06-11
