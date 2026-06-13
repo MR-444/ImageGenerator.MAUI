@@ -48,13 +48,27 @@ public sealed class CivitaiPostingService : ICivitaiPostingService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<CivitaiPostResult> PostImageAsync(
+    public Task<CivitaiPostResult> PostImageAsync(
         string filePath,
         string title,
         IReadOnlyDictionary<string, object>? meta,
         int? modelVersionId,
         CancellationToken cancellationToken = default)
+        // The generation-time path: one image, published one-step (user decision 2026-06-13).
+        => PostImagesAsync(
+            [new CivitaiImagePost(filePath, meta)], title, modelVersionId,
+            publish: true, cancellationToken);
+
+    public async Task<CivitaiPostResult> PostImagesAsync(
+        IReadOnlyList<CivitaiImagePost> images,
+        string title,
+        int? modelVersionId,
+        bool publish,
+        CancellationToken cancellationToken = default)
     {
+        if (images.Count == 0)
+            return new CivitaiPostResult(false, null, null, "No images to post.");
+
         var apiKey = await _tokenStore.LoadAsync();
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -64,38 +78,22 @@ public sealed class CivitaiPostingService : ICivitaiPostingService
 
         try
         {
-            // The saved file goes up byte-identical: no re-encode, no metadata injection.
-            // Generation data travels as the structured `meta` object instead.
-            var bytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
-            var base64 = Convert.ToBase64String(bytes);
-            var contentType = ImageDataUriEncoder.DetectImageMimeType(base64);
-
-            var upload = await CallMcpToolAsync(
-                "upload_image",
-                new Dictionary<string, object> { ["data"] = base64, ["contentType"] = contentType },
-                apiKey, cancellationToken);
-            var uuid = GetString(upload, "uuid")
-                ?? throw new CivitaiApiException("CivitAI upload returned no image UUID (response shape changed?).");
-
-            var image = new Dictionary<string, object?>
+            // Upload each image first (byte-identical, no re-encode) and collect the post-image
+            // payloads; a single create call then groups them into one post.
+            var imagePayloads = new List<Dictionary<string, object?>>(images.Count);
+            for (var index = 0; index < images.Count; index++)
             {
-                ["url"] = uuid,
-                ["index"] = 0,
-                ["type"] = "image",
-            };
-            if (GetInt(upload, "width") is { } width) image["width"] = width;
-            if (GetInt(upload, "height") is { } height) image["height"] = height;
-            if (meta is { Count: > 0 }) image["meta"] = meta;
-            // Set on the image AND the post (below), mirroring the MCP server's own wrapper —
-            // this is what lands the published post in the model's gallery.
-            if (modelVersionId is { } versionId) image["modelVersionId"] = versionId;
+                imagePayloads.Add(await UploadAndBuildImageAsync(
+                    images[index].FilePath, images[index].Meta, index, modelVersionId,
+                    apiKey, cancellationToken));
+            }
 
             var input = new Dictionary<string, object?>
             {
-                // One-step publish (user decision 2026-06-13, after a draft-first trial): the
-                // whole point of the checkbox is post-and-done, no manual publish on the site.
-                ["publish"] = true,
-                ["images"] = new[] { image },
+                // publish:true = post-and-done (generation-time checkbox); publish:false = draft
+                // (Gallery batch flow — the user reviews and publishes on the site).
+                ["publish"] = publish,
+                ["images"] = imagePayloads,
             };
             // Title is optional server-side; an empty one (e.g. a JSON prompt with no usable
             // description) is better omitted than sent as an empty string.
@@ -106,8 +104,11 @@ public sealed class CivitaiPostingService : ICivitaiPostingService
             var postId = GetInt(created, "id")
                 ?? throw new CivitaiApiException("CivitAI post creation returned no post id (response shape changed?).");
 
-            _logger.LogInformation("CivitAI post published Id={PostId} File={File}", postId, filePath);
-            return new CivitaiPostResult(true, postId, $"{PostUrlPrefix}{postId}", "Posted to CivitAI.");
+            _logger.LogInformation(
+                "CivitAI post {Mode} Id={PostId} Images={Count}",
+                publish ? "published" : "drafted", postId, images.Count);
+            return new CivitaiPostResult(true, postId, $"{PostUrlPrefix}{postId}",
+                publish ? "Posted to CivitAI." : "Created CivitAI draft.");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -118,9 +119,46 @@ public sealed class CivitaiPostingService : ICivitaiPostingService
             // CivitaiApiException carries a server-shaped message; everything else (transport,
             // Polly timeout, IO) gets its exception message. Posting is a post-save side
             // effect — it must surface as a status line, never as a thrown error.
-            _logger.LogWarning(ex, "CivitAI posting failed File={File}", filePath);
+            _logger.LogWarning(ex, "CivitAI posting failed Images={Count}", images.Count);
             return new CivitaiPostResult(false, null, null, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Uploads one file via MCP upload_image and builds its post.createWithImages image entry
+    /// (url=UUID, index, optional width/height/meta/modelVersionId). The modelVersionId rides on
+    /// the image AND the post, mirroring the MCP wrapper — this lands the post in the model gallery.
+    /// </summary>
+    private async Task<Dictionary<string, object?>> UploadAndBuildImageAsync(
+        string filePath,
+        IReadOnlyDictionary<string, object>? meta,
+        int index,
+        int? modelVersionId,
+        string apiKey,
+        CancellationToken cancellationToken)
+    {
+        var bytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
+        var base64 = Convert.ToBase64String(bytes);
+        var contentType = ImageDataUriEncoder.DetectImageMimeType(base64);
+
+        var upload = await CallMcpToolAsync(
+            "upload_image",
+            new Dictionary<string, object> { ["data"] = base64, ["contentType"] = contentType },
+            apiKey, cancellationToken);
+        var uuid = GetString(upload, "uuid")
+            ?? throw new CivitaiApiException("CivitAI upload returned no image UUID (response shape changed?).");
+
+        var image = new Dictionary<string, object?>
+        {
+            ["url"] = uuid,
+            ["index"] = index,
+            ["type"] = "image",
+        };
+        if (GetInt(upload, "width") is { } width) image["width"] = width;
+        if (GetInt(upload, "height") is { } height) image["height"] = height;
+        if (meta is { Count: > 0 }) image["meta"] = meta;
+        if (modelVersionId is { } versionId) image["modelVersionId"] = versionId;
+        return image;
     }
 
     public async Task<CivitaiConnectionResult> TestConnectionAsync(CancellationToken cancellationToken = default)

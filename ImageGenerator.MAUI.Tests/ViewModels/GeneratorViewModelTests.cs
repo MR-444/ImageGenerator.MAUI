@@ -2372,57 +2372,6 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.CivitaiModelRef.Should().Be("3005491");
     }
 
-    [Theory]
-    [InlineData("", "")]
-    [InlineData("   \t\n ", "")]
-    [InlineData("a red fox", "a red fox")]
-    [InlineData("a   red\n\nfox", "a red fox")]
-    public void BuildCivitaiTitle_CollapsesWhitespace_EmptyMeansNoTitle(string prompt, string expected)
-    {
-        GeneratorViewModel.BuildCivitaiTitle(prompt).Should().Be(expected);
-    }
-
-    [Fact]
-    public void BuildCivitaiTitle_JsonPrompt_UsesHighLevelDescription()
-    {
-        const string json = """{"high_level_description":"A dark-haired woman at dusk","style":"photo"}""";
-
-        GeneratorViewModel.BuildCivitaiTitle(json).Should().Be("A dark-haired woman at dusk");
-    }
-
-    [Fact]
-    public void BuildCivitaiTitle_JsonPrompt_FallsBackThroughKnownKeys()
-    {
-        GeneratorViewModel.BuildCivitaiTitle("""{"style":"photo","caption":"A red fox"}""")
-            .Should().Be("A red fox");
-    }
-
-    [Fact]
-    public void BuildCivitaiTitle_JsonPromptWithoutUsableField_ReturnsEmpty()
-    {
-        GeneratorViewModel.BuildCivitaiTitle("""{"style":"photo","steps":30}""")
-            .Should().BeEmpty("no title beats a raw JSON blob as the post title");
-    }
-
-    [Fact]
-    public void BuildCivitaiTitle_MalformedJson_ReturnsEmpty()
-    {
-        GeneratorViewModel.BuildCivitaiTitle("{\"broken\": ").Should().BeEmpty();
-    }
-
-    [Fact]
-    public void BuildCivitaiTitle_LongPrompt_CutsAtWordBoundaryWithEllipsis()
-    {
-        var prompt = "A cinematic in-camera double-exposure photograph at eye level of a young woman";
-
-        var title = GeneratorViewModel.BuildCivitaiTitle(prompt);
-
-        title.Length.Should().BeLessThanOrEqualTo(61);
-        title.Should().EndWith("…");
-        title.Should().NotContain("  ");
-        prompt.Should().StartWith(title[..^1], "the cut must happen at a word boundary, not mid-word");
-    }
-
     [Fact]
     public async Task TestCivitaiConnection_WritesResultMessageToStatus()
     {

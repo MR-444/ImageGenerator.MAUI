@@ -45,20 +45,46 @@ public partial class GalleryPage
         }
     }
 
-    private void OnTileTapped(object? sender, TappedEventArgs e)
+    private void OnOpenTileClicked(object? sender, EventArgs e)
     {
         try
         {
-            // The Image's BindingContext inside the DataTemplate is the GalleryItem; pull it
-            // off the sender rather than relying on cross-DataTemplate binding paths.
-            if (sender is BindableObject bindable && bindable.BindingContext is GalleryItem item)
+            // Tile tap now toggles multi-selection, so opening the viewer is an explicit button.
+            if (sender is Button { CommandParameter: GalleryItem item })
             {
                 _viewModel.OpenInViewerCommand.Execute(item);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GalleryPage.{Op}", "OnTileTapped");
+            _logger.LogError(ex, "GalleryPage.{Op}", "OnOpenTileClicked");
+        }
+    }
+
+    private async void OnPostToCivitaiClicked(object? sender, EventArgs e)
+    {
+        try
+        {
+            var count = _viewModel.SelectedItems.Count;
+            if (count == 0) return;
+
+            // Posting publishes immediately at generation time, but the Gallery batch drafts —
+            // spell out exactly what happens so the user reviews before any upload runs.
+            var confirmed = await DisplayAlertAsync(
+                "Post to CivitAI?",
+                $"This uploads the {count} selected image(s) into ONE draft post on your CivitAI " +
+                "account. Nothing is published — open the draft to review and publish it on civitai.com.",
+                "Post draft",
+                "Cancel");
+
+            if (confirmed)
+            {
+                await _viewModel.PostSelectedAsOnePostCommand.ExecuteAsync(null);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GalleryPage.{Op}", "OnPostToCivitaiClicked");
         }
     }
 

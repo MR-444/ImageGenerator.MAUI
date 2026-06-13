@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Core.Domain.Services;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,8 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
 
     private readonly IGalleryService _galleryService;
     private readonly IFileLauncher _fileLauncher;
+    private readonly ICivitaiPostingService _civitaiPostingService;
+    private readonly IUiStateStore _uiStateStore;
     private readonly ILogger<GalleryViewModel> _logger;
     private readonly string _watchDirectory;
 
@@ -28,11 +31,47 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<GalleryItem> Items { get; } = [];
 
+    // Bound to the CollectionView's SelectedItems (SelectionMode="Multiple"). Object-typed
+    // because that is the contract of CollectionView.SelectedItems.
+    public ObservableCollection<object> SelectedItems { get; } = [];
+
+    public bool HasSelection => SelectedItems.Count > 0;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEmpty))]
     private bool _isBusy;
 
     public bool IsEmpty => Items.Count == 0 && !IsBusy;
+
+    // --- CivitAI batch posting (selected images → ONE draft post) ---
+
+    // The CivitAI model reference (URL or version id) the draft should land in. Shared with the
+    // main page via the same persisted UiStateStore key, so the target only has to be set once.
+    [ObservableProperty]
+    private string _civitaiModelRef = string.Empty;
+
+    // Attach each image's embedded generation data (prompt/seed/model) to the post. Defaults ON
+    // for the Gallery: posting here is deliberate curation, and the data is already in the files.
+    [ObservableProperty]
+    private bool _civitaiIncludeMeta = true;
+
+    [ObservableProperty]
+    private string? _civitaiStatusMessage;
+
+    // The created draft's URL — surfaces the "Open draft" button so the user can review + publish.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLastPost))]
+    private string? _lastPostUrl;
+
+    public bool HasLastPost => !string.IsNullOrEmpty(LastPostUrl);
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PostSelectedAsOnePostCommand))]
+    private bool _isPosting;
+
+    private bool CanPostSelected => HasSelection && !IsPosting;
+
+    partial void OnCivitaiModelRefChanged(string value) => _uiStateStore.PersistCivitaiModelRef(value ?? string.Empty);
 
     // Sort modes the user can pick. Display strings double as the SelectedSortMode value —
     // simpler than an enum + IValueConverter when the UI already uses a Picker bound to a
@@ -62,20 +101,35 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
     public GalleryViewModel(
         IGalleryService galleryService,
         IFileLauncher fileLauncher,
+        ICivitaiPostingService civitaiPostingService,
+        IUiStateStore uiStateStore,
         ILogger<GalleryViewModel> logger)
     {
         _galleryService = galleryService ?? throw new ArgumentNullException(nameof(galleryService));
         _fileLauncher = fileLauncher ?? throw new ArgumentNullException(nameof(fileLauncher));
+        _civitaiPostingService = civitaiPostingService ?? throw new ArgumentNullException(nameof(civitaiPostingService));
+        _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _watchDirectory = OutputPaths.GeneratedImagesDirectory;
 
         Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsEmpty));
+        // SelectedItems is mutated by the CollectionView (multi-select); recompute the gating
+        // flag and the post command's CanExecute whenever the selection changes.
+        SelectedItems.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasSelection));
+            PostSelectedAsOnePostCommand.NotifyCanExecuteChanged();
+        };
     }
 
     public async Task OnAppearingAsync()
     {
         try
         {
+            // Restore the shared CivitAI model target (same key the main page persists).
+            var savedModelRef = _uiStateStore.LoadCivitaiModelRef();
+            if (!string.IsNullOrEmpty(savedModelRef)) CivitaiModelRef = savedModelRef;
+
             StartWatcher();
             await RefreshAsync();
         }
@@ -172,6 +226,89 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
             // or if no shell association exists. Log so we can see a pattern, but don't
             // surface to the user — the missing tile will disappear on the next refresh.
             _logger.LogError(ex, "GalleryVM.{Op}", "OpenInViewer");
+        }
+    }
+
+    /// <summary>
+    /// Uploads every selected image into ONE CivitAI draft post (a single gallery card). Drafts —
+    /// never publishes — so the user reviews and publishes on the site. The warning/confirmation
+    /// is shown by the page before this runs; the command itself just does the work.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanPostSelected))]
+    private async Task PostSelectedAsOnePostAsync(CancellationToken ct = default)
+    {
+        // Snapshot now: the selection can change while uploads are in flight.
+        var selected = SelectedItems.OfType<GalleryItem>().ToList();
+        if (selected.Count == 0) return;
+
+        DispatchToUi(() =>
+        {
+            IsPosting = true;
+            LastPostUrl = null;
+            CivitaiStatusMessage = $"Posting {selected.Count} image(s) to CivitAI…";
+        });
+
+        try
+        {
+            var images = new List<CivitaiImagePost>(selected.Count);
+            string? firstPrompt = null;
+            foreach (var item in selected)
+            {
+                var fileMeta = await _galleryService.ReadMetadataAsync(item.FilePath, ct);
+                firstPrompt ??= fileMeta is not null && fileMeta.TryGetValue("Prompt", out var p) ? p : null;
+                var meta = CivitaiIncludeMeta ? CivitaiMetaBuilder.BuildFromFileMetadata(fileMeta) : null;
+                images.Add(new CivitaiImagePost(item.FilePath, meta));
+            }
+
+            var modelVersionId = CivitaiModelReference.ParseVersionId(CivitaiModelRef);
+            // Non-empty text that parses to nothing is a typo, not a "no model" choice — say so
+            // instead of silently posting to the profile.
+            var refNotRecognized = !string.IsNullOrWhiteSpace(CivitaiModelRef) && modelVersionId is null;
+
+            var title = CivitaiTitleBuilder.Build(firstPrompt ?? string.Empty);
+            var result = await _civitaiPostingService.PostImagesAsync(
+                images, title, modelVersionId, publish: false, ct);
+
+            _logger.LogInformation(
+                "Gallery CivitAI draft finished Success={Success} PostId={PostId} Images={Count} ModelVersionId={ModelVersionId}",
+                result.Success, result.PostId, images.Count, modelVersionId);
+
+            DispatchToUi(() =>
+            {
+                LastPostUrl = result.PostUrl;
+                CivitaiStatusMessage = result.Success
+                    ? refNotRecognized
+                        ? $"{result.Message} Model reference not recognized — drafted without a model link."
+                        : result.Message
+                    : $"CivitAI draft failed: {result.Message}";
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            DispatchToUi(() => CivitaiStatusMessage = "CivitAI posting canceled.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Gallery CivitAI posting threw");
+            DispatchToUi(() => CivitaiStatusMessage = $"CivitAI draft failed: {ex.Message}");
+        }
+        finally
+        {
+            DispatchToUi(() => IsPosting = false);
+        }
+    }
+
+    [RelayCommand]
+    private void OpenLastPost()
+    {
+        if (string.IsNullOrEmpty(LastPostUrl)) return;
+        try
+        {
+            _fileLauncher.Launch(LastPostUrl);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GalleryVM.{Op}", "OpenLastPost");
         }
     }
 

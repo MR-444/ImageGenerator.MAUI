@@ -28,9 +28,27 @@ public interface ICivitaiPostingService
         int? modelVersionId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Uploads every image in <paramref name="images"/> byte-identical and creates ONE post
+    /// containing all of them (a single CivitAI gallery card, swipeable) — used by the
+    /// Gallery's batch posting. Each image carries its own optional <see cref="CivitaiImagePost.Meta"/>.
+    /// <paramref name="publish"/> false creates a DRAFT (the Gallery flow, so the user reviews
+    /// and publishes on the site); true publishes immediately. Same fail-soft contract as
+    /// <see cref="PostImageAsync"/>: server-side failures return an unsuccessful result.
+    /// </summary>
+    Task<CivitaiPostResult> PostImagesAsync(
+        IReadOnlyList<CivitaiImagePost> images,
+        string title,
+        int? modelVersionId,
+        bool publish,
+        CancellationToken cancellationToken = default);
+
     /// <summary>whoami — validates the stored API key for the Settings "Test connection" button.</summary>
     Task<CivitaiConnectionResult> TestConnectionAsync(CancellationToken cancellationToken = default);
 }
+
+/// <summary>One image in a multi-image post: its file path and optional structured meta.</summary>
+public sealed record CivitaiImagePost(string FilePath, IReadOnlyDictionary<string, object>? Meta);
 
 public sealed record CivitaiPostResult(bool Success, int? PostId, string? PostUrl, string Message);
 

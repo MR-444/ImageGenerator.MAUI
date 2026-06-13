@@ -906,7 +906,7 @@ public partial class GeneratorViewModel : ObservableObject
                 !string.IsNullOrWhiteSpace(job.Parameters.CivitaiModelRef) && modelVersionId is null;
 
             var result = await _civitaiPostingService.PostImageAsync(
-                savedPath, BuildCivitaiTitle(job.Prompt), meta, modelVersionId);
+                savedPath, CivitaiTitleBuilder.Build(job.Prompt), meta, modelVersionId);
 
             _logger.LogInformation(
                 "CivitAI post finished Success={Success} PostId={PostId} ModelVersionId={ModelVersionId}",
@@ -935,43 +935,6 @@ public partial class GeneratorViewModel : ObservableObject
     // Structured-JSON prompts (Ideogram / ComfyUI) would otherwise yield a raw
     // '{"high_level_description":…' blob as the title — extract the human description field
     // instead; when none is usable, return empty and the service omits the title entirely.
-    internal static string BuildCivitaiTitle(string prompt)
-    {
-        var text = prompt.TrimStart().StartsWith('{') ? ExtractJsonDescription(prompt) : prompt;
-
-        const int maxLength = 60;
-        var collapsed = string.Join(' ', (text ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-        if (collapsed.Length <= maxLength) return collapsed;
-
-        var cut = collapsed.LastIndexOf(' ', maxLength);
-        return collapsed[..(cut > 0 ? cut : maxLength)] + "…";
-    }
-
-    private static string? ExtractJsonDescription(string jsonPrompt)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(jsonPrompt);
-            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
-            // Priority order matches the prompt schemas in use: the Ideogram4 workflows carry
-            // high_level_description; the rest are generic fallbacks for other JSON shapes.
-            foreach (var key in (string[])["high_level_description", "description", "caption", "prompt", "title"])
-            {
-                if (doc.RootElement.TryGetProperty(key, out var value)
-                    && value.ValueKind == JsonValueKind.String
-                    && !string.IsNullOrWhiteSpace(value.GetString()))
-                {
-                    return value.GetString();
-                }
-            }
-        }
-        catch (JsonException)
-        {
-            // Not valid JSON after all — no title is better than a brace blob.
-        }
-        return null;
-    }
-
     [ObservableProperty]
     private string? _civitaiConnectionStatus;
 

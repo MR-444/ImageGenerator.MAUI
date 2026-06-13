@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using FluentAssertions;
+using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.External.Civitai;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Tests.TestSupport;
@@ -238,6 +239,52 @@ public sealed class CivitaiPostingServiceTests : IDisposable
     public async Task PostImage_MissingFile_FailsWithoutThrowing()
     {
         var result = await _sut.PostImageAsync(Path.Combine(_tempDir, "gone.png"), "t", null, null);
+
+        result.Success.Should().BeFalse();
+        _handler.Requests.Should().BeEmpty();
+    }
+
+    // ---- PostImagesAsync (Gallery batch — one draft, many images) ----
+
+    [Fact]
+    public async Task PostImages_MultipleImages_CreatesOneDraft_WithIndexedImages()
+    {
+        var second = Path.Combine(_tempDir, "image2.png");
+        File.WriteAllBytes(second, PngBytes);
+
+        // Two uploads, then one create.
+        _handler.Enqueue(HttpStatusCode.OK, UploadResponse);
+        _handler.Enqueue(HttpStatusCode.OK, UploadResponse);
+        _handler.Enqueue(HttpStatusCode.OK, CreatePostResponse);
+
+        var images = new List<CivitaiImagePost>
+        {
+            new(_imagePath, new Dictionary<string, object> { ["prompt"] = "first" }),
+            new(second, new Dictionary<string, object> { ["prompt"] = "second" }),
+        };
+
+        var result = await _sut.PostImagesAsync(images, "Batch", modelVersionId: null, publish: false);
+
+        result.Success.Should().BeTrue();
+        _handler.Requests.Should().HaveCount(3, "two uploads then a single create");
+
+        using var doc = JsonDocument.Parse(_handler.Requests[2].Body);
+        var input = doc.RootElement.GetProperty("json");
+        input.GetProperty("publish").GetBoolean().Should().BeFalse("the Gallery batch drafts for review");
+        input.GetProperty("title").GetString().Should().Be("Batch");
+
+        var imageArray = input.GetProperty("images");
+        imageArray.GetArrayLength().Should().Be(2);
+        imageArray[0].GetProperty("index").GetInt32().Should().Be(0);
+        imageArray[0].GetProperty("meta").GetProperty("prompt").GetString().Should().Be("first");
+        imageArray[1].GetProperty("index").GetInt32().Should().Be(1);
+        imageArray[1].GetProperty("meta").GetProperty("prompt").GetString().Should().Be("second");
+    }
+
+    [Fact]
+    public async Task PostImages_EmptyList_FailsFastWithoutRequests()
+    {
+        var result = await _sut.PostImagesAsync([], "t", null, publish: false);
 
         result.Success.Should().BeFalse();
         _handler.Requests.Should().BeEmpty();

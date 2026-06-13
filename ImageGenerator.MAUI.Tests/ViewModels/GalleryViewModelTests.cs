@@ -13,8 +13,12 @@ public class GalleryViewModelTests
 {
     private readonly Mock<IGalleryService> _galleryService = new();
     private readonly Mock<IFileLauncher> _fileLauncher = new();
+    private readonly Mock<ICivitaiPostingService> _civitaiPostingService = new();
+    private readonly Mock<IUiStateStore> _uiStateStore = new();
 
-    private GalleryViewModel CreateSut() => new(_galleryService.Object, _fileLauncher.Object, NullLogger<GalleryViewModel>.Instance);
+    private GalleryViewModel CreateSut() => new(
+        _galleryService.Object, _fileLauncher.Object, _civitaiPostingService.Object,
+        _uiStateStore.Object, NullLogger<GalleryViewModel>.Instance);
 
     private static GalleryItem MakeItem(string fileName, long size = 1234L, DateTime? createdAt = null) => new(
         FilePath: Path.Combine("C:", "fake", fileName),
@@ -231,5 +235,165 @@ public class GalleryViewModelTests
         var act = () => sut.Dispose();
 
         act.Should().NotThrow();
+    }
+
+    // ---- CivitAI batch posting ----
+
+    private sealed class CapturedPost
+    {
+        public List<CivitaiImagePost> Images { get; } = [];
+        public bool Publish { get; set; }
+        public int? ModelVersionId { get; set; }
+        public string Title { get; set; } = string.Empty;
+    }
+
+    private CapturedPost SetupCapturingPostingService(CivitaiPostResult? result = null)
+    {
+        // A class, not a tuple: the Callback runs AFTER this method returns, so value-type
+        // fields on a returned struct would be snapshotted empty. A reference type is mutated
+        // in place and the test sees the captured values.
+        var captured = new CapturedPost();
+        _civitaiPostingService
+            .Setup(s => s.PostImagesAsync(
+                It.IsAny<IReadOnlyList<CivitaiImagePost>>(), It.IsAny<string>(),
+                It.IsAny<int?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Callback<IReadOnlyList<CivitaiImagePost>, string, int?, bool, CancellationToken>(
+                (imgs, title, mv, pub, _) =>
+                {
+                    captured.Images.AddRange(imgs);
+                    captured.Publish = pub;
+                    captured.ModelVersionId = mv;
+                    captured.Title = title;
+                })
+            .ReturnsAsync(result ?? new CivitaiPostResult(true, 123, "https://civitai.com/posts/123", "Created CivitAI draft."));
+        return captured;
+    }
+
+    [Fact]
+    public void HasSelection_TracksSelectedItems()
+    {
+        var sut = CreateSut();
+        sut.HasSelection.Should().BeFalse();
+
+        sut.SelectedItems.Add(MakeItem("a.png"));
+        sut.HasSelection.Should().BeTrue();
+
+        sut.SelectedItems.Clear();
+        sut.HasSelection.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PostSelectedAsOnePostCommand_NoSelection_CannotExecute()
+    {
+        var sut = CreateSut();
+
+        ((IAsyncRelayCommand)sut.PostSelectedAsOnePostCommand).CanExecute(null).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task PostSelectedAsOnePost_PostsAllSelected_AsOneDraft_WithMeta()
+    {
+        _galleryService
+            .Setup(s => s.ReadMetadataAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, string> { ["Prompt"] = "a fox", ["Seed"] = "42" });
+        var captured = SetupCapturingPostingService();
+
+        var sut = CreateSut();
+        sut.SelectedItems.Add(MakeItem("a.png"));
+        sut.SelectedItems.Add(MakeItem("b.png"));
+
+        await ((IAsyncRelayCommand)sut.PostSelectedAsOnePostCommand).ExecuteAsync(null);
+
+        // Exactly one service call (one post), with both images and publish:false (draft).
+        _civitaiPostingService.Verify(s => s.PostImagesAsync(
+            It.IsAny<IReadOnlyList<CivitaiImagePost>>(), It.IsAny<string>(),
+            It.IsAny<int?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Once);
+        captured.Images.Should().HaveCount(2);
+        captured.Images.Select(i => Path.GetFileName(i.FilePath)).Should().ContainInOrder("a.png", "b.png");
+        captured.Publish.Should().BeFalse("the Gallery batch always drafts for review");
+        captured.Images[0].Meta.Should().NotBeNull();
+        captured.Images[0].Meta!["prompt"].Should().Be("a fox");
+        captured.Title.Should().Be("a fox", "title derives from the first image's prompt");
+
+        sut.CivitaiStatusMessage.Should().Be("Created CivitAI draft.");
+        sut.LastPostUrl.Should().Be("https://civitai.com/posts/123");
+        sut.HasLastPost.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task PostSelectedAsOnePost_IncludeMetaOff_SendsNullMeta()
+    {
+        _galleryService
+            .Setup(s => s.ReadMetadataAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, string> { ["Prompt"] = "a fox" });
+        var captured = SetupCapturingPostingService();
+
+        var sut = CreateSut();
+        sut.CivitaiIncludeMeta = false;
+        sut.SelectedItems.Add(MakeItem("a.png"));
+
+        await ((IAsyncRelayCommand)sut.PostSelectedAsOnePostCommand).ExecuteAsync(null);
+
+        captured.Images.Should().ContainSingle();
+        captured.Images[0].Meta.Should().BeNull("generation data is opt-out per batch");
+    }
+
+    [Fact]
+    public async Task PostSelectedAsOnePost_ParsesModelVersionIdFromRef()
+    {
+        _galleryService
+            .Setup(s => s.ReadMetadataAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, string> { ["Prompt"] = "p" });
+        var captured = SetupCapturingPostingService();
+
+        var sut = CreateSut();
+        sut.CivitaiModelRef = "https://civitai.com/models/123?modelVersionId=3005491";
+        sut.SelectedItems.Add(MakeItem("a.png"));
+
+        await ((IAsyncRelayCommand)sut.PostSelectedAsOnePostCommand).ExecuteAsync(null);
+
+        captured.ModelVersionId.Should().Be(3005491);
+    }
+
+    [Fact]
+    public void CivitaiModelRef_Changed_PersistsToUiStateStore()
+    {
+        var sut = CreateSut();
+
+        sut.CivitaiModelRef = "3005491";
+
+        _uiStateStore.Verify(u => u.PersistCivitaiModelRef("3005491"), Times.Once);
+    }
+
+    [Fact]
+    public async Task OnAppearing_RestoresSavedModelRef()
+    {
+        _uiStateStore.Setup(u => u.LoadCivitaiModelRef()).Returns("999");
+        _galleryService
+            .Setup(s => s.EnumerateAsync(It.IsAny<CancellationToken>()))
+            .Returns(AsAsync(Array.Empty<GalleryItem>()));
+
+        var sut = CreateSut();
+        await sut.OnAppearingAsync();
+        sut.Dispose();
+
+        sut.CivitaiModelRef.Should().Be("999");
+    }
+
+    [Fact]
+    public async Task OpenLastPostCommand_LaunchesUrl()
+    {
+        var sut = CreateSut();
+        // Drive LastPostUrl via a completed post so the command has something to open.
+        SetupCapturingPostingService(new CivitaiPostResult(true, 1, "https://civitai.com/posts/1", "ok"));
+        _galleryService
+            .Setup(s => s.ReadMetadataAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyDictionary<string, string>?)null);
+        sut.SelectedItems.Add(MakeItem("a.png"));
+        await ((IAsyncRelayCommand)sut.PostSelectedAsOnePostCommand).ExecuteAsync(null);
+
+        sut.OpenLastPostCommand.Execute(null);
+
+        _fileLauncher.Verify(l => l.Launch("https://civitai.com/posts/1"), Times.Once);
     }
 }
