@@ -135,4 +135,81 @@ public class FallbackComfyUiDescriptorTests
         _sut.Lines(defaulted).Should().NotContain(l => l.StartsWith("Preset:"));
         _sut.Lines(picked).Should().Contain("Preset: Turbo");
     }
+
+    // ---- Apply (Remix from an image) --------------------------------------------------------
+
+    [Theory]
+    [InlineData("1.5", "1.5 MP")]
+    [InlineData("1.0", "1.0 MP")]
+    [InlineData("4.0", "4.0 MP")]
+    public void Apply_ReverseMapsMegapixelsToTheResolutionOption(string stored, string expectedOption)
+    {
+        var p = new ImageGenerationParameters();
+
+        _sut.Apply(p, new Dictionary<string, string> { ["Megapixels"] = stored });
+
+        p.Resolution.Should().Be(expectedOption);
+    }
+
+    [Fact]
+    public void Apply_RoundTripsMegapixelsThroughLines()
+    {
+        var source = Parameters(resolution: "2.0 MP");
+
+        var p = new ImageGenerationParameters();
+        _sut.Apply(p, ParseLines(_sut.Lines(source)));
+
+        p.Resolution.Should().Be("2.0 MP");
+    }
+
+    [Fact]
+    public void Apply_UnknownMegapixels_LeavesResolutionUntouched()
+    {
+        var p = new ImageGenerationParameters { Resolution = "1.0 MP" };
+
+        _sut.Apply(p, new Dictionary<string, string> { ["Megapixels"] = "7.3" });
+
+        p.Resolution.Should().Be("1.0 MP");
+    }
+
+    [Fact]
+    public void Apply_RestoresJsonPromptToggle()
+    {
+        var p = new ImageGenerationParameters { UseJsonPrompt = false };
+
+        _sut.Apply(p, new Dictionary<string, string> { ["JsonPrompt"] = "True" });
+
+        p.UseJsonPrompt.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Apply_LeavesCheckpointAndPresetUntouched()
+    {
+        // ComfyUI checkpoint/preset are picker-mediated (async, Preferences-backed), so Remix
+        // deliberately does NOT re-apply them — the workflow itself comes back via the model id.
+        var p = new ImageGenerationParameters();
+
+        _sut.Apply(p, new Dictionary<string, string>
+        {
+            ["Checkpoint"] = "server.safetensors",
+            ["Preset"] = "Turbo"
+        });
+
+        p.ComfyUiCheckpoint.Should().BeEmpty();
+        p.ComfyUiPreset.Should().BeEmpty();
+    }
+
+    private static IReadOnlyDictionary<string, string> ParseLines(IEnumerable<string> lines)
+    {
+        var dict = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var line in lines)
+        {
+            var colon = line.IndexOf(':');
+            if (colon <= 0) continue;
+            var value = line[(colon + 1)..];
+            if (value.StartsWith(' ')) value = value[1..];
+            dict[line[..colon]] = value;
+        }
+        return dict;
+    }
 }

@@ -57,6 +57,16 @@ public abstract class GptImageOnReplicateDescriptor : IPayloadBuilder, ICapabili
         $"GptModeration: {p.GptModeration}",
         $"GptInputFidelity: {p.GptInputFidelity}"
     ];
+
+    public void Apply(ImageGenerationParameters p, IReadOnlyDictionary<string, string> meta)
+    {
+        // Only adopt values still offered by this model, so an out-of-range string from an
+        // older save can't slip past the picker into the Build payload.
+        meta.ApplyString("GptQuality", v => p.GptQuality = v, Quality.Contains);
+        meta.ApplyString("GptBackground", v => p.GptBackground = v, Background.Contains);
+        meta.ApplyString("GptModeration", v => p.GptModeration = v, Moderation.Contains);
+        meta.ApplyString("GptInputFidelity", v => p.GptInputFidelity = v, InputFidelity.Contains);
+    }
 }
 
 public sealed class GptImage15Descriptor : GptImageOnReplicateDescriptor

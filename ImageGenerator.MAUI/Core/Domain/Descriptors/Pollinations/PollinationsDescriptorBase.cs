@@ -72,6 +72,9 @@ public abstract class PollinationsDescriptorBase : IPayloadBuilder, ICapabilityP
     public IEnumerable<string> Lines(ImageGenerationParameters p) =>
         [$"Safe: {p.Safe}"];
 
+    public void Apply(ImageGenerationParameters p, IReadOnlyDictionary<string, string> meta) =>
+        meta.ApplyBool("Safe", v => p.Safe = v);
+
     private static (int W, int H) ResolveDimensions(ImageGenerationParameters p) =>
         AspectMap.TryGetValue(p.AspectRatio, out var preset)
             ? preset

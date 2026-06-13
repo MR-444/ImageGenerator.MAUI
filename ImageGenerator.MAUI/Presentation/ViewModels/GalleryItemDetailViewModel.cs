@@ -128,6 +128,27 @@ public partial class GalleryItemDetailViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task RemixAsync()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(FilePath)) return;
+            // Hand the path off to MainPage's "remixFrom" QueryProperty, which loads this image's
+            // embedded recipe (prompt, model, seed, params) back into the generator. The absolute
+            // "//MainPage" form pops the gallery + detail off the stack so the user lands on the
+            // generator with the recipe applied. ShellNavigationQueryParameters is single-use: a
+            // string query suffix would be RE-applied on every later back navigation to MainPage,
+            // re-loading the recipe and stomping any edits made since.
+            await Shell.Current.GoToAsync("//MainPage",
+                new ShellNavigationQueryParameters { ["remixFrom"] = FilePath });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GalleryItemDetailVM.{Op}", "Remix");
+        }
+    }
+
+    [RelayCommand]
     private async Task UseAsInputAsync()
     {
         try

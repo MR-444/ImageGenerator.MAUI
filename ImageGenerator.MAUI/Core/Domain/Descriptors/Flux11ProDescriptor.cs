@@ -38,4 +38,7 @@ public sealed class Flux11ProDescriptor : IPayloadBuilder, ICapabilityProvider, 
 
     public IEnumerable<string> Lines(ImageGenerationParameters p) =>
         [$"Upsampling: {p.PromptUpsampling}"];
+
+    public void Apply(ImageGenerationParameters p, IReadOnlyDictionary<string, string> meta) =>
+        meta.ApplyBool("Upsampling", v => p.PromptUpsampling = v);
 }

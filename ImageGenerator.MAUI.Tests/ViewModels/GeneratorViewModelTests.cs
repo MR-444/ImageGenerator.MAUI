@@ -30,6 +30,7 @@ public class GeneratorViewModelTests
     private readonly Mock<IModelCatalogCoordinator> _mockCatalogCoordinator;
     private readonly Mock<IPromptBatchParser> _mockPromptBatchParser;
     private readonly Mock<IComfyUiCheckpointService> _mockCheckpointService;
+    private readonly Mock<IGalleryService> _mockGalleryService;
 
     public GeneratorViewModelTests()
     {
@@ -43,6 +44,7 @@ public class GeneratorViewModelTests
         _mockCatalogCoordinator = new Mock<IModelCatalogCoordinator>();
         _mockPromptBatchParser = new Mock<IPromptBatchParser>();
         _mockCheckpointService = new Mock<IComfyUiCheckpointService>();
+        _mockGalleryService = new Mock<IGalleryService>();
 
         _viewModel = new GeneratorViewModel(
             _mockJobRunner.Object,
@@ -56,6 +58,7 @@ public class GeneratorViewModelTests
             ModelDescriptorRegistry.Default(),
             _mockPromptBatchParser.Object,
             _mockCheckpointService.Object,
+            _mockGalleryService.Object,
             NullLogger<GeneratorViewModel>.Instance);
     }
 
@@ -1003,6 +1006,7 @@ public class GeneratorViewModelTests
             ModelDescriptorRegistry.Default(),
             new Mock<IPromptBatchParser>().Object,
             new Mock<IComfyUiCheckpointService>().Object,
+            new Mock<IGalleryService>().Object,
             NullLogger<GeneratorViewModel>.Instance);
 
         await vm1.LoadCachedCatalogAsync();
@@ -1029,6 +1033,7 @@ public class GeneratorViewModelTests
             ModelDescriptorRegistry.Default(),
             new Mock<IPromptBatchParser>().Object,
             new Mock<IComfyUiCheckpointService>().Object,
+            new Mock<IGalleryService>().Object,
             NullLogger<GeneratorViewModel>.Instance);
 
         await vm2.LoadCachedCatalogAsync();
@@ -2382,5 +2387,140 @@ public class GeneratorViewModelTests
         await ((IAsyncRelayCommand)_viewModel.TestCivitaiConnectionCommand).ExecuteAsync(null);
 
         _viewModel.CivitaiConnectionStatus.Should().Be("Connected as Silmas.");
+    }
+
+    // ---- Remix from an image ----------------------------------------------------------------
+
+    private void StubRecipe(string path, params (string Key, string Value)[] lines)
+    {
+        var dict = lines.ToDictionary(l => l.Key, l => l.Value, StringComparer.Ordinal);
+        _mockGalleryService
+            .Setup(s => s.ReadMetadataAsync(path, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(dict);
+    }
+
+    [Fact]
+    public async Task RemixFromImage_FluxProRecipe_RestoresModelPromptSeedAndDisablesRandomize()
+    {
+        const string path = @"C:\fake\flux.png";
+        StubRecipe(path,
+            ("Prompt", "a remix prompt"),
+            ("ModelName", ModelConstants.Flux.Pro11),
+            ("Seed", "987654321"),
+            ("AspectRatio", "3:2"),
+            ("Format", "Jpg"),
+            ("Quality", "80"),
+            ("Upsampling", "True"));
+
+        await _viewModel.RemixFromImageAsync(path);
+
+        _viewModel.Parameters.Model.Should().Be(ModelConstants.Flux.Pro11);
+        _viewModel.Parameters.Prompt.Should().Be("a remix prompt");
+        _viewModel.Parameters.Seed.Should().Be(987654321);
+        // Without this the seed would be re-rolled at generate time, defeating reproducibility.
+        _viewModel.Parameters.RandomizeSeed.Should().BeFalse();
+        _viewModel.Parameters.AspectRatio.Should().Be("3:2");
+        _viewModel.Parameters.OutputFormat.Should().Be(ImageOutputFormat.Jpg);
+        _viewModel.Parameters.OutputQuality.Should().Be(80);
+        _viewModel.Parameters.PromptUpsampling.Should().BeTrue();
+        _viewModel.StatusKind.Should().Be(StatusKind.Success);
+    }
+
+    [Fact]
+    public async Task RemixFromImage_UnknownModel_LoadsPromptAndSeedOnly_WithWarning()
+    {
+        const string path = @"C:\fake\unknown.png";
+        var originalModel = _viewModel.Parameters.Model;
+        StubRecipe(path,
+            ("Prompt", "orphan prompt"),
+            ("ModelName", "vendor/deleted-model"),
+            ("Seed", "42"));
+
+        await _viewModel.RemixFromImageAsync(path);
+
+        _viewModel.Parameters.Prompt.Should().Be("orphan prompt");
+        _viewModel.Parameters.Seed.Should().Be(42);
+        _viewModel.Parameters.RandomizeSeed.Should().BeFalse();
+        _viewModel.Parameters.Model.Should().Be(originalModel);
+        _viewModel.StatusKind.Should().Be(StatusKind.Warning);
+    }
+
+    [Fact]
+    public async Task RemixFromImage_NoMetadata_SetsWarningAndChangesNothing()
+    {
+        const string path = @"C:\fake\nometa.png";
+        var prompt = _viewModel.Parameters.Prompt;
+        var model = _viewModel.Parameters.Model;
+        _mockGalleryService
+            .Setup(s => s.ReadMetadataAsync(path, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyDictionary<string, string>?)null);
+
+        await _viewModel.RemixFromImageAsync(path);
+
+        _viewModel.Parameters.Prompt.Should().Be(prompt);
+        _viewModel.Parameters.Model.Should().Be(model);
+        _viewModel.StatusKind.Should().Be(StatusKind.Warning);
+    }
+
+    [Fact]
+    public async Task RemixFromImage_IdeogramRecipe_AppliesResolutionAndJsonPromptWithoutPersisting()
+    {
+        const string path = @"C:\fake\ideogram.png";
+        StubRecipe(path,
+            ("Prompt", "{\"x\":1}"),
+            ("ModelName", ModelConstants.Ideogram.V4Balanced),
+            ("Resolution", "2048x2048"),
+            ("JsonPrompt", "True"),
+            ("CopyrightDetection", "True"));
+
+        await _viewModel.RemixFromImageAsync(path);
+
+        _viewModel.Parameters.Model.Should().Be(ModelConstants.Ideogram.V4Balanced);
+        _viewModel.Parameters.Resolution.Should().Be("2048x2048");
+        _viewModel.Parameters.UseJsonPrompt.Should().BeTrue();
+        _viewModel.Parameters.EnableCopyrightDetection.Should().BeTrue();
+        // A programmatic restore must never overwrite the user's persisted preferences.
+        _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _mockUiStateStore.Verify(s => s.PersistUseJsonPrompt(It.IsAny<bool>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RemixFromImage_AspectRatioNotOfferedByModel_IsIgnored()
+    {
+        // gpt-image-1.5 only offers 1:1 / 3:2 / 2:3 — a saved "21:9" must not slip through.
+        const string path = @"C:\fake\gpt.png";
+        StubRecipe(path,
+            ("Prompt", "p"),
+            ("ModelName", ModelConstants.OpenAI.GptImage15OnReplicate),
+            ("AspectRatio", "21:9"));
+
+        await _viewModel.RemixFromImageAsync(path);
+
+        _viewModel.Capabilities.AspectRatios.Should().Contain(_viewModel.Parameters.AspectRatio);
+        _viewModel.Parameters.AspectRatio.Should().NotBe("21:9");
+    }
+
+    [Fact]
+    public async Task RemixFromImage_ThenGenerate_PreservesTheRemixedSeed()
+    {
+        const string path = @"C:\fake\seed.png";
+        StubRecipe(path,
+            ("Prompt", "seed test"),
+            ("ModelName", ModelConstants.Flux.Pro11),
+            ("Seed", "123456"));
+
+        await _viewModel.RemixFromImageAsync(path);
+        _viewModel.Parameters.ApiToken = "valid-token";
+
+        ImageGenerationParameters? captured = null;
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .Callback<ImageGenerationParameters, CancellationToken, IProgress<JobProgress>?>((p, _, _) => captured = p)
+            .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, "ok"));
+
+        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+
+        captured.Should().NotBeNull();
+        captured!.Seed.Should().Be(123456);
     }
 }

@@ -71,6 +71,11 @@
 
             <!-- Action row. Wraps onto a second line when the window is narrow. -->
             <FlexLayout Direction="Row" Wrap="Wrap" JustifyContent="Start" AlignItems="Center">
+                <Button Text="Remix"
+                        Command="{Binding RemixCommand}"
+                        Style="{StaticResource PrimaryButton}"
+                        Margin="0,0,8,8"
+                        AutomationId="DetailRemixButton" />
                 <Button Text="Copy metadata"
                         Command="{Binding CopyMetadataCommand}"
                         Style="{StaticResource SecondaryButton}"
@@ -78,7 +83,7 @@
                         AutomationId="DetailCopyButton" />
                 <Button Text="Use as input"
                         Command="{Binding UseAsInputCommand}"
-                        Style="{StaticResource PrimaryButton}"
+                        Style="{StaticResource SecondaryButton}"
                         Margin="0,0,8,8"
                         AutomationId="DetailUseAsInputButton" />
                 <Button Text="Open in viewer"

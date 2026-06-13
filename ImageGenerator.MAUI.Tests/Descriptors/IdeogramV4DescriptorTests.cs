@@ -103,6 +103,43 @@ public class IdeogramV4DescriptorTests
     }
 
     [Fact]
+    public void Apply_RoundTripsResolutionJsonPromptAndCopyright()
+    {
+        var source = Params(useJson: true, resolution: "2048x2048", copyright: true);
+
+        var fresh = new ImageGenerationParameters();
+        _descriptor.Apply(fresh, ParseLines(_descriptor.Lines(source)));
+
+        fresh.Resolution.Should().Be("2048x2048");
+        fresh.UseJsonPrompt.Should().BeTrue();
+        fresh.EnableCopyrightDetection.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Apply_ResolutionNotInIdeogramSet_IsIgnored()
+    {
+        var p = new ImageGenerationParameters { Resolution = IdeogramV4Descriptor.AutoResolution };
+
+        _descriptor.Apply(p, new Dictionary<string, string> { ["Resolution"] = "1K" });
+
+        p.Resolution.Should().Be(IdeogramV4Descriptor.AutoResolution);
+    }
+
+    private static IReadOnlyDictionary<string, string> ParseLines(IEnumerable<string> lines)
+    {
+        var dict = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var line in lines)
+        {
+            var colon = line.IndexOf(':');
+            if (colon <= 0) continue;
+            var value = line[(colon + 1)..];
+            if (value.StartsWith(' ')) value = value[1..];
+            dict[line[..colon]] = value;
+        }
+        return dict;
+    }
+
+    [Fact]
     public void Capabilities_AreIdeogramShaped()
     {
         var caps = _descriptor.Capabilities;

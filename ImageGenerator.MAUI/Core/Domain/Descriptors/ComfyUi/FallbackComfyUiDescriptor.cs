@@ -65,6 +65,32 @@ public sealed class FallbackComfyUiDescriptor : IPayloadBuilder, ICapabilityProv
             yield return $"Preset: {p.ComfyUiPreset}";
     }
 
+    // Remix: restore the recipe a ComfyUI render carries that we CAN re-apply without the async
+    // checkpoint/preset pickers — the workflow itself comes back via the model id (comfyui/<name>).
+    // Checkpoint/Preset lines are intentionally NOT re-applied: the user picks a workflow and lets
+    // it define its models, and re-applying an explicit pick would mean threading a value through
+    // the async, Preferences-backed picker refresh.
+    public void Apply(ImageGenerationParameters p, IReadOnlyDictionary<string, string> meta)
+    {
+        meta.ApplyBool("JsonPrompt", v => p.UseJsonPrompt = v);
+        // Megapixels is stored as the number; Parameters.Resolution holds the picker option
+        // string, so reverse-map the number back to its "x.x MP" option when one matches.
+        if (FormatMegapixels(meta) is { } option)
+            p.Resolution = option;
+    }
+
+    /// <summary>
+    /// Inverse of the Megapixels writer: maps the stored number back to its option string
+    /// (1.5 → "1.5 MP"), but only when it matches a known option. Missing/unparseable/unknown → null.
+    /// </summary>
+    private static string? FormatMegapixels(IReadOnlyDictionary<string, string> meta)
+    {
+        if (!meta.TryGetValue("Megapixels", out var raw)
+            || !double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var mp))
+            return null;
+        return MegapixelOptions.FirstOrDefault(opt => ParseMegapixels(opt) == mp);
+    }
+
     /// <summary>"1.5 MP" → 1.5; anything unparseable → null (the workflow keeps its own value).</summary>
     internal static double? ParseMegapixels(string? resolution)
     {

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -29,6 +30,7 @@ public partial class GeneratorViewModel : ObservableObject
     private readonly IModelCatalogCoordinator _catalogCoordinator;
     private readonly IModelDescriptorRegistry _registry;
     private readonly IComfyUiCheckpointService _checkpointService;
+    private readonly IGalleryService _galleryService;
     private readonly ILogger<GeneratorViewModel> _logger;
 
     [ObservableProperty]
@@ -573,6 +575,7 @@ public partial class GeneratorViewModel : ObservableObject
         IModelDescriptorRegistry registry,
         IPromptBatchParser promptBatchParser,
         IComfyUiCheckpointService checkpointService,
+        IGalleryService galleryService,
         ILogger<GeneratorViewModel> logger)
     {
         _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
@@ -585,6 +588,7 @@ public partial class GeneratorViewModel : ObservableObject
         _catalogCoordinator = catalogCoordinator ?? throw new ArgumentNullException(nameof(catalogCoordinator));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _checkpointService = checkpointService ?? throw new ArgumentNullException(nameof(checkpointService));
+        _galleryService = galleryService ?? throw new ArgumentNullException(nameof(galleryService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         if (promptBatchParser is null) throw new ArgumentNullException(nameof(promptBatchParser));
 
@@ -1135,6 +1139,112 @@ public partial class GeneratorViewModel : ObservableObject
             _suppressJsonPromptPersist = true;
             try { Parameters.UseJsonPrompt = true; }
             finally { _suppressJsonPromptPersist = false; }
+        }
+    }
+
+    /// <summary>
+    /// Remix from an image: read a saved image's embedded recipe and reconstitute it in the
+    /// generator (select the model, populate prompt/seed/params). Mirrors LoadSavedUiState's
+    /// ordering — model first so RefreshCapabilities settles the option lists, then the
+    /// resolution/JSON-prompt writes happen last under the persist-suppression windows. The
+    /// common lines (Prompt/ModelName/Seed/AspectRatio/Dimensions/Format/Quality) are applied
+    /// here; per-model extras come from the model's IMetadataDescriber.Apply (the inverse of the
+    /// Lines writer in ImageFileService). Best-effort: a missing model still loads prompt+seed.
+    /// </summary>
+    public async Task RemixFromImageAsync(string? filePath, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(filePath)) return;
+
+        try
+        {
+            var meta = await _galleryService.ReadMetadataAsync(filePath, ct);
+            if (meta is null || meta.Count == 0)
+            {
+                SetStatus("No recipe found in this image.", StatusKind.Warning);
+                return;
+            }
+
+            // Prompt + seed first so the best-effort path (unknown model) still loads them.
+            meta.ApplyString("Prompt", v => Parameters.Prompt = v);
+            if (meta.TryGetValue("Seed", out var seedText)
+                && long.TryParse(seedText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var seed))
+            {
+                Parameters.Seed = seed;
+                // Without this the seed is re-rolled at generate time (GenerateImageAsync) —
+                // defeating the whole point of reproducing the image.
+                Parameters.RandomizeSeed = false;
+            }
+
+            // Model: only when it resolves in the hydrated catalog. RestoreSelectedModel runs
+            // RefreshCapabilities synchronously, settling AspectRatio/Resolution/format options.
+            meta.TryGetValue("ModelName", out var modelId);
+            var modelKnown = !string.IsNullOrEmpty(modelId)
+                && ProviderFilter.AllModels.Any(m => m.Value == modelId);
+            if (!modelKnown)
+            {
+                _logger.LogInformation("Remix: model \"{Model}\" not in catalog — loaded prompt+seed only", modelId);
+                SetStatus(
+                    string.IsNullOrEmpty(modelId)
+                        ? "This image has no model recorded — loaded prompt and seed only."
+                        : $"Model '{modelId}' isn't available — loaded prompt and seed only.",
+                    StatusKind.Warning);
+                return;
+            }
+
+            ProviderFilter.RestoreSelectedModel(modelId!);
+
+            // Aspect ratio: only if the (now-current) model offers it. SetAspectRatioProgrammatically
+            // keeps it out of the sticky preferred-AR memory.
+            if (meta.TryGetValue("AspectRatio", out var ar) && Capabilities.AspectRatios.Contains(ar))
+            {
+                SetAspectRatioProgrammatically(ar);
+                // Custom dimensions live in the Dimensions line (the produced pixel size); only
+                // meaningful for custom-dimension models, which is exactly when AR == "custom".
+                if (ar == "custom" && Capabilities.CustomDimensions
+                    && meta.TryGetValue("Dimensions", out var dims))
+                {
+                    var parts = dims.Split('x', StringSplitOptions.TrimEntries);
+                    if (parts.Length == 2
+                        && int.TryParse(parts[0], out var w) && int.TryParse(parts[1], out var h))
+                    {
+                        Parameters.Width = Math.Clamp(w, ValidationConstants.ImageWidthMin, ValidationConstants.ImageWidthMax);
+                        Parameters.Height = Math.Clamp(h, ValidationConstants.ImageHeightMin, ValidationConstants.ImageHeightMax);
+                    }
+                }
+            }
+
+            // Output format: skip on models that pin PNG (Ideogram) — RefreshCapabilities already set it.
+            if (Capabilities.OutputFormatSelectable
+                && meta.TryGetValue("Format", out var fmt)
+                && Enum.TryParse<ImageOutputFormat>(fmt, ignoreCase: true, out var outputFormat))
+            {
+                Parameters.OutputFormat = outputFormat;
+            }
+
+            if (meta.TryGetValue("Quality", out var qualityText)
+                && int.TryParse(qualityText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var quality))
+            {
+                Parameters.OutputQuality = quality;
+            }
+
+            // Per-model extras (Upsampling, Raw, Gpt*, Resolution, JsonPrompt, Safe, …). Resolution
+            // and UseJsonPrompt writes must sit inside the suppression windows so this restore can't
+            // overwrite the user's persisted preferences (same rule as LoadSavedUiState).
+            _suppressResolutionPersist = true;
+            _suppressJsonPromptPersist = true;
+            try { _registry.MetadataFor(modelId!)?.Apply(Parameters, meta); }
+            finally
+            {
+                _suppressResolutionPersist = false;
+                _suppressJsonPromptPersist = false;
+            }
+
+            SetStatus("Recipe loaded from image.", StatusKind.Success);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Remix from image failed for {Path}", filePath);
+            SetStatus("Couldn't load this image's recipe. See app.log for details.", StatusKind.Error);
         }
     }
 

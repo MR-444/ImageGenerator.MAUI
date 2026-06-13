@@ -44,4 +44,7 @@ public sealed class NanoBanana2Descriptor : IPayloadBuilder, ICapabilityProvider
 
     public IEnumerable<string> Lines(ImageGenerationParameters p) =>
         [$"Resolution: {p.Resolution}"];
+
+    public void Apply(ImageGenerationParameters p, IReadOnlyDictionary<string, string> meta) =>
+        meta.ApplyString("Resolution", v => p.Resolution = v, Resolutions.Contains);
 }

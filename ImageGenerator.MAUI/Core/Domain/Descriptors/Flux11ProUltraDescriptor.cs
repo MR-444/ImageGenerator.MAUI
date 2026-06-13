@@ -1,3 +1,4 @@
+using System.Globalization;
 using ImageGenerator.MAUI.Core.Domain.Descriptors.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
@@ -37,6 +38,14 @@ public sealed class Flux11ProUltraDescriptor : IPayloadBuilder, ICapabilityProvi
     public IEnumerable<string> Lines(ImageGenerationParameters p) =>
     [
         $"Raw: {p.Raw}",
-        $"ImagePromptStrength: {p.ImagePromptStrength}"
+        // Invariant culture so the value is portable: a German-locale machine would otherwise
+        // write "0,5" and the invariant-culture reader (Remix) couldn't parse it back.
+        $"ImagePromptStrength: {p.ImagePromptStrength.ToString(CultureInfo.InvariantCulture)}"
     ];
+
+    public void Apply(ImageGenerationParameters p, IReadOnlyDictionary<string, string> meta)
+    {
+        meta.ApplyBool("Raw", v => p.Raw = v);
+        meta.ApplyDouble("ImagePromptStrength", v => p.ImagePromptStrength = v);
+    }
 }

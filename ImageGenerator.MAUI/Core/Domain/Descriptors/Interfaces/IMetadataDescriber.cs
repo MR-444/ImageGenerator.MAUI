@@ -11,4 +11,12 @@ public interface IMetadataDescriber
 {
     string ModelId { get; }
     IEnumerable<string> Lines(ImageGenerationParameters parameters);
+
+    /// <summary>
+    /// Inverse of <see cref="Lines"/>: reads this model's extra metadata keys back out of a
+    /// parsed recipe (Remix from an image) and writes them onto <paramref name="parameters"/>.
+    /// Co-located with <see cref="Lines"/> so the write/read pair can't drift. Parsing is
+    /// defensive — a missing or unparseable key leaves the existing parameter value untouched.
+    /// </summary>
+    void Apply(ImageGenerationParameters parameters, IReadOnlyDictionary<string, string> meta);
 }

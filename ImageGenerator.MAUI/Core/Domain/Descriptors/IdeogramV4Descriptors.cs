@@ -81,6 +81,13 @@ public abstract class IdeogramV4Descriptor : IPayloadBuilder, ICapabilityProvide
         $"JsonPrompt: {p.UseJsonPrompt}",
         $"CopyrightDetection: {p.EnableCopyrightDetection}"
     ];
+
+    public void Apply(ImageGenerationParameters p, IReadOnlyDictionary<string, string> meta)
+    {
+        meta.ApplyString("Resolution", v => p.Resolution = v, IdeogramResolutions.Contains);
+        meta.ApplyBool("JsonPrompt", v => p.UseJsonPrompt = v);
+        meta.ApplyBool("CopyrightDetection", v => p.EnableCopyrightDetection = v);
+    }
 }
 
 public sealed class IdeogramV4BalancedDescriptor : IdeogramV4Descriptor
