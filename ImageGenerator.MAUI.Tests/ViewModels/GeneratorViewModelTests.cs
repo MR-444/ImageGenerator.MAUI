@@ -133,8 +133,40 @@ public class GeneratorViewModelTests
 
         await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
 
-        // Drives the hero "Latest result" preview on the main page.
+        // Drives the featured (large uncropped) queue card on the main page.
         _viewModel.LatestCompletedJob.Should().BeSameAs(_viewModel.Jobs[0]);
+    }
+
+    [Fact]
+    public async Task GenerateImage_SavedOutcome_FeaturesNewestJob()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        _viewModel.Parameters.Prompt = "test prompt";
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
+
+        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+
+        _viewModel.Jobs[0].IsFeatured.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GenerateImage_SecondSave_MovesFeaturedFlagToNewest()
+    {
+        _viewModel.Parameters.ApiToken = "valid-token";
+        _viewModel.Parameters.Prompt = "test prompt";
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
+
+        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+
+        // Newest is Jobs[0]; the previous newest (now Jobs[1]) must lose the crown so exactly
+        // one card renders the large preview.
+        _viewModel.Jobs[0].IsFeatured.Should().BeTrue();
+        _viewModel.Jobs[1].IsFeatured.Should().BeFalse();
     }
 
     [Fact]
@@ -148,7 +180,7 @@ public class GeneratorViewModelTests
 
         await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
 
-        // A failed/canceled job must never become the hero image.
+        // A failed/canceled job must never become the featured image.
         _viewModel.LatestCompletedJob.Should().BeNull();
     }
 

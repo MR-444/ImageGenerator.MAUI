@@ -414,43 +414,6 @@
             <ScrollView Grid.Column="1">
                 <VerticalStackLayout Spacing="12" Padding="0,0,12,16">
 
-                    <!-- HERO: newest saved image, large. Null job propagates to a null path,
-                         so NonEmptyStringToBool hides the whole block until the first save. -->
-                    <VerticalStackLayout Spacing="8"
-                                         IsVisible="{Binding LatestCompletedJob.ResultPath, Converter={StaticResource NonEmptyStringToBool}}">
-                        <Label Text="Latest result" Style="{StaticResource CardTitle}" />
-                        <Border Stroke="{AppThemeBinding Light={StaticResource SurfaceBorderLight}, Dark={StaticResource SurfaceBorderDark}}"
-                                StrokeThickness="1"
-                                Padding="0">
-                            <Border.StrokeShape>
-                                <RoundRectangle CornerRadius="8" />
-                            </Border.StrokeShape>
-                            <Image Source="{Binding LatestCompletedJob.ResultPath}"
-                                   Aspect="AspectFit"
-                                   MaximumHeightRequest="560"
-                                   HorizontalOptions="Fill"
-                                   SemanticProperties.Description="Newest generated image. Tap to open full size."
-                                   AutomationId="HeroResultImage">
-                                <Image.GestureRecognizers>
-                                    <TapGestureRecognizer Command="{Binding LatestCompletedJob.OpenImageCommand}" />
-                                </Image.GestureRecognizers>
-                            </Image>
-                        </Border>
-                        <HorizontalStackLayout Spacing="8">
-                            <Label Text="Tap to open full size."
-                                   Style="{StaticResource HelperText}"
-                                   VerticalOptions="Center" />
-                            <Button Text="Use as input"
-                                    Command="{Binding LatestCompletedJob.UseAsInputCommand}"
-                                    Style="{StaticResource SecondaryButton}"
-                                    AutomationId="HeroUseAsInputButton" />
-                            <Button Text="Show in folder"
-                                    Command="{Binding LatestCompletedJob.ShowInFolderCommand}"
-                                    Style="{StaticResource SecondaryButton}"
-                                    AutomationId="HeroShowInFolderButton" />
-                        </HorizontalStackLayout>
-                    </VerticalStackLayout>
-
                     <Label Text="Generation Queue"
                            Style="{StaticResource CardTitle}"
                            IsVisible="{Binding HasJobs}" />
@@ -519,6 +482,15 @@
                                                    HeightRequest="260"
                                                    HorizontalOptions="Fill"
                                                    SemanticProperties.Description="Generated image. Tap to open full size.">
+                                                <!-- Newest saved job is "featured": large, uncropped
+                                                     (the old hero treatment). Older cards stay compact. -->
+                                                <Image.Triggers>
+                                                    <DataTrigger TargetType="Image" Binding="{Binding IsFeatured}" Value="True">
+                                                        <Setter Property="Aspect" Value="AspectFit" />
+                                                        <Setter Property="HeightRequest" Value="-1" />
+                                                        <Setter Property="MaximumHeightRequest" Value="560" />
+                                                    </DataTrigger>
+                                                </Image.Triggers>
                                                 <Image.GestureRecognizers>
                                                     <TapGestureRecognizer Command="{Binding OpenImageCommand}" />
                                                 </Image.GestureRecognizers>

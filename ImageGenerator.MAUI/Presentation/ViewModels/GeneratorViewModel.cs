@@ -103,9 +103,9 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private string? _jsonPromptStateText;
 
-    // The newest successfully saved job — drives the main page's hero "Latest result"
-    // preview. Only Saved outcomes update it (see RunJobAsync); canceled/failed jobs never
-    // become the hero.
+    // The newest successfully saved job — drives the featured (large uncropped) queue card
+    // and is the handle for un-featuring the previous newest. Only Saved outcomes update it
+    // (see RunJobAsync); canceled/failed jobs never become the featured card.
     [ObservableProperty]
     private GenerationJob? _latestCompletedJob;
 
@@ -830,7 +830,14 @@ public partial class GeneratorViewModel : ObservableObject
             DispatchToUi(() =>
             {
                 job.ResultPath = outcome.SavedPath;
-                if (outcome.SavedPath is not null) LatestCompletedJob = job;
+                if (outcome.SavedPath is not null)
+                {
+                    // Move the "featured" crown from the previous newest to this one so exactly
+                    // one card shows the large uncropped preview.
+                    if (LatestCompletedJob is not null) LatestCompletedJob.IsFeatured = false;
+                    job.IsFeatured = true;
+                    LatestCompletedJob = job;
+                }
                 job.StatusMessage = outcome.Message;
                 job.StatusKind = outcome.Kind switch
                 {
