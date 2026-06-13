@@ -18,6 +18,15 @@ next pass).
 RECENTLY DONE
 -------------
 
+[x] Clear finished jobs — commit df1b1b0 (2026-06-13), user-verified ("it works").
+    "Clear finished" button in the Generation Queue header drops terminal cards, keeps
+    running + queued. GenerationJob.IsFinished = !IsRunning AND terminal StatusKind
+    (Success/Error/Canceled) — the kind check is load-bearing: a QUEUED batch job is
+    also !IsRunning but stays StatusKind.Info, so !IsRunning alone would evict pending
+    work. GeneratorViewModel.HasFinishedJobs gates the command (live via per-job
+    PropertyChanged through the Jobs CollectionChanged handler); clearing nulls
+    LatestCompletedJob (featured card is always Saved => terminal). 892 tests (+9).
+
 [x] Remix from an image (FLAGSHIP) — commit 15e955b (2026-06-13), user-verified
     ("it works"). "Remix" button on the gallery DETAIL page reloads a saved image's
     embedded recipe into the generator. Inverse mirrors the write split: common lines
@@ -51,14 +60,12 @@ ROADMAP / OUTLOOK — recorded forward plan (each = its own future task)
 User-selected 2026-06-13 from a grounded brainstorm. Respect scope rules
 (no multi-image-per-click; no kontext/negative_prompt/A1111-in-saved-files).
 These go INTO the README Outlook AND are the backlog for future contexts.
-(Remix from an image — SHIPPED, see RECENTLY DONE above.)
+(Remix from an image + Clear finished jobs — SHIPPED, see RECENTLY DONE above.)
 
 [ ] One-click upscale of a result — route a finished image through an existing
     provider (a Replicate upscaler model, or a ComfyUI upscale workflow). New
     operation type but reuses dispatch/provider plumbing.
 [ ] Saved parameter presets — name + recall a model+params combo.
-[ ] Clear finished jobs — queue-eviction control (cards never evict today;
-    GeneratorViewModel.Jobs). Was a Known-issues "v1.x candidate".
 [ ] Configurable output folder — currently hard-pinned in
     Shared/Constants/OutputPaths.cs (GeneratedImagesDirectory =
     %USERPROFILE%\Pictures\ImageGenerator.MAUI\). Make it a setting.
