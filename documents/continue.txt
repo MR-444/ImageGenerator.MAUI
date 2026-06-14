@@ -29,19 +29,29 @@ blend labels aggregate new words across ALL style fields; identical variants ded
 friendly slot-tag names (new SlotTagDisplay) + plain-English "operators that will run"; SCENE target
 frame derives from the real render AR (Parameters.AspectRatio) and the manual W×H field was removed.
 
-NEXT (user wants this): MORE / MORE-DIVERSE STYLE FRAGMENTS. Library = user-editable JSON folder, but
-the SHIPPED defaults live in ImageGenerator.MAUI/Resources/Raw/MutationDefaults/style-fragments.json
-(bundled into the exe by the Resources\Raw\** MauiAsset glob; lazily seeded to
-Pictures\ImageGenerator.MAUI\mutation-library\ on first run, NEVER overwritten thereafter). To ship new
-styles for everyone, edit that Resources seed file. Current 3 = gouache / anime / density — anime+density
-share aesthetics/lighting/palette and differ only in art_style (that overlap caused two blend labels to
-nearly collide), so add styles that are DISTINCT in aesthetics/lighting/palette, not just art_style.
-Schema per entry: { "name": unique-id, "style": { aesthetics, lighting, medium, art_style XOR photo
-(single-branch!), color_palette: [<=16 uppercase #RRGGBB] } }. Each fragment is validated on apply
-(V4JsonPromptValidator) AND a [CallerFilePath]-located real-seed test in MutationLibraryServiceTests
-guards the shipped JSON — keep it schema-clean or that test fails. Same pattern applies to ornament-kits.json
-(LOOK ornament phrases) and scene-elements.json (SCENE addable objects) if expanding those too. OPTIONAL
-companion idea the user floated: an "Open style library" button on the mutation page to reveal the folder.
+MORE / MORE-DIVERSE STYLE FRAGMENTS — DONE 0d81da6 (user-verified 2026-06-15: "I can see differences"
+— expected, style swap is one axis = same scene re-styled, not a different scene). Library grew 3 -> 24:
+the 3 botanist-themed originals (gouache/anime/density) + 21 NEW subject-agnostic fragments distinct in
+aesthetics/lighting/palette (not just art_style): oil_impasto, watercolor, pastel_soft, charcoal_sketch,
+concept_matte (painting); woodcut, ukiyo_e, risograph, art_nouveau, art_deco, comic_ink (print/graphic);
+cyberpunk_neon, synthwave, low_poly, pixel_art (digital); stained_glass, sumi_e, papercut_layered
+(decorative); cinematic_film, film_noir, analog_35mm (FIRST photo-branch styles — the photo branch was
+unused before). The shipped-seed guard test was STRENGTHENED to run EVERY fragment through
+V4JsonPromptValidator (catches a malformed style at test time, not a silent apply-time drop). RE-SEED NOTE:
+LoadAsync only seeds a MISSING store and is lazy (fires on first mutation RUN, MutationEngineViewModel.cs
+~L288, NOT at app start) — to pick up new defaults on an EXISTING install, delete
+Pictures\ImageGenerator.MAUI\mutation-library\style-fragments.json (styles only; ornament-kits/scene-elements
+untouched) then run a batch. MutationTestData.Library() was deliberately LEFT as the 3-fragment botanist
+fixture (no test enforces seed==fixture). 1076 tests.
+
+  Background on the schema (kept for future style/kit/element expansion):
+  Library = user-editable JSON folder; SHIPPED defaults live in
+  ImageGenerator.MAUI/Resources/Raw/MutationDefaults/style-fragments.json (bundled by the Resources\Raw\**
+  MauiAsset glob). Schema per entry: { "name": unique-id, "style": { aesthetics, lighting, medium,
+  art_style XOR photo (single-branch!), color_palette: [<=16 UPPERCASE #RRGGBB] } }. Same pattern applies to
+  ornament-kits.json (LOOK ornament phrases) and scene-elements.json (SCENE addable objects) if expanding
+  those. OPTIONAL companion idea the user floated (still open): an "Open style library" button on the
+  mutation page to reveal the folder.
 
 Detailed plan: C:\Users\mr\.claude\plans\question-about-my-comfyui-tingly-hummingbird.md
 Brief: documents/mutations/ideogram4_mutation_engine_handoff.md (+ botanist_*.json goldens).
