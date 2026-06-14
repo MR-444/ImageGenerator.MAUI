@@ -603,6 +603,32 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
             _generator.Parameters.Resolution = SelectedResolution;
     }
 
+    /// <summary>
+    /// Hand the current model to the mutation engine. Unlike Apply this stashes the <b>typed</b>
+    /// model on the generator (not a serialized string) so any per-element <c>Element.SlotTag</c>
+    /// survives the hop — the engine reads explicit tags only off the typed base. Validated first
+    /// so an incomplete model can't reach a mutation run.
+    /// </summary>
+    [RelayCommand]
+    private async Task MutateAsync()
+    {
+        if (_generator is null) return;
+
+        var model = BuildModel();
+        if (!ReportValidation(model)) return;
+
+        _generator.PendingMutationBase = model;
+        try
+        {
+            await Shell.Current.GoToAsync("mutation-engine");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "IdeogramStructureEditorVM.{Op}", "Mutate");
+            SetStatus($"Couldn't open the mutation engine: {ex.Message}", StatusKind.Error);
+        }
+    }
+
     [RelayCommand]
     private async Task CancelAsync()
     {

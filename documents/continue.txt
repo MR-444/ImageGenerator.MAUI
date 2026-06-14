@@ -132,9 +132,28 @@ PHASES:
        trailing_ivy/luna_moth); auto-bundled by the existing MauiAsset Resources\Raw\** glob (no .csproj
        change). 6 new service tests incl. a [CallerFilePath]-located REAL-seed validity test guarding the
        shipped JSON against schema drift. 1045 total green, Release clean (0 warnings). Committed 2fae988.
-[ ] 5. UI: MutationEnginePage/VM (axis, operators, library pickers, N, strength,
+[~] 5. UI: MutationEnginePage/VM (axis, operators, library pickers, N, strength,
        include-base, seed, slot-tag review) → RunBatchAsync; editor "Mutate…" button
        + per-element slot picker + PendingMutationBase handoff; MainPage "Mutate current".
+       DONE (commit pending): MutationEngineViewModel (transient) + MutationEnginePage. User chose
+       MINIMAL selectors (axis only; the as-built MutationRunConfig has NO operator/library subset
+       fields — engine runs ALL axis operators + full library, operators self-draw) so operators show
+       READ-ONLY ("OperatorsForAxis", filtered DefaultOperators by axis); NO operator/library multi-
+       select, NO editor slot Picker (user chose slot review on the MUTATION PAGE ONLY). Page = axis
+       Picker (pins other) + Count 1-100 + strength Picker (visible when SCENE) + include-base toggle
+       + seed entry/Randomize/Copy + target W×H (parsed from resolution "WxH", else 1024²) + per-element
+       slot-review CollectionView (inferred default via SlotTagger + "(auto / infer)" sentinel → null)
+       + read-only settings echo. KEY MECHANISM: explicit slot tags reach the engine ONLY via
+       Element.SlotTag on the TYPED base — engine calls SlotTagger.Resolve(base) with no caller map.
+       So editor "Mutate…" hands off the typed model (BuildModel) on GeneratorViewModel.PendingMutationBase
+       (plain property, not observable; consumed+cleared in VM.Initialize), and Run() writes reviewed
+       tags onto base.Elements[].SlotTag before engine.Generate. MainPage "Mutate current prompt…"
+       (gated by SupportsJsonPromptEditor, beside "Edit structure…") deserializes Parameters.Prompt
+       (tags inferred). GenerateAsync → engine.Generate → GoToAsync("..") → Batch.RunBatchAsync(captions).
+       VM seams kept Shell-free + testable: InitializeFrom / Run / SetBaseForTest; MutationSlotReviewItem
+       is TOP-LEVEL (clean XAML x:DataType). DI: CaptionMutationEngine singleton + VM/Page transient in
+       MauiProgram; route "mutation-engine" in AppShell. 11 new VM tests (1056 total green), both configs
+       0 warnings. NEXT = Phase 6.
 [ ] 6. Multi-generation "Mutate from this" (gallery/job winner → caption via metadata
        read → new base) + promotion metadata round-trip test.
 

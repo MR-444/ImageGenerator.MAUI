@@ -10,6 +10,7 @@ using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.ComfyUi;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Enums;
+using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Core.Domain.Services;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
@@ -1088,6 +1089,42 @@ public partial class GeneratorViewModel : ObservableObject
         catch (Exception ex)
         {
             SetStatus($"Couldn't open Settings: {ex.Message}", StatusKind.Error);
+        }
+    }
+
+    /// <summary>
+    /// Transient hand-off slot for the mutation engine page: the structure editor stashes the
+    /// typed base model here (so explicit <c>Element.SlotTag</c> values survive — a string
+    /// round-trip would strip them), and the mutation VM consumes it on appearance. Plain
+    /// property, not observable: nothing binds to it; it's read once then cleared.
+    /// </summary>
+    public V4JsonPrompt? PendingMutationBase { get; set; }
+
+    /// <summary>
+    /// "Mutate current prompt" entry from MainPage: seed the mutation page from whatever is in the
+    /// prompt box (slot tags only inferred, since a string carries none). A non-structured prompt
+    /// leaves <see cref="PendingMutationBase"/> null — the mutation VM then reports the problem.
+    /// </summary>
+    [RelayCommand]
+    private async Task OpenMutationEngineAsync()
+    {
+        try
+        {
+            PendingMutationBase = V4JsonPromptSerializer.Deserialize(Parameters.Prompt);
+        }
+        catch (V4JsonPromptParseException)
+        {
+            // Navigate anyway: the page surfaces "the prompt box isn't a structured prompt".
+            PendingMutationBase = null;
+        }
+
+        try
+        {
+            await Shell.Current.GoToAsync("mutation-engine");
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Couldn't open the mutation engine: {ex.Message}", StatusKind.Error);
         }
     }
 

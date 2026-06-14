@@ -128,6 +128,13 @@
                                         Margin="0,6,0,0"
                                         SemanticProperties.Description="Open the visual builder for Ideogram's structured JSON prompt"
                                         AutomationId="EditStructureButton" />
+                                <Button Text="Mutate current prompt…"
+                                        Command="{Binding OpenMutationEngineCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        HorizontalOptions="Start"
+                                        Margin="0,6,0,0"
+                                        SemanticProperties.Description="Generate variants of the current structured prompt as a batch"
+                                        AutomationId="MutateCurrentButton" />
                             </VerticalStackLayout>
 
                             <HorizontalStackLayout Spacing="8" IsVisible="{Binding Capabilities.PromptUpsampling}">

@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:behaviors="clr-namespace:ImageGenerator.MAUI.Presentation.Behaviors"
+             xmlns:converters="clr-namespace:ImageGenerator.MAUI.Presentation.Converters"
+             xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
+             x:Class="ImageGenerator.MAUI.Presentation.Views.MutationEnginePage"
+             x:DataType="vm:MutationEngineViewModel"
+             Title="Mutation engine"
+             Shell.NavBarIsVisible="True"
+             Padding="0">
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="16">
+
+            <!-- Header -->
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <Button Grid.Column="0"
+                        Text="← Back"
+                        Clicked="OnBackClicked"
+                        Style="{StaticResource SecondaryButton}"
+                        VerticalOptions="Start"
+                        AutomationId="MutationBackButton" />
+                <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                    <Label Text="Mutate a structured prompt" Style="{StaticResource CardTitle}" />
+                    <Label Text="Turn the current caption into N one-change variants, then render them all as a batch. Pick winners in the gallery and promote one to full quality via Remix."
+                           Style="{StaticResource HelperText}" />
+                    <Label Text="{Binding SettingsEcho}"
+                           Style="{StaticResource HelperText}"
+                           IsVisible="{Binding SettingsEcho, Converter={StaticResource NonEmptyStringToBool}}" />
+                </VerticalStackLayout>
+            </Grid>
+
+            <!-- CARD: Axis -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Axis to vary" Style="{StaticResource FieldLabel}" />
+                    <Picker ItemsSource="{Binding AxisOptions}"
+                            SelectedItem="{Binding SelectedAxis}"
+                            AutomationId="MutationAxisPicker" />
+                    <Label Text="LOOK varies style + ornament (placement pinned). SCENE varies background, placement, and elements (style pinned). One axis per run keeps each difference traceable."
+                           Style="{StaticResource HelperText}" />
+
+                    <Label Text="Operators that will run" Style="{StaticResource FieldLabel}" Margin="0,8,0,0" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding OperatorsForAxis}" Spacing="2">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <Label Text="{Binding ., StringFormat='• {0}'}" Style="{StaticResource HelperText}" />
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- CARD: Run settings -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Number of variants (1–100)" Style="{StaticResource FieldLabel}" />
+                    <Entry Text="{Binding Count}" Keyboard="Numeric" AutomationId="MutationCountEntry">
+                        <Entry.Behaviors><behaviors:NumericOnlyBehavior /></Entry.Behaviors>
+                    </Entry>
+
+                    <VerticalStackLayout Spacing="4" IsVisible="{Binding IsScene}">
+                        <Label Text="Placement strength" Style="{StaticResource FieldLabel}" />
+                        <Picker ItemsSource="{Binding StrengthOptions}"
+                                SelectedItem="{Binding SelectedStrength}"
+                                AutomationId="MutationStrengthPicker" />
+                        <Label Text="How far bbox/placement operators move boxes (subtle / moderate / bold = 2 / 5 / 10% of the grid)."
+                               Style="{StaticResource HelperText}" />
+                    </VerticalStackLayout>
+
+                    <HorizontalStackLayout Spacing="8">
+                        <CheckBox IsChecked="{Binding IncludeBase}" VerticalOptions="Center"
+                                  AutomationId="MutationIncludeBaseCheckBox" />
+                        <Label Text="Include the unmutated base as a reference (variant 0)" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+
+                    <Label Text="Seed" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <Entry Grid.Column="0" Text="{Binding Seed}" Keyboard="Numeric" AutomationId="MutationSeedEntry">
+                            <Entry.Behaviors><behaviors:NumericOnlyBehavior /></Entry.Behaviors>
+                        </Entry>
+                        <Button Grid.Column="1" Text="Randomize" Command="{Binding RandomizeSeedCommand}"
+                                Style="{StaticResource SecondaryButton}" AutomationId="MutationRandomizeSeedButton" />
+                        <Button Grid.Column="2" Text="Copy" Command="{Binding CopySeedCommand}"
+                                Style="{StaticResource SecondaryButton}" AutomationId="MutationCopySeedButton" />
+                    </Grid>
+                    <Label Text="Same base + same seed ⇒ identical variants." Style="{StaticResource HelperText}" />
+
+                    <Label Text="Target aspect ratio (W × H — reference for placement)" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="8">
+                        <Entry Grid.Column="0" Text="{Binding TargetWidth}" Keyboard="Numeric" AutomationId="MutationTargetWidthEntry">
+                            <Entry.Behaviors><behaviors:NumericOnlyBehavior /></Entry.Behaviors>
+                        </Entry>
+                        <Label Grid.Column="1" Text="×" VerticalOptions="Center" />
+                        <Entry Grid.Column="2" Text="{Binding TargetHeight}" Keyboard="Numeric" AutomationId="MutationTargetHeightEntry">
+                            <Entry.Behaviors><behaviors:NumericOnlyBehavior /></Entry.Behaviors>
+                        </Entry>
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- CARD: Slot-tag review -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding HasBase}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Slot tags" Style="{StaticResource FieldLabel}" />
+                    <Label Text="Tags steer which elements operators may touch (a subject identity is never altered). Defaults are inferred — override per element, or leave on auto."
+                           Style="{StaticResource HelperText}" />
+                    <CollectionView ItemsSource="{Binding SlotReview}" AutomationId="MutationSlotReviewList">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MutationSlotReviewItem">
+                                <Grid ColumnDefinitions="*,200" ColumnSpacing="8" Padding="0,4">
+                                    <Label Grid.Column="0" Text="{Binding Summary}" VerticalOptions="Center"
+                                           LineBreakMode="TailTruncation" />
+                                    <Picker Grid.Column="1" ItemsSource="{Binding Options}"
+                                            SelectedItem="{Binding SelectedTag}" />
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Generate -->
+            <Button Text="Generate variants"
+                    Command="{Binding GenerateCommand}"
+                    Style="{StaticResource PrimaryButton}"
+                    HorizontalOptions="Fill"
+                    AutomationId="MutationGenerateButton" />
+
+            <Label Text="{Binding StatusMessage}"
+                   Style="{StaticResource StatusLabel}"
+                   IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
+                   LineBreakMode="WordWrap"
+                   AutomationId="MutationStatusLabel">
+                <Label.Triggers>
+                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
+                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
+                    </DataTrigger>
+                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
+                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
+                    </DataTrigger>
+                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Warning}">
+                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
+                    </DataTrigger>
+                </Label.Triggers>
+            </Label>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

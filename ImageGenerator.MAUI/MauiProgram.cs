@@ -134,6 +134,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<IClipboardService, ClipboardService>();
         builder.Services.AddSingleton<IJsonPromptFileService, JsonPromptFileService>();
         builder.Services.AddSingleton<IMutationLibraryService, MutationLibraryService>();
+        // Stateless mutation engine over the full built-in operator set; one instance is fine.
+        builder.Services.AddSingleton<Core.Domain.Ideogram.Mutation.CaptionMutationEngine>();
 
         // 3a) VM collaborators carved out of the original god-class GeneratorViewModel (M1).
         builder.Services.AddSingleton<IApiTokenStore, ApiTokenStore>();
@@ -156,6 +158,7 @@ public static class MauiProgram
         builder.Services.AddTransient<GalleryViewModel>();
         builder.Services.AddTransient<GalleryItemDetailViewModel>();
         builder.Services.AddTransient<IdeogramStructureEditorViewModel>();
+        builder.Services.AddTransient<MutationEngineViewModel>();
 
         // 4) Register MainPage so it (and its constructor) can be injected. See the
         //    Singleton rationale above the GeneratorViewModel registration.
@@ -163,6 +166,7 @@ public static class MauiProgram
         builder.Services.AddTransient<GalleryPage>();
         builder.Services.AddTransient<GalleryItemDetailPage>();
         builder.Services.AddTransient<IdeogramStructureEditorPage>();
+        builder.Services.AddTransient<MutationEnginePage>();
         // SettingsPage binds the singleton GeneratorViewModel (tokens drive IsValid there);
         // the page itself is cheap to rebuild per navigation.
         builder.Services.AddTransient<SettingsPage>();

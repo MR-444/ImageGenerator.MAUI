@@ -319,6 +319,12 @@
                                     HorizontalOptions="Fill"
                                     SemanticProperties.Description="Validate and write the compact JSON into the generator's prompt box"
                                     AutomationId="EditorApplyButton" />
+                            <Button Text="Mutate…"
+                                    Command="{Binding MutateCommand}"
+                                    Style="{StaticResource SecondaryButton}"
+                                    HorizontalOptions="Fill"
+                                    SemanticProperties.Description="Hand this prompt to the mutation engine to generate variants"
+                                    AutomationId="EditorMutateButton" />
                             <Button Text="Save JSON to file…"
                                     Command="{Binding SaveToFileCommand}"
                                     Style="{StaticResource SecondaryButton}"

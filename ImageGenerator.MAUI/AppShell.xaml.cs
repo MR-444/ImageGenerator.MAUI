@@ -13,6 +13,7 @@ public partial class AppShell
         Routing.RegisterRoute("gallery", typeof(GalleryPage));
         Routing.RegisterRoute("detail", typeof(GalleryItemDetailPage));
         Routing.RegisterRoute("ideogram-editor", typeof(IdeogramStructureEditorPage));
+        Routing.RegisterRoute("mutation-engine", typeof(MutationEnginePage));
         Routing.RegisterRoute("settings", typeof(SettingsPage));
     }
 }
