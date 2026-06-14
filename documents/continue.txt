@@ -59,9 +59,19 @@ PHASES:
        +MutationVariant, CaptionClone). SlotTagger keyword-inference also deferred to Phase 1.
        Stripping test ElementSlotTagSerializationTests + CaptionCloneTests (7 tests). 921 green,
        Release clean. NOT committed yet.
-[ ] 1. LOOK operators (SwapStyle, BlendStyle, ApplyOrnamentKit) + DescBudget
+[x] 1. LOOK operators (SwapStyle, BlendStyle, ApplyOrnamentKit) + DescBudget
        (60-word trim order: env-micro → color-beyond-harmony → secondary-frame →
        style-markers; NEVER subject identity/scale/facing). + trim-order test.
+       DONE: Library/ domain types (StyleFragment, OrnamentKit, OrnamentPhrase,
+       DescBudgetCategory, MutationLibrary) — DATA only, service still Phase 4.
+       MutationContext gained Library member (Phase-0 placeholder filled). SlotTagger
+       (keyword inference, deferred from Phase 0) + DescBudget (CountWords == py split;
+       Fit keeps lowest-tier first, trims highest tiers; null if base>60). StyleMath
+       (SameStyle/Clone/UnionTokens/MergePalettes) + ColorMath (HSL saturation).
+       Operators self-pick library entry via rng; clone+validate-or-null. BlendStyle =
+       CURRENT style (precedence) + 1 random fragment (user-confirmed, not two-library).
+       KEY: V4JsonPromptValidator does NOT check 60-word cap — DescBudget is sole guard.
+       32 new tests (953 total green), Release clean. NOT committed yet.
 [ ] 2. SCENE operators (Add/Remove/SwapElementDesc, MutateBbox AR-aware, MutatePalette)
        + BboxMath (Gaussian, ClampBbox repair). + AR/overlap [Theory] tests.
 [ ] 3. CaptionMutationEngine.Generate (one-op-per-variant loop, repair+reject,

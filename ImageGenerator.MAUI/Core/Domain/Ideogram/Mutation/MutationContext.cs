@@ -1,21 +1,24 @@
+using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library;
+
 namespace ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation;
 
 /// <summary>
 /// Read-only context handed to every <see cref="ICaptionOperator"/> for a single run. Carries the
-/// target frame dimensions (so bbox operators can stay aspect-ratio aware) and the resolved slot-tag
-/// map for the base caption's elements, keyed by element reference.
+/// target frame dimensions (so bbox operators can stay aspect-ratio aware), the resolved slot-tag map
+/// for the base caption's elements, and the library operators draw style fragments / ornament kits from.
 /// </summary>
-/// <remarks>
-/// A <c>MutationLibrary</c> member (style fragments / ornament kits) joins this context once the
-/// library type exists in a later phase; operators that need it are not built yet.
-/// </remarks>
 public sealed class MutationContext
 {
-    public MutationContext(int targetWidth, int targetHeight, IReadOnlyDictionary<Element, string> tags)
+    public MutationContext(
+        int targetWidth,
+        int targetHeight,
+        IReadOnlyDictionary<Element, string> tags,
+        MutationLibrary library)
     {
         TargetWidth = targetWidth;
         TargetHeight = targetHeight;
         Tags = tags;
+        Library = library;
     }
 
     /// <summary>Target output width in pixels — the AR reference for bbox operators.</summary>
@@ -29,4 +32,7 @@ public sealed class MutationContext
     /// tags from here rather than from a cloned element (the clone path strips <see cref="Element.SlotTag"/>).
     /// </summary>
     public IReadOnlyDictionary<Element, string> Tags { get; }
+
+    /// <summary>Style fragments and ornament kits operators choose from.</summary>
+    public MutationLibrary Library { get; }
 }
