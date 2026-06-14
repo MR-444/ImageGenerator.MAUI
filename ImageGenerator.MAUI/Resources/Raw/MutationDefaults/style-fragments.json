@@ -28,5 +28,215 @@
       "art_style": "polished high-detail anime illustration, smooth gradient cel-shading, glossy idealized features with large luminous eyes, crisp ornamental linework, glowing bloom-light against deep shadow",
       "color_palette": ["#0B0E12", "#16231C", "#2C4A3E", "#3C5A6E", "#E8C27A", "#F2E2B0", "#B5202A", "#C8B98A"]
     }
+  },
+  {
+    "name": "oil_impasto",
+    "style": {
+      "aesthetics": "old-master, sumptuous, textural, dramatic",
+      "lighting": "warm raking gallery light, deep chiaroscuro shadow, soft highlight bloom",
+      "medium": "painting",
+      "art_style": "thick impasto oil painting, visible loaded brushstrokes, glossy varnish sheen, rich glazed darks over coarse canvas weave",
+      "color_palette": ["#1A130D", "#3B2A18", "#6B4A2B", "#8C5A2B", "#A8782E", "#C49A4A", "#D9C089", "#E8DCC0", "#7A2B22", "#2E3B2C"]
+    }
+  },
+  {
+    "name": "watercolor",
+    "style": {
+      "aesthetics": "airy, delicate, luminous, spontaneous",
+      "lighting": "soft diffuse daylight, gentle even illumination, pale glowing whites",
+      "medium": "watercolor painting",
+      "art_style": "loose wet-on-wet watercolor, translucent layered washes, blooming pigment edges, granulation over rough paper tooth, reserved white-paper highlights",
+      "color_palette": ["#F7F4EC", "#DCE7EE", "#B7D0DE", "#9CBBD0", "#C9B8D6", "#E4C3C9", "#F0D8B8", "#A9C4A6", "#7FA0B0", "#5E6B73"]
+    }
+  },
+  {
+    "name": "pastel_soft",
+    "style": {
+      "aesthetics": "tender, dreamy, soft, nostalgic",
+      "lighting": "gentle even light, hazy atmospheric glow, soft velvety shadow",
+      "medium": "pastel drawing",
+      "art_style": "soft chalk pastel, chalky textured strokes, blended powdery gradients, visible paper grain, feathered edges",
+      "color_palette": ["#F2E3DE", "#E8C8C2", "#D9A7A0", "#C9BBD6", "#A9B7D0", "#BFD3C2", "#E6D3A8", "#C0A98E", "#8C7E74", "#5C5550"]
+    }
+  },
+  {
+    "name": "charcoal_sketch",
+    "style": {
+      "aesthetics": "raw, gestural, moody, immediate",
+      "lighting": "hard directional key light, deep blacks, smoky mid-tone haze",
+      "medium": "charcoal drawing",
+      "art_style": "expressive charcoal drawing, smudged gradient shading, bold gestural strokes, rough paper tooth, fingered highlights lifted to white",
+      "color_palette": ["#0B0B0B", "#222222", "#3D3D3D", "#5A5A5A", "#7A7A7A", "#9C9C9C", "#C2C2C2", "#E2E2E2", "#F4F4F4"]
+    }
+  },
+  {
+    "name": "woodcut",
+    "style": {
+      "aesthetics": "bold, rustic, graphic, vigorous",
+      "lighting": "flat even light, stark high-contrast, no gradient",
+      "medium": "woodcut relief print",
+      "art_style": "woodcut relief print, bold carved black linework, rough gouged textures, high-contrast positive-negative shapes, hand-pressed ink on paper",
+      "color_palette": ["#14110D", "#F2E9D8", "#B5341F", "#2C4A3E"]
+    }
+  },
+  {
+    "name": "ukiyo_e",
+    "style": {
+      "aesthetics": "elegant, flat, decorative, serene",
+      "lighting": "flat even daylight, no cast shadows, gentle gradated bokashi sky",
+      "medium": "woodblock print",
+      "art_style": "Japanese ukiyo-e woodblock print, flat color fields, fine keyblock outlines, bokashi gradient skies, visible washi paper grain",
+      "color_palette": ["#1F3A5F", "#3C6E8F", "#6E9DB5", "#C1342D", "#E07B54", "#E8C46A", "#4A7C59", "#2B2722", "#EFE6D2"]
+    }
+  },
+  {
+    "name": "risograph",
+    "style": {
+      "aesthetics": "playful, lo-fi, graphic, retro",
+      "lighting": "flat printed light, no realistic shading, paper-white base",
+      "medium": "risograph print",
+      "art_style": "risograph print, two-color spot-ink overprint, visible halftone dithering, slight mis-registration, grainy soy-ink texture",
+      "color_palette": ["#FF48B0", "#F15060", "#3D5588", "#00A95C", "#FFE800", "#5C5547", "#F4F0E6"]
+    }
+  },
+  {
+    "name": "art_nouveau",
+    "style": {
+      "aesthetics": "ornamental, organic, sinuous, refined",
+      "lighting": "soft gilded glow, flat decorative shading, warm ambient light",
+      "medium": "decorative illustration",
+      "art_style": "Art Nouveau illustration, sinuous whiplash linework, flat decorative panels, gold-leaf accents, stylized botanical ornament, elegant contour drawing",
+      "color_palette": ["#2E3B30", "#5C7359", "#8FA67E", "#C9B370", "#E3D6A8", "#F2E9D8", "#C98B8B", "#A85751", "#6B4E3D"]
+    }
+  },
+  {
+    "name": "art_deco",
+    "style": {
+      "aesthetics": "luxurious, geometric, symmetrical, glamorous",
+      "lighting": "dramatic directional spotlight, polished metallic sheen, crisp hard shadow",
+      "medium": "poster illustration",
+      "art_style": "Art Deco poster, bold symmetrical geometry, sunburst and chevron motifs, gold metallic linework, flat luxe color blocks, streamlined elegance",
+      "color_palette": ["#0B3D2E", "#1B5E45", "#D4AF37", "#E0C97A", "#F3E9D2", "#111217", "#7A1F2B"]
+    }
+  },
+  {
+    "name": "comic_ink",
+    "style": {
+      "aesthetics": "dynamic, punchy, bold, energetic",
+      "lighting": "bold cel light, hard cast shadows, snappy specular highlights",
+      "medium": "comic book illustration",
+      "art_style": "comic book illustration, heavy black ink outlines, flat cel coloring, Ben-Day halftone dots, dynamic action linework",
+      "color_palette": ["#E8231F", "#F2A310", "#F6D72E", "#1E7A3C", "#1C5BB0", "#6B2D8F", "#121212", "#F4F1E8"]
+    }
+  },
+  {
+    "name": "cyberpunk_neon",
+    "style": {
+      "aesthetics": "dystopian, high-tech, gritty, electric",
+      "lighting": "wet neon rim light, glowing signage reflections, deep shadow, high contrast",
+      "medium": "digital illustration",
+      "art_style": "neon cyberpunk digital illustration, glowing rim-lit edges, rain-slick reflections, holographic haze, dense greeble detail against near-black",
+      "color_palette": ["#07060E", "#14122B", "#1B6FA8", "#00E5FF", "#1FE0B4", "#FF2D95", "#C61AFF", "#FF6A3D", "#F4E04D", "#E6F0FF"]
+    }
+  },
+  {
+    "name": "synthwave",
+    "style": {
+      "aesthetics": "retro-futuristic, nostalgic, vibrant, dreamy",
+      "lighting": "neon gridline glow, gradient sunset backlight, chromatic haze, soft bloom",
+      "medium": "digital illustration",
+      "art_style": "1980s synthwave digital art, neon gradient sunset, glowing perspective grid, chrome highlights, scanline haze, retro outrun glow",
+      "color_palette": ["#240046", "#321450", "#5C2C6D", "#8C1EFF", "#F222FF", "#FF2975", "#FF901F", "#FFD319", "#6DF1D8", "#00E5FF"]
+    }
+  },
+  {
+    "name": "low_poly",
+    "style": {
+      "aesthetics": "minimal, geometric, clean, stylized",
+      "lighting": "soft studio ambient occlusion, gentle gradient lighting, faceted highlights",
+      "medium": "3D render",
+      "art_style": "low-poly 3D render, faceted triangulated surfaces, flat-shaded polygons, crisp geometric silhouettes, subtle ambient occlusion",
+      "color_palette": ["#2B3A55", "#3E6A8C", "#5FA8A0", "#8FD0A8", "#E8D58A", "#E29B5E", "#C75D5D", "#6B4A7A", "#F2EEE4"]
+    }
+  },
+  {
+    "name": "pixel_art",
+    "style": {
+      "aesthetics": "nostalgic, charming, retro, crisp",
+      "lighting": "flat even light, dithered shading, hard pixel highlights",
+      "medium": "pixel art",
+      "art_style": "16-bit pixel art, blocky dithered shading, crisp aliased edges, limited indexed palette, retro game sprite detail",
+      "color_palette": ["#1A1C2C", "#5D275D", "#B13E53", "#EF7D57", "#FFCD75", "#A7F070", "#38B764", "#257179", "#29366F", "#3B5DC9", "#41A6F6", "#73EFF7", "#F4F4F4"]
+    }
+  },
+  {
+    "name": "concept_matte",
+    "style": {
+      "aesthetics": "epic, cinematic, atmospheric, awe-inspiring",
+      "lighting": "volumetric god-rays, hazy atmospheric depth, golden-hour key, deep ambient shadow",
+      "medium": "digital matte painting",
+      "art_style": "digital matte painting, photoreal painterly rendering, vast atmospheric depth, layered aerial-perspective haze, sweeping cinematic scale",
+      "color_palette": ["#1B2A33", "#2E4651", "#4A6B6E", "#6E8B86", "#9DB0A6", "#C9C2A8", "#E8C98A", "#E0A05A", "#B5663C", "#6B4A3A"]
+    }
+  },
+  {
+    "name": "stained_glass",
+    "style": {
+      "aesthetics": "luminous, sacred, ornate, jewel-like",
+      "lighting": "backlit translucent glow, radiant jewel-tone luminance, dark leading silhouettes",
+      "medium": "stained glass",
+      "art_style": "stained glass window, bold black leading cames, glowing translucent glass panels, faceted jewel-tone segments, radiant backlight",
+      "color_palette": ["#14110F", "#9B1B30", "#C7452F", "#E0A52E", "#F2D06B", "#1E5631", "#2F8F6B", "#1B3C8C", "#3A6FC4", "#5E2A7E"]
+    }
+  },
+  {
+    "name": "sumi_e",
+    "style": {
+      "aesthetics": "minimal, meditative, serene, spontaneous",
+      "lighting": "soft misty atmospheric light, vast negative space, gentle tonal gradation",
+      "medium": "ink wash painting",
+      "art_style": "sumi-e ink wash painting, gestural brushstrokes, graded ink tones, dry-brush texture, abundant negative space on rice paper",
+      "color_palette": ["#1A1A18", "#34332E", "#55534B", "#7C7A70", "#A6A399", "#CFCBBF", "#ECE7DA", "#F6F2E6"]
+    }
+  },
+  {
+    "name": "papercut_layered",
+    "style": {
+      "aesthetics": "crafted, tactile, whimsical, dimensional",
+      "lighting": "soft directional light, layered drop shadows, gentle depth gradient",
+      "medium": "layered papercut",
+      "art_style": "layered paper-cut art, stacked flat silhouettes, clean knife-cut edges, soft cast shadows between tiers, handmade dimensional depth",
+      "color_palette": ["#2B3C4E", "#41617A", "#6E97A8", "#A7C6CE", "#E8D9B5", "#E0A86E", "#C56B5C", "#8C4A52", "#F4EEE2"]
+    }
+  },
+  {
+    "name": "cinematic_film",
+    "style": {
+      "aesthetics": "moody, atmospheric, immersive, cinematic",
+      "lighting": "low-key anamorphic lighting, motivated practical sources, soft bokeh, teal-and-orange color grade",
+      "medium": "cinematic film still",
+      "photo": "cinematic film still, anamorphic shallow depth of field, teal-and-orange grade, fine film grain, soft bokeh highlights, widescreen framing",
+      "color_palette": ["#0C1418", "#14252B", "#1F3D44", "#2E5A5E", "#C98A4B", "#E0A85C", "#F2D9A8", "#7A5A3A", "#3A2A1E"]
+    }
+  },
+  {
+    "name": "film_noir",
+    "style": {
+      "aesthetics": "suspenseful, shadowy, dramatic, nineteen-forties",
+      "lighting": "hard low-key chiaroscuro, venetian-blind shadow patterns, single harsh key, deep black falloff",
+      "medium": "black and white photograph",
+      "photo": "1940s film noir black and white photograph, high-contrast chiaroscuro, dramatic cast shadows, glossy highlights, grainy monochrome",
+      "color_palette": ["#050505", "#1A1A1A", "#333333", "#4F4F4F", "#6E6E6E", "#909090", "#B8B8B8", "#E0E0E0", "#FAFAFA"]
+    }
+  },
+  {
+    "name": "analog_35mm",
+    "style": {
+      "aesthetics": "candid, nostalgic, warm, lived-in",
+      "lighting": "soft warm natural daylight, gentle window light, mild vignette, lifted shadows",
+      "medium": "35mm film photograph",
+      "photo": "35mm analog film photograph, fine grain, faded warm color cast, soft contrast, gentle vignette, halated highlights",
+      "color_palette": ["#2A2620", "#4A4034", "#6E5E48", "#927C5E", "#B59B76", "#CDB892", "#E3D2B0", "#D8B7A0", "#A8857A", "#6E5A52"]
+    }
   }
 ]

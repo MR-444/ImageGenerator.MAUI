@@ -1,6 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using FluentAssertions;
+using ImageGenerator.MAUI.Core.Domain.Ideogram;
+using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library;
 using ImageGenerator.MAUI.Infrastructure.Services;
 using ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
@@ -110,7 +112,13 @@ public sealed class MutationLibraryServiceTests : IDisposable
 
         var library = await CreateSut(RealSeedOpener).LoadAsync();
 
-        library.StyleFragments.Select(f => f.Name).Should().Equal("gouache", "anime", "density");
+        library.StyleFragments.Select(f => f.Name).Should().Equal(
+            "gouache", "anime", "density",
+            "oil_impasto", "watercolor", "pastel_soft", "charcoal_sketch", "woodcut",
+            "ukiyo_e", "risograph", "art_nouveau", "art_deco", "comic_ink",
+            "cyberpunk_neon", "synthwave", "low_poly", "pixel_art", "concept_matte",
+            "stained_glass", "sumi_e", "papercut_layered",
+            "cinematic_film", "film_noir", "analog_35mm");
         library.OrnamentKits.Should().ContainSingle(k => k.Name == "density");
         library.SceneElements.Select(e => e.Name).Should().Equal("trailing_ivy", "luna_moth");
 
@@ -119,6 +127,16 @@ public sealed class MutationLibraryServiceTests : IDisposable
         gouache.Style.ArtStyle.Should().NotBeNullOrWhiteSpace();
         gouache.Style.Photo.Should().BeNull();
         gouache.Style.ColorPalette.Should().HaveCount(8);
+
+        // Every shipped fragment must be schema-clean — an invalid one is silently dropped (operator
+        // returns null) at apply time, so it would never surface in the app. Catch that here instead.
+        foreach (var fragment in library.StyleFragments)
+        {
+            var probe = CaptionClone.Clone(MutationTestData.BaseCaption());
+            probe.StyleDescription = StyleMath.Clone(fragment.Style);
+            V4JsonPromptValidator.Validate(probe).Should()
+                .BeEmpty($"shipped style '{fragment.Name}' must be a schema-valid style_description");
+        }
 
         // And the density kit's phrases round-tripped their string enum tiers.
         var density = library.OrnamentKits.Single();
