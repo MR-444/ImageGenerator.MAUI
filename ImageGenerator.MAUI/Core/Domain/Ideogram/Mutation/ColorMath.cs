@@ -46,4 +46,85 @@ public static class ColorMath
         var lightness = (max + min) / 2.0;
         return lightness <= 0.5 ? delta / (max + min) : delta / (2.0 - max - min);
     }
+
+    /// <summary>RGB (each 0–1) → HSL with H in [0,360), S and L in [0,1].</summary>
+    public static (double H, double S, double L) RgbToHsl(double r, double g, double b)
+    {
+        var max = Math.Max(r, Math.Max(g, b));
+        var min = Math.Min(r, Math.Min(g, b));
+        var delta = max - min;
+        var l = (max + min) / 2.0;
+
+        if (delta <= 0)
+            return (0, 0, l);
+
+        var s = l <= 0.5 ? delta / (max + min) : delta / (2.0 - max - min);
+
+        double h;
+        if (max == r)
+            h = (g - b) / delta + (g < b ? 6.0 : 0.0);
+        else if (max == g)
+            h = (b - r) / delta + 2.0;
+        else
+            h = (r - g) / delta + 4.0;
+
+        return (h * 60.0, s, l);
+    }
+
+    /// <summary>HSL (H wrapped mod 360; S, L clamped 0–1) → RGB each 0–1.</summary>
+    public static (double R, double G, double B) HslToRgb(double h, double s, double l)
+    {
+        h = ((h % 360.0) + 360.0) % 360.0;
+        s = Math.Clamp(s, 0.0, 1.0);
+        l = Math.Clamp(l, 0.0, 1.0);
+
+        if (s <= 0)
+            return (l, l, l);
+
+        var q = l < 0.5 ? l * (1.0 + s) : l + s - l * s;
+        var p = 2.0 * l - q;
+        var hk = h / 360.0;
+
+        return (
+            HueToChannel(p, q, hk + 1.0 / 3.0),
+            HueToChannel(p, q, hk),
+            HueToChannel(p, q, hk - 1.0 / 3.0));
+    }
+
+    private static double HueToChannel(double p, double q, double t)
+    {
+        t = ((t % 1.0) + 1.0) % 1.0;
+        if (t < 1.0 / 6.0) return p + (q - p) * 6.0 * t;
+        if (t < 1.0 / 2.0) return q;
+        if (t < 2.0 / 3.0) return p + (q - p) * (2.0 / 3.0 - t) * 6.0;
+        return p;
+    }
+
+    /// <summary>
+    /// 0–1 RGB → uppercase <c>#RRGGBB</c> (rounds, clamps each channel to 0–255). Guaranteed to match the
+    /// validator's <c>^#[0-9A-F]{6}$</c> — uppercase hex via <c>X2</c> + <see cref="string.ToUpperInvariant"/>.
+    /// </summary>
+    public static string FormatHex(double r, double g, double b)
+    {
+        var rb = Math.Clamp((int)Math.Round(r * 255.0), 0, 255);
+        var gb = Math.Clamp((int)Math.Round(g * 255.0), 0, 255);
+        var bb = Math.Clamp((int)Math.Round(b * 255.0), 0, 255);
+        return $"#{rb:X2}{gb:X2}{bb:X2}".ToUpperInvariant();
+    }
+
+    /// <summary>
+    /// Parses <paramref name="hex"/>, applies an HSL <paramref name="transform"/>, and reformats to uppercase
+    /// <c>#RRGGBB</c>. Returns <c>null</c> when the input hex is unparseable.
+    /// </summary>
+    public static string? TransformHsl(
+        string? hex,
+        Func<(double H, double S, double L), (double H, double S, double L)> transform)
+    {
+        if (!TryParseHex(hex, out var r, out var g, out var b))
+            return null;
+
+        var (h, s, l) = transform(RgbToHsl(r, g, b));
+        var (nr, ng, nb) = HslToRgb(h, s, l);
+        return FormatHex(nr, ng, nb);
+    }
 }

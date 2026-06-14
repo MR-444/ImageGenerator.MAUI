@@ -72,8 +72,26 @@ PHASES:
        CURRENT style (precedence) + 1 random fragment (user-confirmed, not two-library).
        KEY: V4JsonPromptValidator does NOT check 60-word cap — DescBudget is sole guard.
        32 new tests (953 total green), Release clean. NOT committed yet.
-[ ] 2. SCENE operators (Add/Remove/SwapElementDesc, MutateBbox AR-aware, MutatePalette)
+[x] 2. SCENE operators (Add/Remove/SwapElementDesc, MutateBbox AR-aware, MutatePalette)
        + BboxMath (Gaussian, ClampBbox repair). + AR/overlap [Theory] tests.
+       DONE (user chose ALL FIVE ops, not the trimmed three): MutationStrength enum
+       {Subtle/Moderate/Bold → σ 20/50/100 via BboxMath.SigmaFor}; defaulted Strength on
+       MutationContext + MutationRunConfig (Phase-3 engine copies config→context). BboxMath
+       (STATELESS Box-Muller — NO static 2nd-variate cache, per-seed reproducible; Translate/
+       Scale-about-center/IoU/IsDegenerate/GridAspectForSquareObject=H/W). ColorMath gained
+       RgbToHsl/HslToRgb/FormatHex (uppercase #RRGGBB, X2+ToUpperInvariant — must pass the
+       ^#[0-9A-F]{6}$ regex or self-validation nulls the variant)/TransformHsl. Five Scene-axis
+       operators: MutateBbox (never moves subject.identity; translate/scale/jitter; AR nudge;
+       rejects unchanged/degenerate(minSpan 15)/duplicate-subject IoU>0.6), MutatePalette
+       (PER-ELEMENT palette only — style palette is LOOK; temp/harmony/saturation/accent in HSL;
+       length never changes so ≤5 holds), RemoveElement (standalone prop/scene/untagged only;
+       floor MinElements=2; never subject.*/text.*), AddElement (+SceneElement library store on
+       MutationLibrary, defaulted 3rd ctor param; rejects subject-overlap IoU>0.4), SwapElementDesc
+       (alternate desc by matching SlotTag, ≤60-word guard, never subject.identity). NOTE: in the
+       botanist golden the figure infers as subject.GARMENT (keyword "tunic"), not identity — the
+       identity guard is exercised by explicitly setting Element.SlotTag in tests. Library service
+       + Resources seeding still DEFERRED to Phase 4 (Phase 2 added domain types + in-code test
+       fixtures only). 60 new tests (1013 total green), Release clean (0 warnings). NOT committed yet.
 [ ] 3. CaptionMutationEngine.Generate (one-op-per-variant loop, repair+reject,
        seeded determinism, Count clamp 100). + determinism/canonical tests on goldens.
 [ ] 4. MutationLibraryService (+ IMutationLibraryService) + Resources/Raw/MutationDefaults

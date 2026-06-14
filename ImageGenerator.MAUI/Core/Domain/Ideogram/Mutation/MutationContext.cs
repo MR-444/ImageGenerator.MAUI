@@ -13,12 +13,14 @@ public sealed class MutationContext
         int targetWidth,
         int targetHeight,
         IReadOnlyDictionary<Element, string> tags,
-        MutationLibrary library)
+        MutationLibrary library,
+        MutationStrength strength = MutationStrength.Moderate)
     {
         TargetWidth = targetWidth;
         TargetHeight = targetHeight;
         Tags = tags;
         Library = library;
+        Strength = strength;
     }
 
     /// <summary>Target output width in pixels — the AR reference for bbox operators.</summary>
@@ -35,4 +37,7 @@ public sealed class MutationContext
 
     /// <summary>Style fragments and ornament kits operators choose from.</summary>
     public MutationLibrary Library { get; }
+
+    /// <summary>Perturbation magnitude for the geometry operators (bbox / placement). Defaults to Moderate.</summary>
+    public MutationStrength Strength { get; }
 }

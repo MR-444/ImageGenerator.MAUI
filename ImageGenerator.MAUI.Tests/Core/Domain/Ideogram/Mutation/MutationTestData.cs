@@ -1,6 +1,7 @@
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library;
+using Element = ImageGenerator.MAUI.Core.Domain.Ideogram.Element;
 
 namespace ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
 
@@ -101,18 +102,45 @@ internal static class MutationTestData
         });
 
     /// <summary>
+    /// Scene-element pool for the SCENE Add / SwapElementDesc operators: a <c>scene.flora</c> alternate (a
+    /// swap target for the base's two flower elements, and an Add candidate) and a <c>prop.instrument</c>
+    /// alternate (a swap target for the tuning fork, and an Add candidate). Both placed clear of the subject.
+    /// </summary>
+    public static IReadOnlyList<SceneElement> SceneElements() =>
+    [
+        new SceneElement(
+            "trailing_ivy", Element.ObjType, SlotTag.Scene.Flora,
+            "Trailing strands of dark ivy creeping along the right edge of the frame, small heart-shaped leaves catching faint moonlight against the glass.",
+            null, ["#16231C", "#3F6B57"], [200, 760, 760, 900]),
+        new SceneElement(
+            "luna_moth", Element.ObjType, SlotTag.Prop.Instrument,
+            "A pale luna moth resting mid-frame with wings half-open, faintly luminous against the dark greenhouse glass, long tails trailing below.",
+            null, ["#C8D6E0", "#5B6E8C"], [40, 120, 220, 320]),
+    ];
+
+    /// <summary>
     /// Library whose first fragment IS the base's current style (so "exclude current" has something to
-    /// exclude), plus the anime and density alternatives and the density kit.
+    /// exclude), plus the anime and density alternatives, the density kit, and the scene-element pool.
     /// </summary>
     public static MutationLibrary Library()
     {
         var gouache = new StyleFragment("gouache", StyleMath.Clone(BaseCaption().StyleDescription!));
         return new MutationLibrary(
             [gouache, new StyleFragment("anime", AnimeStyle()), new StyleFragment("density", DensityStyle())],
-            [DensityKit()]);
+            [DensityKit()],
+            SceneElements());
     }
 
     /// <summary>A context over the base caption: inferred tags + the test library, square target frame.</summary>
     public static MutationContext Context(V4JsonPrompt caption, MutationLibrary? library = null) =>
         new(1000, 1000, SlotTagger.Resolve(caption), library ?? Library());
+
+    /// <summary>A context at a given strength (square frame) — for the bbox strength theories.</summary>
+    public static MutationContext Context(V4JsonPrompt caption, MutationStrength strength) =>
+        new(1000, 1000, SlotTagger.Resolve(caption), Library(), strength);
+
+    /// <summary>A context with an explicit target frame — for the AR-aware bbox theories.</summary>
+    public static MutationContext Context(
+        V4JsonPrompt caption, int targetWidth, int targetHeight, MutationStrength strength = MutationStrength.Moderate) =>
+        new(targetWidth, targetHeight, SlotTagger.Resolve(caption), Library(), strength);
 }

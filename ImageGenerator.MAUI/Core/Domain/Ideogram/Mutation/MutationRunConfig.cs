@@ -24,4 +24,10 @@ public sealed record MutationRunConfig
 
     /// <summary>When true (default), the unmutated base is emitted as "variant 0" for side-by-side comparison.</summary>
     public bool IncludeBaseAsReference { get; init; } = true;
+
+    /// <summary>
+    /// Geometry-mutation magnitude for the SCENE bbox / placement operators. Defaults to Moderate. The
+    /// Phase 3 engine threads this onto the <see cref="MutationContext"/> it builds.
+    /// </summary>
+    public MutationStrength Strength { get; init; } = MutationStrength.Moderate;
 }
