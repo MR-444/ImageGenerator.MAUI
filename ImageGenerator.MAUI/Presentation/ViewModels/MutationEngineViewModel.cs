@@ -21,8 +21,9 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 /// </summary>
 public partial class MutationEngineViewModel : ObservableObject
 {
-    /// <summary>Slot-review sentinel: leave <see cref="Element.SlotTag"/> null so the engine infers it.</summary>
-    public const string AutoTag = "(auto / infer)";
+    /// <summary>Slot-review sentinel (friendly): leave <see cref="Element.SlotTag"/> null so the engine
+    /// infers it. Aliases <see cref="SlotTagDisplay.Auto"/> so the picker and the sentinel agree.</summary>
+    public const string AutoTag = SlotTagDisplay.Auto;
 
     private const int MinCount = 1;
     private const int MaxCount = 100;       // mirrors CaptionMutationEngine's own ceiling
@@ -74,11 +75,12 @@ public partial class MutationEngineViewModel : ObservableObject
     /// <summary>SCENE pins LOOK and mutates geometry — only then does bbox strength matter.</summary>
     public bool IsScene => SelectedAxis == MutationAxis.Scene;
 
-    /// <summary>Read-only echo of which operators a run on the pinned axis will draw from.</summary>
+    /// <summary>Read-only echo of which operators a run on the pinned axis will draw from, in
+    /// plain-English "what it does" form (the raw operator names are engine-internal jargon).</summary>
     public IReadOnlyList<string> OperatorsForAxis =>
         CaptionMutationEngine.DefaultOperators
             .Where(o => o.Axis == SelectedAxis)
-            .Select(o => o.Name)
+            .Select(o => CaptionDiff.OperatorBlurb(o.Name))
             .ToList();
 
     [ObservableProperty]
@@ -140,20 +142,27 @@ public partial class MutationEngineViewModel : ObservableObject
 
         var promptJson = _generator?.Parameters.Prompt ?? string.Empty;
         var resolution = _generator?.Parameters.Resolution ?? string.Empty;
+        var aspectRatio = _generator?.Parameters.AspectRatio ?? string.Empty;
         var model = _generator?.Parameters.Model ?? string.Empty;
 
         SettingsEcho = string.IsNullOrWhiteSpace(model)
             ? string.Empty
-            : $"Variants render at the current settings — model {model}, resolution {(string.IsNullOrWhiteSpace(resolution) ? "Auto" : resolution)}. Set a draft preset + low MP first.";
+            : $"Variants render at the current settings — model {model}, "
+              + $"{(string.IsNullOrWhiteSpace(aspectRatio) ? "default AR" : aspectRatio)}, "
+              + $"resolution {(string.IsNullOrWhiteSpace(resolution) ? "Auto" : resolution)}. "
+              + "Set a draft preset + low MP first.";
 
-        InitializeFrom(pending, promptJson, resolution);
+        InitializeFrom(pending, promptJson, aspectRatio, resolution);
     }
 
     /// <summary>
     /// Shell-free core of <see cref="Initialize"/>: resolve the base (typed hand-off &gt; prompt
-    /// string), default the seed + target AR, and build the slot-review rows from inferred tags.
+    /// string), default the seed + target frame, and build the slot-review rows from inferred tags.
+    /// The target frame (the AR reference for SCENE bbox placement) follows the actual render aspect
+    /// ratio; <paramref name="resolution"/> is only a fallback when the AR carries no ratio
+    /// (e.g. "custom").
     /// </summary>
-    internal void InitializeFrom(V4JsonPrompt? pendingBase, string promptJson, string? resolution)
+    internal void InitializeFrom(V4JsonPrompt? pendingBase, string promptJson, string? aspectRatio, string? resolution)
     {
         var newBase = pendingBase ?? TryParse(promptJson);
         var newJson = newBase is null ? null : V4JsonPromptSerializer.Serialize(newBase);
@@ -175,7 +184,7 @@ public partial class MutationEngineViewModel : ObservableObject
         GenerateCommand.NotifyCanExecuteChanged();
 
         if (Seed == 0) Seed = Random.Shared.Next();
-        (TargetWidth, TargetHeight) = ParseTarget(resolution);
+        (TargetWidth, TargetHeight) = DeriveTarget(aspectRatio, resolution);
 
         SlotReview.Clear();
         if (_base is null)
@@ -187,7 +196,9 @@ public partial class MutationEngineViewModel : ObservableObject
         var tags = SlotTagger.Resolve(_base);
         foreach (var element in _base.CompositionalDeconstruction?.Elements ?? [])
         {
-            var inferred = tags.TryGetValue(element, out var t) ? t : AutoTag;
+            // Pre-select the picker on the inferred tag's FRIENDLY label (or Auto when nothing
+            // inferred), so each row visibly shows what the app guessed for that element.
+            var inferred = SlotTagDisplay.ToFriendly(tags.TryGetValue(element, out var t) ? t : null);
             SlotReview.Add(new MutationSlotReviewItem(element, Describe(element), inferred));
         }
 
@@ -200,7 +211,39 @@ public partial class MutationEngineViewModel : ObservableObject
         catch (V4JsonPromptParseException) { return null; }
     }
 
-    /// <summary>Parse a "WIDTHxHEIGHT" resolution into a target AR; anything else falls back to square.</summary>
+    /// <summary>
+    /// The target frame the SCENE bbox operator uses as its AR reference. Only the ratio matters
+    /// (operators read height/width), so this follows the actual render aspect ratio — the AR that
+    /// every variant renders at. Resolution is a fallback for ratio-less AR values ("custom",
+    /// "match_input_image"); failing both, square.
+    /// </summary>
+    private static (int width, int height) DeriveTarget(string? aspectRatio, string? resolution) =>
+        TryParseAspectRatio(aspectRatio, out var w, out var h)
+            ? ScaleToCanonical(w, h)
+            : ParseTarget(resolution);
+
+    /// <summary>Read the leading "W:H" ratio every AR value starts with ("2:3 (Portrait Photo)",
+    /// "16:9", "1:1 (Square)"). Ratio-less values ("custom", "match_input_image") return false.</summary>
+    private static bool TryParseAspectRatio(string? aspectRatio, out int w, out int h)
+    {
+        w = h = 0;
+        if (string.IsNullOrWhiteSpace(aspectRatio)) return false;
+        var token = aspectRatio.Trim().Split(' ', 2)[0]; // "2:3 (Portrait Photo)" -> "2:3"
+        var parts = token.Split(':');
+        return parts.Length == 2
+            && int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out w)
+            && int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out h)
+            && w > 0 && h > 0;
+    }
+
+    /// <summary>Scale a w:h ratio so the longer side is <see cref="DefaultTargetSize"/> (only the ratio
+    /// is used downstream; this keeps the stored pair sane).</summary>
+    private static (int width, int height) ScaleToCanonical(int w, int h) =>
+        w >= h
+            ? (DefaultTargetSize, Math.Max(1, (int)Math.Round((double)h / w * DefaultTargetSize)))
+            : (Math.Max(1, (int)Math.Round((double)w / h * DefaultTargetSize)), DefaultTargetSize);
+
+    /// <summary>Parse a "WIDTHxHEIGHT" resolution into a target frame; anything else falls back to square.</summary>
     private static (int width, int height) ParseTarget(string? resolution)
     {
         if (!string.IsNullOrWhiteSpace(resolution))
@@ -252,8 +295,19 @@ public partial class MutationEngineViewModel : ObservableObject
                 return;
             }
 
-            var prompts = result.Variants.Select(v => v.Caption).ToList();
-            var labels = result.Variants.Select(DescribeVariant).ToList();
+            // Drop byte-identical variants: the engine allows variant↔variant collisions (a blend/
+            // swap can draw the same library entry twice), and two identical captions render the same
+            // image twice and read as duplicate cards. Keep first occurrence — the base reference,
+            // emitted first, is preserved.
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var unique = result.Variants.Where(v => seen.Add(v.Caption)).ToList();
+            if (unique.Count < result.Variants.Count)
+                _logger.LogInformation(
+                    "Mutation run: {Unique} distinct of {Total} variants ({Dropped} duplicate captions skipped)",
+                    unique.Count, result.Variants.Count, result.Variants.Count - unique.Count);
+
+            var prompts = unique.Select(v => v.Caption).ToList();
+            var labels = unique.Select(DescribeVariant).ToList();
 
             if (_generator is null) return; // stand-alone (tests): variants built, nothing to dispatch to.
 
@@ -284,7 +338,7 @@ public partial class MutationEngineViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(_base);
 
         foreach (var item in SlotReview)
-            item.Element.SlotTag = item.SelectedTag == AutoTag ? null : item.SelectedTag;
+            item.Element.SlotTag = SlotTagDisplay.ToRaw(item.SelectedTag);
 
         var config = new MutationRunConfig
         {
@@ -301,7 +355,7 @@ public partial class MutationEngineViewModel : ObservableObject
     }
 
     /// <summary>Test/host seam: set the base directly without a generator hand-off or Shell.</summary>
-    internal void SetBaseForTest(V4JsonPrompt model) => InitializeFrom(model, string.Empty, null);
+    internal void SetBaseForTest(V4JsonPrompt model) => InitializeFrom(model, string.Empty, null, null);
 
     /// <summary>
     /// Job-card label for a variant: the unmutated base reads "Original (reference)"; a mutated
@@ -311,14 +365,14 @@ public partial class MutationEngineViewModel : ObservableObject
     private string DescribeVariant(MutationVariant variant)
     {
         if (variant.OperatorName is null) return "Original (reference)";
-        if (_base is null) return variant.OperatorName;
+        if (_base is null) return CaptionDiff.FriendlyOperator(variant.OperatorName);
         try
         {
-            return CaptionDiff.Describe(_base, V4JsonPromptSerializer.Deserialize(variant.Caption));
+            return CaptionDiff.Describe(_base, V4JsonPromptSerializer.Deserialize(variant.Caption), variant.OperatorName);
         }
         catch (V4JsonPromptParseException)
         {
-            return variant.OperatorName;
+            return CaptionDiff.FriendlyOperator(variant.OperatorName);
         }
     }
 
@@ -357,7 +411,7 @@ public partial class MutationSlotReviewItem : ObservableObject
 
     public string Summary { get; }
 
-    public IReadOnlyList<string> Options { get; } = [MutationEngineViewModel.AutoTag, .. SlotTag.All];
+    public IReadOnlyList<string> Options { get; } = SlotTagDisplay.Options;
 
     [ObservableProperty]
     private string _selectedTag;

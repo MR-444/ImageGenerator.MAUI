@@ -91,30 +91,19 @@
                                 Style="{StaticResource SecondaryButton}" AutomationId="MutationCopySeedButton" />
                     </Grid>
                     <Label Text="Same base + same seed ⇒ identical variants. Every variant (and the base) renders at this one seed, so only the mutation differs." Style="{StaticResource HelperText}" />
-
-                    <Label Text="Target aspect ratio (W × H — reference for placement)" Style="{StaticResource FieldLabel}" />
-                    <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="8">
-                        <Entry Grid.Column="0" Text="{Binding TargetWidth}" Keyboard="Numeric" AutomationId="MutationTargetWidthEntry">
-                            <Entry.Behaviors><behaviors:NumericOnlyBehavior /></Entry.Behaviors>
-                        </Entry>
-                        <Label Grid.Column="1" Text="×" VerticalOptions="Center" />
-                        <Entry Grid.Column="2" Text="{Binding TargetHeight}" Keyboard="Numeric" AutomationId="MutationTargetHeightEntry">
-                            <Entry.Behaviors><behaviors:NumericOnlyBehavior /></Entry.Behaviors>
-                        </Entry>
-                    </Grid>
                 </VerticalStackLayout>
             </Border>
 
             <!-- CARD: Slot-tag review -->
             <Border Style="{StaticResource Card}" IsVisible="{Binding HasBase}">
                 <VerticalStackLayout Spacing="8">
-                    <Label Text="Slot tags" Style="{StaticResource FieldLabel}" />
-                    <Label Text="Tags steer which elements operators may touch (a subject identity is never altered). Defaults are inferred — override per element, or leave on auto."
+                    <Label Text="What may change in each element" Style="{StaticResource FieldLabel}" />
+                    <Label Text="Each row is one element from your prompt. Its tag decides which part a mutation may touch — leave it on “Auto” to let the app guess from the wording, or pick one. The subject's face/identity is always left untouched."
                            Style="{StaticResource HelperText}" />
                     <CollectionView ItemsSource="{Binding SlotReview}" AutomationId="MutationSlotReviewList">
                         <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="vm:MutationSlotReviewItem">
-                                <Grid ColumnDefinitions="*,200" ColumnSpacing="8" Padding="0,4">
+                                <Grid ColumnDefinitions="*,260" ColumnSpacing="8" Padding="0,4">
                                     <Label Grid.Column="0" Text="{Binding Summary}" VerticalOptions="Center"
                                            LineBreakMode="TailTruncation" />
                                     <Picker Grid.Column="1" ItemsSource="{Binding Options}"

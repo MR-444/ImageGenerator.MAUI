@@ -35,12 +35,38 @@ public class MutationEngineViewModelTests
         var typed = MutationTestData.BaseCaption();
         var sut = CreateSut();
 
-        sut.InitializeFrom(typed, "{\"high_level_description\":\"something else entirely\"}", "2048x2048");
+        sut.InitializeFrom(typed, "{\"high_level_description\":\"something else entirely\"}", null, "2048x2048");
 
         sut.HasBase.Should().BeTrue();
         sut.SlotReview.Should().HaveCount(5); // the botanist golden's five elements
-        sut.TargetWidth.Should().Be(2048);
+        sut.TargetWidth.Should().Be(2048); // no AR ratio ⇒ resolution fallback
         sut.TargetHeight.Should().Be(2048);
+    }
+
+    [Fact]
+    public void InitializeFrom_DerivesTargetFrameFromAspectRatio_NotResolution()
+    {
+        var sut = CreateSut();
+        var json = V4JsonPromptSerializer.Serialize(MutationTestData.BaseCaption());
+
+        // Real render AR is portrait 2:3; the resolution is a ComfyUI MP preset (no W×H).
+        sut.InitializeFrom(null, json, "2:3 (Portrait Photo)", "2.0 MP");
+
+        // Longer side normalized to 1024; the ratio (height/width = 1.5) is what bbox ops read.
+        sut.TargetWidth.Should().Be(683);
+        sut.TargetHeight.Should().Be(1024);
+    }
+
+    [Fact]
+    public void InitializeFrom_RatiolessAspectRatio_FallsBackToResolutionThenSquare()
+    {
+        var sut = CreateSut();
+        var json = V4JsonPromptSerializer.Serialize(MutationTestData.BaseCaption());
+
+        sut.InitializeFrom(null, json, "custom", "2.0 MP"); // neither carries a parseable shape
+
+        sut.TargetWidth.Should().Be(1024);
+        sut.TargetHeight.Should().Be(1024);
     }
 
     [Fact]
@@ -49,11 +75,11 @@ public class MutationEngineViewModelTests
         var sut = CreateSut();
         var json = V4JsonPromptSerializer.Serialize(MutationTestData.BaseCaption());
 
-        sut.InitializeFrom(null, json, null);
+        sut.InitializeFrom(null, json, null, null);
 
         sut.HasBase.Should().BeTrue();
         sut.SlotReview.Should().HaveCount(5);
-        sut.TargetWidth.Should().Be(1024); // unparseable resolution ⇒ square fallback
+        sut.TargetWidth.Should().Be(1024); // no AR, unparseable resolution ⇒ square fallback
         sut.TargetHeight.Should().Be(1024);
     }
 
@@ -62,7 +88,7 @@ public class MutationEngineViewModelTests
     {
         var sut = CreateSut();
 
-        sut.InitializeFrom(null, "not json at all", null);
+        sut.InitializeFrom(null, "not json at all", null, null);
 
         sut.HasBase.Should().BeFalse();
         sut.SlotReview.Should().BeEmpty();
@@ -141,15 +167,16 @@ public class MutationEngineViewModelTests
         sut.SelectedAxis = MutationAxis.Look;
         sut.Count = 1;
 
+        // The picker holds FRIENDLY labels; Run maps them back to the raw slot vocabulary.
         var explicitRow = sut.SlotReview[0];
         var autoRow = sut.SlotReview[1];
-        explicitRow.SelectedTag = SlotTag.Subject.Identity;
-        autoRow.SelectedTag = MutationEngineViewModel.AutoTag;
+        explicitRow.SelectedTag = SlotTagDisplay.ToFriendly(SlotTag.Subject.Identity);
+        autoRow.SelectedTag = SlotTagDisplay.Auto;
 
         sut.Run(MutationTestData.Library());
 
         explicitRow.Element.SlotTag.Should().Be(SlotTag.Subject.Identity);
-        autoRow.Element.SlotTag.Should().BeNull(); // sentinel ⇒ engine infers
+        autoRow.Element.SlotTag.Should().BeNull(); // Auto ⇒ engine infers
     }
 
     private sealed record MutationRunVariantCaptions(IReadOnlyList<string> Captions);
