@@ -131,7 +131,7 @@ PHASES:
        LoadAsync. Seed files mirror MutationTestData.Library() (gouache/anime/density + density kit +
        trailing_ivy/luna_moth); auto-bundled by the existing MauiAsset Resources\Raw\** glob (no .csproj
        change). 6 new service tests incl. a [CallerFilePath]-located REAL-seed validity test guarding the
-       shipped JSON against schema drift. 1045 total green, Release clean (0 warnings). NOT committed yet.
+       shipped JSON against schema drift. 1045 total green, Release clean (0 warnings). Committed 2fae988.
 [ ] 5. UI: MutationEnginePage/VM (axis, operators, library pickers, N, strength,
        include-base, seed, slot-tag review) → RunBatchAsync; editor "Mutate…" button
        + per-element slot picker + PendingMutationBase handoff; MainPage "Mutate current".
