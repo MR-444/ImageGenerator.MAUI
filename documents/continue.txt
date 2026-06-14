@@ -109,7 +109,7 @@ PHASES:
        style+ornament, and ApplyOrnamentKit/SwapElementDesc BOTH write element.desc — so the clean
        structural invariant is SCENE-never-touches-style + LOOK-never-touches-scene-geometry
        (background/bbox/element-palette/count), NOT byte-identical composition. 26 new tests
-       (1039 total green), Release clean (0 warnings). NOT committed yet.
+       (1039 total green), Release clean (0 warnings). Committed b24d150.
 [ ] 4. MutationLibraryService (+ IMutationLibraryService) + Resources/Raw/MutationDefaults
        seeding + OutputPaths.MutationLibraryDirectory + DI in MauiProgram. + round-trip test.
 [ ] 5. UI: MutationEnginePage/VM (axis, operators, library pickers, N, strength,
