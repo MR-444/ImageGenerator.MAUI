@@ -132,10 +132,10 @@ PHASES:
        trailing_ivy/luna_moth); auto-bundled by the existing MauiAsset Resources\Raw\** glob (no .csproj
        change). 6 new service tests incl. a [CallerFilePath]-located REAL-seed validity test guarding the
        shipped JSON against schema drift. 1045 total green, Release clean (0 warnings). Committed 2fae988.
-[~] 5. UI: MutationEnginePage/VM (axis, operators, library pickers, N, strength,
+[x] 5. UI: MutationEnginePage/VM (axis, operators, library pickers, N, strength,
        include-base, seed, slot-tag review) → RunBatchAsync; editor "Mutate…" button
        + per-element slot picker + PendingMutationBase handoff; MainPage "Mutate current".
-       DONE (commit pending): MutationEngineViewModel (transient) + MutationEnginePage. User chose
+       DONE (committed adc42f3): MutationEngineViewModel (transient) + MutationEnginePage. User chose
        MINIMAL selectors (axis only; the as-built MutationRunConfig has NO operator/library subset
        fields — engine runs ALL axis operators + full library, operators self-draw) so operators show
        READ-ONLY ("OperatorsForAxis", filtered DefaultOperators by axis); NO operator/library multi-
