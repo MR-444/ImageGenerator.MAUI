@@ -4,7 +4,10 @@ using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.Enums;
+using ImageGenerator.MAUI.Core.Domain.Ideogram;
+using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation;
 using ImageGenerator.MAUI.Infrastructure.Services;
+using ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
@@ -198,6 +201,48 @@ public class ImageFileServiceTests : IDisposable
         using var saved = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(path);
         var comment = saved.Metadata.GetPngMetadata().TextData.Single(t => t.Keyword == "Comment").Value;
         comment.Should().Contain("Prompt: café 🐱 日本語");
+    }
+
+    [Fact]
+    public async Task SaveImageWithMetadataAsync_MutationVariantCaption_SurvivesPromotionRoundTrip()
+    {
+        // Promotion guard for the mutation engine: a low-setting variant's compact structured
+        // caption must survive write→read so a winner can later be remixed / re-mutated. The
+        // metadata block is a Key: Value line list, so ONLY single-line text survives — variant
+        // captions are compact (single-line), which is exactly why this works. Reads back through
+        // the REAL GalleryService.ReadMetadataAsync — the same reader the promotion path uses.
+        var engine = new CaptionMutationEngine();
+        var config = new MutationRunConfig
+        {
+            Axis = MutationAxis.Look,
+            Count = 3,
+            Seed = 1234,
+            TargetWidth = 1024,
+            TargetHeight = 1024,
+            IncludeBaseAsReference = false,
+            Strength = MutationStrength.Subtle
+        };
+        var result = engine.Generate(MutationTestData.BaseCaption(), config, MutationTestData.Library());
+        result.Variants.Should().NotBeEmpty();
+
+        var caption = result.Variants[0].Caption;
+        caption.Should().NotContain("\n"); // compact / single-line — else the metadata block truncates it
+        _ = V4JsonPromptSerializer.Deserialize(caption); // engine emits validator-clean captions
+
+        var parameters = SampleParameters();
+        parameters.Prompt = caption;
+        var bytes = BuildContentPng(8, 8);
+        var path = _sut.GetUniqueSavePath(_tempDir, parameters);
+
+        await _sut.SaveImageWithMetadataAsync(path, bytes, parameters);
+
+        var meta = await new GalleryService().ReadMetadataAsync(path);
+        meta.Should().NotBeNull();
+        meta!["Prompt"].Should().Be(caption);
+
+        // Structured equivalence: both sides parse to the same canonical compact serialization.
+        V4JsonPromptSerializer.Serialize(V4JsonPromptSerializer.Deserialize(meta["Prompt"]))
+            .Should().Be(V4JsonPromptSerializer.Serialize(V4JsonPromptSerializer.Deserialize(caption)));
     }
 
     [Fact]

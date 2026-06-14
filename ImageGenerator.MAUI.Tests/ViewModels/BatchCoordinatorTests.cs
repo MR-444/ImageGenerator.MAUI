@@ -39,7 +39,8 @@ public class BatchCoordinatorTests
             enqueueJob: enqueueJob ?? (_ => { }),
             runJob: runJob ?? (j => Task.CompletedTask),
             setStatus: (_, _) => { },
-            addAsInputAsync: _ => Task.CompletedTask);
+            addAsInputAsync: _ => Task.CompletedTask,
+            mutateFromImageAsync: _ => Task.CompletedTask);
     }
 
     [Fact]

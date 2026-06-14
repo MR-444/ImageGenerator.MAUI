@@ -716,7 +716,8 @@ public partial class GeneratorViewModel : ObservableObject
             enqueueJob: job => DispatchToUi(() => Jobs.Insert(0, job)),
             runJob: RunJobAsync,
             setStatus: SetStatus,
-            addAsInputAsync: InputImages.AddAsInputAsync);
+            addAsInputAsync: InputImages.AddAsInputAsync,
+            mutateFromImageAsync: path => MutateFromImageAsync(path));
 
         _parameters.PropertyChanged += (_, e) =>
         {
@@ -866,7 +867,7 @@ public partial class GeneratorViewModel : ObservableObject
             Parameters.Seed = Random.Shared.NextInt64(0, ValidationConstants.SeedMaxValue);
 
         var snapshot = Parameters.Clone();
-        var job = new GenerationJob(snapshot, AddAsInputAsync);
+        var job = new GenerationJob(snapshot, AddAsInputAsync, path => MutateFromImageAsync(path));
         Jobs.Insert(0, job);
 
         // Activation audit: a generate run used to be invisible in app.log until the service's
@@ -1125,6 +1126,45 @@ public partial class GeneratorViewModel : ObservableObject
         catch (Exception ex)
         {
             SetStatus($"Couldn't open the mutation engine: {ex.Message}", StatusKind.Error);
+        }
+    }
+
+    /// <summary>
+    /// "Mutate from this" on a saved image (gallery item or finished job): read the image's
+    /// embedded caption and seed the mutation page with it as a new base — KEEPING the user's
+    /// current generator settings (model/resolution/quality). No recipe restore: the only sensible
+    /// source is an Ideogram structured-JSON image and the user is already on a draft Ideogram
+    /// preset, so adopting just the caption avoids a surprise model/resolution switch; the mutation
+    /// page pins one render seed across the batch so the only visible difference is the mutation.
+    /// Slot tags can't survive a metadata string, so they're inferred by SlotTagger — same as the
+    /// "Mutate current prompt" path. A non-structured prompt leaves <see cref="PendingMutationBase"/>
+    /// null; the mutation page then reports the problem.
+    /// </summary>
+    public async Task MutateFromImageAsync(string? filePath, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(filePath)) return;
+
+        try
+        {
+            var meta = await _galleryService.ReadMetadataAsync(filePath, ct);
+            if (meta is null || !meta.TryGetValue("Prompt", out var prompt) || string.IsNullOrWhiteSpace(prompt))
+            {
+                SetStatus("No caption found in this image.", StatusKind.Warning);
+                return;
+            }
+
+            // Adopt the image's caption as the box content (the mutation page's null-base fallback
+            // re-parses it) and seed the typed base when it parses.
+            Parameters.Prompt = prompt;
+            try { PendingMutationBase = V4JsonPromptSerializer.Deserialize(prompt); }
+            catch (V4JsonPromptParseException) { PendingMutationBase = null; }
+
+            await Shell.Current.GoToAsync("mutation-engine");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Mutate from image failed for {Path}", filePath);
+            SetStatus("Couldn't load this image's caption. See app.log for details.", StatusKind.Error);
         }
     }
 

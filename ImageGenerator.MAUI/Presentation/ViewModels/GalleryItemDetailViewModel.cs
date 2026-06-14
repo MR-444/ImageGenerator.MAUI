@@ -149,6 +149,25 @@ public partial class GalleryItemDetailViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task MutateFromImageAsync()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(FilePath)) return;
+            // Hand the path to MainPage's "mutateFrom" QueryProperty, which restores this image's
+            // recipe and opens the mutation engine seeded with its structured caption. Same
+            // single-use ShellNavigationQueryParameters rationale as Remix: a string query suffix
+            // would be re-applied on every later back navigation to MainPage.
+            await Shell.Current.GoToAsync("//MainPage",
+                new ShellNavigationQueryParameters { ["mutateFrom"] = FilePath });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GalleryItemDetailVM.{Op}", "MutateFromImage");
+        }
+    }
+
+    [RelayCommand]
     private async Task UseAsInputAsync()
     {
         try

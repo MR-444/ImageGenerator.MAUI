@@ -38,6 +38,13 @@ public partial class MutationEngineViewModel : ObservableObject
     private V4JsonPrompt? _base;
 
     /// <summary>
+    /// Canonical JSON of the currently-loaded base. The VM is a singleton, so a back-and-forth to
+    /// MainPage re-runs Initialize with the same base — when the new base serializes identically we
+    /// PRESERVE the run state (seed, slot-tag edits, …) instead of rebuilding it from scratch.
+    /// </summary>
+    private string? _lastBaseJson;
+
+    /// <summary>
     /// Optional generator so unit tests can construct the VM stand-alone (mirrors how the structure
     /// editor VM takes its generator). Navigation + batch dispatch need it; the engine seam does not.
     /// </summary>
@@ -148,7 +155,22 @@ public partial class MutationEngineViewModel : ObservableObject
     /// </summary>
     internal void InitializeFrom(V4JsonPrompt? pendingBase, string promptJson, string? resolution)
     {
-        _base = pendingBase ?? TryParse(promptJson);
+        var newBase = pendingBase ?? TryParse(promptJson);
+        var newJson = newBase is null ? null : V4JsonPromptSerializer.Serialize(newBase);
+
+        // Same base as the last time the page appeared → keep the existing run state (seed, count,
+        // axis, strength, and the user's slot-tag edits). Crucially, do NOT replace _base: the
+        // SlotReview rows hold references to its Elements, and Run() writes tags back onto them.
+        if (newBase is not null && newJson == _lastBaseJson && _base is not null)
+        {
+            HasBase = true;
+            GenerateCommand.NotifyCanExecuteChanged();
+            SetStatus($"Ready: {SlotReview.Count} element(s) to vary.", StatusKind.Info);
+            return;
+        }
+
+        _base = newBase;
+        _lastBaseJson = newJson;
         HasBase = _base is not null;
         GenerateCommand.NotifyCanExecuteChanged();
 
@@ -231,12 +253,20 @@ public partial class MutationEngineViewModel : ObservableObject
             }
 
             var prompts = result.Variants.Select(v => v.Caption).ToList();
+            var labels = result.Variants.Select(DescribeVariant).ToList();
 
             if (_generator is null) return; // stand-alone (tests): variants built, nothing to dispatch to.
 
+            // Pin the render seed so EVERY variant (incl. the base reference) renders at the same
+            // seed — then the only visible difference between cards is the mutation itself. The page's
+            // Seed field (with Randomize/Copy) is the single knob; without this, RunBatchAsync re-rolls
+            // per job whenever RandomizeSeed is on and the comparison is lost to seed noise.
+            _generator.Parameters.Seed = Seed;
+            _generator.Parameters.RandomizeSeed = false;
+
             // Pop first so the queue fills on MainPage; RunBatchAsync owns its own re-entrancy guard.
             await Shell.Current.GoToAsync("..");
-            await _generator.Batch.RunBatchAsync(prompts);
+            await _generator.Batch.RunBatchAsync(prompts, labels);
         }
         catch (Exception ex)
         {
@@ -272,6 +302,25 @@ public partial class MutationEngineViewModel : ObservableObject
 
     /// <summary>Test/host seam: set the base directly without a generator hand-off or Shell.</summary>
     internal void SetBaseForTest(V4JsonPrompt model) => InitializeFrom(model, string.Empty, null);
+
+    /// <summary>
+    /// Job-card label for a variant: the unmutated base reads "Original (reference)"; a mutated
+    /// variant gets a before→after summary of its single change (falling back to the operator name
+    /// if the caption somehow can't be re-parsed).
+    /// </summary>
+    private string DescribeVariant(MutationVariant variant)
+    {
+        if (variant.OperatorName is null) return "Original (reference)";
+        if (_base is null) return variant.OperatorName;
+        try
+        {
+            return CaptionDiff.Describe(_base, V4JsonPromptSerializer.Deserialize(variant.Caption));
+        }
+        catch (V4JsonPromptParseException)
+        {
+            return variant.OperatorName;
+        }
+    }
 
     /// <summary>One-line element label for the review list (matches the editor's element summary).</summary>
     private static string Describe(Element element)

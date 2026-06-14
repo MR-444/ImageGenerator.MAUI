@@ -8,10 +8,15 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 public partial class GenerationJob : ObservableObject
 {
     private readonly Func<string, Task>? _useAsInput;
+    private readonly Func<string, Task>? _mutateFromImage;
 
     public ImageGenerationParameters Parameters { get; }
     public string Prompt { get; }
     public string MetaLine { get; }
+
+    // Optional one-line "what changed" label for mutation-engine batches (e.g. "art style: gouache
+    // → anime", "Original (reference)"). Null/empty for ordinary single + textfile-batch jobs.
+    [ObservableProperty] private string? _mutationLabel;
 
     [ObservableProperty] private string _statusMessage = "Generating image…";
 
@@ -48,10 +53,14 @@ public partial class GenerationJob : ObservableObject
 
     public CancellationTokenSource Cts { get; } = new();
 
-    public GenerationJob(ImageGenerationParameters parameters, Func<string, Task>? useAsInput = null)
+    public GenerationJob(
+        ImageGenerationParameters parameters,
+        Func<string, Task>? useAsInput = null,
+        Func<string, Task>? mutateFromImage = null)
     {
         Parameters = parameters;
         _useAsInput = useAsInput;
+        _mutateFromImage = mutateFromImage;
         Prompt = parameters.Prompt;
         var modelShort = parameters.Model.Contains('/')
             ? parameters.Model[(parameters.Model.LastIndexOf('/') + 1)..]
@@ -110,6 +119,16 @@ public partial class GenerationJob : ObservableObject
     {
         if (_useAsInput is null || ResultPath is null) return;
         await _useAsInput(ResultPath);
+    }
+
+    // "Mutate from this": hand the saved result back to the generator, which restores its recipe
+    // and opens the mutation engine seeded with the image's structured caption. No-op until the
+    // job has saved (ResultPath set) and the host wired the callback.
+    [RelayCommand]
+    private async Task MutateFromImage()
+    {
+        if (_mutateFromImage is null || ResultPath is null) return;
+        await _mutateFromImage(ResultPath);
     }
 
     [RelayCommand]

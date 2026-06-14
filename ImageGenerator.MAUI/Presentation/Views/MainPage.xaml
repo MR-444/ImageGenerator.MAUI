@@ -451,6 +451,13 @@
                                         <!-- Model · AR · seed -->
                                         <Label Text="{Binding MetaLine}" Style="{StaticResource HelperText}" />
 
+                                        <!-- Mutation-engine "what changed" label (before→after); collapsed for ordinary jobs -->
+                                        <Label Text="{Binding MutationLabel, StringFormat='Δ {0}'}"
+                                               Style="{StaticResource HelperText}"
+                                               FontAttributes="Italic"
+                                               IsVisible="{Binding MutationLabel, Converter={StaticResource NonEmptyStringToBool}}"
+                                               AutomationId="JobMutationLabel" />
+
                                         <!-- Live sampler progress (ComfyUI ws); appears with the first
                                              step report, disappears with the final outcome. -->
                                         <ProgressBar Progress="{Binding Progress}"
@@ -527,6 +534,10 @@
                                                     Command="{Binding UseAsInputCommand}"
                                                     Style="{StaticResource SecondaryButton}"
                                                     AutomationId="JobUseAsInputButton" />
+                                            <Button Text="Mutate from this"
+                                                    Command="{Binding MutateFromImageCommand}"
+                                                    Style="{StaticResource SecondaryButton}"
+                                                    AutomationId="JobMutateFromImageButton" />
                                             <Button Text="Show in folder"
                                                     Command="{Binding ShowInFolderCommand}"
                                                     Style="{StaticResource SecondaryButton}"

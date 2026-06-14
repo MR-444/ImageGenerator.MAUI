@@ -158,7 +158,10 @@ public static class MauiProgram
         builder.Services.AddTransient<GalleryViewModel>();
         builder.Services.AddTransient<GalleryItemDetailViewModel>();
         builder.Services.AddTransient<IdeogramStructureEditorViewModel>();
-        builder.Services.AddTransient<MutationEngineViewModel>();
+        // Singleton so the mutation run state (seed, count, axis, slot-tag edits) survives a
+        // round-trip to MainPage and back — re-initialized only when a genuinely new base loads
+        // (same-base detection in InitializeFrom). The page stays transient and binds this one VM.
+        builder.Services.AddSingleton<MutationEngineViewModel>();
 
         // 4) Register MainPage so it (and its constructor) can be injected. See the
         //    Singleton rationale above the GeneratorViewModel registration.

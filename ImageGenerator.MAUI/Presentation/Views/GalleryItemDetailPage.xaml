@@ -76,6 +76,11 @@
                         Style="{StaticResource PrimaryButton}"
                         Margin="0,0,8,8"
                         AutomationId="DetailRemixButton" />
+                <Button Text="Mutate from this"
+                        Command="{Binding MutateFromImageCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        Margin="0,0,8,8"
+                        AutomationId="DetailMutateFromImageButton" />
                 <Button Text="Copy metadata"
                         Command="{Binding CopyMetadataCommand}"
                         Style="{StaticResource SecondaryButton}"

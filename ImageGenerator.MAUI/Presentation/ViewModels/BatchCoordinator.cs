@@ -24,6 +24,7 @@ public sealed partial class BatchCoordinator : ObservableObject
     private readonly Func<GenerationJob, Task> _runJob;
     private readonly Action<string, StatusKind> _setStatus;
     private readonly Func<string, Task> _addAsInputAsync;
+    private readonly Func<string, Task> _mutateFromImageAsync;
 
     // Non-null only while a batch is actively running. CancelBatch flips it; RunBatchAsync
     // disposes and clears it in a finally so a second batch always starts with a fresh CTS.
@@ -38,7 +39,8 @@ public sealed partial class BatchCoordinator : ObservableObject
         Action<GenerationJob> enqueueJob,
         Func<GenerationJob, Task> runJob,
         Action<string, StatusKind> setStatus,
-        Func<string, Task> addAsInputAsync)
+        Func<string, Task> addAsInputAsync,
+        Func<string, Task> mutateFromImageAsync)
     {
         _promptBatchParser = promptBatchParser ?? throw new ArgumentNullException(nameof(promptBatchParser));
         _parametersAccessor = parametersAccessor ?? throw new ArgumentNullException(nameof(parametersAccessor));
@@ -46,6 +48,7 @@ public sealed partial class BatchCoordinator : ObservableObject
         _runJob = runJob ?? throw new ArgumentNullException(nameof(runJob));
         _setStatus = setStatus ?? throw new ArgumentNullException(nameof(setStatus));
         _addAsInputAsync = addAsInputAsync ?? throw new ArgumentNullException(nameof(addAsInputAsync));
+        _mutateFromImageAsync = mutateFromImageAsync ?? throw new ArgumentNullException(nameof(mutateFromImageAsync));
     }
 
     /// <summary>
@@ -120,7 +123,7 @@ public sealed partial class BatchCoordinator : ObservableObject
     /// and parameters. Each prompt becomes its own <see cref="GenerationJob"/> queued at the
     /// top of the host's Jobs collection in original file order. Failures don't abort the batch.
     /// </summary>
-    public async Task RunBatchAsync(IReadOnlyList<string> prompts)
+    public async Task RunBatchAsync(IReadOnlyList<string> prompts, IReadOnlyList<string>? labels = null)
     {
         if (prompts is null || prompts.Count == 0) return;
         if (IsBatchRunning) return; // re-entrancy guard
@@ -143,11 +146,14 @@ public sealed partial class BatchCoordinator : ObservableObject
                 var snapshot = parameters.Clone();
                 snapshot.Prompt = prompts[i];
 
-                var job = new GenerationJob(snapshot, _addAsInputAsync)
+                var job = new GenerationJob(snapshot, _addAsInputAsync, _mutateFromImageAsync)
                 {
                     IsRunning = false,
                     StatusKind = StatusKind.Info,
-                    StatusMessage = $"Queued ({i + 1}/{prompts.Count})"
+                    StatusMessage = $"Queued ({i + 1}/{prompts.Count})",
+                    // Optional per-prompt label (mutation engine passes a before→after change summary;
+                    // the textfile-batch caller passes none → no label shown).
+                    MutationLabel = labels?.ElementAtOrDefault(i)
                 };
                 batch.Add(job);
             }

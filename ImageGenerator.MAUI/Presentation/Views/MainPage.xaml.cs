@@ -18,6 +18,7 @@ namespace ImageGenerator.MAUI.Presentation.Views;
 // backed out of the editor, stomping whatever was in the prompt box.
 [QueryProperty(nameof(AddInputPath), "addInput")]
 [QueryProperty(nameof(RemixFromPath), "remixFrom")]
+[QueryProperty(nameof(MutateFromPath), "mutateFrom")]
 public partial class MainPage
 {
     private readonly GeneratorViewModel _viewModel;
@@ -53,6 +54,22 @@ public partial class MainPage
             // Fire-and-forget: RemixFromImageAsync owns its own status/error handling and never
             // throws past its catch. Awaiting from a property setter isn't possible.
             _ = _viewModel.RemixFromImageAsync(value);
+        }
+    }
+
+    /// <summary>
+    /// Set by Shell when the user hits "Mutate from this" on the gallery detail page. Single-use
+    /// ShellNavigationQueryParameters (same rationale as RemixFromPath). MutateFromImageAsync
+    /// restores the image's recipe then navigates on to the mutation engine; its first await
+    /// (metadata read) yields, letting this "//MainPage" transaction settle before that push.
+    /// </summary>
+    public string? MutateFromPath
+    {
+        set
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            // Fire-and-forget: MutateFromImageAsync owns its own status/error handling.
+            _ = _viewModel.MutateFromImageAsync(value);
         }
     }
 

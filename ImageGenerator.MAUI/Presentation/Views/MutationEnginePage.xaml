@@ -90,7 +90,7 @@
                         <Button Grid.Column="2" Text="Copy" Command="{Binding CopySeedCommand}"
                                 Style="{StaticResource SecondaryButton}" AutomationId="MutationCopySeedButton" />
                     </Grid>
-                    <Label Text="Same base + same seed ⇒ identical variants." Style="{StaticResource HelperText}" />
+                    <Label Text="Same base + same seed ⇒ identical variants. Every variant (and the base) renders at this one seed, so only the mutation differs." Style="{StaticResource HelperText}" />
 
                     <Label Text="Target aspect ratio (W × H — reference for placement)" Style="{StaticResource FieldLabel}" />
                     <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="8">
