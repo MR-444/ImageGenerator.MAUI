@@ -18,6 +18,67 @@ next pass).
   [ ] = open      [~] = in progress (commit not yet on master)
 
 
+ACTIVE FEATURE — Ideogram-4 JSON Caption Mutation Engine (planned 2026-06-14)
+-----------------------------------------------------------------------------
+
+Detailed plan: C:\Users\mr\.claude\plans\question-about-my-comfyui-tingly-hummingbird.md
+Brief: documents/mutations/ideogram4_mutation_engine_handoff.md (+ botanist_*.json goldens).
+Do PHASE BY PHASE — each phase is one self-contained, committable, tested unit.
+
+WHAT/WHY: a SEPARATE batch feature (one-image-per-click stays). Mutate a base
+caption into N variants → render all at LOW settings → user eyeballs gallery →
+picks winners → promote a winner to FULL quality via existing Remix. Engine's
+only job = base caption → N mutated caption STRINGS → feed EXISTING pipeline.
+
+REUSE (no new plumbing): BatchCoordinator.RunBatchAsync(IReadOnlyList<string>)
+is public + file-picker-independent (the batch seam). Remix metadata read =
+promote + multi-generation. V4JsonPrompt model / V4JsonPromptSerializer (byte-
+canonical, tested) / V4JsonPromptValidator already exist and are reused.
+
+LOCKED DECISIONS:
+  - Algorithm = Interactive Evolutionary Computation (human IS the fitness fn).
+  - ONE change per variant (strict (1+λ)); base included as "variant 0" ref.
+  - Axis pinning: LOOK (style+ornament) ⟂ SCENE (bg+elements+bbox); vary one.
+  - bbox = Gaussian N(0,σ), strength slider subtle/moderate/bold = 2/5/10% of 1000.
+  - palette ops in HSL; categorical genes = seeded library draw; BlendStyle = LOOK crossover.
+  - Multi-generation: "Mutate from this" on a winner → its caption = new base.
+  - Library = user-editable JSON folder (.../mutation-library), seeded from botanist fixtures.
+  - HARD: NO Python ever. Schema-validity via existing C# serializer+validator.
+  - Slot tags: [JsonIgnore] Element.SlotTag, never serialized (ElementJsonConverter
+    writes fixed keys — verified leak-proof); keyword-inference fallback (SlotTagger).
+  - Flexible: operators behind ICaptionOperator, behavior in MutationRunConfig,
+    tunables as named constants — refine after first renders without rearchitecting.
+
+PHASES:
+[x] 0. Domain skeleton (namespace Core/Domain/Ideogram/Mutation): MutationAxis,
+       SlotTag, ICaptionOperator, MutationContext, MutationRunConfig/Result, clone
+       helper + add [JsonIgnore] Element.SlotTag. WRITE THE SLOT-TAG-STRIPPING TEST FIRST.
+       DONE: types under Core/Domain/Ideogram/Mutation/ (MutationAxis, SlotTag w/ nested
+       Subject/Prop/Scene/Text + All, ICaptionOperator, MutationContext {TargetW/H + tag
+       map; MutationLibrary deferred to Phase 4}, MutationRunConfig record, MutationRunResult
+       +MutationVariant, CaptionClone). SlotTagger keyword-inference also deferred to Phase 1.
+       Stripping test ElementSlotTagSerializationTests + CaptionCloneTests (7 tests). 921 green,
+       Release clean. NOT committed yet.
+[ ] 1. LOOK operators (SwapStyle, BlendStyle, ApplyOrnamentKit) + DescBudget
+       (60-word trim order: env-micro → color-beyond-harmony → secondary-frame →
+       style-markers; NEVER subject identity/scale/facing). + trim-order test.
+[ ] 2. SCENE operators (Add/Remove/SwapElementDesc, MutateBbox AR-aware, MutatePalette)
+       + BboxMath (Gaussian, ClampBbox repair). + AR/overlap [Theory] tests.
+[ ] 3. CaptionMutationEngine.Generate (one-op-per-variant loop, repair+reject,
+       seeded determinism, Count clamp 100). + determinism/canonical tests on goldens.
+[ ] 4. MutationLibraryService (+ IMutationLibraryService) + Resources/Raw/MutationDefaults
+       seeding + OutputPaths.MutationLibraryDirectory + DI in MauiProgram. + round-trip test.
+[ ] 5. UI: MutationEnginePage/VM (axis, operators, library pickers, N, strength,
+       include-base, seed, slot-tag review) → RunBatchAsync; editor "Mutate…" button
+       + per-element slot picker + PendingMutationBase handoff; MainPage "Mutate current".
+[ ] 6. Multi-generation "Mutate from this" (gallery/job winner → caption via metadata
+       read → new base) + promotion metadata round-trip test.
+
+SCOPE GUARDS (v1 out): arbitrary from-file base; configurable k / per-gene prob;
+automated fitness/selection; SCENE crossover; validate.py craft-checks beyond word
+caps; any Python; per-job setting overrides in a batch.
+
+
 RECENTLY DONE
 -------------
 

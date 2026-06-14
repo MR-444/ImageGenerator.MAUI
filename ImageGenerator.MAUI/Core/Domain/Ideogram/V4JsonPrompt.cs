@@ -87,4 +87,13 @@ public sealed class Element
 
     [JsonPropertyName("color_palette")]
     public List<string>? ColorPalette { get; set; }
+
+    /// <summary>
+    /// Transient semantic slot (e.g. "subject.garment") used by the mutation engine to target the
+    /// right element for ornament/desc operators. <see cref="JsonIgnoreAttribute"/> keeps it out of
+    /// every serialization; the canonical <c>ElementJsonConverter</c> never reflects it either, so it
+    /// cannot reach disk or the Replicate payload. Not part of the on-disk schema.
+    /// </summary>
+    [JsonIgnore]
+    public string? SlotTag { get; set; }
 }
