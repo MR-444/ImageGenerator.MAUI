@@ -18,8 +18,10 @@ next pass).
   [ ] = open      [~] = in progress (commit not yet on master)
 
 
-ACTIVE FEATURE — Ideogram-4 JSON Caption Mutation Engine (planned 2026-06-14)
+COMPLETE FEATURE — Ideogram-4 JSON Caption Mutation Engine (planned + shipped 2026-06-14)
 -----------------------------------------------------------------------------
+ALL phases 0-6 + AR-persistence (6a) committed & user-verified. Phase hashes below;
+final commits e6d876e (Phase 6) + 7ccf936 (AR persistence). 1070 tests green.
 
 Detailed plan: C:\Users\mr\.claude\plans\question-about-my-comfyui-tingly-hummingbird.md
 Brief: documents/mutations/ideogram4_mutation_engine_handoff.md (+ botanist_*.json goldens).
@@ -154,8 +156,38 @@ PHASES:
        is TOP-LEVEL (clean XAML x:DataType). DI: CaptionMutationEngine singleton + VM/Page transient in
        MauiProgram; route "mutation-engine" in AppShell. 11 new VM tests (1056 total green), both configs
        0 warnings. NEXT = Phase 6.
-[ ] 6. Multi-generation "Mutate from this" (gallery/job winner → caption via metadata
+[x] 6. Multi-generation "Mutate from this" (gallery/job winner → caption via metadata
        read → new base) + promotion metadata round-trip test.
+       COMMITTED e6d876e (Phase 6) — user-verified working; 1070 tests green, both configs
+       0 warnings. "Mutate from this" on gallery detail + job card → caption-only
+       (reads "Prompt" from metadata → PendingMutationBase; KEEPS current main-page model/
+       resolution — user works only on Ideogram, so no recipe restore). Threaded via a
+       mutateFromImage callback: GenerationJob optional ctor param + BatchCoordinator required
+       ctor param + gallery //MainPage?mutateFrom= QueryProperty. Plus 4 post-test UX fixes the
+       user requested: (a) pinned render seed — GenerateAsync sets Parameters.Seed=Seed +
+       RandomizeSeed=false so every variant+base render at ONE seed; (b) durable VM —
+       MutationEngineViewModel now AddSingleton with same-base detection (_lastBaseJson) so
+       seed/count/axis/strength/slot-tags survive navigation; (c) before→after variant labels —
+       new CaptionDiff.Describe(base,variant) ("art style: gouache → anime", "placement moved")
+       → RunBatchAsync(prompts,labels) → GenerationJob.MutationLabel → MainPage job-card "Δ …";
+       (d) caption-only mutate (reverted the recipe-restore). Tests: promotion round-trip in
+       ImageFileServiceTests + CaptionDiffTests(10) + BatchCoordinatorTests factory fix.
+       Handoff detail: ~/.claude/plans/continue-phase-6-of-delightful-seahorse.md.
+
+[x] 6a. AspectRatio persistence across restart — COMMITTED 7ccf936, user-verified (AR 2:3
+       survived restart, app.log clean: LoadAspectRatio -> "2:3 (Portrait Photo)" and NO startup
+       PersistAspectRatio clobber). Output AspectRatio was never persisted before (only the
+       resolution/MP preset was). Added per-family keys in UiStateStore (imggen.last_aspect_ratio
+       [.comfyui]) + Load/PersistAspectRatio + IUiStateStore + persist-on-pick hook +
+       LoadSavedUiState restore. The startup-clobber bug (AR Picker's ItemsSource swap in the
+       model-restore RefreshCapabilities pushed a VALID default through a non-suppressed path,
+       clobbering the saved pick before LoadSavedUiState restored it) was fixed with a
+       _suppressAspectRatioPersist flag (mirrors _suppressResolutionPersist) wrapping the
+       RefreshCapabilities AR swap. Regression test
+       LoadSavedUiState_RestoresAspectRatio_DespitePickerPushOnOptionsSwap.
+       BUILD-PATH CORRECTION: committed TFM is net10.0-windows10.0.22621.0 (NOT 19041 — that was a
+       stale leftover dir, now cleaned) and the implicit win-x64 RID nests the exe. Launch
+       bin\Debug\net10.0-windows10.0.22621.0\win-x64\ImageGenerator.MAUI.exe.
 
 SCOPE GUARDS (v1 out): arbitrary from-file base; configurable k / per-gene prob;
 automated fitness/selection; SCENE crossover; validate.py craft-checks beyond word
