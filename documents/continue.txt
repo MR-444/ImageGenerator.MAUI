@@ -92,8 +92,24 @@ PHASES:
        identity guard is exercised by explicitly setting Element.SlotTag in tests. Library service
        + Resources seeding still DEFERRED to Phase 4 (Phase 2 added domain types + in-code test
        fixtures only). 60 new tests (1013 total green), Release clean (0 warnings). Committed fcb09c6.
-[ ] 3. CaptionMutationEngine.Generate (one-op-per-variant loop, repair+reject,
+[x] 3. CaptionMutationEngine.Generate (one-op-per-variant loop, repair+reject,
        seeded determinism, Count clamp 100). + determinism/canonical tests on goldens.
+       DONE: CaptionMutationEngine (Core/Domain/Ideogram/Mutation) — strict (1+λ): every variant
+       applies exactly ONE pinned-axis operator to the ORIGINAL base (never a chain). Injected
+       IReadOnlyList<ICaptionOperator> catalog + static DefaultOperators (all 8 in a FIXED order —
+       order is part of the determinism contract since op selection draws an index); parameterless
+       ctor for Phase-4 DI. Generate(baseCaption, config, library): emits canonical base as variant 0
+       when IncludeBaseAsReference (OperatorName null, SubSeed=Seed); resolves SlotTagger map +
+       MutationContext ONCE; filters catalog to config.Axis; Count clamped [0,100]. ONE master
+       Random(Seed) advances EXACTLY ONCE per slot (the recorded SubSeed) regardless of attempts ⇒
+       byte-reproducible; per-slot Random owns both operator pick and every Apply. Best-effort +
+       bounded: MaxAttemptsPerVariant=20 (caps work at Count*20, no hang), failed/empty-axis slots
+       skipped with a DropLog line (Variants.Count may be < Count). NO dedup (operators guarantee
+       variant!=base; variant<->variant collisions allowed — test-locked). KEY axis fact: LOOK is
+       style+ornament, and ApplyOrnamentKit/SwapElementDesc BOTH write element.desc — so the clean
+       structural invariant is SCENE-never-touches-style + LOOK-never-touches-scene-geometry
+       (background/bbox/element-palette/count), NOT byte-identical composition. 26 new tests
+       (1039 total green), Release clean (0 warnings). NOT committed yet.
 [ ] 4. MutationLibraryService (+ IMutationLibraryService) + Resources/Raw/MutationDefaults
        seeding + OutputPaths.MutationLibraryDirectory + DI in MauiProgram. + round-trip test.
 [ ] 5. UI: MutationEnginePage/VM (axis, operators, library pickers, N, strength,
