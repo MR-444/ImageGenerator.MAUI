@@ -185,6 +185,12 @@ public partial class GeneratorViewModel : ObservableObject
     // a user pick, so it must not overwrite the persisted choice.
     private bool _suppressResolutionPersist;
 
+    // Mirrors _suppressResolutionPersist for the AspectRatio Picker. The AR options swap in
+    // RefreshCapabilities makes the bound Picker push a VALID first/default option (not null like
+    // resolution), so the membership guard alone can't tell it from a user pick — this flag gates
+    // persistence across the swap so a binding artifact never overwrites the saved choice.
+    private bool _suppressAspectRatioPersist;
+
     // ComfyUI checkpoint picker. Options[0] is always the workflow's own baked-in checkpoint
     // (= no patch); server checkpoints follow after the async fetch lands. Hidden whenever the
     // selected workflow has no literal CheckpointLoaderSimple ckpt_name.
@@ -290,19 +296,31 @@ public partial class GeneratorViewModel : ObservableObject
         // Update derived lists first so when the Capabilities setter fires the binding
         // cascade (NotifyPropertyChangedFor + path-based bindings on Capabilities.X),
         // every consumer sees consistent state.
-        AspectRatioOptions = caps.AspectRatios.ToList();
-        // Sticky AR: prefer the user's last explicit pick if the new model supports it,
-        // otherwise keep the current AR if still valid (covers initial-state edge cases),
-        // otherwise fall back to the model's first AR.
-        var current = Parameters.AspectRatio;
-        var target =
-            (InputImages.PreferredAspectRatio is { } pref && caps.AspectRatios.Contains(pref)) ? pref :
-            caps.AspectRatios.Contains(current) ? current :
-            caps.AspectRatios[0];
-        if (!string.Equals(target, current, StringComparison.Ordinal))
+        // The options swap must sit INSIDE the persist-suppression window, exactly like the
+        // resolution swap below: replacing the ItemsSource makes the two-way-bound AR Picker push
+        // a VALID first/default option into Parameters.AspectRatio synchronously when the old value
+        // isn't in the new list. Outside the window that push (where _suppressPreferredArUpdate is
+        // false) looked user-driven and clobbered the saved AR before LoadSavedUiState could
+        // restore it. Unlike resolution the push is a valid string, so the membership guard alone
+        // isn't enough — _suppressAspectRatioPersist gates it.
+        _suppressAspectRatioPersist = true;
+        try
         {
-            SetAspectRatioProgrammatically(target);
+            AspectRatioOptions = caps.AspectRatios.ToList();
+            // Sticky AR: prefer the user's last explicit pick if the new model supports it,
+            // otherwise keep the current AR if still valid (covers initial-state edge cases),
+            // otherwise fall back to the model's first AR.
+            var current = Parameters.AspectRatio;
+            var target =
+                (InputImages.PreferredAspectRatio is { } pref && caps.AspectRatios.Contains(pref)) ? pref :
+                caps.AspectRatios.Contains(current) ? current :
+                caps.AspectRatios[0];
+            if (!string.Equals(target, current, StringComparison.Ordinal))
+            {
+                SetAspectRatioProgrammatically(target);
+            }
         }
+        finally { _suppressAspectRatioPersist = false; }
 
         // The options swap must sit INSIDE the persist-suppression window: replacing the
         // ItemsSource makes the two-way-bound Picker push SelectedItem=null into
@@ -726,7 +744,20 @@ public partial class GeneratorViewModel : ObservableObject
                 case nameof(ImageGenerationParameters.AspectRatio):
                     UpdateCustomAspectRatio(_parameters.AspectRatio);
                     if (!_suppressPreferredArUpdate)
+                    {
                         InputImages.RecordExplicitAspectRatioPick(_parameters.AspectRatio);
+                        // Persist genuine user picks so the choice survives a restart (mirrors
+                        // resolution). Skip "custom" — its width/height aren't persisted, so
+                        // restoring it would be wrong; and only a value the model actually offers
+                        // (never a Picker null/swap artifact).
+                        if (!_suppressAspectRatioPersist
+                            && !string.IsNullOrEmpty(_parameters.AspectRatio)
+                            && _parameters.AspectRatio != "custom"
+                            && AspectRatioOptions.Contains(_parameters.AspectRatio))
+                        {
+                            _uiStateStore.PersistAspectRatio(_parameters.AspectRatio, _parameters.Model);
+                        }
+                    }
                     break;
                 case nameof(ImageGenerationParameters.ApiToken):
                     // Persistence lives on TokenProviderViewModel now — only revalidate here.
@@ -1293,6 +1324,19 @@ public partial class GeneratorViewModel : ObservableObject
             _suppressResolutionPersist = true;
             try { Parameters.Resolution = savedResolution!; }
             finally { _suppressResolutionPersist = false; }
+        }
+
+        // Restore the last aspect-ratio pick the same way: the model restore above settled
+        // AspectRatioOptions, so only adopt a value this model actually offers. SetAspectRatio-
+        // Programmatically suppresses the preferred-AR/persist hooks; we then record it explicitly
+        // so it also becomes the session's sticky preferred AR (surviving in-session model swaps).
+        var savedAspectRatio = _uiStateStore.LoadAspectRatio(Parameters.Model);
+        if (!string.IsNullOrEmpty(savedAspectRatio)
+            && savedAspectRatio != "custom"
+            && AspectRatioOptions.Contains(savedAspectRatio))
+        {
+            SetAspectRatioProgrammatically(savedAspectRatio);
+            InputImages.RecordExplicitAspectRatioPick(savedAspectRatio);
         }
 
         // Restore the structured-JSON toggle LAST: the model restore above has settled

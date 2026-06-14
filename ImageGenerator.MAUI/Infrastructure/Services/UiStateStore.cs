@@ -12,6 +12,8 @@ public sealed class UiStateStore : IUiStateStore
     private const string UseJsonPromptKey = "imggen.use_json_prompt";
     private const string ResolutionKey = "imggen.last_resolution";
     private const string ComfyUiResolutionKey = "imggen.last_resolution.comfyui";
+    private const string AspectRatioKey = "imggen.last_aspect_ratio";
+    private const string ComfyUiAspectRatioKey = "imggen.last_aspect_ratio.comfyui";
     private const string ComfyUiBaseUrlKey = "imggen.comfyui_base_url";
     private const string CivitaiModelRefKey = "imggen.civitai_model_ref";
     private const string OutputFolderKey = "imggen.output_folder";
@@ -97,6 +99,27 @@ public sealed class UiStateStore : IUiStateStore
     // The legacy key stays the default family, keeping previously saved data valid.
     private static string ResolutionKeyFor(string? modelId) =>
         Shared.Constants.ModelConstants.ComfyUi.IsId(modelId) ? ComfyUiResolutionKey : ResolutionKey;
+
+    public string? LoadAspectRatio(string? modelId)
+    {
+        var key = AspectRatioKeyFor(modelId);
+        var v = SafeGet(key);
+        _logger.LogDebug("UiStateStore.LoadAspectRatio[{Key}] -> {Value}", key, Quote(v));
+        return v;
+    }
+
+    public void PersistAspectRatio(string value, string? modelId)
+    {
+        var key = AspectRatioKeyFor(modelId);
+        if (SafeSet(key, value))
+            _logger.LogDebug("UiStateStore.PersistAspectRatio[{Key}]({Value})", key, Quote(value));
+    }
+
+    // Aspect-ratio option sets differ by model family (a ComfyUI workflow defines its own), so key
+    // per family like resolution — a portrait pick on ComfyUI won't override a landscape pick on
+    // the Replicate models, and a switch back restores that family's last choice.
+    private static string AspectRatioKeyFor(string? modelId) =>
+        Shared.Constants.ModelConstants.ComfyUi.IsId(modelId) ? ComfyUiAspectRatioKey : AspectRatioKey;
 
     public string? LoadComfyUiCheckpoint(string workflowName)
     {

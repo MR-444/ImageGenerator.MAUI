@@ -126,6 +126,30 @@ public class UiStateStoreTests
         _sut.LoadResolution(null).Should().Be("1440x2880");
     }
 
+    // Aspect ratio is persisted per family like resolution: ComfyUI workflows define their own
+    // option set, so a portrait pick there must not override the Replicate models' landscape pick.
+    private const string AspectRatioKey = "imggen.last_aspect_ratio";
+    private const string ComfyAspectRatioKey = "imggen.last_aspect_ratio.comfyui";
+
+    [Fact]
+    public void LoadAspectRatio_KeyMissing_ReturnsNull()
+    {
+        _sut.LoadAspectRatio(IdeogramModel).Should().BeNull();
+        _sut.LoadAspectRatio(ComfyModel).Should().BeNull();
+    }
+
+    [Fact]
+    public void AspectRatio_FamiliesAreIsolated_EachModelRestoresItsOwnPick()
+    {
+        _sut.PersistAspectRatio("3:2", IdeogramModel);
+        _sut.PersistAspectRatio("2:3", ComfyModel);
+
+        _sut.LoadAspectRatio(IdeogramModel).Should().Be("3:2");
+        _sut.LoadAspectRatio(ComfyModel).Should().Be("2:3");
+        _preferences.Get(AspectRatioKey, string.Empty).Should().Be("3:2");
+        _preferences.Get(ComfyAspectRatioKey, string.Empty).Should().Be("2:3");
+    }
+
     [Fact]
     public void LoadComfyUiBaseUrl_KeyMissing_ReturnsNull()
     {

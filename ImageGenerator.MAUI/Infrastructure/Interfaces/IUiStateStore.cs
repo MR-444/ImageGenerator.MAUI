@@ -17,6 +17,12 @@ public interface IUiStateStore
     /// that family's last pick instead of slamming to the first option.
     /// </summary>
     string? LoadResolution(string? modelId);
+    /// <summary>
+    /// Last aspect-ratio pick, persisted per model family (ComfyUI vs the rest) like resolution.
+    /// Null when never persisted — callers keep the model's default first option. "custom" is
+    /// never persisted (its width/height aren't), so this never returns it.
+    /// </summary>
+    string? LoadAspectRatio(string? modelId);
     /// <summary>False when never persisted — the toggle is opt-in per session by default.</summary>
     bool LoadUseJsonPrompt();
     /// <summary>Null when never persisted — callers fall back to ModelConstants.ComfyUi.DefaultBaseUrl.</summary>
@@ -48,6 +54,8 @@ public interface IUiStateStore
     void PersistModel(string value);
     /// <inheritdoc cref="LoadResolution"/>
     void PersistResolution(string value, string? modelId);
+    /// <inheritdoc cref="LoadAspectRatio"/>
+    void PersistAspectRatio(string value, string? modelId);
     void PersistUseJsonPrompt(bool value);
     void PersistComfyUiBaseUrl(string value);
     /// <inheritdoc cref="LoadOutputFolder"/>

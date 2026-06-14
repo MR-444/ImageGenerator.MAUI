@@ -1598,6 +1598,32 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
+    public void LoadSavedUiState_RestoresAspectRatio_DespitePickerPushOnOptionsSwap()
+    {
+        // AR analog of the resolution test above, but the AR Picker pushes a VALID first/default
+        // option on the ItemsSource swap (not null). Unsuppressed, that push persisted the default
+        // and clobbered the user's saved AR before LoadSavedUiState restored it. The
+        // _suppressAspectRatioPersist window around the RefreshCapabilities swap must prevent that.
+        SelectComfyWorkflow(); // catalog contains the workflow entry (its AR list has "2:3 (Portrait Photo)")
+        SelectIdeogramTurbo(); // move away so the restore below actually switches back and swaps the AR options
+        _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ComfyModelId);
+        _mockUiStateStore.Setup(s => s.LoadAspectRatio(It.IsAny<string?>())).Returns("2:3 (Portrait Photo)");
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(GeneratorViewModel.AspectRatioOptions)
+                && _viewModel.AspectRatioOptions.Count > 0)
+                _viewModel.Parameters.AspectRatio = _viewModel.AspectRatioOptions[0]; // "1:1 (Square)"
+        };
+
+        _viewModel.LoadSavedUiState();
+
+        _viewModel.Parameters.AspectRatio.Should().Be("2:3 (Portrait Photo)");
+        _mockUiStateStore.Verify(
+            s => s.PersistAspectRatio(It.IsAny<string>(), It.IsAny<string?>()), Times.Never,
+            "a binding artifact must never overwrite the saved aspect ratio");
+    }
+
+    [Fact]
     public void Resolution_SurvivesIdeogramToIdeogramModelSwitch_DespitePickerNullPush()
     {
         // Round 2 of the restart bug: the options swap synchronously nulls the value via the
