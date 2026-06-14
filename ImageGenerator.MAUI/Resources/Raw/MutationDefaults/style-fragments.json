@@ -1,0 +1,32 @@
+[
+  {
+    "name": "gouache",
+    "style": {
+      "aesthetics": "tender, occult, deadpan-whimsical",
+      "lighting": "cool moonlight from above and behind, low inner glow from the flowers lifting the face from beneath",
+      "medium": "painting",
+      "art_style": "gouache with crisp ink linework, translucent petal glazes, matte opaque skin, lost-and-found edges over cold-press paper tooth",
+      "color_palette": ["#0E0F14", "#2C4A3E", "#3F6B57", "#5B6E8C", "#C8D6E0", "#E8B998", "#B5202A", "#C0C6CC"]
+    }
+  },
+  {
+    "name": "anime",
+    "style": {
+      "aesthetics": "occult-botanical reverie, tender and melancholic, ornate",
+      "lighting": "nocturnal low-key, warm internal glow from the flowers against a deep cool-dark ground, cool moonlight rim",
+      "medium": "illustration",
+      "art_style": "high-detail anime illustration, soft cel-shaded painterly rendering, large expressive eyes, fine ornamental linework, luminous bloom-light",
+      "color_palette": ["#0B0E12", "#16231C", "#2C4A3E", "#3C5A6E", "#E8C27A", "#F2E2B0", "#B5202A", "#C8B98A"]
+    }
+  },
+  {
+    "name": "density",
+    "style": {
+      "aesthetics": "occult-botanical reverie, tender and melancholic, densely ornate",
+      "lighting": "nocturnal low-key, warm internal glow from the flowers against a deep cool-dark ground, cool moonlight rim",
+      "medium": "illustration",
+      "art_style": "polished high-detail anime illustration, smooth gradient cel-shading, glossy idealized features with large luminous eyes, crisp ornamental linework, glowing bloom-light against deep shadow",
+      "color_palette": ["#0B0E12", "#16231C", "#2C4A3E", "#3C5A6E", "#E8C27A", "#F2E2B0", "#B5202A", "#C8B98A"]
+    }
+  }
+]

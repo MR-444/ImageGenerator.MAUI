@@ -1,0 +1,18 @@
+[
+  {
+    "name": "trailing_ivy",
+    "type": "obj",
+    "slotTag": "scene.flora",
+    "desc": "Trailing strands of dark ivy creeping along the right edge of the frame, small heart-shaped leaves catching faint moonlight against the glass.",
+    "colorPalette": ["#16231C", "#3F6B57"],
+    "preferredBbox": [200, 760, 760, 900]
+  },
+  {
+    "name": "luna_moth",
+    "type": "obj",
+    "slotTag": "prop.instrument",
+    "desc": "A pale luna moth resting mid-frame with wings half-open, faintly luminous against the dark greenhouse glass, long tails trailing below.",
+    "colorPalette": ["#C8D6E0", "#5B6E8C"],
+    "preferredBbox": [40, 120, 220, 320]
+  }
+]

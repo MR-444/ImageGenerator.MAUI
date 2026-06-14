@@ -110,8 +110,28 @@ PHASES:
        structural invariant is SCENE-never-touches-style + LOOK-never-touches-scene-geometry
        (background/bbox/element-palette/count), NOT byte-identical composition. 26 new tests
        (1039 total green), Release clean (0 warnings). Committed b24d150.
-[ ] 4. MutationLibraryService (+ IMutationLibraryService) + Resources/Raw/MutationDefaults
+[x] 4. MutationLibraryService (+ IMutationLibraryService) + Resources/Raw/MutationDefaults
        seeding + OutputPaths.MutationLibraryDirectory + DI in MauiProgram. + round-trip test.
+       DONE: IMutationLibraryService (Infrastructure/Interfaces) + MutationLibraryService
+       (Infrastructure/Services). Library = a FOLDER of three JSON arrays — style-fragments.json /
+       ornament-kits.json / scene-elements.json — each a list of the matching domain RECORD,
+       serialized DIRECTLY (no DTOs; STJ binds the records' IReadOnlyList/IReadOnlyDictionary ctor
+       params on read — confirmed by the round-trip test). LibraryJson = Web(camelCase) + WriteIndented
+       + WhenWritingNull (drops the unused style branch/null text) + UnsafeRelaxedJsonEscaping (literal
+       #/non-ASCII) + JsonStringEnumConverter (DescBudgetCategory as names). StyleDescription keeps its
+       own [JsonPropertyName] snake_case inside the camelCase wrapper. LoadAsync: CreateDirectory →
+       seed each MISSING store from Resources/Raw/MutationDefaults via injected assetOpener (default
+       FileSystem.OpenAppPackageFileAsync) → read each → new MutationLibrary; a corrupt/missing store
+       degrades to EMPTY + logs (never sinks the whole load). SaveAsync: atomic temp+File.Move(overwrite)
+       per store (ComfyUiCheckpointService convention). Ctor seams: ILogger + dirOverride + assetOpener
+       (mirrors the app's Func<DateTime> clock pattern). OutputPaths.MutationLibraryDirectory =
+       DefaultGeneratedImagesDirectory\mutation-library — ANCHORED at default like comfy-workflows (does
+       NOT follow the output-folder override; OutputPathsTests extended to assert this). DI: one
+       AddSingleton in MauiProgram (after IJsonPromptFileService); NO startup hook — seeding is lazy in
+       LoadAsync. Seed files mirror MutationTestData.Library() (gouache/anime/density + density kit +
+       trailing_ivy/luna_moth); auto-bundled by the existing MauiAsset Resources\Raw\** glob (no .csproj
+       change). 6 new service tests incl. a [CallerFilePath]-located REAL-seed validity test guarding the
+       shipped JSON against schema drift. 1045 total green, Release clean (0 warnings). NOT committed yet.
 [ ] 5. UI: MutationEnginePage/VM (axis, operators, library pickers, N, strength,
        include-base, seed, slot-tag review) → RunBatchAsync; editor "Mutate…" button
        + per-element slot picker + PendingMutationBase handoff; MainPage "Mutate current".

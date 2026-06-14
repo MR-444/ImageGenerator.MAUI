@@ -37,4 +37,11 @@ public static class OutputPaths
     // must never make the user's workflow models vanish from the picker.
     public static string ComfyWorkflowsDirectory =>
         Path.Combine(DefaultGeneratedImagesDirectory, "comfy-workflows");
+
+    // User-editable mutation library (style fragments, ornament kits, scene-element templates)
+    // the caption mutation engine draws from, seeded from bundled defaults on first use. Like the
+    // ComfyUI workflows above, this is hand-edited INPUT, not output, so it stays anchored at the
+    // default location — re-pointing the output folder must never strand the user's edited library.
+    public static string MutationLibraryDirectory =>
+        Path.Combine(DefaultGeneratedImagesDirectory, "mutation-library");
 }

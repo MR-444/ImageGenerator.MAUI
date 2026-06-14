@@ -1,0 +1,15 @@
+[
+  {
+    "name": "density",
+    "phrasesBySlot": {
+      "subject.garment": [
+        { "text": "crossed by thin leather harness straps with small brass buckles", "category": "StyleMarker" },
+        { "text": "embroidered with pale botanical sprigs", "category": "SecondaryFrameDevice" }
+      ],
+      "prop.charms": [
+        { "text": "engraved circular brass lockets", "category": "StyleMarker" },
+        { "text": "small botanical medallions on fine red thread", "category": "SecondaryFrameDevice" }
+      ]
+    }
+  }
+]

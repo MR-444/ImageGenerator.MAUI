@@ -16,7 +16,7 @@ public class OutputPathsTests : IDisposable
     }
 
     [Fact]
-    public void SetOverride_MovesImagesAndJsonPrompts_ButNotComfyWorkflows()
+    public void SetOverride_MovesImagesAndJsonPrompts_ButNotComfyWorkflowsOrMutationLibrary()
     {
         OutputPaths.SetGeneratedImagesOverride(@"D:\out");
 
@@ -25,6 +25,9 @@ public class OutputPathsTests : IDisposable
         // comfy-workflows are inputs (picker models) — anchored at the default, never moved.
         OutputPaths.ComfyWorkflowsDirectory.Should().Be(
             Path.Combine(OutputPaths.DefaultGeneratedImagesDirectory, "comfy-workflows"));
+        // the mutation library is hand-edited input too — also anchored at the default.
+        OutputPaths.MutationLibraryDirectory.Should().Be(
+            Path.Combine(OutputPaths.DefaultGeneratedImagesDirectory, "mutation-library"));
     }
 
     [Theory]

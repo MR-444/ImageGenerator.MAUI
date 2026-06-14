@@ -133,6 +133,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IFolderPicker, FolderPickerService>();
         builder.Services.AddSingleton<IClipboardService, ClipboardService>();
         builder.Services.AddSingleton<IJsonPromptFileService, JsonPromptFileService>();
+        builder.Services.AddSingleton<IMutationLibraryService, MutationLibraryService>();
 
         // 3a) VM collaborators carved out of the original god-class GeneratorViewModel (M1).
         builder.Services.AddSingleton<IApiTokenStore, ApiTokenStore>();
