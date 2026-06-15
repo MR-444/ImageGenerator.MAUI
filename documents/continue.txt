@@ -18,8 +18,19 @@ next pass).
   [ ] = open      [~] = in progress (commit not yet on master)
 
 
-PROMPT BUILDER v2 — TWO-PASS VPE → (optional) IDEOGRAM JSON (committed 2026-06-15, awaiting user manual verify)
+PROMPT BUILDER v2 — TWO-PASS VPE → (optional) IDEOGRAM JSON (SHIPPED + USER-VERIFIED 2026-06-15, v1.9.1)
 --------------------------------------------------------------------------------------------------------------
+USER-VERIFIED working end-to-end 2026-06-15. Version bumped 1.9.0 → 1.9.1 / ApplicationVersion 19 → 20;
+README updated (two-pass prose+optional-JSON, result card, both override files, ~3-6¢ prose / ~6-12¢ prose+JSON).
+COST NOTE (user): a prose+JSON build is ~10¢ (Opus 4.8 high effort × 2 calls) — "too expensive" but ACCEPTED;
+feature is opt-in (uncheck JSON for a cheaper prose-only build, or just don't use it). Do NOT re-pitch a
+cheaper model — Opus is the only tier that clears the bar (Haiku=unreliable JSON, Sonnet=lacks creativity).
+Post-ship the user also cleaned their PRIVATE system-prompt.md override (Pictures\...\prompt-builder\): the
+original Claude-SKILL version told the model to run `python scripts/validate.py --minify` + paste validator
+stdout + consult a vendored references file — none of which exist in-app (no code exec; app does validation +
+minify itself + structured-output constraint). Edited that local file (NOT the repo/bundled prompt — clean-room
+boundary intact) to "return only the JSON object; the app validates + compacts". vpe-prompt.md = their real VPE skill.
+
 Rebuilt "Describe an idea" as TWO passes. Pass 1 (VPE, ALWAYS runs): idea → a normal PROSE prompt usable by
 every plain-prompt model (Pollinations, Flux, gpt-image, nano-banana) and by a human. Pass 2 (Ideogram
 adapter, OPTIONAL): prose → schema-valid V4 JSON via the existing validator gate + 1 retry. A CHECKBOX by

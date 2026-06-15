@@ -14,7 +14,7 @@ A Windows desktop image generation app built on .NET MAUI with three image provi
 - **Batch from a textfile** — **Import prompts…** runs a `.txt` of prompts (separated by `---`, `#` lines ignored) sequentially against the current model; failures don't abort the queue. → [details](#running-a-batch-from-a-textfile)
 - **In-app gallery** — a sortable tile grid with live `FileSystemWatcher` updates, multi-select, and a detail page with copyable metadata and one-click **Use as input**. Thumbnails come from the Windows shell cache, so a folder of multi-megabyte PNGs doesn't blow process memory. → [details](#browsing-past-images-gallery)
 - **Post to CivitAI** — one checkbox publishes each finished image to [CivitAI](https://civitai.com), optionally into a specific model's gallery with the generation data attached. Fire-and-forget: a slow or failed post never touches the generation job. → [details](#posting-to-civitai-optional)
-- **Describe an idea (AI prompt builder)** — one **Claude Opus 4.8** call turns a freeform idea into a schema-valid Ideogram V4 structured caption, dropped straight into the prompt box (refine it from there with **Edit structure…**). Needs an Anthropic key; power users can override the bundled instructions with a private `system-prompt.md`. → [details](#describe-an-idea-ai-prompt-builder)
+- **Describe an idea (AI prompt builder)** — **Claude Opus 4.8** turns a freeform idea into a polished **prose** prompt that works with any model; tick a box to *also* build a schema-valid Ideogram V4 structured caption. Copy the prose, use it as your prompt, or use the JSON. Needs an Anthropic key; power users can override the bundled instructions with private `vpe-prompt.md` / `system-prompt.md` files. → [details](#describe-an-idea-ai-prompt-builder)
 - **Dynamic model catalog** — **Refresh Models** queries Replicate's `text-to-image` collection (filtered to `black-forest-labs`, `openai`, `google`) and Pollinations' `/models` in parallel, merges with the seed entries (Ideogram V4 is pinned — Replicate's collection doesn't list it), and caches to `AppDataDirectory/model-catalog.json`.
 - **Reproducible by default** — every saved file embeds the full prompt, generation parameters, actual pixel dimensions, and model-specific fields, so any output's recipe is recoverable months later. → [reading it back](#reading-back-the-embedded-metadata)
 - **Persisted UI state** — last prompt, model, resolution, and window bounds are restored on next launch.
@@ -113,7 +113,9 @@ Posting runs after the image is safely on disk and never blocks or fails the gen
 
 ### Describe an idea (AI prompt builder)
 
-Writing a good Ideogram V4 *structured* caption by hand is fiddly. **Describe an idea…** does it for you: type a plain-English idea and one **Claude Opus 4.8** call returns a schema-valid V4 JSON caption, dropped straight into the prompt box.
+Writing a good image prompt by hand is fiddly. **Describe an idea…** does it for you in two passes. **Pass 1 (always):** type a plain-English idea and **Claude Opus 4.8** writes a polished **prose** prompt — a normal description that works directly with *any* model (Pollinations, Flux, gpt-image, nano-banana, Ideogram) and reads well to a human. **Pass 2 (optional):** tick **Also build an Ideogram V4 JSON prompt** and it maps that prose onto a schema-valid V4 *structured* caption for Ideogram V4 / ComfyUI.
+
+The prose is never thrown away: the result card lets you **Copy prose**, **Use prose as prompt**, or **Use JSON prompt** (the last appears only when the JSON was built).
 
 **Setup (once):**
 
@@ -122,13 +124,13 @@ Writing a good Ideogram V4 *structured* caption by hand is fiddly. **Describe an
 
 **Per use:**
 
-1. Pick an Ideogram V4 (or a structured-JSON-capable ComfyUI) model so the structured-prompt controls are available.
-2. Click **Describe an idea…**, type your idea, and hit **Build prompt**. A valid V4 caption lands in the prompt box with **Structured JSON prompt** turned on.
-3. Tweak it further with **Edit structure…** if you like, then **Generate**.
+1. Click **Describe an idea…**, type your idea. The **Also build an Ideogram V4 JSON prompt** checkbox defaults on for Ideogram V4 / ComfyUI structured models and off otherwise — flip it as you like.
+2. Hit **Build prompt**. The prose appears in the result card; if the box was ticked, the V4 JSON is built too.
+3. **Use prose as prompt** (plain-prompt models) or **Use JSON prompt** (turns on **Structured JSON prompt**; refine it with **Edit structure…**), then **Generate**.
 
-Each build is one Opus call — roughly **3–6¢**. The model is hardcoded (it's the only tier that reliably produces valid, creative captions).
+Each pass is one Opus call at high effort — roughly **3–6¢**, so a prose-only build is ~3–6¢ and a prose + JSON build is ~6–12¢. The model is hardcoded (it's the only tier that reliably produces valid, creative prompts).
 
-**Private override (optional, power users):** the app ships a deliberately *basic* clean-room builder prompt. To use your own, drop a file named `system-prompt.md` in `Pictures\ImageGenerator.MAUI\prompt-builder\` (the folder is created on first use, with a `README.txt` explaining this). It's read fresh on every build — no restart — and used verbatim instead of the bundled prompt; delete it to revert. This is an open-core split: the bundled prompt is public, your private prompt stays local and never enters the repo.
+**Private overrides (optional, power users):** the app ships deliberately *basic* clean-room prompts for both passes. To use your own, drop `vpe-prompt.md` (pass 1, prose) and/or `system-prompt.md` (pass 2, JSON) in `Pictures\ImageGenerator.MAUI\prompt-builder\` (the folder is created on first use, with a `README.txt` explaining both files). They're read fresh on every build — no restart — and used verbatim instead of the bundled prompts; delete a file to revert that pass. This is an open-core split: the bundled prompts are public, your private prompts stay local and never enter the repo.
 
 ### Costs
 
