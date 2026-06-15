@@ -1192,6 +1192,14 @@ public partial class GeneratorViewModel : ObservableObject
     public V4JsonPrompt? PendingMutationBase { get; set; }
 
     /// <summary>
+    /// Transient hand-off for the breed flow: the Gallery stashes the selected winners' captions
+    /// here, and the mutation VM consumes them on appearance (it flips to AI mode and runs
+    /// <c>BreedAsync</c>). Plain property like <see cref="PendingMutationBase"/> — read once then
+    /// cleared; nothing binds to it.
+    /// </summary>
+    public IReadOnlyList<V4JsonPrompt>? PendingBreedSet { get; set; }
+
+    /// <summary>
     /// "Mutate current prompt" entry from MainPage: seed the mutation page from whatever is in the
     /// prompt box (slot tags only inferred, since a string carries none). A non-structured prompt
     /// leaves <see cref="PendingMutationBase"/> null — the mutation VM then reports the problem.

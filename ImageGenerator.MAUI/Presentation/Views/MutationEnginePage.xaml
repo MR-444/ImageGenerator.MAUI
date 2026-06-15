@@ -49,6 +49,14 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- BANNER: breeding from gallery winners (set by the "Breed selected" hand-off) -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding IsBreedMode}">
+                <Label Text="{Binding BreedSummary}"
+                       Style="{StaticResource FieldLabel}"
+                       LineBreakMode="WordWrap"
+                       AutomationId="MutationBreedBanner" />
+            </Border>
+
             <!-- CARD: AI steer (AI mode only) -->
             <Border Style="{StaticResource Card}" IsVisible="{Binding IsAiMode}">
                 <VerticalStackLayout Spacing="12">

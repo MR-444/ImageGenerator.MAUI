@@ -258,6 +258,38 @@ public class MutationEngineViewModelTests
     }
 
     [Fact]
+    public void SetBreedSet_FlipsToAiMode_AndSetsSummary()
+    {
+        var sut = CreateSutWithAi(new StubMutationLlm());
+
+        sut.SetBreedSetForTest(new[] { MutationTestData.BaseCaption(), MutationTestData.BaseCaption() });
+
+        sut.IsBreedMode.Should().BeTrue();
+        sut.IsAiMode.Should().BeTrue("breeding is an AI-only path");
+        sut.BreedSummary.Should().Contain("2 winner");
+        sut.HasBase.Should().BeTrue("the first winner seeds the base so the run gate passes");
+    }
+
+    [Fact]
+    public async Task BreedMode_FansOutBreedAsync_NotMutate()
+    {
+        var stub = new StubMutationLlm();
+        var sut = CreateSutWithAi(stub);
+        sut.SetBreedSetForTest(new[] { MutationTestData.BaseCaption(), MutationTestData.BaseCaption() });
+        sut.Steer = "blend them";
+        sut.SelectedModelTier = ModelTier.Sonnet;
+        sut.Count = 4;
+
+        await sut.MutateWithAiCommand.ExecuteAsync(null);
+
+        stub.MutateCalls.Should().BeEmpty("breed mode never calls MutateAsync");
+        stub.BreedCalls.Should().HaveCount(4);
+        stub.BreedCalls.Select(c => c.Index).Should().BeEquivalentTo(new[] { 0, 1, 2, 3 });
+        stub.BreedCalls.Should().OnlyContain(c =>
+            c.WinnerCount == 2 && c.Steer == "blend them" && c.Tier == ModelTier.Sonnet);
+    }
+
+    [Fact]
     public void BuildAiBatch_KeepsSuccessesAndPairsLabels()
     {
         var good = MutationTestData.BaseCaption();
@@ -278,6 +310,7 @@ public class MutationEngineViewModelTests
     private sealed class StubMutationLlm : ICaptionMutationLlmService
     {
         public List<(int Index, string Steer, ModelTier Tier)> MutateCalls { get; } = [];
+        public List<(int WinnerCount, int Index, string Steer, ModelTier Tier)> BreedCalls { get; } = [];
 
         public Task<LlmVariantResult> MutateAsync(
             V4JsonPrompt baseCaption, string steer, int index, ModelTier tier, CancellationToken ct = default)
@@ -288,7 +321,10 @@ public class MutationEngineViewModelTests
 
         public Task<LlmVariantResult> BreedAsync(
             IReadOnlyList<V4JsonPrompt> winners, string steer, int index, ModelTier tier, CancellationToken ct = default)
-            => Task.FromResult(LlmVariantResult.Ok(MutationTestData.BaseCaption(), $"b{index}"));
+        {
+            BreedCalls.Add((winners.Count, index, steer, tier));
+            return Task.FromResult(LlmVariantResult.Ok(MutationTestData.BaseCaption(), $"b{index}"));
+        }
     }
 
     private sealed record MutationRunVariantCaptions(IReadOnlyList<string> Captions);

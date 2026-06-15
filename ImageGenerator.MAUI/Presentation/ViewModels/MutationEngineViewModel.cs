@@ -47,6 +47,10 @@ public partial class MutationEngineViewModel : ObservableObject
     /// <summary>The typed base whose elements (and their slot tags) the run mutates.</summary>
     private V4JsonPrompt? _base;
 
+    /// <summary>When set (handed off from the Gallery "Breed selected"), the AI mutate command breeds
+    /// from these winners instead of mutating a single base. Consumed/reset on each appearance.</summary>
+    private IReadOnlyList<V4JsonPrompt>? _breedSet;
+
     /// <summary>
     /// Canonical JSON of the currently-loaded base. The VM is a singleton, so a back-and-forth to
     /// MainPage re-runs Initialize with the same base — when the new base serializes identically we
@@ -168,6 +172,15 @@ public partial class MutationEngineViewModel : ObservableObject
     /// the generator with the other server settings) without duplicating that state here.</summary>
     public GeneratorViewModel? Generator => _generator;
 
+    /// <summary>True when the page was entered via the Gallery "Breed selected" hand-off — the AI mutate
+    /// command breeds from the winners, and the page shows the breed banner.</summary>
+    [ObservableProperty]
+    private bool _isBreedMode;
+
+    /// <summary>Banner text shown in breed mode (e.g. "Breeding from 3 winner(s) — …").</summary>
+    [ObservableProperty]
+    private string _breedSummary = string.Empty;
+
     /// <summary>N × per-tier rate, shown before running. Local is free.</summary>
     public string CostEstimate
     {
@@ -198,7 +211,20 @@ public partial class MutationEngineViewModel : ObservableObject
     /// </summary>
     public void Initialize()
     {
-        var pending = _generator?.PendingMutationBase;
+        // Breed hand-off takes priority and is consumed first, so a later ordinary visit always
+        // resets breed state (no stale winners). Breeding is an AI-only path; we seed the base from
+        // the first winner so HasBase (the run gate) and the target-frame derivation still work.
+        var breed = _generator?.PendingBreedSet;
+        if (_generator is not null) _generator.PendingBreedSet = null;
+        _breedSet = breed is { Count: > 0 } ? breed : null;
+        IsBreedMode = _breedSet is not null;
+        if (IsBreedMode)
+        {
+            IsAiMode = true;
+            BreedSummary = $"Breeding from {_breedSet!.Count} winner(s) — set a steer + model, then run.";
+        }
+
+        var pending = _breedSet?[0] ?? _generator?.PendingMutationBase;
         if (_generator is not null) _generator.PendingMutationBase = null;
 
         var promptJson = _generator?.Parameters.Prompt ?? string.Empty;
@@ -415,13 +441,18 @@ public partial class MutationEngineViewModel : ObservableObject
         var steer = Steer ?? string.Empty;
         var baseCaption = _base;
         var count = Count;
+        var breedSet = _breedSet;
 
         try
         {
-            SetStatus($"Asking {tier} for {count} variant{(count == 1 ? "" : "s")}…", StatusKind.Info);
+            var verb = breedSet is { Count: > 0 } ? "breed" : "produce";
+            SetStatus($"Asking {tier} to {verb} {count} variant{(count == 1 ? "" : "s")}…", StatusKind.Info);
 
-            var results = await FanOutAsync(count, ConcurrencyFor(tier),
-                i => _mutationLlm.MutateAsync(baseCaption, steer, i, tier));
+            var results = breedSet is { Count: > 0 }
+                ? await FanOutAsync(count, ConcurrencyFor(tier),
+                    i => _mutationLlm.BreedAsync(breedSet, steer, i, tier))
+                : await FanOutAsync(count, ConcurrencyFor(tier),
+                    i => _mutationLlm.MutateAsync(baseCaption, steer, i, tier));
             await DispatchAiResultsAsync(results);
         }
         catch (Exception ex)
@@ -530,6 +561,20 @@ public partial class MutationEngineViewModel : ObservableObject
 
     /// <summary>Test/host seam: set the base directly without a generator hand-off or Shell.</summary>
     internal void SetBaseForTest(V4JsonPrompt model) => InitializeFrom(model, string.Empty, null, null);
+
+    /// <summary>Test/host seam: enter breed mode with the given winners (mirrors the Gallery hand-off
+    /// the singleton would otherwise consume in <see cref="Initialize"/>).</summary>
+    internal void SetBreedSetForTest(IReadOnlyList<V4JsonPrompt> winners)
+    {
+        _breedSet = winners is { Count: > 0 } ? winners : null;
+        IsBreedMode = _breedSet is not null;
+        if (IsBreedMode)
+        {
+            IsAiMode = true;
+            BreedSummary = $"Breeding from {_breedSet!.Count} winner(s) — set a steer + model, then run.";
+            SetBaseForTest(_breedSet[0]);
+        }
+    }
 
     /// <summary>
     /// Job-card label for a variant: the unmutated base reads "Original (reference)"; a mutated

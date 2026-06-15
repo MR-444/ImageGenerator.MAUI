@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Core.Domain.Services;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
@@ -22,6 +23,7 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
     private readonly IFileLauncher _fileLauncher;
     private readonly ICivitaiPostingService _civitaiPostingService;
     private readonly IUiStateStore _uiStateStore;
+    private readonly GeneratorViewModel _generator;
     private readonly ILogger<GalleryViewModel> _logger;
 
     // Resolved live (not captured at construction) so the gallery follows a configurable
@@ -74,6 +76,15 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
 
     private bool CanPostSelected => HasSelection && !IsPosting;
 
+    // --- Breed selected (winners → AI mutation page) ---
+
+    // Surfaces the "none of the selected images carry a structured caption" outcome (the only
+    // breed path that doesn't navigate away). Cleared on each new attempt.
+    [ObservableProperty]
+    private string? _breedStatusMessage;
+
+    private bool CanBreedSelected => HasSelection;
+
     partial void OnCivitaiModelRefChanged(string value) => _uiStateStore.PersistCivitaiModelRef(value ?? string.Empty);
 
     // Sort modes the user can pick. Display strings double as the SelectedSortMode value —
@@ -106,21 +117,24 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
         IFileLauncher fileLauncher,
         ICivitaiPostingService civitaiPostingService,
         IUiStateStore uiStateStore,
+        GeneratorViewModel generator,
         ILogger<GalleryViewModel> logger)
     {
         _galleryService = galleryService ?? throw new ArgumentNullException(nameof(galleryService));
         _fileLauncher = fileLauncher ?? throw new ArgumentNullException(nameof(fileLauncher));
         _civitaiPostingService = civitaiPostingService ?? throw new ArgumentNullException(nameof(civitaiPostingService));
         _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
+        _generator = generator ?? throw new ArgumentNullException(nameof(generator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsEmpty));
         // SelectedItems is mutated by the CollectionView (multi-select); recompute the gating
-        // flag and the post command's CanExecute whenever the selection changes.
+        // flag and the selection commands' CanExecute whenever the selection changes.
         SelectedItems.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasSelection));
             PostSelectedAsOnePostCommand.NotifyCanExecuteChanged();
+            BreedSelectedCommand.NotifyCanExecuteChanged();
         };
     }
 
@@ -297,6 +311,52 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
         finally
         {
             DispatchToUi(() => IsPosting = false);
+        }
+    }
+
+    /// <summary>
+    /// "Breed selected": read each selected image's embedded V4 caption, stash the parents on the
+    /// generator, and hand off to the Mutation page (which flips to AI mode and runs BreedAsync).
+    /// Images without a structured caption are skipped; if none qualify, reports it and stays put.
+    /// No LLM UI lives here — steer + model tier are set on the Mutation page.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanBreedSelected))]
+    private async Task BreedSelectedAsync(CancellationToken ct = default)
+    {
+        var selected = SelectedItems.OfType<GalleryItem>().ToList();
+        if (selected.Count == 0) return;
+
+        BreedStatusMessage = null;
+
+        try
+        {
+            var winners = new List<V4JsonPrompt>(selected.Count);
+            foreach (var item in selected)
+            {
+                var meta = await _galleryService.ReadMetadataAsync(item.FilePath, ct);
+                if (meta is null || !meta.TryGetValue("Prompt", out var prompt) || string.IsNullOrWhiteSpace(prompt))
+                    continue;
+                try { winners.Add(V4JsonPromptSerializer.Deserialize(prompt)); }
+                catch (V4JsonPromptParseException) { /* not a structured caption — skip */ }
+            }
+
+            if (winners.Count == 0)
+            {
+                BreedStatusMessage = "None of the selected images carry a structured (V4) caption to breed from.";
+                return;
+            }
+
+            _generator.PendingBreedSet = winners;
+            await Shell.Current.GoToAsync("mutation-engine");
+        }
+        catch (OperationCanceledException)
+        {
+            // Selection/navigation canceled — nothing to report.
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Breed selected failed");
+            BreedStatusMessage = "Couldn't breed from the selected images. See app.log for details.";
         }
     }
 

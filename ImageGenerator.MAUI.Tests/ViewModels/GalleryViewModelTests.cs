@@ -1,9 +1,12 @@
 using CommunityToolkit.Mvvm.Input;
 using FluentAssertions;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
+using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
+using ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -15,10 +18,30 @@ public class GalleryViewModelTests
     private readonly Mock<IFileLauncher> _fileLauncher = new();
     private readonly Mock<ICivitaiPostingService> _civitaiPostingService = new();
     private readonly Mock<IUiStateStore> _uiStateStore = new();
+    private readonly GeneratorViewModel _generator = BuildGenerator();
 
     private GalleryViewModel CreateSut() => new(
         _galleryService.Object, _fileLauncher.Object, _civitaiPostingService.Object,
-        _uiStateStore.Object, NullLogger<GalleryViewModel>.Instance);
+        _uiStateStore.Object, _generator, NullLogger<GalleryViewModel>.Instance);
+
+    // A GeneratorViewModel from bare mocks (mirrors GeneratorViewModelTests); breed only touches
+    // PendingBreedSet, so no mock setups are needed.
+    private static GeneratorViewModel BuildGenerator() =>
+        new(new Mock<IJobRunner>().Object,
+            new Mock<IApiTokenStore>().Object,
+            new Mock<IPollinationsTokenStore>().Object,
+            new Mock<IComfyUiAuthStore>().Object,
+            new Mock<ICivitaiTokenStore>().Object,
+            new Mock<IAnthropicTokenStore>().Object,
+            new Mock<ICivitaiPostingService>().Object,
+            new Mock<IUiStateStore>().Object,
+            new Mock<IModelCatalogCoordinator>().Object,
+            ModelDescriptorRegistry.Default(),
+            new Mock<IPromptBatchParser>().Object,
+            new Mock<IComfyUiCheckpointService>().Object,
+            new Mock<IGalleryService>().Object,
+            new Mock<IFolderPicker>().Object,
+            NullLogger<GeneratorViewModel>.Instance);
 
     private static GalleryItem MakeItem(string fileName, long size = 1234L, DateTime? createdAt = null) => new(
         FilePath: Path.Combine("C:", "fake", fileName),
@@ -288,6 +311,52 @@ public class GalleryViewModelTests
         var sut = CreateSut();
 
         ((IAsyncRelayCommand)sut.PostSelectedAsOnePostCommand).CanExecute(null).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CanBreedSelected_TracksSelection()
+    {
+        var sut = CreateSut();
+        ((IAsyncRelayCommand)sut.BreedSelectedCommand).CanExecute(null).Should().BeFalse();
+
+        sut.SelectedItems.Add(MakeItem("a.png"));
+        ((IAsyncRelayCommand)sut.BreedSelectedCommand).CanExecute(null).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task BreedSelected_WithStructuredCaptions_StashesWinnersOnGenerator()
+    {
+        var json = V4JsonPromptSerializer.Serialize(MutationTestData.BaseCaption());
+        _galleryService
+            .Setup(s => s.ReadMetadataAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, string> { ["Prompt"] = json });
+
+        var sut = CreateSut();
+        sut.SelectedItems.Add(MakeItem("a.png"));
+        sut.SelectedItems.Add(MakeItem("b.png"));
+
+        // Shell.Current is null in the test harness, so navigation no-ops; the stash (which happens
+        // first) is the observable effect we assert.
+        await ((IAsyncRelayCommand)sut.BreedSelectedCommand).ExecuteAsync(null);
+
+        _generator.PendingBreedSet.Should().NotBeNull();
+        _generator.PendingBreedSet!.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task BreedSelected_NoStructuredCaption_SetsMessage_DoesNotStash()
+    {
+        _galleryService
+            .Setup(s => s.ReadMetadataAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, string> { ["Prompt"] = "not a structured caption" });
+
+        var sut = CreateSut();
+        sut.SelectedItems.Add(MakeItem("a.png"));
+
+        await ((IAsyncRelayCommand)sut.BreedSelectedCommand).ExecuteAsync(null);
+
+        _generator.PendingBreedSet.Should().BeNull();
+        sut.BreedStatusMessage.Should().Contain("structured");
     }
 
     [Fact]

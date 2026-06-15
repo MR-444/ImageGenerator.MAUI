@@ -108,6 +108,27 @@
                             IsVisible="{Binding HasLastPost}"
                             AutomationId="GalleryOpenDraftButton" />
                 </HorizontalStackLayout>
+
+                <!-- Breed the selected winners into AI variants on the Mutation page. Reads each
+                     image's embedded V4 caption; steer + model are set on the Mutation page. -->
+                <BoxView HeightRequest="1" Color="{StaticResource Gray300}" Margin="0,4" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <Label Grid.Column="0"
+                           Text="Breed the selected images into AI variants (combines their captions)"
+                           Style="{StaticResource HelperText}"
+                           VerticalOptions="Center"
+                           LineBreakMode="WordWrap" />
+                    <Button Grid.Column="1"
+                            Text="Breed selected"
+                            Command="{Binding BreedSelectedCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            AutomationId="GalleryBreedSelectedButton" />
+                </Grid>
+                <Label Text="{Binding BreedStatusMessage}"
+                       IsVisible="{Binding BreedStatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
+                       Style="{StaticResource HelperText}"
+                       LineBreakMode="WordWrap"
+                       AutomationId="GalleryBreedStatusLabel" />
             </VerticalStackLayout>
         </Border>
 
