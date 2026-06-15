@@ -8,6 +8,7 @@ using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
+using static ImageGenerator.MAUI.Presentation.Common.UiDispatcher;
 // MAUI's implicit usings bring in Microsoft.Maui.Controls.Element — disambiguate.
 using Element = ImageGenerator.MAUI.Core.Domain.Ideogram.Element;
 
@@ -29,6 +30,9 @@ public partial class MutationEngineViewModel : ObservableObject
     private const int MinCount = 1;
     private const int MaxCount = 100;       // mirrors CaptionMutationEngine's own ceiling
     private const int DefaultTargetSize = 1024;
+
+    /// <summary>Job-card label for the unmutated base reference, shared by the deterministic and AI paths.</summary>
+    private const string OriginalReferenceLabel = "Original (reference)";
 
     /// <summary>Bounded concurrency for the AI fan-out: one paid call per variant, a few at a time.</summary>
     private const int AiMaxConcurrency = 4;
@@ -145,6 +149,14 @@ public partial class MutationEngineViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(MutateWithAiCommand))]
     private bool _hasBase;
 
+    /// <summary>True while a run (deterministic or AI) is in flight — disables both action buttons and
+    /// drives the on-page "Mutating…" spinner. The VM is a singleton, so the commands clear this in a
+    /// finally to avoid stranding it after an error.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GenerateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MutateWithAiCommand))]
+    private bool _isMutating;
+
     // --- AI (LLM) mutation ----------------------------------------------------------------------
 
     /// <summary>Off = deterministic engine (free, reproducible). On = LLM-driven semantic mutation.</summary>
@@ -183,18 +195,26 @@ public partial class MutationEngineViewModel : ObservableObject
     [ObservableProperty]
     private string _steer = string.Empty;
 
+    /// <summary>Neutral first entry of the preset picker — selecting it leaves the steer text as-is,
+    /// and (unlike a null selection) it gives the user a visible way to clear a prior pick. Matched by
+    /// reference, so this exact instance must be the one added to <see cref="AnchorPresets"/>.</summary>
+    public static readonly AnchorPreset NoPreset = new("(No preset)", string.Empty,
+        "Neutral default — leaves the steer text untouched.");
+
     /// <summary>Named steer presets (bundled + user-editable) shown in the "Start from a preset…"
-    /// picker; populated by <see cref="LoadAnchorPresetsAsync"/> on first appearance.</summary>
+    /// picker; populated by <see cref="LoadLibraryAsync"/> on first appearance, with
+    /// <see cref="NoPreset"/> as the neutral first entry.</summary>
     public ObservableCollection<AnchorPreset> AnchorPresets { get; } = [];
 
-    /// <summary>Picking a preset REPLACES the steer text with its starting direction (the user edits
-    /// it afterward). Setting it to null (no selection) leaves the steer untouched.</summary>
+    /// <summary>Picking a real preset REPLACES the steer text with its starting direction (the user
+    /// edits it afterward). The <see cref="NoPreset"/> sentinel (or a null selection) leaves the steer
+    /// untouched.</summary>
     [ObservableProperty]
     private AnchorPreset? _selectedAnchorPreset;
 
     partial void OnSelectedAnchorPresetChanged(AnchorPreset? value)
     {
-        if (value is not null) Steer = value.Steer;
+        if (value is not null && !ReferenceEquals(value, NoPreset)) Steer = value.Steer;
     }
 
     public IReadOnlyList<ModelTier> ModelTierOptions { get; } = [ModelTier.Sonnet, ModelTier.Opus, ModelTier.Local];
@@ -295,8 +315,12 @@ public partial class MutationEngineViewModel : ObservableObject
             var library = await _libraryService.LoadAsync();
 
             if (AnchorPresets.Count == 0)
+            {
+                AnchorPresets.Add(NoPreset);    // neutral first entry
                 foreach (var preset in library.AnchorPresets)
                     AnchorPresets.Add(preset);
+                if (SelectedAnchorPreset is null) SelectedAnchorPreset = NoPreset;
+            }
 
             // Refresh the style names + the name→fragment cache, keeping the current pick if it still
             // exists (else fall back to random).
@@ -434,7 +458,7 @@ public partial class MutationEngineViewModel : ObservableObject
         await _clipboard.SetTextAsync(Seed.ToString(CultureInfo.InvariantCulture));
     }
 
-    private bool CanGenerate() => HasBase;
+    private bool CanGenerate() => HasBase && !IsMutating;
 
     [RelayCommand(CanExecute = nameof(CanGenerate))]
     private async Task GenerateAsync()
@@ -445,6 +469,7 @@ public partial class MutationEngineViewModel : ObservableObject
             return;
         }
 
+        IsMutating = true;
         try
         {
             var library = await _libraryService.LoadAsync();
@@ -489,9 +514,13 @@ public partial class MutationEngineViewModel : ObservableObject
             _logger.LogError(ex, "MutationEngineVM.{Op}", "Generate");
             SetStatus($"Couldn't run the mutation: {ex.Message}", StatusKind.Error);
         }
+        finally
+        {
+            IsMutating = false;
+        }
     }
 
-    private bool CanMutateWithAi() => HasBase && _mutationLlm is not null;
+    private bool CanMutateWithAi() => HasBase && _mutationLlm is not null && !IsMutating;
 
     /// <summary>
     /// AI path: fan out N independent LLM calls (one validated variant each, bounded concurrency), then
@@ -528,6 +557,15 @@ public partial class MutationEngineViewModel : ObservableObject
             steer = ComposeStyleLockedSteer(steer);
         }
 
+        IsMutating = true;
+        if (_generator is not null)
+            DispatchToUi(() =>
+            {
+                _generator.IsAiMutationRunning = true;
+                _generator.AiMutationStatus =
+                    $"Mutating with {tier}… ({count} variant{(count == 1 ? "" : "s")} in flight)";
+            });
+
         try
         {
             var verb = breedSet is { Count: > 0 } ? "breed" : "produce";
@@ -551,6 +589,16 @@ public partial class MutationEngineViewModel : ObservableObject
         {
             _logger.LogError(ex, "MutationEngineVM.{Op}", "MutateWithAi");
             SetStatus($"Couldn't run the AI mutation: {ex.Message}", StatusKind.Error);
+        }
+        finally
+        {
+            IsMutating = false;
+            if (_generator is not null)
+                DispatchToUi(() =>
+                {
+                    _generator.IsAiMutationRunning = false;
+                    _generator.AiMutationStatus = null;
+                });
         }
     }
 
@@ -619,6 +667,17 @@ public partial class MutationEngineViewModel : ObservableObject
         return (prompts, labels);
     }
 
+    /// <summary>Prepend the unmutated base as variant 0 so the AI batch carries the same "Original
+    /// (reference)" card the deterministic engine emits — a fixed baseline to compare restyled
+    /// variants against. Pure + static so it's unit-testable without a generator.</summary>
+    internal static (List<string> Prompts, List<string> Labels) PrependBaseReference(
+        V4JsonPrompt baseCaption, List<string> prompts, List<string> labels)
+    {
+        prompts.Insert(0, V4JsonPromptSerializer.Serialize(baseCaption));
+        labels.Insert(0, OriginalReferenceLabel);
+        return (prompts, labels);
+    }
+
     /// <summary>Turn successful AI variants into the seed-pinned render batch (shared handoff).</summary>
     private async Task DispatchAiResultsAsync(IReadOnlyList<LlmVariantResult> results)
     {
@@ -632,6 +691,12 @@ public partial class MutationEngineViewModel : ObservableObject
         }
 
         var (prompts, labels) = BuildAiBatch(results);
+
+        // Mirror the deterministic engine: when the user keeps the reference card, render the TRUE
+        // original (the unmutated base, before any pinned style) as variant 0 for side-by-side compare.
+        if (IncludeBase && _base is not null)
+            (prompts, labels) = PrependBaseReference(_base, prompts, labels);
+
         var failed = results.Count - ok.Count;
 
         if (_generator is null)
@@ -706,7 +771,7 @@ public partial class MutationEngineViewModel : ObservableObject
     /// </summary>
     private string DescribeVariant(MutationVariant variant)
     {
-        if (variant.OperatorName is null) return "Original (reference)";
+        if (variant.OperatorName is null) return OriginalReferenceLabel;
         if (_base is null) return CaptionDiff.FriendlyOperator(variant.OperatorName);
         try
         {

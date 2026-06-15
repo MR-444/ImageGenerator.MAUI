@@ -340,12 +340,27 @@ public class MutationEngineViewModelTests
 
         await sut.LoadLibraryAsync();
 
+        sut.AnchorPresets[0].Should().BeSameAs(MutationEngineViewModel.NoPreset, "the neutral entry leads the list");
+        sut.SelectedAnchorPreset.Should().BeSameAs(MutationEngineViewModel.NoPreset, "it is the default selection");
         sut.AnchorPresets.Select(p => p.Name).Should().Contain("make it winter");
 
         // Idempotent for presets: a second appearance doesn't duplicate the list.
         var count = sut.AnchorPresets.Count;
         await sut.LoadLibraryAsync();
         sut.AnchorPresets.Should().HaveCount(count);
+    }
+
+    [Fact]
+    public async Task SelectingTheNoPresetSentinel_LeavesTheSteerUntouched()
+    {
+        var sut = CreateSut();
+        await sut.LoadLibraryAsync();
+        sut.SelectedAnchorPreset = sut.AnchorPresets.First(p => p.Name == "make it winter");
+        sut.Steer = "edited after the preset";
+
+        sut.SelectedAnchorPreset = MutationEngineViewModel.NoPreset;
+
+        sut.Steer.Should().Be("edited after the preset", "re-selecting the neutral entry is non-destructive");
     }
 
     [Fact]
@@ -430,6 +445,21 @@ public class MutationEngineViewModelTests
         prompts.Should().HaveCount(2, "failed variants are dropped");
         labels.Should().Equal("winter", "summer");
         prompts[0].Should().Be(V4JsonPromptSerializer.Serialize(good));
+    }
+
+    [Fact]
+    public void PrependBaseReference_PutsTheOriginalFirst_LabeledAsReference()
+    {
+        var original = MutationTestData.BaseCaption();
+        var prompts = new List<string> { "variant-a", "variant-b" };
+        var labels = new List<string> { "winter", "summer" };
+
+        var (outPrompts, outLabels) = MutationEngineViewModel.PrependBaseReference(original, prompts, labels);
+
+        outPrompts[0].Should().Be(V4JsonPromptSerializer.Serialize(original), "the original is variant 0");
+        outLabels[0].Should().Be("Original (reference)");
+        outPrompts.Skip(1).Should().Equal("variant-a", "variant-b");
+        outLabels.Skip(1).Should().Equal("winter", "summer");
     }
 
     [Fact]

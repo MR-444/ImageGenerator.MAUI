@@ -51,6 +51,15 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private string? _flashMessage;
 
+    // True while the Mutation engine's AI fan-out is in flight. The mutation VM (a singleton holding
+    // this one) flips it so MainPage can show an in-progress banner if the user leaves that page —
+    // the LLM calls happen before the batch's own job cards appear.
+    [ObservableProperty]
+    private bool _isAiMutationRunning;
+
+    [ObservableProperty]
+    private string? _aiMutationStatus;
+
     public ObservableCollection<GenerationJob> Jobs { get; } = [];
     public bool HasJobs => Jobs.Count > 0;
 

@@ -13,6 +13,7 @@
     <ContentPage.Resources>
         <ResourceDictionary>
             <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
+            <converters:InverseBoolConverter x:Key="InverseBool" />
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -67,42 +68,13 @@
                             AutoSize="TextChanges"
                             MinimumHeightRequest="72"
                             AutomationId="MutationSteerEditor" />
-                    <Picker Title="Start from a preset…"
+                    <Picker Title="Start from a preset (optional)"
                             ItemsSource="{Binding AnchorPresets}"
                             ItemDisplayBinding="{Binding Name, x:DataType=lib:AnchorPreset}"
                             SelectedItem="{Binding SelectedAnchorPreset}"
                             AutomationId="MutationAnchorPresetPicker" />
-                    <Label Text="Optional: a preset fills the steer with a starting direction — edit it freely afterward." Style="{StaticResource HelperText}" />
+                    <Label Text="Presets are quick starting directions for the steer above — pick one to prefill the text, then edit it. “(No preset)” leaves your text as-is." Style="{StaticResource HelperText}" />
                     <Label Text="The model rewrites the WHOLE caption coherently for each variant (medium, lighting, palette and every element together)." Style="{StaticResource HelperText}" />
-
-                    <Label Text="Model" Style="{StaticResource FieldLabel}" />
-                    <Picker ItemsSource="{Binding ModelTierOptions}"
-                            SelectedItem="{Binding SelectedModelTier}"
-                            AutomationId="MutationModelTierPicker" />
-                    <Label Text="Sonnet = affordable default · Opus = stronger/pricier · Local = free Ollama (verifies the round-trip; quality not guaranteed)."
-                           Style="{StaticResource HelperText}" />
-
-                    <!-- Local-only: which Ollama model. Type any tag, or Refresh to pick from the server. -->
-                    <VerticalStackLayout Spacing="8" IsVisible="{Binding IsLocalTier}">
-                        <Label Text="Local model (Ollama)" Style="{StaticResource FieldLabel}" />
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                            <Picker Grid.Column="0"
-                                    ItemsSource="{Binding Generator.OllamaModels}"
-                                    SelectedItem="{Binding Generator.OllamaModel, Mode=TwoWay}"
-                                    Title="Refresh, then pick a model…"
-                                    AutomationId="MutationOllamaModelPicker" />
-                            <Button Grid.Column="1"
-                                    Text="Refresh"
-                                    Command="{Binding Generator.RefreshOllamaModelsCommand}"
-                                    Style="{StaticResource SecondaryButton}"
-                                    AutomationId="MutationOllamaRefreshButton" />
-                        </Grid>
-                        <Label Text="Set the server URL on the Settings page. A 27B model takes a few minutes on the first (cold) call."
-                               Style="{StaticResource HelperText}" />
-                    </VerticalStackLayout>
-
-                    <Label Text="{Binding CostEstimate}" Style="{StaticResource HelperText}"
-                           AutomationId="MutationCostEstimateLabel" />
                 </VerticalStackLayout>
             </Border>
 
@@ -130,11 +102,11 @@
             <!-- CARD: Saved style (deterministic LOOK swap, or AI restyle — hidden in breed mode) -->
             <Border Style="{StaticResource Card}" IsVisible="{Binding ShowStylePin}">
                 <VerticalStackLayout Spacing="8">
-                    <Label Text="Saved style" Style="{StaticResource FieldLabel}" />
+                    <Label Text="Saved style (creative direction)" Style="{StaticResource FieldLabel}" />
                     <Picker ItemsSource="{Binding StyleNames}"
                             SelectedItem="{Binding SelectedStyleName}"
                             AutomationId="MutationStylePinPicker" />
-                    <Label Text="Render in a specific saved style instead of varying it. Deterministic LOOK swaps to it exactly; AI rewrites the whole scene into it coherently. “Any style (random)” varies the style per variant. Save styles via the gallery’s “Save style”."
+                    <Label Text="A preset/steer says HOW to change; a saved style says WHICH look to lock to. Deterministic LOOK swaps to it exactly; AI rewrites the whole scene into it coherently. “Any style (random)” varies the style per variant. Save styles via the gallery’s “Save style”."
                            Style="{StaticResource HelperText}" />
                 </VerticalStackLayout>
             </Border>
@@ -156,10 +128,10 @@
                                Style="{StaticResource HelperText}" />
                     </VerticalStackLayout>
 
-                    <HorizontalStackLayout Spacing="8" IsVisible="{Binding IsDeterministicMode}">
+                    <HorizontalStackLayout Spacing="8" IsVisible="{Binding HasBase}">
                         <CheckBox IsChecked="{Binding IncludeBase}" VerticalOptions="Center"
                                   AutomationId="MutationIncludeBaseCheckBox" />
-                        <Label Text="Include the unmutated base as a reference (variant 0)" VerticalOptions="Center" />
+                        <Label Text="Include the unmutated original as a reference card" VerticalOptions="Center" />
                     </HorizontalStackLayout>
 
                     <Label Text="Seed" Style="{StaticResource FieldLabel}" />
@@ -200,12 +172,48 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- CARD: Model & cost (AI mode only) — the engine/cost choice, kept apart from the
+                 creative-direction pickers (steer/preset/saved style) above. -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding IsAiMode}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Model &amp; cost" Style="{StaticResource FieldLabel}" />
+                    <Picker ItemsSource="{Binding ModelTierOptions}"
+                            SelectedItem="{Binding SelectedModelTier}"
+                            AutomationId="MutationModelTierPicker" />
+                    <Label Text="Sonnet = affordable default · Opus = stronger/pricier · Local = free Ollama (verifies the round-trip; quality not guaranteed)."
+                           Style="{StaticResource HelperText}" />
+
+                    <!-- Local-only: which Ollama model. Type any tag, or Refresh to pick from the server. -->
+                    <VerticalStackLayout Spacing="8" IsVisible="{Binding IsLocalTier}">
+                        <Label Text="Local model (Ollama)" Style="{StaticResource FieldLabel}" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <Picker Grid.Column="0"
+                                    ItemsSource="{Binding Generator.OllamaModels}"
+                                    SelectedItem="{Binding Generator.OllamaModel, Mode=TwoWay}"
+                                    Title="Refresh, then pick a model…"
+                                    AutomationId="MutationOllamaModelPicker" />
+                            <Button Grid.Column="1"
+                                    Text="Refresh"
+                                    Command="{Binding Generator.RefreshOllamaModelsCommand}"
+                                    Style="{StaticResource SecondaryButton}"
+                                    AutomationId="MutationOllamaRefreshButton" />
+                        </Grid>
+                        <Label Text="Set the server URL on the Settings page. A 27B model takes a few minutes on the first (cold) call."
+                               Style="{StaticResource HelperText}" />
+                    </VerticalStackLayout>
+
+                    <Label Text="{Binding CostEstimate}" Style="{StaticResource HelperText}"
+                           AutomationId="MutationCostEstimateLabel" />
+                </VerticalStackLayout>
+            </Border>
+
             <!-- Generate (deterministic) -->
             <Button Text="Generate variants"
                     Command="{Binding GenerateCommand}"
                     Style="{StaticResource PrimaryButton}"
                     HorizontalOptions="Fill"
                     IsVisible="{Binding IsDeterministicMode}"
+                    IsEnabled="{Binding IsMutating, Converter={StaticResource InverseBool}}"
                     AutomationId="MutationGenerateButton" />
 
             <!-- Mutate (AI) -->
@@ -214,7 +222,15 @@
                     Style="{StaticResource PrimaryButton}"
                     HorizontalOptions="Fill"
                     IsVisible="{Binding IsAiMode}"
+                    IsEnabled="{Binding IsMutating, Converter={StaticResource InverseBool}}"
                     AutomationId="MutationMutateWithAiButton" />
+
+            <!-- Busy row: the run (esp. the AI fan-out) happens before navigation, so signal it here. -->
+            <HorizontalStackLayout Spacing="8" IsVisible="{Binding IsMutating}"
+                                   HorizontalOptions="Center" AutomationId="MutationBusyRow">
+                <ActivityIndicator IsRunning="{Binding IsMutating}" />
+                <Label Text="Mutating…" VerticalOptions="Center" />
+            </HorizontalStackLayout>
 
             <Label Text="{Binding StatusMessage}"
                    Style="{StaticResource StatusLabel}"

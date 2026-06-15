@@ -675,6 +675,11 @@
                 </VerticalStackLayout>
 
                 <VerticalStackLayout Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5" Spacing="2">
+                    <Label Text="{Binding AiMutationStatus}"
+                           Style="{StaticResource HelperText}"
+                           FontAttributes="Italic"
+                           IsVisible="{Binding IsAiMutationRunning}"
+                           AutomationId="AiMutationBanner" />
                     <Label Text="Enter a prompt to enable generation. Replicate-hosted models also need an API token — set it under Settings (top right)."
                            Style="{StaticResource HelperText}"
                            IsVisible="{Binding IsValid, Converter={StaticResource InverseBool}}" />
