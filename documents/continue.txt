@@ -18,7 +18,7 @@ next pass).
   [ ] = open      [~] = in progress (commit not yet on master)
 
 
-AI-STEERED CAPTION MUTATION (LLM mutation engine) — SLICE 1 COMMITTED + USER-VERIFIED 2026-06-15
+AI-STEERED CAPTION MUTATION (LLM mutation engine) — ALL 3 SLICES COMMITTED 2026-06-15 (not released)
 ------------------------------------------------------------------------------------------------
 A second, AI path beside the deterministic mutation engine on the Mutation page. Plan (3 slices) at
 ~/.claude/plans/implement-the-plan-at-fuzzy-emerson.md. Decisions locked: directed steer + breed-from-winners
@@ -64,9 +64,38 @@ SLICE 2 (DONE — COMMITTED c8e5598, NOT released; USER-VERIFIED 2026-06-15 "eve
   selection action-bar card; breed banner card on the Mutation page (IsVisible IsBreedMode). +5 tests (1135), 0 warnings.
   GOTCHA confirmed: Shell.Current is null in tests → BreedSelectedAsync stashes BEFORE navigating, GoToAsync throws,
   caught → tests assert the stash (the observable effect).
-SLICE 3 (LATER): "Save style from this" → extract style_description → named StyleFragment via
-  MutationLibraryService.SaveAsync (feeds the deterministic style list too) + bundled/extensible anchor presets
-  that prepend to the steer.
+SLICE 3 (DONE — COMMITTED 26b459a, NOT released; AI round-trip user-verified 2026-06-15: Local good /
+  Sonnet very good / Opus very good "maybe not worth it, puts in implications"). Save-style + anchor presets +
+  pin-a-style:
+  - SAVE STYLE FROM THIS: gallery DETAIL page action "Save style" → DisplayPromptAsync for a name (View) →
+    GalleryItemDetailViewModel.SaveStyleAsync(name) reads "Prompt" metadata → V4JsonPromptSerializer.Deserialize →
+    extracts StyleDescription → appends a named StyleFragment via IMutationLibraryService.SaveAsync. REJECTS a
+    duplicate name (never clobbers). VM gained an IMutationLibraryService ctor param.
+  - ANCHOR PRESETS: new 4th user-editable store anchor-presets.json (seeded from Resources/Raw/MutationDefaults
+    via the same SeedIfMissing path; auto-bundled by the Resources\Raw\** glob). MutationLibrary gained a 4th
+    DEFAULTED AnchorPresets ctor param + PresetByName (every existing 2-/3-arg caller compiles unchanged).
+    "Start from a preset…" picker in the AI steer card REPLACES the steer text on pick. 8 bundled clean-room presets.
+  - PIN A STYLE (the verification-driven addition): a "Saved style" picker (its OWN card, IsVisible ShowStylePin).
+    DETERMINISTIC LOOK = swap to that exact style every variant (MutationRunConfig.PinnedStyleName → MutationContext
+    → SwapStyleOperator; engine restricts the LOOK run to SwapStyle when pinned → one restyled result after the
+    dispatch dedup). AI path (commit 13426eb) = pre-apply the chosen StyleDescription onto the base + prepend a
+    style-LOCK steer preamble → the LLM rewrites the WHOLE scene into that style coherently (the deterministic swap
+    can't — it leaves element wording in the old style; that incoherence is WHY the LLM path exists). Shared
+    SelectedStyleName/StyleNames + RandomStyleSentinel ("Any style (random)"); StyleNames refresh on each page
+    appearance so a just-saved style shows up. ShowStylePin = (IsAiMode && !IsBreedMode) || (IsDeterministicMode &&
+    !IsScene) — hidden in breed mode (breed blends winners' own looks; AI-style-for-breed is a possible follow-up).
+  - 1152 tests, Debug+Release 0 warnings. PENDING: user UI-verify the AI restyle (pick a saved style in AI mode →
+    variants render coherently in that style). Plan: ~/.claude/plans/continue-the-ai-caption-composed-catmull.md.
+
+SHOW-IN-FOLDER FIX (COMMITTED a1f80af, unrelated bug found during slice-3 verify): explorer.exe parses /select
+  non-standardly — the path MUST be double-quoted (/select,"<path>") or any path with a comma/space is mis-parsed
+  and Explorer opens the drive root. Our generated filenames embed the prompt and routinely contain commas. Fixed
+  FileLauncher.RevealInFolder + GenerationJob.ShowInFolder to build /select,"<path>" directly (NOT an unquoted
+  ArgumentList token). Injection-safe: '"' is illegal in a Windows path. (Reverses the audit's QW5 ArgumentList
+  switch, which broke comma paths.)
+
+OBSERVATION (user, 2026-06-15): the deterministic mutation path has "low influence" vs the LLM path — expected;
+  the LLM restyle is the coherent one. Not an action item, just the standing verdict on the two engines.
 
 
 PROMPT BUILDER v2 — TWO-PASS VPE → (optional) IDEOGRAM JSON (SHIPPED + USER-VERIFIED 2026-06-15, v1.9.1)
