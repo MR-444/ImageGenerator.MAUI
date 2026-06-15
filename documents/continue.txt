@@ -47,13 +47,21 @@ EVERY element desc co-varied (hair→dry dust currents, sand-dune slope, legs si
   ("Subject & Action:") into the output — the label-echoers are the weaker half. User DECLINED a prompt tweak;
   will judge on Sonnet first. Don't add the "no label echo" line unilaterally.
 
-SLICE 2 (NEXT — start in a fresh context): breed-from-winners. Gallery multi-select (GalleryViewModel.SelectedItems,
-  already exists for CivitAI posting) → new "Breed selected" command → read each winner's embedded V4 caption via
-  IGalleryService.ReadMetadataAsync ("Prompt" → V4JsonPromptSerializer.Deserialize) → stash List<V4JsonPrompt> on a
-  NEW GeneratorViewModel.PendingBreedSet → Shell-navigate to the Mutation page → MutationEngineViewModel.Initialize
-  consumes it, flips to AI mode ("Breeding from N winners"), the mutate command calls BreedAsync (fan-out). NO LLM UI
-  duplicated in the Gallery. Gallery has NO generator/batch access — use the stash-on-singleton pattern (like
-  PendingMutationBase). MutationEngineViewModel already exposes Generator + IsLocalTier passthroughs.
+SLICE 2 (DONE — COMMITTED c8e5598, NOT released; pending user UI verify): breed-from-winners, wired end-to-end.
+  Gallery multi-select → new "Breed selected" command (GalleryViewModel) reads each winner's embedded V4 caption
+  (IGalleryService.ReadMetadataAsync → "Prompt" → V4JsonPromptSerializer.Deserialize; non-structured images skipped,
+  none-qualify → BreedStatusMessage + no navigate) → stashes List<V4JsonPrompt> on the NEW GeneratorViewModel
+  .PendingBreedSet → Shell.GoToAsync("mutation-engine"). GalleryViewModel now injects the GeneratorViewModel SINGLETON
+  (transient→singleton, no cycle: generator depends on IGalleryService not the gallery VM); ctor + GalleryViewModelTests
+  BuildGenerator() helper updated. MutationEngineViewModel.Initialize consumes PendingBreedSet FIRST (resets _breedSet
+  on every ordinary visit so no stale winners), seeds _base from winner[0] (so HasBase run-gate + target-frame still
+  work), flips IsAiMode=true, sets IsBreedMode + BreedSummary banner. MutateWithAiAsync branches: _breedSet present →
+  fan out BreedAsync(breedSet, steer, i, tier); else MutateAsync. Same seed-pinned DispatchAiResultsAsync/RunBatchAsync
+  handoff, unchanged. NO LLM UI duplicated in the Gallery (steer + model tier set on the Mutation page). New test seam
+  SetBreedSetForTest mirrors the hand-off without a generator. UI: "Breed selected" button + status in the Gallery
+  selection action-bar card; breed banner card on the Mutation page (IsVisible IsBreedMode). +5 tests (1135), 0 warnings.
+  GOTCHA confirmed: Shell.Current is null in tests → BreedSelectedAsync stashes BEFORE navigating, GoToAsync throws,
+  caught → tests assert the stash (the observable effect).
 SLICE 3 (LATER): "Save style from this" → extract style_description → named StyleFragment via
   MutationLibraryService.SaveAsync (feeds the deterministic style list too) + bundled/extensible anchor presets
   that prepend to the steer.
