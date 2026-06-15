@@ -258,6 +258,48 @@ public class MutationEngineViewModelTests
     }
 
     [Fact]
+    public async Task MutateWithAi_PinnedStyle_RestylesTheBaseAndLocksTheStyleInTheSteer()
+    {
+        var stub = new StubMutationLlm();
+        var sut = CreateSutWithAi(stub);
+        await sut.LoadLibraryAsync();                 // fills the name→fragment cache from the stub library
+        sut.SetBaseForTest(MutationTestData.BaseCaption());
+        sut.IsAiMode = true;
+        sut.SelectedStyleName = "anime";             // a saved style differing from the gouache base
+        sut.Steer = "make it winter";
+        sut.Count = 2;
+
+        await sut.MutateWithAiCommand.ExecuteAsync(null);
+
+        var anime = MutationTestData.AnimeStyle();
+        stub.MutateCalls.Should().HaveCount(2);
+        stub.MutateCalls.Should().OnlyContain(c => StyleMath.SameStyle(c.Base.StyleDescription, anime),
+            "the chosen style is pre-applied to the base sent to the model");
+        stub.MutateCalls.Should().OnlyContain(c => c.Steer.Contains("EXACTLY") && c.Steer.Contains("make it winter"),
+            "the steer locks the style and still carries the user's direction");
+    }
+
+    [Fact]
+    public async Task MutateWithAi_RandomStyle_LeavesTheBaseAndSteerUntouched()
+    {
+        var stub = new StubMutationLlm();
+        var sut = CreateSutWithAi(stub);
+        await sut.LoadLibraryAsync();
+        var baseCaption = MutationTestData.BaseCaption();
+        sut.SetBaseForTest(baseCaption);
+        sut.IsAiMode = true;
+        sut.Steer = "make it winter";                // SelectedStyleName stays at the random sentinel
+        sut.Count = 1;
+
+        await sut.MutateWithAiCommand.ExecuteAsync(null);
+
+        stub.MutateCalls.Should().ContainSingle();
+        stub.MutateCalls[0].Steer.Should().Be("make it winter");
+        StyleMath.SameStyle(stub.MutateCalls[0].Base.StyleDescription, baseCaption.StyleDescription)
+            .Should().BeTrue("no pin ⇒ the base style is unchanged");
+    }
+
+    [Fact]
     public void SetBreedSet_FlipsToAiMode_AndSetsSummary()
     {
         var sut = CreateSutWithAi(new StubMutationLlm());
@@ -330,18 +372,20 @@ public class MutationEngineViewModelTests
     }
 
     [Fact]
-    public void ShowStylePin_OnlyForDeterministicLook()
+    public void ShowStylePin_InDeterministicLookAndAi_ButNotSceneOrBreed()
     {
-        var sut = CreateSut();
+        var sut = CreateSutWithAi(new StubMutationLlm());
         sut.SelectedAxis = MutationAxis.Look;
-        sut.ShowStylePin.Should().BeTrue("deterministic LOOK");
+        sut.ShowStylePin.Should().BeTrue("deterministic LOOK swaps to a saved style");
 
         sut.SelectedAxis = MutationAxis.Scene;
         sut.ShowStylePin.Should().BeFalse("SCENE has no style swap");
 
-        sut.SelectedAxis = MutationAxis.Look;
         sut.IsAiMode = true;
-        sut.ShowStylePin.Should().BeFalse("AI mode hides the deterministic style pin");
+        sut.ShowStylePin.Should().BeTrue("AI can restyle into a saved style");
+
+        sut.SetBreedSetForTest(new[] { MutationTestData.BaseCaption(), MutationTestData.BaseCaption() });
+        sut.ShowStylePin.Should().BeFalse("breed blends the winners' own looks");
     }
 
     [Fact]
@@ -388,13 +432,13 @@ public class MutationEngineViewModelTests
 
     private sealed class StubMutationLlm : ICaptionMutationLlmService
     {
-        public List<(int Index, string Steer, ModelTier Tier)> MutateCalls { get; } = [];
+        public List<(int Index, string Steer, ModelTier Tier, V4JsonPrompt Base)> MutateCalls { get; } = [];
         public List<(int WinnerCount, int Index, string Steer, ModelTier Tier)> BreedCalls { get; } = [];
 
         public Task<LlmVariantResult> MutateAsync(
             V4JsonPrompt baseCaption, string steer, int index, ModelTier tier, CancellationToken ct = default)
         {
-            MutateCalls.Add((index, steer, tier));
+            MutateCalls.Add((index, steer, tier, baseCaption));
             return Task.FromResult(LlmVariantResult.Ok(MutationTestData.BaseCaption(), $"v{index}"));
         }
 

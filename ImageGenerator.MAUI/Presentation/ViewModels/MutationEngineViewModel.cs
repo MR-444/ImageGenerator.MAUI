@@ -156,15 +156,20 @@ public partial class MutationEngineViewModel : ObservableObject
     /// <summary>Placement strength only matters for the deterministic SCENE axis.</summary>
     public bool ShowStrength => IsDeterministicMode && IsScene;
 
-    /// <summary>The "swap to a specific style" picker only applies to the deterministic LOOK axis.</summary>
-    public bool ShowStylePin => IsDeterministicMode && !IsScene;
+    /// <summary>The saved-style picker applies to the deterministic LOOK axis (swap to it exactly) and to
+    /// the AI path (rewrite the scene into it) — but not in breed mode, which blends the winners' looks.</summary>
+    public bool ShowStylePin => (IsAiMode && !IsBreedMode) || (IsDeterministicMode && !IsScene);
 
     /// <summary>Picker sentinel for "let the engine draw a random style per variant" (maps to a null pin).</summary>
     public const string RandomStyleSentinel = "Any style (random)";
 
-    /// <summary>"Any (random)" + every saved style name, for the LOOK "Swap to" picker; refreshed each
+    /// <summary>"Any (random)" + every saved style name, for the "Saved style" picker; refreshed each
     /// appearance by <see cref="LoadLibraryAsync"/> so a style just saved in the gallery shows up.</summary>
     public ObservableCollection<string> StyleNames { get; } = [RandomStyleSentinel];
+
+    /// <summary>Saved fragments by name, cached alongside <see cref="StyleNames"/> so the AI path can read
+    /// the chosen style's <c>StyleDescription</c> (the deterministic path only needs the name).</summary>
+    private readonly Dictionary<string, StyleFragment> _styleByName = new(StringComparer.Ordinal);
 
     /// <summary>Selected entry of <see cref="StyleNames"/>; the sentinel means random (no pin).</summary>
     [ObservableProperty]
@@ -205,6 +210,7 @@ public partial class MutationEngineViewModel : ObservableObject
     /// <summary>True when the page was entered via the Gallery "Breed selected" hand-off — the AI mutate
     /// command breeds from the winners, and the page shows the breed banner.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowStylePin))]
     private bool _isBreedMode;
 
     /// <summary>Banner text shown in breed mode (e.g. "Breeding from 3 winner(s) — …").</summary>
@@ -288,12 +294,17 @@ public partial class MutationEngineViewModel : ObservableObject
                 foreach (var preset in library.AnchorPresets)
                     AnchorPresets.Add(preset);
 
-            // Refresh the style names, keeping the current pick if it still exists (else fall back to random).
+            // Refresh the style names + the name→fragment cache, keeping the current pick if it still
+            // exists (else fall back to random).
             var previous = SelectedStyleName;
             StyleNames.Clear();
             StyleNames.Add(RandomStyleSentinel);
+            _styleByName.Clear();
             foreach (var fragment in library.StyleFragments)
+            {
                 StyleNames.Add(fragment.Name);
+                _styleByName[fragment.Name] = fragment;
+            }
             SelectedStyleName = StyleNames.Contains(previous) ? previous : RandomStyleSentinel;
         }
         catch (Exception ex)
@@ -503,6 +514,16 @@ public partial class MutationEngineViewModel : ObservableObject
         var count = Count;
         var breedSet = _breedSet;
 
+        // Saved-style pin (mutate path only — breed blends the winners' own looks). Pre-apply the chosen
+        // style onto the base so the LLM receives the exact target style_description, and lock it in the
+        // steer so the per-variant "distinct direction" push varies the interpretation, not the style.
+        if (breedSet is not { Count: > 0 } && TryResolvePinnedStyle(out var pinned))
+        {
+            baseCaption = CaptionClone.Clone(baseCaption);
+            baseCaption.StyleDescription = StyleMath.Clone(pinned.Style);
+            steer = ComposeStyleLockedSteer(steer);
+        }
+
         try
         {
             var verb = breedSet is { Count: > 0 } ? "breed" : "produce";
@@ -520,6 +541,24 @@ public partial class MutationEngineViewModel : ObservableObject
             _logger.LogError(ex, "MutationEngineVM.{Op}", "MutateWithAi");
             SetStatus($"Couldn't run the AI mutation: {ex.Message}", StatusKind.Error);
         }
+    }
+
+    /// <summary>Resolve the pinned saved style if one is selected (not the random sentinel) and known.</summary>
+    private bool TryResolvePinnedStyle(out StyleFragment fragment)
+    {
+        fragment = null!;
+        return SelectedStyleName != RandomStyleSentinel && _styleByName.TryGetValue(SelectedStyleName, out fragment!);
+    }
+
+    /// <summary>Prepend a style-lock directive so the LLM keeps the (pre-applied) style fixed across
+    /// variants and only varies the interpretation; the user's steer (if any) follows.</summary>
+    private static string ComposeStyleLockedSteer(string userSteer)
+    {
+        const string Lock =
+            "Keep the style_description in the base EXACTLY as given (medium, art_style/photo, lighting, "
+            + "and palette); rewrite the high_level_description, background and every element desc so they "
+            + "read coherently in that style. Vary the interpretation between variations, never the style itself.";
+        return string.IsNullOrWhiteSpace(userSteer) ? Lock : $"{Lock} Also: {userSteer.Trim()}";
     }
 
     /// <summary>A local model on one GPU serves requests serially, so concurrent calls would queue

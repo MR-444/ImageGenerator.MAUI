@@ -124,16 +124,18 @@
                             </DataTemplate>
                         </BindableLayout.ItemTemplate>
                     </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
 
-                    <!-- LOOK only: pin the style swap to one saved style instead of a random draw. -->
-                    <VerticalStackLayout Spacing="4" IsVisible="{Binding ShowStylePin}" Margin="0,8,0,0">
-                        <Label Text="Swap to" Style="{StaticResource FieldLabel}" />
-                        <Picker ItemsSource="{Binding StyleNames}"
-                                SelectedItem="{Binding SelectedStyleName}"
-                                AutomationId="MutationStylePinPicker" />
-                        <Label Text="Pick a specific saved style to swap to (every LOOK variant becomes that exact style), or “Any style (random)” to draw a different one per variant. Save a style from a result via the gallery’s “Save style”."
-                               Style="{StaticResource HelperText}" />
-                    </VerticalStackLayout>
+            <!-- CARD: Saved style (deterministic LOOK swap, or AI restyle — hidden in breed mode) -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding ShowStylePin}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Saved style" Style="{StaticResource FieldLabel}" />
+                    <Picker ItemsSource="{Binding StyleNames}"
+                            SelectedItem="{Binding SelectedStyleName}"
+                            AutomationId="MutationStylePinPicker" />
+                    <Label Text="Render in a specific saved style instead of varying it. Deterministic LOOK swaps to it exactly; AI rewrites the whole scene into it coherently. “Any style (random)” varies the style per variant. Save styles via the gallery’s “Save style”."
+                           Style="{StaticResource HelperText}" />
                 </VerticalStackLayout>
             </Border>
 
