@@ -144,6 +144,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<ReplicateImageGenerationService>();
         builder.Services.AddSingleton<PollinationsImageGenerationService>();
         builder.Services.AddSingleton<ComfyUiImageGenerationService>();
+        builder.Services.AddSingleton<IComfyUiVramService, ComfyUiVramService>();
         builder.Services.AddSingleton<IImageGenerationService, ImageGenerationDispatcher>();
         builder.Services.AddSingleton<IModelCatalogService, ModelCatalogService>();
         builder.Services.AddSingleton<IPollinationsCatalogService, PollinationsCatalogService>();

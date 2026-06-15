@@ -34,6 +34,7 @@ public partial class GeneratorViewModel : ObservableObject
     private readonly IGalleryService _galleryService;
     private readonly IFolderPicker _folderPicker;
     private readonly IOllamaModelCatalog? _ollamaModelCatalog;
+    private readonly IComfyUiVramService? _comfyVram;
     private readonly ILogger<GeneratorViewModel> _logger;
 
     [ObservableProperty]
@@ -126,6 +127,14 @@ public partial class GeneratorViewModel : ObservableObject
 
     partial void OnComfyUiBaseUrlChanged(string value) =>
         _uiStateStore.PersistComfyUiBaseUrl(value ?? string.Empty);
+
+    // When on, POST /free to ComfyUI once rendering is idle so the Ollama mutation tier (and the OS) get
+    // the VRAM back. Default on; turn off to keep the checkpoint resident for faster single-image iteration.
+    [ObservableProperty]
+    private bool _freeVramAfterRendering = true;
+
+    partial void OnFreeVramAfterRenderingChanged(bool value) =>
+        _uiStateStore.PersistFreeVramAfterRendering(value);
 
     // The local Ollama server + model for the AI caption mutator's free "Local" tier. Preferences-backed
     // like the ComfyUI URL; the mutation service re-reads the store per request, so edits apply instantly.
@@ -721,7 +730,8 @@ public partial class GeneratorViewModel : ObservableObject
         IGalleryService galleryService,
         IFolderPicker folderPicker,
         ILogger<GeneratorViewModel> logger,
-        IOllamaModelCatalog? ollamaModelCatalog = null)
+        IOllamaModelCatalog? ollamaModelCatalog = null,
+        IComfyUiVramService? comfyVram = null)
     {
         _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
@@ -737,6 +747,7 @@ public partial class GeneratorViewModel : ObservableObject
         _galleryService = galleryService ?? throw new ArgumentNullException(nameof(galleryService));
         _folderPicker = folderPicker ?? throw new ArgumentNullException(nameof(folderPicker));
         _ollamaModelCatalog = ollamaModelCatalog;
+        _comfyVram = comfyVram;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         if (promptBatchParser is null) throw new ArgumentNullException(nameof(promptBatchParser));
 
@@ -785,6 +796,15 @@ public partial class GeneratorViewModel : ObservableObject
             setStatus: SetStatus,
             addAsInputAsync: InputImages.AddAsInputAsync,
             mutateFromImageAsync: path => MutateFromImageAsync(path));
+
+        // Free the ComfyUI GPU once a whole batch finishes (per-job frees would reload the checkpoint
+        // between every variant). The per-job path handles single Generates; here IsBatchRunning has just
+        // gone false, so MaybeFree proceeds for the batch as a whole.
+        Batch.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(BatchCoordinator.IsBatchRunning) && !Batch.IsBatchRunning)
+                _ = MaybeFreeComfyUiVramAsync(Parameters.Model);
+        };
 
         _parameters.PropertyChanged += (_, e) =>
         {
@@ -1065,6 +1085,29 @@ public partial class GeneratorViewModel : ObservableObject
             });
             job.Cts.Dispose();
         }
+
+        // Rendering for this job is done — free the ComfyUI GPU when idle. A batch ITEM sees
+        // IsBatchRunning true and skips (no mid-batch checkpoint reload); the batch-completion hook
+        // frees once at the end. A single Generate frees here.
+        await MaybeFreeComfyUiVramAsync(job.Parameters.Model);
+    }
+
+    /// <summary>
+    /// Free the ComfyUI server's GPU memory when rendering is idle, if the user's "Free GPU memory after
+    /// rendering" toggle is on. No-op for non-ComfyUI models, while a batch is still running, or when the
+    /// VRAM service isn't wired (tests). Best-effort — the service swallows failures.
+    /// </summary>
+    internal async Task MaybeFreeComfyUiVramAsync(string model)
+    {
+        if (!FreeVramAfterRendering
+            || _comfyVram is null
+            || Batch.IsBatchRunning
+            || !ModelConstants.ComfyUi.IsId(model))
+        {
+            return;
+        }
+
+        await _comfyVram.TryFreeAsync();
     }
 
     internal async Task PostJobToCivitaiAsync(GenerationJob job, string savedPath)
@@ -1395,6 +1438,10 @@ public partial class GeneratorViewModel : ObservableObject
         // Seed the picker with the current model so it shows a value before the first live refresh.
         if (!string.IsNullOrWhiteSpace(OllamaModel) && !OllamaModels.Contains(OllamaModel))
             OllamaModels.Add(OllamaModel);
+
+        // Default-on; only flips the field when the user previously turned it off (OnChanged re-persist is
+        // a harmless echo — nothing else writes this field).
+        FreeVramAfterRendering = _uiStateStore.LoadFreeVramAfterRendering();
 
         // The override was already applied at the composition root; this just echoes the saved
         // value into the bound field so Settings shows it. OnChanged re-applies harmlessly.

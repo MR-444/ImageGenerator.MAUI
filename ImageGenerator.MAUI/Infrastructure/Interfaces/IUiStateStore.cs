@@ -25,6 +25,9 @@ public interface IUiStateStore
     string? LoadAspectRatio(string? modelId);
     /// <summary>False when never persisted — the toggle is opt-in per session by default.</summary>
     bool LoadUseJsonPrompt();
+    /// <summary>Whether to POST /free to ComfyUI when rendering goes idle, freeing GPU memory for the
+    /// Ollama mutation tier. TRUE when never persisted (default-on; the user can disable it in Settings).</summary>
+    bool LoadFreeVramAfterRendering();
     /// <summary>Null when never persisted — callers fall back to ModelConstants.ComfyUi.DefaultBaseUrl.</summary>
     string? LoadComfyUiBaseUrl();
     /// <summary>
@@ -67,6 +70,8 @@ public interface IUiStateStore
     /// <inheritdoc cref="LoadAspectRatio"/>
     void PersistAspectRatio(string value, string? modelId);
     void PersistUseJsonPrompt(bool value);
+    /// <inheritdoc cref="LoadFreeVramAfterRendering"/>
+    void PersistFreeVramAfterRendering(bool value);
     void PersistComfyUiBaseUrl(string value);
     /// <inheritdoc cref="LoadOllamaBaseUrl"/>
     void PersistOllamaBaseUrl(string value);

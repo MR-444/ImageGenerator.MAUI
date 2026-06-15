@@ -6,6 +6,7 @@ using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
+using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
 // MAUI's implicit usings bring in Microsoft.Maui.Controls.Element — disambiguate.
 using Element = ImageGenerator.MAUI.Core.Domain.Ideogram.Element;
@@ -42,6 +43,7 @@ public partial class MutationEngineViewModel : ObservableObject
     private readonly CaptionMutationEngine _engine;
     private readonly ICaptionMutationLlmService? _mutationLlm;
     private readonly IClipboardService? _clipboard;
+    private readonly IOllamaModelCatalog? _ollamaCatalog;
     private readonly ILogger<MutationEngineViewModel> _logger;
 
     /// <summary>The typed base whose elements (and their slot tags) the run mutates.</summary>
@@ -68,7 +70,8 @@ public partial class MutationEngineViewModel : ObservableObject
         ILogger<MutationEngineViewModel> logger,
         GeneratorViewModel? generator = null,
         IClipboardService? clipboard = null,
-        ICaptionMutationLlmService? mutationLlm = null)
+        ICaptionMutationLlmService? mutationLlm = null,
+        IOllamaModelCatalog? ollamaCatalog = null)
     {
         _libraryService = libraryService ?? throw new ArgumentNullException(nameof(libraryService));
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
@@ -76,6 +79,7 @@ public partial class MutationEngineViewModel : ObservableObject
         _generator = generator;
         _clipboard = clipboard;
         _mutationLlm = mutationLlm;
+        _ollamaCatalog = ollamaCatalog;
     }
 
     // --- Run configuration (bound to the page) ---------------------------------------------------
@@ -534,6 +538,13 @@ public partial class MutationEngineViewModel : ObservableObject
                     i => _mutationLlm.BreedAsync(breedSet, steer, i, tier))
                 : await FanOutAsync(count, ConcurrencyFor(tier),
                     i => _mutationLlm.MutateAsync(baseCaption, steer, i, tier));
+
+            // Free the local GPU before the ComfyUI render: the 27B is done generating captions and
+            // both models won't fit. Fires once after the whole (sequential) Local batch; cloud tiers
+            // hold no local VRAM. Best-effort — the catalog swallows failures.
+            if (tier == ModelTier.Local && _ollamaCatalog is not null)
+                await UnloadLocalModelAsync();
+
             await DispatchAiResultsAsync(results);
         }
         catch (Exception ex)
@@ -559,6 +570,15 @@ public partial class MutationEngineViewModel : ObservableObject
             + "and palette); rewrite the high_level_description, background and every element desc so they "
             + "read coherently in that style. Vary the interpretation between variations, never the style itself.";
         return string.IsNullOrWhiteSpace(userSteer) ? Lock : $"{Lock} Also: {userSteer.Trim()}";
+    }
+
+    /// <summary>Unload the Ollama model from the GPU after the Local batch, resolving the same endpoint/
+    /// model the service used (generator settings, else the constants' defaults). Best-effort.</summary>
+    private async Task UnloadLocalModelAsync()
+    {
+        var baseUrl = _generator?.OllamaBaseUrl is { Length: > 0 } u ? u : ModelConstants.Ollama.DefaultBaseUrl;
+        var model = _generator?.OllamaModel is { Length: > 0 } m ? m : ModelConstants.Ollama.DefaultModel;
+        await _ollamaCatalog!.UnloadAsync(baseUrl, model);
     }
 
     /// <summary>A local model on one GPU serves requests serially, so concurrent calls would queue

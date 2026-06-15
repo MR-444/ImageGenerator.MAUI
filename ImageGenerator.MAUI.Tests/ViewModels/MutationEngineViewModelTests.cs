@@ -181,13 +181,15 @@ public class MutationEngineViewModelTests
 
     // ---- AI (LLM) mode -------------------------------------------------------------------
 
-    private static MutationEngineViewModel CreateSutWithAi(ICaptionMutationLlmService llm) =>
+    private static MutationEngineViewModel CreateSutWithAi(
+        ICaptionMutationLlmService llm, IOllamaModelCatalog? ollamaCatalog = null) =>
         new(new StubLibraryService(),
             new CaptionMutationEngine(),
             NullLogger<MutationEngineViewModel>.Instance,
             generator: null,
             clipboard: null,
-            mutationLlm: llm);
+            mutationLlm: llm,
+            ollamaCatalog: ollamaCatalog);
 
     [Fact]
     public void IsAiMode_TogglesDeterministicOnlyVisibility()
@@ -428,6 +430,48 @@ public class MutationEngineViewModelTests
         prompts.Should().HaveCount(2, "failed variants are dropped");
         labels.Should().Equal("winter", "summer");
         prompts[0].Should().Be(V4JsonPromptSerializer.Serialize(good));
+    }
+
+    [Fact]
+    public async Task MutateWithAi_LocalTier_UnloadsTheOllamaModelOnce()
+    {
+        var catalog = new StubOllamaCatalog();
+        var sut = CreateSutWithAi(new StubMutationLlm(), catalog);
+        sut.SetBaseForTest(MutationTestData.BaseCaption());
+        sut.IsAiMode = true;
+        sut.SelectedModelTier = ModelTier.Local;
+        sut.Count = 3;
+
+        await sut.MutateWithAiCommand.ExecuteAsync(null);
+
+        catalog.UnloadCalls.Should().Be(1, "the local model is freed once after the whole sequential batch");
+    }
+
+    [Fact]
+    public async Task MutateWithAi_CloudTier_NeverUnloadsOllama()
+    {
+        var catalog = new StubOllamaCatalog();
+        var sut = CreateSutWithAi(new StubMutationLlm(), catalog);
+        sut.SetBaseForTest(MutationTestData.BaseCaption());
+        sut.IsAiMode = true;
+        sut.SelectedModelTier = ModelTier.Sonnet;
+        sut.Count = 2;
+
+        await sut.MutateWithAiCommand.ExecuteAsync(null);
+
+        catalog.UnloadCalls.Should().Be(0, "cloud tiers hold no local VRAM");
+    }
+
+    private sealed class StubOllamaCatalog : IOllamaModelCatalog
+    {
+        public int UnloadCalls { get; private set; }
+        public Task<IReadOnlyList<string>> ListModelsAsync(string baseUrl, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
+        public Task UnloadAsync(string baseUrl, string model, CancellationToken ct = default)
+        {
+            UnloadCalls++;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class StubMutationLlm : ICaptionMutationLlmService

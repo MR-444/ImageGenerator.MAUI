@@ -71,6 +71,19 @@
                            Keyboard="Url"
                            SemanticProperties.Description="Base URL of the ComfyUI server"
                            AutomationId="ComfyUiBaseUrlEntry" />
+
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,8,0,0">
+                        <VerticalStackLayout Grid.Column="0" Spacing="2">
+                            <Label Text="Free GPU memory after rendering" Style="{StaticResource FieldLabel}" />
+                            <Label Text="Unloads ComfyUI models when rendering is idle so the Ollama mutation tier has VRAM. Turn off to keep the checkpoint loaded for faster single-image iteration."
+                                   Style="{StaticResource HelperText}" />
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1"
+                                IsToggled="{Binding FreeVramAfterRendering, Mode=TwoWay}"
+                                VerticalOptions="Center"
+                                SemanticProperties.Description="Free ComfyUI GPU memory after rendering"
+                                AutomationId="FreeVramAfterRenderingSwitch" />
+                    </Grid>
                 </VerticalStackLayout>
             </Border>
 

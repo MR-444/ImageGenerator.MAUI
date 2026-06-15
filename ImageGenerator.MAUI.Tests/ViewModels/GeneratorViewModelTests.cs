@@ -133,6 +133,52 @@ public class GeneratorViewModelTests
         }
     }
 
+    // --- Free GPU memory after rendering ---
+
+    private GeneratorViewModel BuildViewModelWithVram(IComfyUiVramService vram) =>
+        new(_mockJobRunner.Object, _mockTokenStore.Object, _mockPollinationsTokenStore.Object,
+            _mockComfyUiAuthStore.Object, _mockCivitaiTokenStore.Object, _mockAnthropicTokenStore.Object,
+            _mockCivitaiPostingService.Object, _mockUiStateStore.Object, _mockCatalogCoordinator.Object,
+            ModelDescriptorRegistry.Default(), _mockPromptBatchParser.Object, _mockCheckpointService.Object,
+            _mockGalleryService.Object, _mockFolderPicker.Object, NullLogger<GeneratorViewModel>.Instance,
+            ollamaModelCatalog: null, comfyVram: vram);
+
+    [Fact]
+    public async Task MaybeFreeComfyUiVram_FreesOnlyWhenEnabled_ComfyModel_AndIdle()
+    {
+        var vram = new StubComfyVram();
+        var vm = BuildViewModelWithVram(vram);
+        vm.FreeVramAfterRendering = true;
+
+        await vm.MaybeFreeComfyUiVramAsync("comfyui/anything");
+        vram.Calls.Should().Be(1, "enabled + ComfyUI model + no batch running");
+
+        await vm.MaybeFreeComfyUiVramAsync(ModelConstants.Flux.Pro11);
+        vram.Calls.Should().Be(1, "non-ComfyUI models hold no local VRAM");
+
+        vm.FreeVramAfterRendering = false;
+        await vm.MaybeFreeComfyUiVramAsync("comfyui/anything");
+        vram.Calls.Should().Be(1, "the toggle gates it off");
+    }
+
+    [Fact]
+    public async Task MaybeFreeComfyUiVram_NoServiceWired_DoesNotThrow()
+    {
+        // The default _viewModel is built without a vram service (optional ctor arg).
+        var act = async () => await _viewModel.MaybeFreeComfyUiVramAsync("comfyui/anything");
+        await act.Should().NotThrowAsync();
+    }
+
+    private sealed class StubComfyVram : IComfyUiVramService
+    {
+        public int Calls { get; private set; }
+        public Task TryFreeAsync(CancellationToken ct = default)
+        {
+            Calls++;
+            return Task.CompletedTask;
+        }
+    }
+
     [Fact]
     public void Providers_ShouldIncludeAllAndDistinctProviders()
     {

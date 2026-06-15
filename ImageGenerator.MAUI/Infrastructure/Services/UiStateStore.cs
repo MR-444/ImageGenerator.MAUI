@@ -10,6 +10,7 @@ public sealed class UiStateStore : IUiStateStore
     private const string PromptKey = "imggen.last_prompt";
     private const string ModelKey = "imggen.last_model";
     private const string UseJsonPromptKey = "imggen.use_json_prompt";
+    private const string FreeVramAfterRenderingKey = "imggen.free_vram_after_rendering";
     private const string ResolutionKey = "imggen.last_resolution";
     private const string ComfyUiResolutionKey = "imggen.last_resolution.comfyui";
     private const string AspectRatioKey = "imggen.last_aspect_ratio";
@@ -282,6 +283,37 @@ public sealed class UiStateStore : IUiStateStore
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Preferences.Set({Key}) failed", UseJsonPromptKey);
+        }
+    }
+
+    public bool LoadFreeVramAfterRendering()
+    {
+        try
+        {
+            // Default TRUE — free GPU memory unless the user opted out.
+            var value = _preferences.Get(FreeVramAfterRenderingKey, true);
+            _logger.LogDebug("UiStateStore.LoadFreeVramAfterRendering -> {Value}", value);
+            return value;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Preferences.Get({Key}) failed", FreeVramAfterRenderingKey);
+            return true;
+        }
+    }
+
+    public void PersistFreeVramAfterRendering(bool value)
+    {
+        try
+        {
+            if (_preferences.ContainsKey(FreeVramAfterRenderingKey)
+                && _preferences.Get(FreeVramAfterRenderingKey, true) == value) return;
+            _preferences.Set(FreeVramAfterRenderingKey, value);
+            _logger.LogDebug("UiStateStore.PersistFreeVramAfterRendering({Value})", value);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Preferences.Set({Key}) failed", FreeVramAfterRenderingKey);
         }
     }
 

@@ -9,4 +9,11 @@ public interface IOllamaModelCatalog
     /// can surface why the list is empty.
     /// </summary>
     Task<IReadOnlyList<string>> ListModelsAsync(string baseUrl, CancellationToken ct = default);
+
+    /// <summary>
+    /// Asks the Ollama server to unload <paramref name="model"/> from (V)RAM immediately — a
+    /// <c>POST /api/generate</c> with <c>keep_alive: 0</c>. Best-effort: never throws, so a caller can fire
+    /// it after a Local-tier mutation batch to free the GPU for the imminent ComfyUI render.
+    /// </summary>
+    Task UnloadAsync(string baseUrl, string model, CancellationToken ct = default);
 }

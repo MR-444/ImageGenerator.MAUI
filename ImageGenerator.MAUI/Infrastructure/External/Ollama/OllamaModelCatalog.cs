@@ -1,4 +1,6 @@
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -48,5 +50,35 @@ public sealed class OllamaModelCatalog : IOllamaModelCatalog
 
         names.Sort(StringComparer.OrdinalIgnoreCase);
         return names;
+    }
+
+    // Short budget: a dead/slow host must not stall the mutation→render handoff. The unload is a
+    // free-the-GPU nicety, so a failure is logged and swallowed.
+    private static readonly TimeSpan UnloadTimeout = TimeSpan.FromSeconds(10);
+
+    public async Task UnloadAsync(string baseUrl, string model, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(model))
+            return;
+
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(UnloadTimeout);
+
+            // Ollama unloads a model when it receives a request with keep_alive 0; an empty prompt means
+            // "just (un)load", no generation. Native /api/generate, not the OpenAI-compatible endpoint.
+            var endpoint = $"{baseUrl.TrimEnd('/')}/api/generate";
+            var body = new JsonObject { ["model"] = model, ["keep_alive"] = 0 };
+            using var content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+            using var client = _httpClientFactory.CreateClient(OllamaChatTransport.HttpClientName);
+            using var response = await client.PostAsync(endpoint, content, cts.Token);
+            _logger.LogInformation(
+                "Ollama unload requested Model={Model} (HTTP {StatusCode})", model, (int)response.StatusCode);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Ollama unload failed Model={Model}", model);
+        }
     }
 }
