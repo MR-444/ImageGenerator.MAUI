@@ -106,7 +106,7 @@ VRAM UNLOAD (COMMITTED 77c3f4a): on the single-GPU fireEngine the 27B Ollama mod
     fires when rendering is IDLE only — after a single Generate, and once at batch end (gated by
     Batch.IsBatchRunning so a batch never reloads the checkpoint mid-run; batch-end hook via Batch.PropertyChanged).
     Best-effort (mirrors /interrupt; never throws). Toggle OFF keeps the checkpoint resident for fast single-image
-    iteration. 1162 tests, 0 warnings. PENDING user verify on fireEngine (watch nvidia-smi / server /free log).
+    iteration. 1162 tests, 0 warnings. USER-VERIFIED on fireEngine 2026-06-16 ("the ram management works").
 
 
 PROMPT BUILDER v2 — TWO-PASS VPE → (optional) IDEOGRAM JSON (SHIPPED + USER-VERIFIED 2026-06-15, v1.9.1)
