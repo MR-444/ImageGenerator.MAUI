@@ -154,6 +154,25 @@ public sealed class AnthropicPromptBuilderServiceTests : IDisposable
         captured.Should().Be("BUNDLED SYSTEM PROMPT");
     }
 
+    [Fact]
+    public async Task BuildAsync_SeedsOverrideReadme_WithoutTouchingExistingPrompt()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var promptPath = Path.Combine(_tempDir, "system-prompt.md");
+        await File.WriteAllTextAsync(promptPath, "PRIVATE OVERRIDE PROMPT");
+
+        string? captured = null;
+        var sut = CreateSut(KeyStore("sk-ant"), (_, system, _, _) => { captured = system; return Task.FromResult(ValidJson); });
+
+        await sut.BuildAsync("a red fox");
+
+        // README.txt seeded for discoverability...
+        File.Exists(Path.Combine(_tempDir, "README.txt")).Should().BeTrue();
+        // ...without disturbing the user's override, which is still the one used.
+        (await File.ReadAllTextAsync(promptPath)).Should().Be("PRIVATE OVERRIDE PROMPT");
+        captured.Should().Be("PRIVATE OVERRIDE PROMPT");
+    }
+
     // ---- Shipped clean-room prompt guard ------------------------------------------------
 
     [Fact]

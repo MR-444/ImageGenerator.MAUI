@@ -54,6 +54,14 @@ system-prompt.md (present → used verbatim instead of the bundled default, read
 The two private skills live in documents/private/ (GITIGNORED via .gitignore:29, committed in 36180d8 —
 NOT uncommitted as a prior note claimed). NEVER read them to author the public prompt.
 
+POST-SHIP (2026-06-15): the override folder is now self-seeding + documented. AnthropicPromptBuilderService
+.EnsureOverrideReadme() (called atop LoadSystemPromptAsync, best-effort try/catch→LogWarning like
+MutationLibraryService.SeedIfMissingAsync) creates Pictures\ImageGenerator.MAUI\prompt-builder\ and drops a
+README.txt (only if missing) explaining the system-prompt.md override — it NEVER reads/writes/touches the
+user's system-prompt.md. README.md now documents the feature (Features bullet, Anthropic in the API-Tokens
+provider list, a "Describe an idea (AI prompt builder)" usage subsection, idea-to-prompt+mutation-engine in
+the AppShell routes line). 1097 tests (+1 seed test), Debug+Release 0 warnings.
+
 FUTURE (NOT v1): no model-tier picker (Opus too expensive for public users; nothing cheaper clears the
 idea→valid-V4 bar; Fable 5 = the only sensible bump, a one-line const change). IPromptBuilderService is the
 additive swap seam — structured-output reliability is ANTHROPIC-SPECIFIC, each future provider owns its own

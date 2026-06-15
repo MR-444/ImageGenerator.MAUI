@@ -14,6 +14,7 @@ A Windows desktop image generation app built on .NET MAUI with three image provi
 - **Batch from a textfile** — **Import prompts…** runs a `.txt` of prompts (separated by `---`, `#` lines ignored) sequentially against the current model; failures don't abort the queue. → [details](#running-a-batch-from-a-textfile)
 - **In-app gallery** — a sortable tile grid with live `FileSystemWatcher` updates, multi-select, and a detail page with copyable metadata and one-click **Use as input**. Thumbnails come from the Windows shell cache, so a folder of multi-megabyte PNGs doesn't blow process memory. → [details](#browsing-past-images-gallery)
 - **Post to CivitAI** — one checkbox publishes each finished image to [CivitAI](https://civitai.com), optionally into a specific model's gallery with the generation data attached. Fire-and-forget: a slow or failed post never touches the generation job. → [details](#posting-to-civitai-optional)
+- **Describe an idea (AI prompt builder)** — one **Claude Opus 4.8** call turns a freeform idea into a schema-valid Ideogram V4 structured caption, dropped straight into the prompt box (refine it from there with **Edit structure…**). Needs an Anthropic key; power users can override the bundled instructions with a private `system-prompt.md`. → [details](#describe-an-idea-ai-prompt-builder)
 - **Dynamic model catalog** — **Refresh Models** queries Replicate's `text-to-image` collection (filtered to `black-forest-labs`, `openai`, `google`) and Pollinations' `/models` in parallel, merges with the seed entries (Ideogram V4 is pinned — Replicate's collection doesn't list it), and caches to `AppDataDirectory/model-catalog.json`.
 - **Reproducible by default** — every saved file embeds the full prompt, generation parameters, actual pixel dimensions, and model-specific fields, so any output's recipe is recoverable months later. → [reading it back](#reading-back-the-embedded-metadata)
 - **Persisted UI state** — last prompt, model, resolution, and window bounds are restored on next launch.
@@ -41,7 +42,7 @@ If you'd rather not click through a SmartScreen warning, you can always [build f
 
 ### Picking a provider
 
-The **Settings** button (top right) opens the configuration page. Its **API Tokens** card has a provider dropdown — switch between **Replicate**, **Pollinations**, **ComfyUI**, and **CivitAI** to edit each slot independently (ComfyUI needs a server base URL instead of a token; the CivitAI slot is for publishing finished images, not generating). All slots are stored separately and save as you type, so you can keep them all configured and just flip the selected model on the main page to route requests one way or the other.
+The **Settings** button (top right) opens the configuration page. Its **API Tokens** card has a provider dropdown — switch between **Replicate**, **Pollinations**, **ComfyUI**, **CivitAI**, and **Anthropic** to edit each slot independently (ComfyUI needs a server base URL instead of a token; the CivitAI slot is for publishing finished images, not generating; the Anthropic slot powers the *Describe an idea…* prompt builder, not image generation). All slots are stored separately and save as you type, so you can keep them all configured and just flip the selected model on the main page to route requests one way or the other.
 
 ### Getting a Replicate API token
 
@@ -109,6 +110,25 @@ Check **Post to CivitAI** in the output options and every finished image is publ
 - The post title is derived from the prompt (for structured-JSON prompts, from its description field); the upload is the saved file, byte-identical.
 
 Posting runs after the image is safely on disk and never blocks or fails the generation itself — the job card gets its own status line and an **Open post** button. The checkboxes reset to off on every launch, so nothing is ever published by accident. Under the hood this uses CivitAI's official [MCP server](https://mcp.civitai.com/) for the upload plus one direct API call for the post itself — plain HTTP either way, your key never goes anywhere but civitai.com.
+
+### Describe an idea (AI prompt builder)
+
+Writing a good Ideogram V4 *structured* caption by hand is fiddly. **Describe an idea…** does it for you: type a plain-English idea and one **Claude Opus 4.8** call returns a schema-valid V4 JSON caption, dropped straight into the prompt box.
+
+**Setup (once):**
+
+1. Create an Anthropic API key at [console.anthropic.com](https://console.anthropic.com).
+2. In **Settings**, pick "Anthropic" in the API Tokens dropdown and paste it (same per-slot DPAPI secure storage as the other providers). This key is used only for the prompt builder — never for image generation.
+
+**Per use:**
+
+1. Pick an Ideogram V4 (or a structured-JSON-capable ComfyUI) model so the structured-prompt controls are available.
+2. Click **Describe an idea…**, type your idea, and hit **Build prompt**. A valid V4 caption lands in the prompt box with **Structured JSON prompt** turned on.
+3. Tweak it further with **Edit structure…** if you like, then **Generate**.
+
+Each build is one Opus call — roughly **3–6¢**. The model is hardcoded (it's the only tier that reliably produces valid, creative captions).
+
+**Private override (optional, power users):** the app ships a deliberately *basic* clean-room builder prompt. To use your own, drop a file named `system-prompt.md` in `Pictures\ImageGenerator.MAUI\prompt-builder\` (the folder is created on first use, with a `README.txt` explaining this). It's read fresh on every build — no restart — and used verbatim instead of the bundled prompt; delete it to revert. This is an open-core split: the bundled prompt is public, your private prompt stays local and never enters the repo.
 
 ### Costs
 
@@ -210,7 +230,8 @@ ImageGenerator.MAUI/
 ├── Shared/Constants/         # ModelConstants, ValidationConstants, OutputPaths
 ├── Resources/                # Styles, Colors, Fonts, Images
 ├── Extensions/               # RefitServiceExtensions (serializer + resilience pipeline)
-├── AppShell.xaml             # Shell + route registration (gallery, detail, ideogram-editor, settings)
+├── AppShell.xaml             # Shell + route registration (gallery, detail, ideogram-editor,
+│                             # mutation-engine, idea-to-prompt, settings)
 └── MauiProgram.cs            # DI registration + app bootstrap
 ```
 

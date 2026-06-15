@@ -32,10 +32,30 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
 
     private const string SystemPromptAsset = "PromptBuilder/v4-builder-system.md";
     private const string OverrideFileName = "system-prompt.md";
+    private const string OverrideReadmeName = "README.txt";
     private const string MessagesEndpoint = "https://api.anthropic.com/v1/messages";
     private const string AnthropicVersion = "2023-06-01";
     private const int MaxOutputTokens = 16000;
     private const int MaxAttempts = 2;   // initial call + one validator-feedback retry
+
+    // Seeded into the override folder so the open-core override seam is discoverable. Plain text,
+    // dropped only if missing — never overwrites a user file, never touches their system-prompt.md.
+    private const string OverrideReadmeText =
+        """
+        "Describe an idea" prompt builder — private override
+        =====================================================
+
+        Drop a file named "system-prompt.md" in this folder to REPLACE the bundled prompt-builder
+        instructions with your own. When present, it is used verbatim instead of the app's basic
+        built-in prompt.
+
+        - Read fresh on every "Build prompt" click — no app restart needed after you edit it.
+        - Model: Claude Opus 4.8 (hardcoded).
+        - Delete system-prompt.md to revert to the bundled prompt.
+
+        This file (README.txt) is just documentation and is safe to delete; the app re-creates it on
+        the next build. Your system-prompt.md is never modified or read by anything but the builder.
+        """;
 
     /// <summary>
     /// Transport seam: given the API key + assembled turns, return the model's raw structured-output
@@ -224,6 +244,8 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
     /// </summary>
     private async Task<string> LoadSystemPromptAsync()
     {
+        EnsureOverrideReadme();
+
         var overridePath = Path.Combine(_promptDirectory, OverrideFileName);
         if (File.Exists(overridePath))
             return await File.ReadAllTextAsync(overridePath);
@@ -231,6 +253,29 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
         await using var stream = await _assetOpener(SystemPromptAsset);
         using var reader = new StreamReader(stream);
         return await reader.ReadToEndAsync();
+    }
+
+    /// <summary>
+    /// Best-effort, idempotent: make the override folder exist and drop a README.txt explaining how to
+    /// supply a private <c>system-prompt.md</c>. Additive — it creates the folder (no-op if present)
+    /// and writes README.txt only when missing, and it never reads, writes, or touches the user's
+    /// <c>system-prompt.md</c>. Failures are logged and swallowed (mirrors
+    /// <c>MutationLibraryService.SeedIfMissingAsync</c>); a missing README must never break a build.
+    /// </summary>
+    private void EnsureOverrideReadme()
+    {
+        try
+        {
+            Directory.CreateDirectory(_promptDirectory);
+
+            var readmePath = Path.Combine(_promptDirectory, OverrideReadmeName);
+            if (!File.Exists(readmePath))
+                File.WriteAllText(readmePath, OverrideReadmeText);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "PromptBuilder: could not seed the override folder README Dir={Dir}", _promptDirectory);
+        }
     }
 
     private static StructuredCompletion BuildHttpCompletion(IHttpClientFactory httpClientFactory, ILogger logger) =>
