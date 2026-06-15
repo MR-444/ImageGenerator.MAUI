@@ -30,8 +30,15 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
 
     public const string HttpClientName = "anthropic";
 
-    private const string SystemPromptAsset = "PromptBuilder/v4-builder-system.md";
-    private const string OverrideFileName = "system-prompt.md";
+    // VPE pass (idea → prose). Override beats bundled.
+    private const string VpeSystemPromptAsset = "PromptBuilder/vpe-system.md";
+    private const string VpeOverrideFileName = "vpe-prompt.md";
+
+    // JSON pass (prose → V4). The override keeps its historical name so an existing user file
+    // (the 3-yr IP) keeps working unchanged as the JSON-pass prompt.
+    private const string JsonSystemPromptAsset = "PromptBuilder/v4-builder-system.md";
+    private const string JsonOverrideFileName = "system-prompt.md";
+
     private const string OverrideReadmeName = "README.txt";
     private const string MessagesEndpoint = "https://api.anthropic.com/v1/messages";
     private const string AnthropicVersion = "2023-06-01";
@@ -42,28 +49,38 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
     // dropped only if missing — never overwrites a user file, never touches their system-prompt.md.
     private const string OverrideReadmeText =
         """
-        "Describe an idea" prompt builder — private override
-        =====================================================
+        "Describe an idea" prompt builder — private overrides
+        ======================================================
 
-        Drop a file named "system-prompt.md" in this folder to REPLACE the bundled prompt-builder
-        instructions with your own. When present, it is used verbatim instead of the app's basic
-        built-in prompt.
+        The builder runs in two passes, each with its own override file you can drop in this folder:
 
-        - Read fresh on every "Build prompt" click — no app restart needed after you edit it.
-        - Model: Claude Opus 4.8 (hardcoded).
-        - Delete system-prompt.md to revert to the bundled prompt.
+          1. vpe-prompt.md   — Pass 1 (VPE). Turns your idea into a normal PROSE image prompt that
+                               works directly with every plain-prompt model (Pollinations, Flux,
+                               gpt-image, nano-banana) and reads well to a human.
+          2. system-prompt.md — Pass 2 (Ideogram JSON adapter). Maps that prose onto the schema-valid
+                               Ideogram V4 structured caption. Only runs when "Also build an Ideogram
+                               V4 JSON prompt" is ticked.
+
+        When a file is present it REPLACES the matching bundled prompt verbatim; otherwise the app's
+        bundled clean-room prompt is used. The prose pass always runs; the JSON pass is optional.
+
+        - Read fresh on every "Build prompt" click — no app restart needed after you edit either file.
+        - Model: Claude Opus 4.8 (hardcoded, both passes).
+        - Delete a file to revert that pass to its bundled prompt.
 
         This file (README.txt) is just documentation and is safe to delete; the app re-creates it on
-        the next build. Your system-prompt.md is never modified or read by anything but the builder.
+        the next build. Your override files are never modified or read by anything but the builder.
         """;
 
     /// <summary>
-    /// Transport seam: given the API key + assembled turns, return the model's raw structured-output
-    /// JSON text. Production = one Anthropic Messages call; tests inject a fake so the request build,
-    /// override precedence, and validate-retry logic run without disk or network.
+    /// Transport seam: given the API key + assembled turns, return the model's raw text. When
+    /// <paramref name="schema"/> is non-null the call uses structured outputs (constrained to that JSON
+    /// schema, the JSON pass); when null it's a plain text call (the VPE prose pass). Production = one
+    /// Anthropic Messages call; tests inject a fake so the request build, override precedence, and
+    /// validate-retry logic run without disk or network.
     /// </summary>
     internal delegate Task<string> StructuredCompletion(
-        string apiKey, string systemPrompt, IReadOnlyList<ChatTurn> messages, CancellationToken ct);
+        string apiKey, string systemPrompt, IReadOnlyList<ChatTurn> messages, JsonElement? schema, CancellationToken ct);
 
     internal readonly record struct ChatTurn(string Role, string Content);
 
@@ -165,10 +182,57 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
             : promptDirectoryOverride;
     }
 
-    public async Task<PromptBuilderResult> BuildAsync(string idea, CancellationToken cancellationToken = default)
+    /// <summary>Pass 1 (VPE): idea → a normal prose prompt. One plain text call, no validator.</summary>
+    public async Task<ProseResult> BuildProseAsync(string idea, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(idea))
-            return PromptBuilderResult.Fail("Describe an idea first.");
+            return ProseResult.Fail("Describe an idea first.");
+
+        var apiKey = await _tokenStore.LoadAsync();
+        if (string.IsNullOrWhiteSpace(apiKey))
+            return ProseResult.Fail("No Anthropic API key — add it on the Settings page.");
+
+        string systemPrompt;
+        try
+        {
+            systemPrompt = await LoadPromptAsync(VpeOverrideFileName, VpeSystemPromptAsset);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "PromptBuilder: failed to load the VPE system prompt");
+            return ProseResult.Fail("Couldn't load the prompt-builder instructions. See app.log.");
+        }
+
+        var messages = new List<ChatTurn> { new("user", idea.Trim()) };
+
+        string raw;
+        try
+        {
+            // schema = null → a plain text call; the VPE pass emits prose, not JSON.
+            raw = await _complete(apiKey!, systemPrompt, messages, null, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "PromptBuilder: VPE call failed");
+            return ProseResult.Fail($"The prompt builder couldn't reach Claude: {ex.Message}");
+        }
+
+        var prose = raw.Trim();
+        if (string.IsNullOrEmpty(prose))
+            return ProseResult.Fail("Claude returned an empty prompt. Try rephrasing the idea.");
+
+        return ProseResult.Ok(prose);
+    }
+
+    /// <summary>Pass 2 (Ideogram adapter): prose → a schema-valid V4 prompt with one validator-feedback retry.</summary>
+    public async Task<PromptBuilderResult> BuildJsonAsync(string prose, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(prose))
+            return PromptBuilderResult.Fail("Build a prose prompt first.");
 
         var apiKey = await _tokenStore.LoadAsync();
         if (string.IsNullOrWhiteSpace(apiKey))
@@ -177,22 +241,22 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
         string systemPrompt;
         try
         {
-            systemPrompt = await LoadSystemPromptAsync();
+            systemPrompt = await LoadPromptAsync(JsonOverrideFileName, JsonSystemPromptAsset);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "PromptBuilder: failed to load the system prompt");
+            _logger.LogError(ex, "PromptBuilder: failed to load the JSON system prompt");
             return PromptBuilderResult.Fail("Couldn't load the prompt-builder instructions. See app.log.");
         }
 
-        var messages = new List<ChatTurn> { new("user", idea.Trim()) };
+        var messages = new List<ChatTurn> { new("user", prose.Trim()) };
 
         for (var attempt = 1; attempt <= MaxAttempts; attempt++)
         {
             string raw;
             try
             {
-                raw = await _complete(apiKey!, systemPrompt, messages, cancellationToken);
+                raw = await _complete(apiKey!, systemPrompt, messages, V4Schema, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -238,19 +302,19 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
     }
 
     /// <summary>
-    /// Private override beats the bundled clean-room default: if <c>system-prompt.md</c> exists in the
-    /// prompt-builder folder (the user's 3-yr IP, outside the repo), use it verbatim; otherwise read
-    /// the bundled basic prompt from <c>Resources/Raw/PromptBuilder</c>.
+    /// Private override beats the bundled clean-room default: if the named override file exists in the
+    /// prompt-builder folder (the user's IP, outside the repo), use it verbatim; otherwise read the
+    /// bundled prompt from <c>Resources/Raw/PromptBuilder</c>. Used by both passes with their own file.
     /// </summary>
-    private async Task<string> LoadSystemPromptAsync()
+    private async Task<string> LoadPromptAsync(string overrideFileName, string bundledAsset)
     {
         EnsureOverrideReadme();
 
-        var overridePath = Path.Combine(_promptDirectory, OverrideFileName);
+        var overridePath = Path.Combine(_promptDirectory, overrideFileName);
         if (File.Exists(overridePath))
             return await File.ReadAllTextAsync(overridePath);
 
-        await using var stream = await _assetOpener(SystemPromptAsset);
+        await using var stream = await _assetOpener(bundledAsset);
         using var reader = new StreamReader(stream);
         return await reader.ReadToEndAsync();
     }
@@ -279,7 +343,8 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
     }
 
     private static StructuredCompletion BuildHttpCompletion(IHttpClientFactory httpClientFactory, ILogger logger) =>
-        (apiKey, systemPrompt, messages, ct) => SendAsync(httpClientFactory, logger, apiKey, systemPrompt, messages, ct);
+        (apiKey, systemPrompt, messages, schema, ct) =>
+            SendAsync(httpClientFactory, logger, apiKey, systemPrompt, messages, schema, ct);
 
     private static async Task<string> SendAsync(
         IHttpClientFactory httpClientFactory,
@@ -287,6 +352,7 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
         string apiKey,
         string systemPrompt,
         IReadOnlyList<ChatTurn> messages,
+        JsonElement? schema,
         CancellationToken ct)
     {
         var body = new
@@ -301,12 +367,13 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
                 new { type = "text", text = systemPrompt, cache_control = new { type = "ephemeral" } }
             },
             messages = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
-            // effort lives INSIDE output_config (per the claude-api skill), alongside the json_schema.
-            // high = max creativity for the idea→V4 job.
+            // effort lives INSIDE output_config (per the claude-api skill); high = max creativity for
+            // both jobs. The json_schema format is present ONLY for the JSON pass (schema != null); the
+            // VPE prose pass omits it (BodyJson drops the null), leaving the model free to emit prose.
             output_config = new
             {
                 effort = "high",
-                format = new { type = "json_schema", schema = V4Schema }
+                format = schema is { } s ? (object)new { type = "json_schema", schema = s } : null
             }
         };
 

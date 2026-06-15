@@ -11,19 +11,22 @@ using Moq;
 namespace ImageGenerator.MAUI.Tests.ViewModels;
 
 /// <summary>
-/// The prompt-builder front door: the VM builds a caption via <see cref="IPromptBuilderService"/> and,
-/// on success, drops it into the generator through the same Parameters handoff the structure editor
-/// uses. These tests pin the gating, the success handoff, and the failure surface with a fake service.
+/// The prompt-builder front door is a two-pass flow: pass 1 always builds a prose prompt; pass 2
+/// (gated by the <see cref="IdeaToPromptViewModel.BuildJson"/> checkbox) builds the Ideogram V4 JSON.
+/// The prose is never discarded — the user copies it, applies it as the prompt, or applies the JSON.
+/// These tests pin the gating, both apply handoffs, prose preservation on JSON failure, and copy.
 /// </summary>
 [Collection("OutputPathsState")]
 public class IdeaToPromptViewModelTests
 {
+    private const string Prose = "A russet-red fox mid-step through fresh snow at dawn, breath fogging.";
+
+    private readonly Mock<IClipboardService> _clipboard = new();
+
     [Fact]
     public void BuildCommand_DisabledUntilAnIdeaIsTyped()
     {
-        var vm = new IdeaToPromptViewModel(
-            new FakePromptBuilder(PromptBuilderResult.Ok(MutationTestData.BaseCaption())),
-            NullLogger<IdeaToPromptViewModel>.Instance);
+        var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
 
         vm.BuildCommand.CanExecute(null).Should().BeFalse("no idea entered yet");
 
@@ -32,54 +35,140 @@ public class IdeaToPromptViewModelTests
         vm.BuildCommand.CanExecute(null).Should().BeTrue();
     }
 
-    [Fact]
-    public async Task Build_Success_AppliesPromptToGeneratorAndReportsSuccess()
-    {
-        var prompt = MutationTestData.BaseCaption();
-        var generator = BuildGenerator();
-        var vm = new IdeaToPromptViewModel(
-            new FakePromptBuilder(PromptBuilderResult.Ok(prompt)),
-            NullLogger<IdeaToPromptViewModel>.Instance,
-            generator)
-        {
-            Idea = "a red fox in snow"
-        };
-
-        await vm.BuildCommand.ExecuteAsync(null);
-
-        generator.Parameters.UseJsonPrompt.Should().BeTrue();
-        generator.Parameters.Prompt.Should().Be(V4JsonPromptSerializer.Serialize(prompt));
-        vm.StatusKind.Should().Be(StatusKind.Success);
-        vm.IsBusy.Should().BeFalse();
-    }
+    // ---- Pass 1 only (checkbox off) -----------------------------------------------------
 
     [Fact]
-    public async Task Build_Failure_SurfacesErrorAndLeavesGeneratorUntouched()
+    public async Task Build_JsonUnchecked_ShowsProseAndLeavesGeneratorUntouched()
     {
         var generator = BuildGenerator();
         var originalPrompt = generator.Parameters.Prompt;
-        var vm = new IdeaToPromptViewModel(
-            new FakePromptBuilder(PromptBuilderResult.Fail("No Anthropic API key — add it on the Settings page.")),
-            NullLogger<IdeaToPromptViewModel>.Instance,
-            generator)
-        {
-            Idea = "a red fox in snow"
-        };
+        var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()), generator);
+        vm.BuildJson = false;
+        vm.Idea = "a red fox in snow";
+
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        vm.Prose.Should().Be(Prose);
+        vm.HasProse.Should().BeTrue();
+        vm.HasJson.Should().BeFalse("the JSON pass was not requested");
+        vm.StatusKind.Should().Be(StatusKind.Success);
+        vm.IsBusy.Should().BeFalse();
+        // No handoff happens on Build now — only when the user clicks "Use ...".
+        generator.Parameters.Prompt.Should().Be(originalPrompt);
+        generator.Parameters.UseJsonPrompt.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task UseProse_AppliesProseAndDisablesJsonMode()
+    {
+        var generator = BuildGenerator();
+        generator.Parameters.UseJsonPrompt = true;   // prove the command flips it back off
+        var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()), generator);
+        vm.BuildJson = false;
+        vm.Idea = "a red fox in snow";
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        await vm.UseProseCommand.ExecuteAsync(null);
+
+        generator.Parameters.Prompt.Should().Be(Prose);
+        generator.Parameters.UseJsonPrompt.Should().BeFalse();
+    }
+
+    // ---- Pass 2 (checkbox on) -----------------------------------------------------------
+
+    [Fact]
+    public async Task Build_JsonChecked_BuildsJson_AndUseJsonAppliesCompactJson()
+    {
+        var prompt = MutationTestData.BaseCaption();
+        var generator = BuildGenerator();
+        var vm = NewVm(ProseOk(), JsonOk(prompt), generator);
+        vm.BuildJson = true;
+        vm.Idea = "a red fox in snow";
+
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        vm.Prose.Should().Be(Prose, "the prose is kept even when JSON is also built");
+        vm.HasJson.Should().BeTrue();
+        vm.StatusKind.Should().Be(StatusKind.Success);
+
+        await vm.UseJsonCommand.ExecuteAsync(null);
+
+        generator.Parameters.UseJsonPrompt.Should().BeTrue();
+        generator.Parameters.Prompt.Should().Be(V4JsonPromptSerializer.Serialize(prompt));
+    }
+
+    [Fact]
+    public async Task Build_JsonChecked_JsonFails_KeepsProseVisibleAndSurfacesError()
+    {
+        var generator = BuildGenerator();
+        var originalPrompt = generator.Parameters.Prompt;
+        var vm = NewVm(ProseOk(), PromptBuilderResult.Fail("Claude's prompt didn't satisfy the schema"), generator);
+        vm.BuildJson = true;
+        vm.Idea = "a red fox in snow";
+
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        vm.Prose.Should().Be(Prose, "the prose stays usable even when the JSON pass fails");
+        vm.HasProse.Should().BeTrue();
+        vm.HasJson.Should().BeFalse();
+        vm.UseJsonCommand.CanExecute(null).Should().BeFalse();
+        vm.StatusKind.Should().Be(StatusKind.Error);
+        generator.Parameters.Prompt.Should().Be(originalPrompt);
+        generator.Parameters.UseJsonPrompt.Should().BeFalse();
+    }
+
+    // ---- Failure + copy -----------------------------------------------------------------
+
+    [Fact]
+    public async Task Build_ProseFails_SurfacesErrorAndLeavesGeneratorUntouched()
+    {
+        var generator = BuildGenerator();
+        var originalPrompt = generator.Parameters.Prompt;
+        var vm = NewVm(ProseResult.Fail("No Anthropic API key — add it on the Settings page."),
+            JsonOk(MutationTestData.BaseCaption()), generator);
+        vm.Idea = "a red fox in snow";
 
         await vm.BuildCommand.ExecuteAsync(null);
 
         vm.StatusKind.Should().Be(StatusKind.Error);
         vm.StatusMessage.Should().Contain("API key");
+        vm.HasProse.Should().BeFalse();
         generator.Parameters.UseJsonPrompt.Should().BeFalse();
         generator.Parameters.Prompt.Should().Be(originalPrompt);
     }
 
+    [Fact]
+    public async Task CopyProse_PutsTheProseOnTheClipboard()
+    {
+        var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+        vm.BuildJson = false;
+        vm.Idea = "a red fox in snow";
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        await vm.CopyProseCommand.ExecuteAsync(null);
+
+        _clipboard.Verify(c => c.SetTextAsync(Prose), Times.Once);
+    }
+
     // ---- Helpers / fakes ----------------------------------------------------------------
 
-    private sealed class FakePromptBuilder(PromptBuilderResult result) : IPromptBuilderService
+    private static ProseResult ProseOk() => ProseResult.Ok(Prose);
+
+    private static PromptBuilderResult JsonOk(V4JsonPrompt prompt) => PromptBuilderResult.Ok(prompt);
+
+    private IdeaToPromptViewModel NewVm(ProseResult prose, PromptBuilderResult json, GeneratorViewModel? generator = null) =>
+        new(new FakePromptBuilder(prose, json),
+            _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance,
+            generator);
+
+    private sealed class FakePromptBuilder(ProseResult prose, PromptBuilderResult json) : IPromptBuilderService
     {
-        public Task<PromptBuilderResult> BuildAsync(string idea, CancellationToken cancellationToken = default) =>
-            Task.FromResult(result);
+        public Task<ProseResult> BuildProseAsync(string idea, CancellationToken cancellationToken = default) =>
+            Task.FromResult(prose);
+
+        public Task<PromptBuilderResult> BuildJsonAsync(string prose, CancellationToken cancellationToken = default) =>
+            Task.FromResult(json);
     }
 
     // A GeneratorViewModel built from bare mocks — mirrors GeneratorViewModelTests; we only touch

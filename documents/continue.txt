@@ -1,7 +1,7 @@
 ImageGenerator.MAUI — Open Work Queue
 =====================================
 
-Last updated: 2026-06-14 (v1.9.0 RELEASED). v1.9.0 bundles the post-1.8.0 work:
+Last updated: 2026-06-15 (prompt-builder v2 two-pass committed; see top section). v1.9.0 RELEASED. v1.9.0 bundles the post-1.8.0 work:
 Remix from an image (flagship), Gallery multi-select → one CivitAI draft post,
 Configurable output folder, Clear finished jobs, Faster byte-identical PNG saves,
 and the custom app icon. Earlier: v1.8.0 (CivitAI posting: one-click publish +
@@ -18,7 +18,40 @@ next pass).
   [ ] = open      [~] = in progress (commit not yet on master)
 
 
-COMPLETE FEATURE — IN-APP "DESCRIBE AN IDEA → V4 JSON" PROMPT BUILDER (shipped + user-verified 2026-06-15)
+PROMPT BUILDER v2 — TWO-PASS VPE → (optional) IDEOGRAM JSON (committed 2026-06-15, awaiting user manual verify)
+--------------------------------------------------------------------------------------------------------------
+Rebuilt "Describe an idea" as TWO passes. Pass 1 (VPE, ALWAYS runs): idea → a normal PROSE prompt usable by
+every plain-prompt model (Pollinations, Flux, gpt-image, nano-banana) and by a human. Pass 2 (Ideogram
+adapter, OPTIONAL): prose → schema-valid V4 JSON via the existing validator gate + 1 retry. A CHECKBOX by
+"Build prompt" ("Also build an Ideogram V4 JSON prompt") gates pass 2, DEFAULTED from
+GeneratorViewModel.SupportsJsonPromptEditor (on for Ideogram V4 / ComfyUI, off otherwise). The prose is NEVER
+discarded: a result card shows it (read-only Editor, selectable) with Copy prose / Use prose as prompt /
+Use JSON prompt (last shown only once HasJson). NO auto-navigate on Build now — results stay on the page;
+navigation happens only on a Use* click. Why: the old single-call always-JSON feature was WRONG for
+plain-prompt models (nova-canvas 2000-char 400). Two calls ⇒ no MaxOutputTokens bump.
+
+  - IPromptBuilderService: BuildAsync → BuildProseAsync(idea):ProseResult + BuildJsonAsync(prose):PromptBuilderResult.
+    New record ProseResult(Success,Prose,Error){Ok/Fail}. StructuredCompletion seam gained JsonElement? schema
+    (null ⇒ plain text VPE call, output_config.format OMITTED but effort:"high"+adaptive thinking+ephemeral KEPT;
+    V4Schema ⇒ structured JSON call). BodyJson WhenWritingNull drops the null format.
+  - Override split (override beats bundled, read at call time): VPE = vpe-prompt.md else bundled NEW
+    Resources/Raw/PromptBuilder/vpe-system.md; JSON KEEPS system-prompt.md (back-compat — the user's existing
+    override now drives pass 2 unchanged) else strengthened v4-builder-system.md. README.txt rewritten to
+    document BOTH override files + the two-pass flow.
+  - PUBLIC-BASELINE (user decision): bundled prompts strengthened CLEAN-ROOM from PUBLIC sources only
+    (Ideogram open-source magic-prompt craft, public V4 schema, general prompt-craft) — NEVER the user's
+    *SKILL*.md / VPE skill. v4-builder-system.md gained a "How the renderer reads this structure" section
+    (ground-belongs-in-background, one-element-per-subject, commit-to-one-value, photographic restraint, text
+    elements) and now frames its input as prose. vpe-system.md is a new ~60-130-word prose-prompt instruction.
+  - IdeaToPromptViewModel: + BuildJson / Prose / HasJson / HasProse, _builtJson; injects IClipboardService;
+    CopyProse/UseProse(Prompt=prose,UseJsonPrompt=false)/UseJson(ApplyToGenerator,UseJsonPrompt=true) commands.
+  - 1108 tests (service: VPE schema-less call + override precedence + vpe-system.md guard; VM: checkbox off/on,
+    UseProse/UseJson handoffs, JSON-fail keeps prose, CopyProse). Debug+Release 0 warnings.
+  - REMAINING: user manual UI verify (plain-prompt → prose-only; Ideogram V4/ComfyUI → prose+JSON; Copy;
+    drop private vpe-prompt.md/system-prompt.md and confirm each pass reads its file).
+
+
+COMPLETE FEATURE — IN-APP "DESCRIBE AN IDEA → V4 JSON" PROMPT BUILDER (v1 shipped + user-verified 2026-06-15)
 ---------------------------------------------------------------------------------------------------------
 Committed f8e3eb1. User-verified end-to-end: idea → Build → valid V4 caption in the box
 (UseJsonPrompt on) → ComfyUI Ideogram render saved (app.log clean; no PromptBuilder errors). 1096 tests

@@ -27,8 +27,8 @@
                         VerticalOptions="Start"
                         AutomationId="IdeaToPromptBackButton" />
                 <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
-                    <Label Text="Describe an idea → structured prompt" Style="{StaticResource CardTitle}" />
-                    <Label Text="Type a plain-English idea. Claude Opus 4.8 turns it into a schema-valid Ideogram V4 caption and drops it into the prompt box (JSON mode on). Then refine it with “Edit structure…”."
+                    <Label Text="Describe an idea → prompt" Style="{StaticResource CardTitle}" />
+                    <Label Text="Type a plain-English idea. Claude Opus 4.8 writes a polished prose prompt you can use with any model. Optionally it also builds an Ideogram V4 JSON prompt for structured models."
                            Style="{StaticResource HelperText}" />
                 </VerticalStackLayout>
             </Grid>
@@ -47,6 +47,18 @@
                            Style="{StaticResource HelperText}" />
                 </VerticalStackLayout>
             </Border>
+
+            <!-- JSON-pass toggle -->
+            <HorizontalStackLayout Spacing="10">
+                <CheckBox IsChecked="{Binding BuildJson}"
+                          VerticalOptions="Start"
+                          AutomationId="BuildJsonCheckBox" />
+                <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                    <Label Text="Also build an Ideogram V4 JSON prompt" Style="{StaticResource FieldLabel}" />
+                    <Label Text="For Ideogram V4 / ComfyUI structured models. Plain-prompt models use the prose directly."
+                           Style="{StaticResource HelperText}" />
+                </VerticalStackLayout>
+            </HorizontalStackLayout>
 
             <!-- Build -->
             <Button Text="Build prompt"
@@ -77,6 +89,40 @@
                     </DataTrigger>
                 </Label.Triggers>
             </Label>
+
+            <!-- CARD: Result (prose, copyable + applyable; JSON button appears when built) -->
+            <Border Style="{StaticResource Card}"
+                    IsVisible="{Binding HasProse}"
+                    AutomationId="ProseResultCard">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Prose prompt" Style="{StaticResource FieldLabel}" />
+                    <Editor Text="{Binding Prose}"
+                            IsReadOnly="True"
+                            AutoSize="TextChanges"
+                            MinimumHeightRequest="120"
+                            AutomationId="ProseResultEditor" />
+                    <Label Text="A normal prompt that works with any model. Copy it, or use it as your prompt."
+                           Style="{StaticResource HelperText}" />
+                    <FlexLayout Wrap="Wrap" Direction="Row" AlignItems="Center" Margin="0,4,0,0">
+                        <Button Text="Copy prose"
+                                Command="{Binding CopyProseCommand}"
+                                Style="{StaticResource SecondaryButton}"
+                                Margin="0,0,8,8"
+                                AutomationId="CopyProseButton" />
+                        <Button Text="Use prose as prompt"
+                                Command="{Binding UseProseCommand}"
+                                Style="{StaticResource PrimaryButton}"
+                                Margin="0,0,8,8"
+                                AutomationId="UseProseButton" />
+                        <Button Text="Use JSON prompt"
+                                Command="{Binding UseJsonCommand}"
+                                IsVisible="{Binding HasJson}"
+                                Style="{StaticResource PrimaryButton}"
+                                Margin="0,0,8,8"
+                                AutomationId="UseJsonButton" />
+                    </FlexLayout>
+                </VerticalStackLayout>
+            </Border>
 
         </VerticalStackLayout>
     </ScrollView>
