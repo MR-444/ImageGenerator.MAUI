@@ -23,3 +23,9 @@ launchSettings.json
 
 # Claude Code workspace state
 .claude/
+
+# Private prompt-engineering IP — never publish to the public repo.
+# Keeps the files in the working tree (readable/editable) but untracked.
+documents/private/
+documents/*SKILL*.md
+documents/visual-prompt-engineer-*.md
