@@ -85,6 +85,7 @@ public partial class MutationEngineViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsScene))]
     [NotifyPropertyChangedFor(nameof(ShowStrength))]
+    [NotifyPropertyChangedFor(nameof(ShowStylePin))]
     [NotifyPropertyChangedFor(nameof(OperatorsForAxis))]
     private MutationAxis _selectedAxis = MutationAxis.Look;
 
@@ -146,6 +147,7 @@ public partial class MutationEngineViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDeterministicMode))]
     [NotifyPropertyChangedFor(nameof(ShowStrength))]
+    [NotifyPropertyChangedFor(nameof(ShowStylePin))]
     private bool _isAiMode;
 
     /// <summary>Inverse of <see cref="IsAiMode"/> — gates the deterministic-only controls.</summary>
@@ -154,9 +156,37 @@ public partial class MutationEngineViewModel : ObservableObject
     /// <summary>Placement strength only matters for the deterministic SCENE axis.</summary>
     public bool ShowStrength => IsDeterministicMode && IsScene;
 
+    /// <summary>The "swap to a specific style" picker only applies to the deterministic LOOK axis.</summary>
+    public bool ShowStylePin => IsDeterministicMode && !IsScene;
+
+    /// <summary>Picker sentinel for "let the engine draw a random style per variant" (maps to a null pin).</summary>
+    public const string RandomStyleSentinel = "Any style (random)";
+
+    /// <summary>"Any (random)" + every saved style name, for the LOOK "Swap to" picker; refreshed each
+    /// appearance by <see cref="LoadLibraryAsync"/> so a style just saved in the gallery shows up.</summary>
+    public ObservableCollection<string> StyleNames { get; } = [RandomStyleSentinel];
+
+    /// <summary>Selected entry of <see cref="StyleNames"/>; the sentinel means random (no pin).</summary>
+    [ObservableProperty]
+    private string _selectedStyleName = RandomStyleSentinel;
+
     /// <summary>Free-text steer for the LLM, e.g. "make it winter", "1970s film look".</summary>
     [ObservableProperty]
     private string _steer = string.Empty;
+
+    /// <summary>Named steer presets (bundled + user-editable) shown in the "Start from a preset…"
+    /// picker; populated by <see cref="LoadAnchorPresetsAsync"/> on first appearance.</summary>
+    public ObservableCollection<AnchorPreset> AnchorPresets { get; } = [];
+
+    /// <summary>Picking a preset REPLACES the steer text with its starting direction (the user edits
+    /// it afterward). Setting it to null (no selection) leaves the steer untouched.</summary>
+    [ObservableProperty]
+    private AnchorPreset? _selectedAnchorPreset;
+
+    partial void OnSelectedAnchorPresetChanged(AnchorPreset? value)
+    {
+        if (value is not null) Steer = value.Steer;
+    }
 
     public IReadOnlyList<ModelTier> ModelTierOptions { get; } = [ModelTier.Sonnet, ModelTier.Opus, ModelTier.Local];
 
@@ -240,6 +270,36 @@ public partial class MutationEngineViewModel : ObservableObject
               + "Set a draft preset + low MP first.";
 
         InitializeFrom(pending, promptJson, aspectRatio, resolution);
+    }
+
+    /// <summary>
+    /// Fill the library-backed pickers from the JSON stores. Anchor presets load once (they don't change
+    /// within a session); the LOOK "Swap to" style list is refreshed every appearance so a style just
+    /// saved in the gallery shows up when the user returns. Best-effort: a load failure leaves the pickers
+    /// at their defaults and is logged, never surfaced. Called from the page's OnAppearing.
+    /// </summary>
+    public async Task LoadLibraryAsync()
+    {
+        try
+        {
+            var library = await _libraryService.LoadAsync();
+
+            if (AnchorPresets.Count == 0)
+                foreach (var preset in library.AnchorPresets)
+                    AnchorPresets.Add(preset);
+
+            // Refresh the style names, keeping the current pick if it still exists (else fall back to random).
+            var previous = SelectedStyleName;
+            StyleNames.Clear();
+            StyleNames.Add(RandomStyleSentinel);
+            foreach (var fragment in library.StyleFragments)
+                StyleNames.Add(fragment.Name);
+            SelectedStyleName = StyleNames.Contains(previous) ? previous : RandomStyleSentinel;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "MutationEngineVM.{Op}", "LoadLibrary");
+        }
     }
 
     /// <summary>
@@ -553,7 +613,11 @@ public partial class MutationEngineViewModel : ObservableObject
             TargetWidth = TargetWidth,
             TargetHeight = TargetHeight,
             IncludeBaseAsReference = IncludeBase,
-            Strength = SelectedStrength
+            Strength = SelectedStrength,
+            // LOOK only, and the sentinel means "random" → no pin.
+            PinnedStyleName = SelectedAxis == MutationAxis.Look && SelectedStyleName != RandomStyleSentinel
+                ? SelectedStyleName
+                : null
         };
 
         return _engine.Generate(_base, config, library);

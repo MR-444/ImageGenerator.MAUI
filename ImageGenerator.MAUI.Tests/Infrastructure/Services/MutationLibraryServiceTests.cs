@@ -37,6 +37,7 @@ public sealed class MutationLibraryServiceTests : IDisposable
         loaded.StyleFragments.Should().BeEquivalentTo(original.StyleFragments);
         loaded.OrnamentKits.Should().BeEquivalentTo(original.OrnamentKits);
         loaded.SceneElements.Should().BeEquivalentTo(original.SceneElements);
+        loaded.AnchorPresets.Should().BeEquivalentTo(original.AnchorPresets);
     }
 
     // ---- Seeding -----------------------------------------------------------------------
@@ -49,10 +50,12 @@ public sealed class MutationLibraryServiceTests : IDisposable
         File.Exists(Path.Combine(_tempDir, "style-fragments.json")).Should().BeTrue();
         File.Exists(Path.Combine(_tempDir, "ornament-kits.json")).Should().BeTrue();
         File.Exists(Path.Combine(_tempDir, "scene-elements.json")).Should().BeTrue();
+        File.Exists(Path.Combine(_tempDir, "anchor-presets.json")).Should().BeTrue();
 
         library.StyleFragments.Select(f => f.Name).Should().Contain(["gouache", "anime", "density"]);
         library.OrnamentKits.Should().ContainSingle(k => k.Name == "density");
         library.SceneElements.Select(e => e.Name).Should().BeEquivalentTo("trailing_ivy", "luna_moth");
+        library.AnchorPresets.Select(p => p.Name).Should().Contain("make it winter");
     }
 
     [Fact]
@@ -122,6 +125,12 @@ public sealed class MutationLibraryServiceTests : IDisposable
         library.OrnamentKits.Should().ContainSingle(k => k.Name == "density");
         library.SceneElements.Select(e => e.Name).Should().Equal("trailing_ivy", "luna_moth");
 
+        // Anchor presets are free-text steers (no validator), but every shipped one must carry a usable
+        // name + steer so the picker shows a label and filling the field does something.
+        library.AnchorPresets.Should().NotBeEmpty();
+        library.AnchorPresets.Should().OnlyContain(p =>
+            !string.IsNullOrWhiteSpace(p.Name) && !string.IsNullOrWhiteSpace(p.Steer));
+
         // Spot-check the schema survived: the gouache fragment is a valid single-branch style with its palette.
         var gouache = library.StyleFragments.First(f => f.Name == "gouache");
         gouache.Style.ArtStyle.Should().NotBeNullOrWhiteSpace();
@@ -165,6 +174,7 @@ public sealed class MutationLibraryServiceTests : IDisposable
             "style-fragments.json" => StyleJson,
             "ornament-kits.json" => KitsJson,
             "scene-elements.json" => SceneJson,
+            "anchor-presets.json" => PresetsJson,
             _ => throw new FileNotFoundException(assetName)
         };
         return Task.FromResult<Stream>(new MemoryStream(Encoding.UTF8.GetBytes(json)));
@@ -191,6 +201,14 @@ public sealed class MutationLibraryServiceTests : IDisposable
         [
           {"name":"trailing_ivy","type":"obj","slotTag":"scene.flora","desc":"ivy"},
           {"name":"luna_moth","type":"obj","slotTag":"prop.instrument","desc":"moth"}
+        ]
+        """;
+
+    private const string PresetsJson =
+        """
+        [
+          {"name":"make it winter","steer":"frost and snow","description":"cold"},
+          {"name":"golden hour","steer":"warm low sun"}
         ]
         """;
 }

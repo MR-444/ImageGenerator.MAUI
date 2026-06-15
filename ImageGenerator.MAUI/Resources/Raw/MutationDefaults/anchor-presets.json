@@ -1,0 +1,42 @@
+[
+  {
+    "name": "make it winter",
+    "steer": "Recast the whole scene in deep winter: frost, snow and bare branches, breath-fogging cold air, a pale low sun and long blue shadows. Shift the palette to icy blues, frosted whites and muted greys.",
+    "description": "Cold-season recolour and mood across the entire composition."
+  },
+  {
+    "name": "golden hour",
+    "steer": "Bathe everything in warm late-afternoon golden-hour light: long raking shadows, glowing rim light, a hazy amber and rose palette, soft warm highlights on every surface.",
+    "description": "Warm, low, directional sunlight with amber tones."
+  },
+  {
+    "name": "1970s film look",
+    "steer": "Render it as a grainy 1970s analog photograph: warm faded colours, gentle halation, soft contrast, slight vignetting and the muted earthy palette of aged Kodachrome.",
+    "description": "Vintage analog-film stock aesthetic."
+  },
+  {
+    "name": "film noir",
+    "steer": "Turn it into high-contrast black-and-white film noir: hard chiaroscuro lighting, deep blacks, sharp shafts of light, dramatic shadows and a tense, moody atmosphere.",
+    "description": "Monochrome, hard-shadow dramatic lighting."
+  },
+  {
+    "name": "cyberpunk night",
+    "steer": "Move it to a rain-slick cyberpunk night: glowing neon signage, magenta and cyan reflections on wet surfaces, volumetric haze and electric artificial light replacing daylight.",
+    "description": "Neon-lit nocturnal sci-fi city mood."
+  },
+  {
+    "name": "dreamy pastel",
+    "steer": "Soften the whole image into a dreamy pastel illustration: gentle diffuse light, airy desaturated pastels, soft edges and a quiet, tender, storybook atmosphere.",
+    "description": "Soft, light, gentle pastel palette and mood."
+  },
+  {
+    "name": "bold art movement",
+    "steer": "Reinterpret the entire scene through a single bold art movement of your choice (e.g. art nouveau, ukiyo-e, art deco, expressionism) — commit fully to its line, palette and stylisation across every element.",
+    "description": "Commit the whole caption to one strong art style."
+  },
+  {
+    "name": "stormy and dramatic",
+    "steer": "Charge the scene with a dramatic storm: heavy clouds, raking stormlight, wind-driven motion, deep contrast and a brooding, high-energy atmosphere.",
+    "description": "Turbulent weather and high-drama lighting."
+  }
+]

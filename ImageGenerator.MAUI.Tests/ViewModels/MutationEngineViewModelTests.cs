@@ -290,6 +290,85 @@ public class MutationEngineViewModelTests
     }
 
     [Fact]
+    public async Task LoadLibraryAsync_FillsTheAnchorPresetPickerFromTheLibrary()
+    {
+        var sut = CreateSut();
+
+        await sut.LoadLibraryAsync();
+
+        sut.AnchorPresets.Select(p => p.Name).Should().Contain("make it winter");
+
+        // Idempotent for presets: a second appearance doesn't duplicate the list.
+        var count = sut.AnchorPresets.Count;
+        await sut.LoadLibraryAsync();
+        sut.AnchorPresets.Should().HaveCount(count);
+    }
+
+    [Fact]
+    public async Task LoadLibraryAsync_FillsStyleNames_WithRandomSentinelFirst()
+    {
+        var sut = CreateSut();
+
+        await sut.LoadLibraryAsync();
+
+        sut.StyleNames[0].Should().Be(MutationEngineViewModel.RandomStyleSentinel);
+        sut.StyleNames.Should().Contain(["gouache", "anime", "density"]);
+        sut.SelectedStyleName.Should().Be(MutationEngineViewModel.RandomStyleSentinel);
+    }
+
+    [Fact]
+    public async Task LoadLibraryAsync_RefreshesStyleNames_PreservingTheSelectionWhenStillPresent()
+    {
+        var sut = CreateSut();
+        await sut.LoadLibraryAsync();
+        sut.SelectedStyleName = "anime";
+
+        await sut.LoadLibraryAsync(); // a return visit re-reads the store
+
+        sut.StyleNames.Count(n => n == "anime").Should().Be(1, "the list is rebuilt, not appended");
+        sut.SelectedStyleName.Should().Be("anime", "a still-present pick survives the refresh");
+    }
+
+    [Fact]
+    public void ShowStylePin_OnlyForDeterministicLook()
+    {
+        var sut = CreateSut();
+        sut.SelectedAxis = MutationAxis.Look;
+        sut.ShowStylePin.Should().BeTrue("deterministic LOOK");
+
+        sut.SelectedAxis = MutationAxis.Scene;
+        sut.ShowStylePin.Should().BeFalse("SCENE has no style swap");
+
+        sut.SelectedAxis = MutationAxis.Look;
+        sut.IsAiMode = true;
+        sut.ShowStylePin.Should().BeFalse("AI mode hides the deterministic style pin");
+    }
+
+    [Fact]
+    public async Task SelectingAnAnchorPreset_ReplacesTheSteer()
+    {
+        var sut = CreateSut();
+        await sut.LoadLibraryAsync();
+        sut.Steer = "something the user typed first";
+
+        var preset = sut.AnchorPresets.First(p => p.Name == "make it winter");
+        sut.SelectedAnchorPreset = preset;
+
+        sut.Steer.Should().Be(preset.Steer);
+    }
+
+    [Fact]
+    public void ClearingTheAnchorPreset_LeavesTheSteerUntouched()
+    {
+        var sut = CreateSut();
+        sut.Steer = "my own steer";
+
+        sut.SelectedAnchorPreset = null;
+
+        sut.Steer.Should().Be("my own steer");
+    }
+
+    [Fact]
     public void BuildAiBatch_KeepsSuccessesAndPairsLabels()
     {
         var good = MutationTestData.BaseCaption();

@@ -73,9 +73,16 @@ public sealed class CaptionMutationEngine
         // One run-wide context: the slot-tag map is resolved once from the base (operators read tags from here,
         // never from a clone, since the clone path strips Element.SlotTag).
         var tags = SlotTagger.Resolve(baseCaption);
-        var context = new MutationContext(config.TargetWidth, config.TargetHeight, tags, library, config.Strength);
+        var context = new MutationContext(
+            config.TargetWidth, config.TargetHeight, tags, library, config.Strength, config.PinnedStyleName);
 
         var axisOperators = _catalog.Where(o => o.Axis == config.Axis).ToList();
+
+        // Pinning a style is a LOOK-only directive: restrict the run to the style swap so every variant
+        // becomes exactly the chosen style (SwapStyle reads the pinned name from the context). Identical
+        // swaps collapse to one at the dispatch dedup — "apply this style" is a single transformation.
+        if (config.Axis == MutationAxis.Look && !string.IsNullOrWhiteSpace(config.PinnedStyleName))
+            axisOperators = axisOperators.Where(o => o.Name == "SwapStyle").ToList();
         var count = Math.Clamp(config.Count, MinCount, MaxCount);
         var master = new Random(config.Seed);
 

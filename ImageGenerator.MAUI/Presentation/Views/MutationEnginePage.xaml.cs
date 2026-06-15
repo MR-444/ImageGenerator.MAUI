@@ -19,6 +19,9 @@ public partial class MutationEnginePage
     {
         base.OnAppearing();
         _viewModel.Initialize();
+        // Best-effort: fill the library-backed pickers (anchor presets + saved styles) without blocking
+        // the page (the VM swallows + logs). Refreshing here picks up a style just saved in the gallery.
+        _ = _viewModel.LoadLibraryAsync();
     }
 
     private async void OnBackClicked(object sender, EventArgs e)

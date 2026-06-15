@@ -15,9 +15,15 @@ public sealed class SwapStyleOperator : ICaptionOperator
 
     public V4JsonPrompt? Apply(V4JsonPrompt source, Random rng, MutationContext context)
     {
-        var candidates = context.Library.StyleFragments
-            .Where(f => !StyleMath.SameStyle(f.Style, source.StyleDescription))
-            .ToList();
+        var differing = context.Library.StyleFragments
+            .Where(f => !StyleMath.SameStyle(f.Style, source.StyleDescription));
+
+        // Pinned: swap to exactly the named fragment (still skipped if it equals the current style or is
+        // absent). Unpinned: the original uniform-random draw over every differing fragment.
+        if (!string.IsNullOrWhiteSpace(context.PinnedStyleName))
+            differing = differing.Where(f => f.Name == context.PinnedStyleName);
+
+        var candidates = differing.ToList();
 
         if (candidates.Count == 0)
             return null;

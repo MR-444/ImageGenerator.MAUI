@@ -128,8 +128,16 @@ internal static class MutationTestData
         return new MutationLibrary(
             [gouache, new StyleFragment("anime", AnimeStyle()), new StyleFragment("density", DensityStyle())],
             [DensityKit()],
-            SceneElements());
+            SceneElements(),
+            AnchorPresets());
     }
+
+    /// <summary>Two named steer presets for the AI mutation picker (anchor-preset store fixture).</summary>
+    public static IReadOnlyList<AnchorPreset> AnchorPresets() =>
+    [
+        new AnchorPreset("make it winter", "Recast the whole scene in deep winter: frost, snow, icy blues.", "Cold-season recolour."),
+        new AnchorPreset("golden hour", "Bathe everything in warm late-afternoon golden-hour light."),
+    ];
 
     /// <summary>A context over the base caption: inferred tags + the test library, square target frame.</summary>
     public static MutationContext Context(V4JsonPrompt caption, MutationLibrary? library = null) =>

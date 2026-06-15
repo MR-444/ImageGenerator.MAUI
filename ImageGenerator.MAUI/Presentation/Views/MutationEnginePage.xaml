@@ -4,6 +4,7 @@
              xmlns:behaviors="clr-namespace:ImageGenerator.MAUI.Presentation.Behaviors"
              xmlns:converters="clr-namespace:ImageGenerator.MAUI.Presentation.Converters"
              xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
+             xmlns:lib="clr-namespace:ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library"
              x:Class="ImageGenerator.MAUI.Presentation.Views.MutationEnginePage"
              x:DataType="vm:MutationEngineViewModel"
              Title="Mutation engine"
@@ -66,6 +67,12 @@
                             AutoSize="TextChanges"
                             MinimumHeightRequest="72"
                             AutomationId="MutationSteerEditor" />
+                    <Picker Title="Start from a preset…"
+                            ItemsSource="{Binding AnchorPresets}"
+                            ItemDisplayBinding="{Binding Name, x:DataType=lib:AnchorPreset}"
+                            SelectedItem="{Binding SelectedAnchorPreset}"
+                            AutomationId="MutationAnchorPresetPicker" />
+                    <Label Text="Optional: a preset fills the steer with a starting direction — edit it freely afterward." Style="{StaticResource HelperText}" />
                     <Label Text="The model rewrites the WHOLE caption coherently for each variant (medium, lighting, palette and every element together)." Style="{StaticResource HelperText}" />
 
                     <Label Text="Model" Style="{StaticResource FieldLabel}" />
@@ -116,6 +123,16 @@
                                 <Label Text="{Binding ., StringFormat='• {0}'}" Style="{StaticResource HelperText}" />
                             </DataTemplate>
                         </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+
+                    <!-- LOOK only: pin the style swap to one saved style instead of a random draw. -->
+                    <VerticalStackLayout Spacing="4" IsVisible="{Binding ShowStylePin}" Margin="0,8,0,0">
+                        <Label Text="Swap to" Style="{StaticResource FieldLabel}" />
+                        <Picker ItemsSource="{Binding StyleNames}"
+                                SelectedItem="{Binding SelectedStyleName}"
+                                AutomationId="MutationStylePinPicker" />
+                        <Label Text="Pick a specific saved style to swap to (every LOOK variant becomes that exact style), or “Any style (random)” to draw a different one per variant. Save a style from a result via the gallery’s “Save style”."
+                               Style="{StaticResource HelperText}" />
                     </VerticalStackLayout>
                 </VerticalStackLayout>
             </Border>

@@ -74,4 +74,38 @@ public class SwapStyleOperatorTests
 
         _op.Apply(source, new Random(1), ctx).Should().BeNull();
     }
+
+    private static MutationContext PinnedContext(V4JsonPrompt source, string pinned) =>
+        new(1000, 1000, SlotTagger.Resolve(source), MutationTestData.Library(),
+            MutationStrength.Moderate, pinned);
+
+    [Fact]
+    public void Apply_Pinned_SwapsToExactlyThatFragment_RegardlessOfSeed()
+    {
+        var source = MutationTestData.BaseCaption(); // current style = gouache
+        var anime = MutationTestData.AnimeStyle();
+
+        for (var seed = 0; seed < 10; seed++)
+        {
+            var result = _op.Apply(source, new Random(seed), PinnedContext(source, "anime"))!;
+            result.Should().NotBeNull();
+            StyleMath.SameStyle(result.StyleDescription, anime).Should().BeTrue();
+        }
+    }
+
+    [Fact]
+    public void Apply_PinnedToTheCurrentStyle_ReturnsNull()
+    {
+        var source = MutationTestData.BaseCaption(); // current style IS "gouache"
+
+        _op.Apply(source, new Random(1), PinnedContext(source, "gouache")).Should().BeNull();
+    }
+
+    [Fact]
+    public void Apply_PinnedToAnUnknownName_ReturnsNull()
+    {
+        var source = MutationTestData.BaseCaption();
+
+        _op.Apply(source, new Random(1), PinnedContext(source, "does_not_exist")).Should().BeNull();
+    }
 }

@@ -14,13 +14,15 @@ public sealed class MutationContext
         int targetHeight,
         IReadOnlyDictionary<Element, string> tags,
         MutationLibrary library,
-        MutationStrength strength = MutationStrength.Moderate)
+        MutationStrength strength = MutationStrength.Moderate,
+        string? pinnedStyleName = null)
     {
         TargetWidth = targetWidth;
         TargetHeight = targetHeight;
         Tags = tags;
         Library = library;
         Strength = strength;
+        PinnedStyleName = pinnedStyleName;
     }
 
     /// <summary>Target output width in pixels — the AR reference for bbox operators.</summary>
@@ -40,4 +42,8 @@ public sealed class MutationContext
 
     /// <summary>Perturbation magnitude for the geometry operators (bbox / placement). Defaults to Moderate.</summary>
     public MutationStrength Strength { get; }
+
+    /// <summary>When set, <see cref="Operators.SwapStyleOperator"/> swaps to exactly this named fragment
+    /// instead of a random one. <c>null</c> = random draw (the default).</summary>
+    public string? PinnedStyleName { get; }
 }

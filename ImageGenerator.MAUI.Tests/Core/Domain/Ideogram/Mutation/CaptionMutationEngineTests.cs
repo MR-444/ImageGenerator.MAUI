@@ -67,6 +67,26 @@ public class CaptionMutationEngineTests
         a.Variants.Select(v => v.Caption).Should().NotEqual(b.Variants.Select(v => v.Caption));
     }
 
+    // ---- Pinned style (LOOK) -----------------------------------------------------------
+
+    [Fact]
+    public void Generate_PinnedStyle_RestylesEveryLookVariantToThatExactStyle()
+    {
+        var engine = new CaptionMutationEngine();
+        var config = Config(MutationAxis.Look, 8, seed: 7) with { PinnedStyleName = "anime" };
+
+        var result = engine.Generate(MutationTestData.BaseCaption(), config, MutationTestData.Library());
+        var anime = MutationTestData.AnimeStyle();
+
+        result.Variants.Should().NotBeEmpty();
+        foreach (var variant in result.Variants)
+        {
+            variant.OperatorName.Should().Be("SwapStyle", "pinning restricts the LOOK run to the style swap");
+            var caption = V4JsonPromptSerializer.Deserialize(variant.Caption);
+            StyleMath.SameStyle(caption.StyleDescription, anime).Should().BeTrue();
+        }
+    }
+
     // ---- Count clamp / bounds ----------------------------------------------------------
 
     [Theory]

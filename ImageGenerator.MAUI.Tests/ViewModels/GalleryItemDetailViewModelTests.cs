@@ -1,8 +1,11 @@
 using CommunityToolkit.Mvvm.Input;
 using FluentAssertions;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
+using ImageGenerator.MAUI.Core.Domain.Ideogram;
+using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
+using ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -13,9 +16,11 @@ public class GalleryItemDetailViewModelTests
     private readonly Mock<IGalleryService> _galleryService = new();
     private readonly Mock<IFileLauncher> _fileLauncher = new();
     private readonly Mock<IClipboardService> _clipboard = new();
+    private readonly Mock<IMutationLibraryService> _libraryService = new();
 
     private GalleryItemDetailViewModel CreateSut() =>
-        new(_galleryService.Object, _fileLauncher.Object, _clipboard.Object, NullLogger<GalleryItemDetailViewModel>.Instance);
+        new(_galleryService.Object, _fileLauncher.Object, _clipboard.Object, _libraryService.Object,
+            NullLogger<GalleryItemDetailViewModel>.Instance);
 
     [Fact]
     public async Task LoadAsync_PopulatesFileNameAndMetadataText()
@@ -134,5 +139,89 @@ public class GalleryItemDetailViewModelTests
         sut.OpenInViewerCommand.Execute(null);
 
         _fileLauncher.Verify(l => l.Launch(It.IsAny<string>()), Times.Never);
+    }
+
+    // ---- Save style from this ----------------------------------------------------------
+
+    private void SetupPrompt(string filePath, string prompt) =>
+        _galleryService
+            .Setup(s => s.ReadMetadataAsync(filePath, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, string> { ["Prompt"] = prompt });
+
+    [Fact]
+    public async Task SaveStyleAsync_StructuredCaption_SavesNamedFragmentWithTheExtractedStyle()
+    {
+        var sut = CreateSut();
+        sut.FilePath = @"C:\fake\variant.png";
+        var caption = MutationTestData.BaseCaption();
+        SetupPrompt(sut.FilePath, V4JsonPromptSerializer.Serialize(caption));
+        _libraryService.Setup(s => s.LoadAsync(It.IsAny<CancellationToken>())).ReturnsAsync(MutationLibrary.Empty);
+
+        MutationLibrary? saved = null;
+        _libraryService.Setup(s => s.SaveAsync(It.IsAny<MutationLibrary>(), It.IsAny<CancellationToken>()))
+            .Callback<MutationLibrary, CancellationToken>((lib, _) => saved = lib)
+            .Returns(Task.CompletedTask);
+
+        await sut.SaveStyleAsync("my_look");
+
+        saved.Should().NotBeNull();
+        var fragment = saved!.FragmentByName("my_look");
+        fragment.Should().NotBeNull();
+        fragment!.Style.ArtStyle.Should().Be(caption.StyleDescription!.ArtStyle);
+    }
+
+    [Fact]
+    public async Task SaveStyleAsync_DuplicateName_DoesNotSave()
+    {
+        var sut = CreateSut();
+        sut.FilePath = @"C:\fake\variant.png";
+        SetupPrompt(sut.FilePath, V4JsonPromptSerializer.Serialize(MutationTestData.BaseCaption()));
+        _libraryService.Setup(s => s.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MutationLibrary([new StyleFragment("taken", MutationTestData.AnimeStyle())], []));
+
+        await sut.SaveStyleAsync("taken");
+
+        _libraryService.Verify(s => s.SaveAsync(It.IsAny<MutationLibrary>(), It.IsAny<CancellationToken>()), Times.Never);
+        sut.FlashMessage.Should().Contain("already exists");
+    }
+
+    [Fact]
+    public async Task SaveStyleAsync_CaptionHasNoStyleBlock_DoesNotSave()
+    {
+        var sut = CreateSut();
+        sut.FilePath = @"C:\fake\variant.png";
+        var caption = MutationTestData.BaseCaption();
+        caption.StyleDescription = null;
+        SetupPrompt(sut.FilePath, V4JsonPromptSerializer.Serialize(caption));
+
+        await sut.SaveStyleAsync("any");
+
+        _libraryService.Verify(s => s.SaveAsync(It.IsAny<MutationLibrary>(), It.IsAny<CancellationToken>()), Times.Never);
+        sut.FlashMessage.Should().Contain("no style block");
+    }
+
+    [Fact]
+    public async Task SaveStyleAsync_NonStructuredCaption_DoesNotSave()
+    {
+        var sut = CreateSut();
+        sut.FilePath = @"C:\fake\plain.png";
+        SetupPrompt(sut.FilePath, "just a plain prompt, not JSON");
+
+        await sut.SaveStyleAsync("any");
+
+        _libraryService.Verify(s => s.SaveAsync(It.IsAny<MutationLibrary>(), It.IsAny<CancellationToken>()), Times.Never);
+        sut.FlashMessage.Should().Contain("isn't a structured prompt");
+    }
+
+    [Fact]
+    public async Task SaveStyleAsync_BlankName_DoesNotSave()
+    {
+        var sut = CreateSut();
+        sut.FilePath = @"C:\fake\variant.png";
+
+        await sut.SaveStyleAsync("   ");
+
+        _galleryService.Verify(s => s.ReadMetadataAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _libraryService.Verify(s => s.SaveAsync(It.IsAny<MutationLibrary>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

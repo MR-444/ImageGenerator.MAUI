@@ -9,8 +9,9 @@ using Microsoft.Extensions.Logging;
 namespace ImageGenerator.MAUI.Infrastructure.Services;
 
 /// <summary>
-/// File-backed <see cref="IMutationLibraryService"/>. The library is three JSON arrays on disk —
-/// <c>style-fragments.json</c>, <c>ornament-kits.json</c>, <c>scene-elements.json</c> — each a list of the
+/// File-backed <see cref="IMutationLibraryService"/>. The library is four JSON arrays on disk —
+/// <c>style-fragments.json</c>, <c>ornament-kits.json</c>, <c>scene-elements.json</c>,
+/// <c>anchor-presets.json</c> — each a list of the
 /// matching domain record. Missing stores are seeded once from the bundled <c>Resources/Raw/MutationDefaults</c>
 /// copies, so a fresh install loads a working library; thereafter the files are the user's to hand-edit.
 /// A corrupt store degrades to empty (logged) so it never sinks the whole load.
@@ -20,6 +21,7 @@ public sealed class MutationLibraryService : IMutationLibraryService
     private const string StyleFragmentsFile = "style-fragments.json";
     private const string OrnamentKitsFile = "ornament-kits.json";
     private const string SceneElementsFile = "scene-elements.json";
+    private const string AnchorPresetsFile = "anchor-presets.json";
     private const string DefaultsAssetFolder = "MutationDefaults";   // logical name under Resources/Raw
 
     // Web defaults give camelCase wrapper keys + case-insensitive reads; the relaxed encoder keeps non-ASCII
@@ -57,12 +59,14 @@ public sealed class MutationLibraryService : IMutationLibraryService
         await SeedIfMissingAsync(StyleFragmentsFile, ct);
         await SeedIfMissingAsync(OrnamentKitsFile, ct);
         await SeedIfMissingAsync(SceneElementsFile, ct);
+        await SeedIfMissingAsync(AnchorPresetsFile, ct);
 
         var fragments = await ReadStoreAsync<StyleFragment>(StyleFragmentsFile, ct);
         var kits = await ReadStoreAsync<OrnamentKit>(OrnamentKitsFile, ct);
         var elements = await ReadStoreAsync<SceneElement>(SceneElementsFile, ct);
+        var presets = await ReadStoreAsync<AnchorPreset>(AnchorPresetsFile, ct);
 
-        return new MutationLibrary(fragments, kits, elements);
+        return new MutationLibrary(fragments, kits, elements, presets);
     }
 
     public async Task SaveAsync(MutationLibrary library, CancellationToken ct = default)
@@ -73,6 +77,7 @@ public sealed class MutationLibraryService : IMutationLibraryService
         await WriteStoreAsync(StyleFragmentsFile, library.StyleFragments, ct);
         await WriteStoreAsync(OrnamentKitsFile, library.OrnamentKits, ct);
         await WriteStoreAsync(SceneElementsFile, library.SceneElements, ct);
+        await WriteStoreAsync(AnchorPresetsFile, library.AnchorPresets, ct);
     }
 
     // Copies the bundled default for a store into the library folder when the user has none yet. A missing

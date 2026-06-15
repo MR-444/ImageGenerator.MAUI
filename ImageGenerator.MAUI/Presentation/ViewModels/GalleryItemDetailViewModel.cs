@@ -1,6 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
+using ImageGenerator.MAUI.Core.Domain.Ideogram;
+using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -11,6 +13,7 @@ public partial class GalleryItemDetailViewModel : ObservableObject
     private readonly IGalleryService _galleryService;
     private readonly IFileLauncher _fileLauncher;
     private readonly IClipboardService _clipboard;
+    private readonly IMutationLibraryService _libraryService;
     private readonly ILogger<GalleryItemDetailViewModel> _logger;
 
     [ObservableProperty]
@@ -40,11 +43,13 @@ public partial class GalleryItemDetailViewModel : ObservableObject
         IGalleryService galleryService,
         IFileLauncher fileLauncher,
         IClipboardService clipboard,
+        IMutationLibraryService libraryService,
         ILogger<GalleryItemDetailViewModel> logger)
     {
         _galleryService = galleryService ?? throw new ArgumentNullException(nameof(galleryService));
         _fileLauncher = fileLauncher ?? throw new ArgumentNullException(nameof(fileLauncher));
         _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
+        _libraryService = libraryService ?? throw new ArgumentNullException(nameof(libraryService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -164,6 +169,72 @@ public partial class GalleryItemDetailViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "GalleryItemDetailVM.{Op}", "MutateFromImage");
+        }
+    }
+
+    /// <summary>
+    /// Capture this image's structured-caption style block as a named <see cref="StyleFragment"/> in the
+    /// mutation library, so the deterministic engine can re-use a look the AI invented. The name is
+    /// prompted by the page (a View concern) and passed in, keeping this unit-testable. Each failure path
+    /// flashes a message and returns; an existing name is rejected (never clobbered).
+    /// </summary>
+    internal async Task SaveStyleAsync(string name, CancellationToken ct = default)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(FilePath)) return;
+
+            var styleName = name?.Trim() ?? string.Empty;
+            if (styleName.Length == 0)
+            {
+                _ = FlashAsync("Enter a name for the style.");
+                return;
+            }
+
+            var meta = await _galleryService.ReadMetadataAsync(FilePath, ct);
+            if (meta is null || !meta.TryGetValue("Prompt", out var prompt) || string.IsNullOrWhiteSpace(prompt))
+            {
+                _ = FlashAsync("This image has no structured caption to save a style from.");
+                return;
+            }
+
+            V4JsonPrompt parsed;
+            try
+            {
+                parsed = V4JsonPromptSerializer.Deserialize(prompt);
+            }
+            catch (V4JsonPromptParseException)
+            {
+                _ = FlashAsync("This image's caption isn't a structured prompt.");
+                return;
+            }
+
+            if (parsed.StyleDescription is null)
+            {
+                _ = FlashAsync("This caption has no style block to save.");
+                return;
+            }
+
+            var library = await _libraryService.LoadAsync(ct);
+            if (library.FragmentByName(styleName) is not null)
+            {
+                _ = FlashAsync($"Style '{styleName}' already exists — pick another name.");
+                return;
+            }
+
+            var updated = new MutationLibrary(
+                [.. library.StyleFragments, new StyleFragment(styleName, parsed.StyleDescription)],
+                library.OrnamentKits,
+                library.SceneElements,
+                library.AnchorPresets);
+            await _libraryService.SaveAsync(updated, ct);
+
+            _ = FlashAsync($"Saved style '{styleName}' to the mutation library.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "GalleryItemDetailVM.{Op}", "SaveStyle");
+            _ = FlashAsync("Couldn't save the style. See app.log for details.");
         }
     }
 

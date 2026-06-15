@@ -30,4 +30,11 @@ public sealed record MutationRunConfig
     /// Phase 3 engine threads this onto the <see cref="MutationContext"/> it builds.
     /// </summary>
     public MutationStrength Strength { get; init; } = MutationStrength.Moderate;
+
+    /// <summary>
+    /// LOOK-only: when set to a library style fragment's name, every LOOK variant swaps to exactly that
+    /// style instead of a random one (the engine restricts the run to the style swap and the swap
+    /// operator targets this fragment). <c>null</c> (default) = the original random-per-variant behavior.
+    /// </summary>
+    public string? PinnedStyleName { get; init; }
 }
