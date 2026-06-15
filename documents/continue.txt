@@ -97,6 +97,17 @@ SHOW-IN-FOLDER FIX (COMMITTED a1f80af, unrelated bug found during slice-3 verify
 OBSERVATION (user, 2026-06-15): the deterministic mutation path has "low influence" vs the LLM path — expected;
   the LLM restyle is the coherent one. Not an action item, just the standing verdict on the two engines.
 
+VRAM UNLOAD (COMMITTED 77c3f4a): on the single-GPU fireEngine the 27B Ollama model (mutation Local tier) and the
+  ComfyUI checkpoint both want VRAM; holding both thrashes. Now each frees when idle:
+  - Ollama ALWAYS: IOllamaModelCatalog.UnloadAsync → POST /api/generate {keep_alive:0}, fired ONCE after the
+    Local fan-out in MutationEngineViewModel (before the ComfyUI render), never per-call. Cloud tiers no-op.
+  - ComfyUI behind a Settings toggle "Free GPU memory after rendering" (default ON, key imggen.free_vram_after_
+    rendering): new IComfyUiVramService → POST /free {unload_models,free_memory}. GeneratorViewModel.MaybeFree
+    fires when rendering is IDLE only — after a single Generate, and once at batch end (gated by
+    Batch.IsBatchRunning so a batch never reloads the checkpoint mid-run; batch-end hook via Batch.PropertyChanged).
+    Best-effort (mirrors /interrupt; never throws). Toggle OFF keeps the checkpoint resident for fast single-image
+    iteration. 1162 tests, 0 warnings. PENDING user verify on fireEngine (watch nvidia-smi / server /free log).
+
 
 PROMPT BUILDER v2 — TWO-PASS VPE → (optional) IDEOGRAM JSON (SHIPPED + USER-VERIFIED 2026-06-15, v1.9.1)
 --------------------------------------------------------------------------------------------------------------
