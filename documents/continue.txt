@@ -22,6 +22,9 @@ PROMPT BUILDER v2 — TWO-PASS VPE → (optional) IDEOGRAM JSON (SHIPPED + USER-
 --------------------------------------------------------------------------------------------------------------
 USER-VERIFIED working end-to-end 2026-06-15. Version bumped 1.9.0 → 1.9.1 / ApplicationVersion 19 → 20;
 README updated (two-pass prose+optional-JSON, result card, both override files, ~3-6¢ prose / ~6-12¢ prose+JSON).
+RELEASED on GitHub: tag v1.9.1 on 542e601, exe 118 MB, marked Latest — the FIRST release with ANY LLM feature
+(prompt-builder v1 f8e3eb1 was committed AFTER the v1.9.0 exe, so no prior release shipped LLM support); notes
+framed it as "first LLM support, for better or worse" (opt-in, paid Anthropic key).
 COST NOTE (user): a prose+JSON build is ~10¢ (Opus 4.8 high effort × 2 calls) — "too expensive" but ACCEPTED;
 feature is opt-in (uncheck JSON for a cheaper prose-only build, or just don't use it). Do NOT re-pitch a
 cheaper model — Opus is the only tier that clears the bar (Haiku=unreliable JSON, Sonnet=lacks creativity).
