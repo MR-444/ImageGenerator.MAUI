@@ -18,6 +18,53 @@ next pass).
   [ ] = open      [~] = in progress (commit not yet on master)
 
 
+COMPLETE FEATURE — IN-APP "DESCRIBE AN IDEA → V4 JSON" PROMPT BUILDER (shipped + user-verified 2026-06-15)
+---------------------------------------------------------------------------------------------------------
+Committed f8e3eb1. User-verified end-to-end: idea → Build → valid V4 caption in the box
+(UseJsonPrompt on) → ComfyUI Ideogram render saved (app.log clean; no PromptBuilder errors). 1096 tests
+(+20), Debug+Release 0 warnings. Plan: C:\Users\mr\.claude\plans\continue-txt-design-the-vast-summit.md.
+
+WHAT (as built): MainPage "Describe an idea…" button (in the SupportsJsonPromptEditor block beside Edit
+structure… / Mutate current prompt…) → IdeaToPromptPage/VM (route "idea-to-prompt", AddSingleton VM so an
+in-progress idea survives navigation) → ONE Claude Opus 4.8 call with NATIVE STRUCTURED OUTPUT → V4 JSON →
+V4JsonPromptValidator gate (+1 retry feeding the validator errors back as a user turn) → the established
+handoff (Parameters.Prompt = compact serialize, UseJsonPrompt = true). The app already had the RUNTIME half.
+
+KEY API SHAPE (confirmed via the claude-api skill 2026-06-15 — don't re-derive):
+  - Native structured outputs are GA, no beta header. Body: top-level thinking:{type:"adaptive"};
+    output_config:{ effort:"high", format:{ type:"json_schema", schema:<V4 shape> } }. effort lives INSIDE
+    output_config (NOT top-level — an earlier docs page was wrong; the skill's C#/Java/cURL docs are right).
+    System sent as a cached ephemeral block; result read from content[0].text. Model claude-opus-4-8,
+    $5/$25 per MTok ⇒ ~3-6¢/call.
+  - Schema cannot express string length / numeric ranges / regex, so desc≤60 words, ^#[0-9A-F]{6}$ hex,
+    bbox [y,x,y,x] ordering, art_style XOR photo all stay in V4JsonPromptValidator + the retry. Schema is
+    lean (~9 optional props, under the 24-total / 16-union caps); additionalProperties:false on every object.
+
+TRANSPORT DECISION: raw HttpClient (CivitaiPostingService pattern) over https://api.anthropic.com/v1/messages,
+behind an internal StructuredCompletion delegate seam — chosen over the official `Anthropic` NuGet SDK to
+avoid the unverifiable beta-SDK (v10+) trimmed single-file publish risk. The SDK stays a clean one-method
+swap (replace BuildHttpCompletion). AnthropicPromptBuilderService: public DI ctor (tokenStore, logger,
+IHttpClientFactory) + internal test ctor (tokenStore, logger, StructuredCompletion, dirOverride?, assetOpener?).
+Named "anthropic" HttpClient: ConfigureStandardResilience 120s/5min.
+
+OPEN-CORE / IP (still CRITICAL): App ships a BASIC CLEAN-ROOM prompt at
+Resources/Raw/PromptBuilder/v4-builder-system.md (PUBLIC Ideogram schema only — never paraphrase the user's
+IP). The user's REAL skill loads from a LOCAL non-repo override: Pictures\ImageGenerator.MAUI\prompt-builder\
+system-prompt.md (present → used verbatim instead of the bundled default, read at call time, no rebuild).
+The two private skills live in documents/private/ (GITIGNORED via .gitignore:29, committed in 36180d8 —
+NOT uncommitted as a prior note claimed). NEVER read them to author the public prompt.
+
+FUTURE (NOT v1): no model-tier picker (Opus too expensive for public users; nothing cheaper clears the
+idea→valid-V4 bar; Fable 5 = the only sensible bump, a one-line const change). IPromptBuilderService is the
+additive swap seam — structured-output reliability is ANTHROPIC-SPECIFIC, each future provider owns its own
+JSON mode. Reference: the user's working-but-messy Python multi-phase Claude stack (3 phases, prompt caching)
+— ask for its caching/orchestration/params ONLY when building the multi-phase private path or a provider
+picker, never for v1, plumbing only.
+
+KNOWN EDGE (not a bug): sending a full V4 JSON caption (2000+ chars) to Pollinations nova-canvas 400s
+upstream (text maxLength 1024) — nova-canvas isn't a structured-prompt model. Use Ideogram/ComfyUI for V4 JSON.
+
+
 COMPLETE FEATURE — Ideogram-4 JSON Caption Mutation Engine (planned + shipped 2026-06-14)
 -----------------------------------------------------------------------------
 ALL phases 0-6 + AR-persistence (6a) + a UX legibility pass committed & user-verified.
