@@ -179,6 +179,118 @@ public class MutationEngineViewModelTests
         autoRow.Element.SlotTag.Should().BeNull(); // Auto ⇒ engine infers
     }
 
+    // ---- AI (LLM) mode -------------------------------------------------------------------
+
+    private static MutationEngineViewModel CreateSutWithAi(ICaptionMutationLlmService llm) =>
+        new(new StubLibraryService(),
+            new CaptionMutationEngine(),
+            NullLogger<MutationEngineViewModel>.Instance,
+            generator: null,
+            clipboard: null,
+            mutationLlm: llm);
+
+    [Fact]
+    public void IsAiMode_TogglesDeterministicOnlyVisibility()
+    {
+        var sut = CreateSut();
+        sut.SelectedAxis = MutationAxis.Scene;
+
+        sut.IsDeterministicMode.Should().BeTrue();
+        sut.ShowStrength.Should().BeTrue(); // deterministic + SCENE
+
+        sut.IsAiMode = true;
+
+        sut.IsDeterministicMode.Should().BeFalse();
+        sut.ShowStrength.Should().BeFalse("AI mode hides the deterministic placement-strength control");
+    }
+
+    [Fact]
+    public void CanMutateWithAi_RequiresBothABaseAndTheService()
+    {
+        // No service ⇒ disabled even with a base.
+        WithBase().MutateWithAiCommand.CanExecute(null).Should().BeFalse();
+
+        var sut = CreateSutWithAi(new StubMutationLlm());
+        sut.MutateWithAiCommand.CanExecute(null).Should().BeFalse("no base yet");
+
+        sut.SetBaseForTest(MutationTestData.BaseCaption());
+        sut.MutateWithAiCommand.CanExecute(null).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(ModelTier.Sonnet, "0.17", "Sonnet")]
+    [InlineData(ModelTier.Opus, "0.28", "Opus")]
+    public void CostEstimate_ReflectsCountAndTier(ModelTier tier, string expectedAmount, string expectedTier)
+    {
+        var sut = CreateSut();
+        sut.Count = 10;
+        sut.SelectedModelTier = tier;
+
+        sut.CostEstimate.Should().Contain(expectedAmount).And.Contain(expectedTier);
+    }
+
+    [Fact]
+    public void CostEstimate_LocalTierIsFree()
+    {
+        var sut = CreateSut();
+        sut.SelectedModelTier = ModelTier.Local;
+
+        sut.CostEstimate.Should().Contain("Free");
+    }
+
+    [Fact]
+    public async Task MutateWithAi_FansOutOneCallPerVariant_WithDistinctIndicesAndSteer()
+    {
+        var stub = new StubMutationLlm();
+        var sut = CreateSutWithAi(stub);
+        sut.SetBaseForTest(MutationTestData.BaseCaption());
+        sut.IsAiMode = true;
+        sut.Steer = "make it winter";
+        sut.SelectedModelTier = ModelTier.Opus;
+        sut.Count = 5;
+
+        await sut.MutateWithAiCommand.ExecuteAsync(null);
+
+        stub.MutateCalls.Should().HaveCount(5);
+        stub.MutateCalls.Select(c => c.Index).Should().BeEquivalentTo(new[] { 0, 1, 2, 3, 4 });
+        stub.MutateCalls.Should().OnlyContain(c => c.Steer == "make it winter" && c.Tier == ModelTier.Opus);
+        sut.StatusKind.Should().Be(StatusKind.Success); // no generator ⇒ "variants ready"
+    }
+
+    [Fact]
+    public void BuildAiBatch_KeepsSuccessesAndPairsLabels()
+    {
+        var good = MutationTestData.BaseCaption();
+        var results = new[]
+        {
+            LlmVariantResult.Ok(good, "winter"),
+            LlmVariantResult.Fail("nope"),
+            LlmVariantResult.Ok(good, "summer"),
+        };
+
+        var (prompts, labels) = MutationEngineViewModel.BuildAiBatch(results);
+
+        prompts.Should().HaveCount(2, "failed variants are dropped");
+        labels.Should().Equal("winter", "summer");
+        prompts[0].Should().Be(V4JsonPromptSerializer.Serialize(good));
+    }
+
+    private sealed class StubMutationLlm : ICaptionMutationLlmService
+    {
+        public List<(int Index, string Steer, ModelTier Tier)> MutateCalls { get; } = [];
+
+        public Task<LlmVariantResult> MutateAsync(
+            V4JsonPrompt baseCaption, string steer, int index, ModelTier tier, CancellationToken ct = default)
+        {
+            MutateCalls.Add((index, steer, tier));
+            return Task.FromResult(LlmVariantResult.Ok(MutationTestData.BaseCaption(), $"v{index}"));
+        }
+
+        public Task<LlmVariantResult> BreedAsync(
+            IReadOnlyList<V4JsonPrompt> winners, string steer, int index, ModelTier tier, CancellationToken ct = default)
+            => Task.FromResult(LlmVariantResult.Ok(MutationTestData.BaseCaption(), $"b{index}"));
+    }
+
     private sealed record MutationRunVariantCaptions(IReadOnlyList<string> Captions);
 
     // LoadAsync is only exercised by GenerateAsync (which needs a generator + Shell); the seam tests

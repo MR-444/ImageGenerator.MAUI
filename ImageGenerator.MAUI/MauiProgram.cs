@@ -7,6 +7,8 @@ using ImageGenerator.MAUI.Infrastructure.Diagnostics;
 using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 using ImageGenerator.MAUI.Infrastructure.External.Civitai;
 using ImageGenerator.MAUI.Infrastructure.External.ComfyUi;
+using ImageGenerator.MAUI.Infrastructure.External.Mutation;
+using ImageGenerator.MAUI.Infrastructure.External.Ollama;
 using ImageGenerator.MAUI.Infrastructure.External.Pollinations;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
@@ -93,13 +95,23 @@ public static class MauiProgram
                 perAttemptTimeout: TimeSpan.FromSeconds(120),
                 totalTimeout: TimeSpan.FromMinutes(5));
 
-        // The "Describe an idea…" prompt builder talks to api.anthropic.com. Adaptive thinking at
-        // high effort on Opus 4.8 can run well past the default 60 s, so the per-attempt timeout is
-        // generous. Building a prompt has no side effects, so the standard 5xx/429 retry is safe.
-        builder.Services.AddHttpClient(AnthropicPromptBuilderService.HttpClientName)
+        // The "Describe an idea…" prompt builder and the AI caption mutator both talk to
+        // api.anthropic.com. Adaptive thinking at high effort can run well past the default 60 s, so the
+        // per-attempt timeout is generous. Neither has side effects, so the standard 5xx/429 retry is safe.
+        builder.Services.AddHttpClient(AnthropicMessagesTransport.HttpClientName)
             .ConfigureStandardResilience(
                 perAttemptTimeout: TimeSpan.FromSeconds(120),
                 totalTimeout: TimeSpan.FromMinutes(5));
+
+        // No BaseAddress: the Ollama endpoint (e.g. the user's fireEngine box) is a runtime setting, so
+        // the transport composes the absolute URL per request. This is the FREE local path for verifying
+        // the AI-mutation plumbing. A large local model (e.g. a 27B) cold-loads into VRAM and then
+        // generates, which easily exceeds a couple of minutes on the first call, so the per-attempt
+        // timeout is very generous. Generating a caption has no side effects, so the 5xx/429 retry is safe.
+        builder.Services.AddHttpClient(OllamaChatTransport.HttpClientName)
+            .ConfigureStandardResilience(
+                perAttemptTimeout: TimeSpan.FromMinutes(5),
+                totalTimeout: TimeSpan.FromMinutes(10));
 
         // 2) Per-model descriptors. Each registers as itself + every narrow interface it
         //    implements, forwarded to the same singleton instance. Adding a new model is now
@@ -154,6 +166,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<ICivitaiPostingService, CivitaiPostingService>();
         builder.Services.AddSingleton<IAnthropicTokenStore, AnthropicTokenStore>();
         builder.Services.AddSingleton<IPromptBuilderService, AnthropicPromptBuilderService>();
+        builder.Services.AddSingleton<ICaptionMutationLlmService, CaptionMutationLlmService>();
+        builder.Services.AddSingleton<IOllamaModelCatalog, OllamaModelCatalog>();
         builder.Services.AddSingleton<IUiStateStore, UiStateStore>();
         builder.Services.AddSingleton<IJobRunner, JobRunner>();
         builder.Services.AddSingleton<IModelCatalogCoordinator, ModelCatalogCoordinator>();

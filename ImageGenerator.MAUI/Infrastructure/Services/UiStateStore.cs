@@ -15,6 +15,8 @@ public sealed class UiStateStore : IUiStateStore
     private const string AspectRatioKey = "imggen.last_aspect_ratio";
     private const string ComfyUiAspectRatioKey = "imggen.last_aspect_ratio.comfyui";
     private const string ComfyUiBaseUrlKey = "imggen.comfyui_base_url";
+    private const string OllamaBaseUrlKey = "imggen.ollama_base_url";
+    private const string OllamaModelKey = "imggen.ollama_model";
     private const string CivitaiModelRefKey = "imggen.civitai_model_ref";
     private const string OutputFolderKey = "imggen.output_folder";
     private const string WindowBoundsKey = "imggen.window_bounds";
@@ -198,6 +200,32 @@ public sealed class UiStateStore : IUiStateStore
     {
         if (SafeSet(ComfyUiBaseUrlKey, value))
             _logger.LogDebug("UiStateStore.PersistComfyUiBaseUrl({Value})", Quote(value));
+    }
+
+    public string? LoadOllamaBaseUrl()
+    {
+        var v = SafeGet(OllamaBaseUrlKey);
+        _logger.LogDebug("UiStateStore.LoadOllamaBaseUrl -> {Value}", Quote(v));
+        return v;
+    }
+
+    public void PersistOllamaBaseUrl(string value)
+    {
+        if (SafeSet(OllamaBaseUrlKey, value))
+            _logger.LogDebug("UiStateStore.PersistOllamaBaseUrl({Value})", Quote(value));
+    }
+
+    public string? LoadOllamaModel()
+    {
+        var v = SafeGet(OllamaModelKey);
+        _logger.LogDebug("UiStateStore.LoadOllamaModel -> {Value}", Quote(v));
+        return v;
+    }
+
+    public void PersistOllamaModel(string value)
+    {
+        if (SafeSet(OllamaModelKey, value))
+            _logger.LogDebug("UiStateStore.PersistOllamaModel({Value})", Quote(value));
     }
 
     public string? LoadOutputFolder()

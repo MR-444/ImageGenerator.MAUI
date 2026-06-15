@@ -28,6 +28,16 @@ public interface IUiStateStore
     /// <summary>Null when never persisted — callers fall back to ModelConstants.ComfyUi.DefaultBaseUrl.</summary>
     string? LoadComfyUiBaseUrl();
     /// <summary>
+    /// The local Ollama server URL used by the AI caption mutator's free "Local" tier. Null when never
+    /// set — callers fall back to <c>ModelConstants.Ollama.DefaultBaseUrl</c>.
+    /// </summary>
+    string? LoadOllamaBaseUrl();
+    /// <summary>
+    /// The Ollama model name (tag) the "Local" tier requests. Null when never set — callers fall back to
+    /// <c>ModelConstants.Ollama.DefaultModel</c>.
+    /// </summary>
+    string? LoadOllamaModel();
+    /// <summary>
     /// The user's configured output folder for generated images. Null when never set — callers
     /// fall back to <c>OutputPaths.DefaultGeneratedImagesDirectory</c>. Only the images and their
     /// json-prompt exports follow this; the ComfyUI workflow templates and app.log stay anchored
@@ -58,6 +68,10 @@ public interface IUiStateStore
     void PersistAspectRatio(string value, string? modelId);
     void PersistUseJsonPrompt(bool value);
     void PersistComfyUiBaseUrl(string value);
+    /// <inheritdoc cref="LoadOllamaBaseUrl"/>
+    void PersistOllamaBaseUrl(string value);
+    /// <inheritdoc cref="LoadOllamaModel"/>
+    void PersistOllamaModel(string value);
     /// <inheritdoc cref="LoadOutputFolder"/>
     void PersistOutputFolder(string value);
     /// <inheritdoc cref="LoadCivitaiModelRef"/>

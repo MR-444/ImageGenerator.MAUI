@@ -135,7 +135,7 @@ public sealed class AnthropicPromptBuilderServiceTests : IDisposable
     [Fact]
     public async Task BuildJsonAsync_InvalidThenValid_RetriesWithFeedbackAndSucceeds()
     {
-        var seenMessages = new List<IReadOnlyList<AnthropicPromptBuilderService.ChatTurn>>();
+        var seenMessages = new List<IReadOnlyList<ChatTurn>>();
         var call = 0;
         var sut = CreateSut(KeyStore("sk-ant"), (_, _, messages, _, _) =>
         {

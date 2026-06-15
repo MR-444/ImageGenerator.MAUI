@@ -33,6 +33,7 @@ public partial class GeneratorViewModel : ObservableObject
     private readonly IComfyUiCheckpointService _checkpointService;
     private readonly IGalleryService _galleryService;
     private readonly IFolderPicker _folderPicker;
+    private readonly IOllamaModelCatalog? _ollamaModelCatalog;
     private readonly ILogger<GeneratorViewModel> _logger;
 
     [ObservableProperty]
@@ -125,6 +126,50 @@ public partial class GeneratorViewModel : ObservableObject
 
     partial void OnComfyUiBaseUrlChanged(string value) =>
         _uiStateStore.PersistComfyUiBaseUrl(value ?? string.Empty);
+
+    // The local Ollama server + model for the AI caption mutator's free "Local" tier. Preferences-backed
+    // like the ComfyUI URL; the mutation service re-reads the store per request, so edits apply instantly.
+    [ObservableProperty]
+    private string _ollamaBaseUrl = ModelConstants.Ollama.DefaultBaseUrl;
+
+    partial void OnOllamaBaseUrlChanged(string value) =>
+        _uiStateStore.PersistOllamaBaseUrl(value ?? string.Empty);
+
+    [ObservableProperty]
+    private string _ollamaModel = ModelConstants.Ollama.DefaultModel;
+
+    partial void OnOllamaModelChanged(string value) =>
+        _uiStateStore.PersistOllamaModel(value ?? string.Empty);
+
+    /// <summary>Installed Ollama models for the Settings picker; filled by <see cref="RefreshOllamaModelsCommand"/>.</summary>
+    public ObservableCollection<string> OllamaModels { get; } = [];
+
+    /// <summary>Pull the model list from the configured Ollama server into the picker.</summary>
+    [RelayCommand]
+    private async Task RefreshOllamaModelsAsync()
+    {
+        if (_ollamaModelCatalog is null) return;
+        try
+        {
+            var models = await _ollamaModelCatalog.ListModelsAsync(OllamaBaseUrl);
+
+            var current = OllamaModel;
+            OllamaModels.Clear();
+            foreach (var m in models) OllamaModels.Add(m);
+            // Preserve the saved selection even if the server doesn't list it (e.g. typo / not pulled yet).
+            if (!string.IsNullOrWhiteSpace(current) && !OllamaModels.Contains(current))
+                OllamaModels.Add(current);
+
+            SetStatus(models.Count > 0
+                ? $"Found {models.Count} Ollama model(s)."
+                : "No models installed on the Ollama server.", models.Count > 0 ? StatusKind.Success : StatusKind.Warning);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Couldn't list Ollama models from {Url}", OllamaBaseUrl);
+            SetStatus($"Couldn't reach Ollama at {OllamaBaseUrl}: {ex.Message}", StatusKind.Error);
+        }
+    }
 
     // The configurable output folder (where generated images are saved). Preferences-backed like
     // the ComfyUI URL; the change hook also applies the override to OutputPaths so saves, the
@@ -675,7 +720,8 @@ public partial class GeneratorViewModel : ObservableObject
         IComfyUiCheckpointService checkpointService,
         IGalleryService galleryService,
         IFolderPicker folderPicker,
-        ILogger<GeneratorViewModel> logger)
+        ILogger<GeneratorViewModel> logger,
+        IOllamaModelCatalog? ollamaModelCatalog = null)
     {
         _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
@@ -690,6 +736,7 @@ public partial class GeneratorViewModel : ObservableObject
         _checkpointService = checkpointService ?? throw new ArgumentNullException(nameof(checkpointService));
         _galleryService = galleryService ?? throw new ArgumentNullException(nameof(galleryService));
         _folderPicker = folderPicker ?? throw new ArgumentNullException(nameof(folderPicker));
+        _ollamaModelCatalog = ollamaModelCatalog;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         if (promptBatchParser is null) throw new ArgumentNullException(nameof(promptBatchParser));
 
@@ -1325,6 +1372,21 @@ public partial class GeneratorViewModel : ObservableObject
         {
             ComfyUiBaseUrl = savedComfyUrl;
         }
+
+        var savedOllamaUrl = _uiStateStore.LoadOllamaBaseUrl();
+        if (!string.IsNullOrEmpty(savedOllamaUrl))
+        {
+            OllamaBaseUrl = savedOllamaUrl;
+        }
+
+        var savedOllamaModel = _uiStateStore.LoadOllamaModel();
+        if (!string.IsNullOrEmpty(savedOllamaModel))
+        {
+            OllamaModel = savedOllamaModel;
+        }
+        // Seed the picker with the current model so it shows a value before the first live refresh.
+        if (!string.IsNullOrWhiteSpace(OllamaModel) && !OllamaModels.Contains(OllamaModel))
+            OllamaModels.Add(OllamaModel);
 
         // The override was already applied at the composition root; this just echoes the saved
         // value into the bound field so Settings shows it. OnChanged re-applies harmlessly.

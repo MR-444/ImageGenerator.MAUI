@@ -74,6 +74,41 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- CARD: Local LLM (Ollama) -->
+            <Border Style="{StaticResource Card}"
+                    VerticalOptions="Start">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Local LLM (Ollama)" Style="{StaticResource CardTitle}" />
+                    <!-- The free "Local" tier of AI mutation: verifies the technical round-trip without
+                         paying Anthropic. No token needed; output quality is not the goal here. -->
+                    <Label Text="Local Ollama server for the AI mutation 'Local' tier — a free path to test the round-trip (no token). Output quality isn't guaranteed."
+                           Style="{StaticResource HelperText}" />
+                    <Entry Text="{Binding OllamaBaseUrl, Mode=TwoWay}"
+                           Placeholder="http://fireengine:11434"
+                           Keyboard="Url"
+                           SemanticProperties.Description="Base URL of the local Ollama server"
+                           AutomationId="OllamaBaseUrlEntry" />
+                    <Label Text="Model" Style="{StaticResource FieldLabel}" />
+                    <!-- Refresh pulls the installed models from the server; pick one. -->
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Picker Grid.Column="0"
+                                ItemsSource="{Binding OllamaModels}"
+                                SelectedItem="{Binding OllamaModel, Mode=TwoWay}"
+                                Title="Refresh, then pick a model…"
+                                SemanticProperties.Description="Pick an installed Ollama model"
+                                AutomationId="OllamaModelPicker" />
+                        <Button Grid.Column="1"
+                                Text="Refresh"
+                                Command="{Binding RefreshOllamaModelsCommand}"
+                                Style="{StaticResource SecondaryButton}"
+                                SemanticProperties.Description="List models from the Ollama server"
+                                AutomationId="OllamaModelRefreshButton" />
+                    </Grid>
+                    <Label Text="A 27B model cold-loads into VRAM on the first call — expect the first variant to take a few minutes."
+                           Style="{StaticResource HelperText}" />
+                </VerticalStackLayout>
+            </Border>
+
             <!-- CARD: Output folder -->
             <Border Style="{StaticResource Card}"
                     VerticalOptions="Start">

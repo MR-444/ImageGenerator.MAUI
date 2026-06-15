@@ -65,4 +65,15 @@ public static class ModelConstants
         public static string WorkflowName(string modelId) =>
             IsId(modelId) ? modelId[PrefixSlash.Length..] : modelId;
     }
+
+    public static class Ollama
+    {
+        // The local Ollama server the AI caption mutator's free "Local" tier talks to. Defaults to the
+        // user's fireEngine box (the same machine that runs ComfyUI); overridable per-user in Settings.
+        public const string DefaultBaseUrl = "http://fireengine:11434";
+
+        // A capable, widely-available local model. Only the technical round-trip is verified on this
+        // tier, not output quality, so any installed json-schema-capable model works — overridable.
+        public const string DefaultModel = "qwen2.5";
+    }
 }

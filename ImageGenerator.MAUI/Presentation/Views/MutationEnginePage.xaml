@@ -36,8 +36,63 @@
                 </VerticalStackLayout>
             </Grid>
 
-            <!-- CARD: Axis -->
+            <!-- CARD: Engine (Deterministic / AI) -->
             <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Mutation engine" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                        <Switch Grid.Column="0" IsToggled="{Binding IsAiMode}" VerticalOptions="Center"
+                                AutomationId="MutationAiModeSwitch" />
+                        <Label Grid.Column="1" VerticalOptions="Center"
+                               Text="AI (LLM) mutation — coherent, directed variants from a free-text steer. Off = the deterministic engine (free, reproducible)." />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- CARD: AI steer (AI mode only) -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding IsAiMode}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Describe the change" Style="{StaticResource FieldLabel}" />
+                    <Editor Text="{Binding Steer}"
+                            Placeholder="e.g. make it winter · 1970s film look · explore a bold art movement"
+                            AutoSize="TextChanges"
+                            MinimumHeightRequest="72"
+                            AutomationId="MutationSteerEditor" />
+                    <Label Text="The model rewrites the WHOLE caption coherently for each variant (medium, lighting, palette and every element together)." Style="{StaticResource HelperText}" />
+
+                    <Label Text="Model" Style="{StaticResource FieldLabel}" />
+                    <Picker ItemsSource="{Binding ModelTierOptions}"
+                            SelectedItem="{Binding SelectedModelTier}"
+                            AutomationId="MutationModelTierPicker" />
+                    <Label Text="Sonnet = affordable default · Opus = stronger/pricier · Local = free Ollama (verifies the round-trip; quality not guaranteed)."
+                           Style="{StaticResource HelperText}" />
+
+                    <!-- Local-only: which Ollama model. Type any tag, or Refresh to pick from the server. -->
+                    <VerticalStackLayout Spacing="8" IsVisible="{Binding IsLocalTier}">
+                        <Label Text="Local model (Ollama)" Style="{StaticResource FieldLabel}" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <Picker Grid.Column="0"
+                                    ItemsSource="{Binding Generator.OllamaModels}"
+                                    SelectedItem="{Binding Generator.OllamaModel, Mode=TwoWay}"
+                                    Title="Refresh, then pick a model…"
+                                    AutomationId="MutationOllamaModelPicker" />
+                            <Button Grid.Column="1"
+                                    Text="Refresh"
+                                    Command="{Binding Generator.RefreshOllamaModelsCommand}"
+                                    Style="{StaticResource SecondaryButton}"
+                                    AutomationId="MutationOllamaRefreshButton" />
+                        </Grid>
+                        <Label Text="Set the server URL on the Settings page. A 27B model takes a few minutes on the first (cold) call."
+                               Style="{StaticResource HelperText}" />
+                    </VerticalStackLayout>
+
+                    <Label Text="{Binding CostEstimate}" Style="{StaticResource HelperText}"
+                           AutomationId="MutationCostEstimateLabel" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- CARD: Axis (deterministic only) -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding IsDeterministicMode}">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="Axis to vary" Style="{StaticResource FieldLabel}" />
                     <Picker ItemsSource="{Binding AxisOptions}"
@@ -65,7 +120,7 @@
                         <Entry.Behaviors><behaviors:NumericOnlyBehavior /></Entry.Behaviors>
                     </Entry>
 
-                    <VerticalStackLayout Spacing="4" IsVisible="{Binding IsScene}">
+                    <VerticalStackLayout Spacing="4" IsVisible="{Binding ShowStrength}">
                         <Label Text="Placement strength" Style="{StaticResource FieldLabel}" />
                         <Picker ItemsSource="{Binding StrengthOptions}"
                                 SelectedItem="{Binding SelectedStrength}"
@@ -74,7 +129,7 @@
                                Style="{StaticResource HelperText}" />
                     </VerticalStackLayout>
 
-                    <HorizontalStackLayout Spacing="8">
+                    <HorizontalStackLayout Spacing="8" IsVisible="{Binding IsDeterministicMode}">
                         <CheckBox IsChecked="{Binding IncludeBase}" VerticalOptions="Center"
                                   AutomationId="MutationIncludeBaseCheckBox" />
                         <Label Text="Include the unmutated base as a reference (variant 0)" VerticalOptions="Center" />
@@ -90,7 +145,10 @@
                         <Button Grid.Column="2" Text="Copy" Command="{Binding CopySeedCommand}"
                                 Style="{StaticResource SecondaryButton}" AutomationId="MutationCopySeedButton" />
                     </Grid>
-                    <Label Text="Same base + same seed ⇒ identical variants. Every variant (and the base) renders at this one seed, so only the mutation differs." Style="{StaticResource HelperText}" />
+                    <Label Text="Same base + same seed ⇒ identical variants. Every variant (and the base) renders at this one seed, so only the mutation differs."
+                           Style="{StaticResource HelperText}" IsVisible="{Binding IsDeterministicMode}" />
+                    <Label Text="The render seed is pinned across the batch so only the caption differs. AI variants are not reproducible (no model seed)."
+                           Style="{StaticResource HelperText}" IsVisible="{Binding IsAiMode}" />
                 </VerticalStackLayout>
             </Border>
 
@@ -115,12 +173,21 @@
                 </VerticalStackLayout>
             </Border>
 
-            <!-- Generate -->
+            <!-- Generate (deterministic) -->
             <Button Text="Generate variants"
                     Command="{Binding GenerateCommand}"
                     Style="{StaticResource PrimaryButton}"
                     HorizontalOptions="Fill"
+                    IsVisible="{Binding IsDeterministicMode}"
                     AutomationId="MutationGenerateButton" />
+
+            <!-- Mutate (AI) -->
+            <Button Text="Mutate with AI"
+                    Command="{Binding MutateWithAiCommand}"
+                    Style="{StaticResource PrimaryButton}"
+                    HorizontalOptions="Fill"
+                    IsVisible="{Binding IsAiMode}"
+                    AutomationId="MutationMutateWithAiButton" />
 
             <Label Text="{Binding StatusMessage}"
                    Style="{StaticResource StatusLabel}"

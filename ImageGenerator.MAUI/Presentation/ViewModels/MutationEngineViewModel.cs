@@ -29,9 +29,18 @@ public partial class MutationEngineViewModel : ObservableObject
     private const int MaxCount = 100;       // mirrors CaptionMutationEngine's own ceiling
     private const int DefaultTargetSize = 1024;
 
+    /// <summary>Bounded concurrency for the AI fan-out: one paid call per variant, a few at a time.</summary>
+    private const int AiMaxConcurrency = 4;
+
+    // Rough one-call cost estimates (USD) — input+output of a typical mutation turn at each tier's rate
+    // (Sonnet $3/$15, Opus $5/$25 per MTok). Display only; the user sees N×rate before running.
+    private const decimal SonnetPerCallUsd = 0.017m;
+    private const decimal OpusPerCallUsd = 0.028m;
+
     private readonly GeneratorViewModel? _generator;
     private readonly IMutationLibraryService _libraryService;
     private readonly CaptionMutationEngine _engine;
+    private readonly ICaptionMutationLlmService? _mutationLlm;
     private readonly IClipboardService? _clipboard;
     private readonly ILogger<MutationEngineViewModel> _logger;
 
@@ -54,13 +63,15 @@ public partial class MutationEngineViewModel : ObservableObject
         CaptionMutationEngine engine,
         ILogger<MutationEngineViewModel> logger,
         GeneratorViewModel? generator = null,
-        IClipboardService? clipboard = null)
+        IClipboardService? clipboard = null,
+        ICaptionMutationLlmService? mutationLlm = null)
     {
         _libraryService = libraryService ?? throw new ArgumentNullException(nameof(libraryService));
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _generator = generator;
         _clipboard = clipboard;
+        _mutationLlm = mutationLlm;
     }
 
     // --- Run configuration (bound to the page) ---------------------------------------------------
@@ -69,6 +80,7 @@ public partial class MutationEngineViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsScene))]
+    [NotifyPropertyChangedFor(nameof(ShowStrength))]
     [NotifyPropertyChangedFor(nameof(OperatorsForAxis))]
     private MutationAxis _selectedAxis = MutationAxis.Look;
 
@@ -84,6 +96,7 @@ public partial class MutationEngineViewModel : ObservableObject
             .ToList();
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CostEstimate))]
     private int _count = 8;
 
     partial void OnCountChanged(int value)
@@ -120,7 +133,55 @@ public partial class MutationEngineViewModel : ObservableObject
     /// <summary>False until a parseable base is loaded — gates the Generate button.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GenerateCommand))]
+    [NotifyCanExecuteChangedFor(nameof(MutateWithAiCommand))]
     private bool _hasBase;
+
+    // --- AI (LLM) mutation ----------------------------------------------------------------------
+
+    /// <summary>Off = deterministic engine (free, reproducible). On = LLM-driven semantic mutation.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDeterministicMode))]
+    [NotifyPropertyChangedFor(nameof(ShowStrength))]
+    private bool _isAiMode;
+
+    /// <summary>Inverse of <see cref="IsAiMode"/> — gates the deterministic-only controls.</summary>
+    public bool IsDeterministicMode => !IsAiMode;
+
+    /// <summary>Placement strength only matters for the deterministic SCENE axis.</summary>
+    public bool ShowStrength => IsDeterministicMode && IsScene;
+
+    /// <summary>Free-text steer for the LLM, e.g. "make it winter", "1970s film look".</summary>
+    [ObservableProperty]
+    private string _steer = string.Empty;
+
+    public IReadOnlyList<ModelTier> ModelTierOptions { get; } = [ModelTier.Sonnet, ModelTier.Opus, ModelTier.Local];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CostEstimate))]
+    [NotifyPropertyChangedFor(nameof(IsLocalTier))]
+    private ModelTier _selectedModelTier = ModelTier.Sonnet;
+
+    /// <summary>True when the Local (Ollama) tier is picked — reveals the inline Ollama model picker.</summary>
+    public bool IsLocalTier => SelectedModelTier == ModelTier.Local;
+
+    /// <summary>The host generator, exposed so the page can bind the Ollama model picker (which lives on
+    /// the generator with the other server settings) without duplicating that state here.</summary>
+    public GeneratorViewModel? Generator => _generator;
+
+    /// <summary>N × per-tier rate, shown before running. Local is free.</summary>
+    public string CostEstimate
+    {
+        get
+        {
+            var plural = Count == 1 ? "" : "s";
+            if (SelectedModelTier == ModelTier.Local)
+                return $"Free — local Ollama ({Count} call{plural}). Quality not guaranteed; verifies the round-trip.";
+
+            var per = SelectedModelTier == ModelTier.Opus ? OpusPerCallUsd : SonnetPerCallUsd;
+            var total = (per * Count).ToString("0.00", CultureInfo.InvariantCulture);
+            return $"Estimated cost ≈ ${total} for {Count} variant{plural} on {SelectedModelTier} (one paid call each).";
+        }
+    }
 
     [ObservableProperty]
     private string _statusMessage = string.Empty;
@@ -327,6 +388,119 @@ public partial class MutationEngineViewModel : ObservableObject
             _logger.LogError(ex, "MutationEngineVM.{Op}", "Generate");
             SetStatus($"Couldn't run the mutation: {ex.Message}", StatusKind.Error);
         }
+    }
+
+    private bool CanMutateWithAi() => HasBase && _mutationLlm is not null;
+
+    /// <summary>
+    /// AI path: fan out N independent LLM calls (one validated variant each, bounded concurrency), then
+    /// hand the successful captions to the SAME batch pipeline the deterministic path uses — render seed
+    /// pinned so only the caption differs. In-flight paid calls are never aborted mid-run.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanMutateWithAi))]
+    private async Task MutateWithAiAsync()
+    {
+        if (_base is null)
+        {
+            SetStatus("Nothing to mutate — load a structured prompt first.", StatusKind.Warning);
+            return;
+        }
+        if (_mutationLlm is null)
+        {
+            SetStatus("AI mutation isn't available in this build.", StatusKind.Error);
+            return;
+        }
+
+        var tier = SelectedModelTier;
+        var steer = Steer ?? string.Empty;
+        var baseCaption = _base;
+        var count = Count;
+
+        try
+        {
+            SetStatus($"Asking {tier} for {count} variant{(count == 1 ? "" : "s")}…", StatusKind.Info);
+
+            var results = await FanOutAsync(count, ConcurrencyFor(tier),
+                i => _mutationLlm.MutateAsync(baseCaption, steer, i, tier));
+            await DispatchAiResultsAsync(results);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "MutationEngineVM.{Op}", "MutateWithAi");
+            SetStatus($"Couldn't run the AI mutation: {ex.Message}", StatusKind.Error);
+        }
+    }
+
+    /// <summary>A local model on one GPU serves requests serially, so concurrent calls would queue
+    /// server-side and trip the per-call timeout; run the Local tier one-at-a-time. Cloud tiers fan out.</summary>
+    private static int ConcurrencyFor(ModelTier tier) => tier == ModelTier.Local ? 1 : AiMaxConcurrency;
+
+    /// <summary>Run <paramref name="count"/> LLM calls with bounded concurrency, preserving index order.</summary>
+    private static async Task<LlmVariantResult[]> FanOutAsync(
+        int count, int maxConcurrency, Func<int, Task<LlmVariantResult>> call)
+    {
+        using var gate = new SemaphoreSlim(maxConcurrency);
+        var tasks = new Task<LlmVariantResult>[count];
+        for (var i = 0; i < count; i++)
+        {
+            var index = i;
+            tasks[i] = RunGatedAsync(gate, () => call(index));
+        }
+        return await Task.WhenAll(tasks);
+    }
+
+    private static async Task<LlmVariantResult> RunGatedAsync(SemaphoreSlim gate, Func<Task<LlmVariantResult>> call)
+    {
+        await gate.WaitAsync();
+        try { return await call(); }
+        finally { gate.Release(); }
+    }
+
+    /// <summary>
+    /// Keep only the successful variants, then serialize each caption + pair it with its label — the
+    /// exact (prompts, labels) the batch pipeline expects. Static + internal so it's unit-testable
+    /// without a generator.
+    /// </summary>
+    internal static (List<string> Prompts, List<string> Labels) BuildAiBatch(IReadOnlyList<LlmVariantResult> results)
+    {
+        var ok = results.Where(r => r.Success && r.Prompt is not null).ToList();
+        var prompts = ok.Select(r => V4JsonPromptSerializer.Serialize(r.Prompt!)).ToList();
+        var labels = ok.Select(r => r.Label ?? "AI variant").ToList();
+        return (prompts, labels);
+    }
+
+    /// <summary>Turn successful AI variants into the seed-pinned render batch (shared handoff).</summary>
+    private async Task DispatchAiResultsAsync(IReadOnlyList<LlmVariantResult> results)
+    {
+        var ok = results.Where(r => r.Success && r.Prompt is not null).ToList();
+        if (ok.Count == 0)
+        {
+            var why = results.Select(r => r.Error).FirstOrDefault(e => !string.IsNullOrWhiteSpace(e))
+                      ?? "no variants produced";
+            SetStatus($"AI mutation produced nothing: {why}", StatusKind.Error);
+            return;
+        }
+
+        var (prompts, labels) = BuildAiBatch(results);
+        var failed = results.Count - ok.Count;
+
+        if (_generator is null)
+        {
+            SetStatus($"{ok.Count} AI variant(s) ready.", StatusKind.Success);
+            return; // stand-alone (tests): variants built, nothing to dispatch to.
+        }
+
+        if (failed > 0)
+            _logger.LogInformation("AI mutation: {Ok} of {Total} variants succeeded ({Failed} failed)",
+                ok.Count, results.Count, failed);
+
+        // Same seed pin as the deterministic path: every variant renders at one seed so the only visible
+        // difference between cards is the mutation itself.
+        _generator.Parameters.Seed = Seed;
+        _generator.Parameters.RandomizeSeed = false;
+
+        await Shell.Current.GoToAsync("..");
+        await _generator.Batch.RunBatchAsync(prompts, labels);
     }
 
     /// <summary>

@@ -18,6 +18,47 @@ next pass).
   [ ] = open      [~] = in progress (commit not yet on master)
 
 
+AI-STEERED CAPTION MUTATION (LLM mutation engine) — SLICE 1 COMMITTED + USER-VERIFIED 2026-06-15
+------------------------------------------------------------------------------------------------
+A second, AI path beside the deterministic mutation engine on the Mutation page. Plan (3 slices) at
+~/.claude/plans/implement-the-plan-at-fuzzy-emerson.md. Decisions locked: directed steer + breed-from-winners
++ anchor/persist; Sonnet 4.6 default / Opus 4.8 / Local Ollama; one call per variant; NOT reproducible
+(render seed still pinned across the batch so only the caption differs).
+
+SLICE 1 (DONE, NOT yet released): free-text steer → N coherent whole-scene variants via the existing
+_generator.Batch.RunBatchAsync handoff. USER-VERIFIED on local qwen3.5:27b — underwater base → desert variants,
+EVERY element desc co-varied (hair→dry dust currents, sand-dune slope, legs sink into powdery sand). 1130 tests, 0 warnings.
+  - Shared Anthropic transport extracted: AnthropicMessagesTransport.SendAsync(... modelId param ...) +
+    V4StructuredSchema. Prompt builder refactored onto it, behaviour unchanged; ChatTurn is now top-level in
+    the Anthropic namespace (one test ref updated). HttpClientName "anthropic" moved onto the transport.
+  - ICaptionMutationLlmService / CaptionMutationLlmService: MutateAsync/BreedAsync, ModelTier {Sonnet,Opus,Local},
+    one validated variant per call (validator + 1 retry feeding errors back), index-varied user turn for diversity,
+    tier→transport routing. Bundled clean-room Resources/Raw/Mutation/mutation-system.md + private override
+    "mutation-prompt.md" in OutputPaths.PromptBuilderDirectory (mirrors the builder's open-core boundary).
+  - Local tier = FREE technical-verification path: OllamaChatTransport (OpenAI-compatible /v1/chat/completions,
+    response_format json_schema, no key). Settings: OllamaBaseUrl (default http://fireengine:11434, logs <null>→falls
+    back to default) + OllamaModel, persisted in UiStateStore. Model dropdown on BOTH Settings AND the Mutation page
+    (shown when Local tier) via IOllamaModelCatalog (GET /api/tags) + Refresh. Ollama HttpClient = 5min/attempt,
+    10min total; Local tier runs SEQUENTIALLY (concurrency 1) — one GPU can't do parallel 27B gens within the timeout.
+  - Mutation page: Deterministic/AI engine toggle; AI reveals steer Editor + model Picker + live cost estimate
+    (N×rate: Sonnet ~$0.017/call, Opus ~$0.028/call, Local free) and hides deterministic-only controls.
+  - BreedAsync is BUILT + unit-tested but NOT wired to UI yet — that is slice 2.
+  KNOWN (open, do NOT fix without the user): a weak local model sometimes echoes base HLD field-labels
+  ("Subject & Action:") into the output — the label-echoers are the weaker half. User DECLINED a prompt tweak;
+  will judge on Sonnet first. Don't add the "no label echo" line unilaterally.
+
+SLICE 2 (NEXT — start in a fresh context): breed-from-winners. Gallery multi-select (GalleryViewModel.SelectedItems,
+  already exists for CivitAI posting) → new "Breed selected" command → read each winner's embedded V4 caption via
+  IGalleryService.ReadMetadataAsync ("Prompt" → V4JsonPromptSerializer.Deserialize) → stash List<V4JsonPrompt> on a
+  NEW GeneratorViewModel.PendingBreedSet → Shell-navigate to the Mutation page → MutationEngineViewModel.Initialize
+  consumes it, flips to AI mode ("Breeding from N winners"), the mutate command calls BreedAsync (fan-out). NO LLM UI
+  duplicated in the Gallery. Gallery has NO generator/batch access — use the stash-on-singleton pattern (like
+  PendingMutationBase). MutationEngineViewModel already exposes Generator + IsLocalTier passthroughs.
+SLICE 3 (LATER): "Save style from this" → extract style_description → named StyleFragment via
+  MutationLibraryService.SaveAsync (feeds the deterministic style list too) + bundled/extensible anchor presets
+  that prepend to the steer.
+
+
 PROMPT BUILDER v2 — TWO-PASS VPE → (optional) IDEOGRAM JSON (SHIPPED + USER-VERIFIED 2026-06-15, v1.9.1)
 --------------------------------------------------------------------------------------------------------------
 USER-VERIFIED working end-to-end 2026-06-15. Version bumped 1.9.0 → 1.9.1 / ApplicationVersion 19 → 20;
