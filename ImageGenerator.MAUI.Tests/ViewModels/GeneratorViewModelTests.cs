@@ -26,6 +26,7 @@ public class GeneratorViewModelTests
     private readonly Mock<IPollinationsTokenStore> _mockPollinationsTokenStore;
     private readonly Mock<IComfyUiAuthStore> _mockComfyUiAuthStore;
     private readonly Mock<ICivitaiTokenStore> _mockCivitaiTokenStore;
+    private readonly Mock<IAnthropicTokenStore> _mockAnthropicTokenStore;
     private readonly Mock<ICivitaiPostingService> _mockCivitaiPostingService;
     private readonly Mock<IUiStateStore> _mockUiStateStore;
     private readonly Mock<IModelCatalogCoordinator> _mockCatalogCoordinator;
@@ -41,6 +42,7 @@ public class GeneratorViewModelTests
         _mockPollinationsTokenStore = new Mock<IPollinationsTokenStore>();
         _mockComfyUiAuthStore = new Mock<IComfyUiAuthStore>();
         _mockCivitaiTokenStore = new Mock<ICivitaiTokenStore>();
+        _mockAnthropicTokenStore = new Mock<IAnthropicTokenStore>();
         _mockCivitaiPostingService = new Mock<ICivitaiPostingService>();
         _mockUiStateStore = new Mock<IUiStateStore>();
         _mockCatalogCoordinator = new Mock<IModelCatalogCoordinator>();
@@ -55,6 +57,7 @@ public class GeneratorViewModelTests
             _mockPollinationsTokenStore.Object,
             _mockComfyUiAuthStore.Object,
             _mockCivitaiTokenStore.Object,
+            _mockAnthropicTokenStore.Object,
             _mockCivitaiPostingService.Object,
             _mockUiStateStore.Object,
             _mockCatalogCoordinator.Object,
@@ -1057,6 +1060,7 @@ public class GeneratorViewModelTests
             new Mock<IPollinationsTokenStore>().Object,
             new Mock<IComfyUiAuthStore>().Object,
             new Mock<ICivitaiTokenStore>().Object,
+            new Mock<IAnthropicTokenStore>().Object,
             new Mock<ICivitaiPostingService>().Object,
             sharedStore.Object,
             coordinator1.Object,
@@ -1085,6 +1089,7 @@ public class GeneratorViewModelTests
             new Mock<IPollinationsTokenStore>().Object,
             new Mock<IComfyUiAuthStore>().Object,
             new Mock<ICivitaiTokenStore>().Object,
+            new Mock<IAnthropicTokenStore>().Object,
             new Mock<ICivitaiPostingService>().Object,
             sharedStore.Object,
             coordinator2.Object,

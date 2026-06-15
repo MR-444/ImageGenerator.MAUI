@@ -14,6 +14,7 @@ public partial class AppShell
         Routing.RegisterRoute("detail", typeof(GalleryItemDetailPage));
         Routing.RegisterRoute("ideogram-editor", typeof(IdeogramStructureEditorPage));
         Routing.RegisterRoute("mutation-engine", typeof(MutationEnginePage));
+        Routing.RegisterRoute("idea-to-prompt", typeof(IdeaToPromptPage));
         Routing.RegisterRoute("settings", typeof(SettingsPage));
     }
 }

@@ -121,6 +121,13 @@
                                        Style="{StaticResource HelperText}"
                                        IsVisible="{Binding JsonPromptStateText, Converter={StaticResource NonEmptyStringToBool}}"
                                        AutomationId="JsonPromptStateLabel" />
+                                <Button Text="Describe an idea…"
+                                        Command="{Binding OpenIdeaToPromptCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        HorizontalOptions="Start"
+                                        Margin="0,6,0,0"
+                                        SemanticProperties.Description="Turn a freeform idea into a structured JSON prompt with Claude"
+                                        AutomationId="DescribeIdeaButton" />
                                 <Button Text="Edit structure…"
                                         Command="{Binding OpenIdeogramEditorCommand}"
                                         Style="{StaticResource SecondaryButton}"

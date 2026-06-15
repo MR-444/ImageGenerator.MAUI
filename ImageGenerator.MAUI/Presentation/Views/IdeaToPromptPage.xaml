@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:converters="clr-namespace:ImageGenerator.MAUI.Presentation.Converters"
+             xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
+             x:Class="ImageGenerator.MAUI.Presentation.Views.IdeaToPromptPage"
+             x:DataType="vm:IdeaToPromptViewModel"
+             Title="Describe an idea"
+             Shell.NavBarIsVisible="True"
+             Padding="0">
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
+            <converters:InverseBoolConverter x:Key="InverseBool" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="16">
+
+            <!-- Header -->
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <Button Grid.Column="0"
+                        Text="← Back"
+                        Clicked="OnBackClicked"
+                        Style="{StaticResource SecondaryButton}"
+                        VerticalOptions="Start"
+                        AutomationId="IdeaToPromptBackButton" />
+                <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                    <Label Text="Describe an idea → structured prompt" Style="{StaticResource CardTitle}" />
+                    <Label Text="Type a plain-English idea. Claude Opus 4.8 turns it into a schema-valid Ideogram V4 caption and drops it into the prompt box (JSON mode on). Then refine it with “Edit structure…”."
+                           Style="{StaticResource HelperText}" />
+                </VerticalStackLayout>
+            </Grid>
+
+            <!-- CARD: Idea -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Your idea" Style="{StaticResource FieldLabel}" />
+                    <Editor Text="{Binding Idea}"
+                            AutoSize="TextChanges"
+                            MinimumHeightRequest="140"
+                            Placeholder="e.g. A cozy bookshop on a rainy evening, warm lamplight, a cat asleep in the window"
+                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                            AutomationId="IdeaEditor" />
+                    <Label Text="One or two sentences works best — name the subject, setting, and mood. The builder fills in the rest."
+                           Style="{StaticResource HelperText}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Build -->
+            <Button Text="Build prompt"
+                    Command="{Binding BuildCommand}"
+                    Style="{StaticResource PrimaryButton}"
+                    HorizontalOptions="Fill"
+                    AutomationId="BuildPromptButton" />
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}"
+                               IsVisible="{Binding IsBusy}"
+                               HorizontalOptions="Center"
+                               AutomationId="IdeaToPromptBusyIndicator" />
+
+            <Label Text="{Binding StatusMessage}"
+                   Style="{StaticResource StatusLabel}"
+                   IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
+                   LineBreakMode="WordWrap"
+                   AutomationId="IdeaToPromptStatusLabel">
+                <Label.Triggers>
+                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
+                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
+                    </DataTrigger>
+                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
+                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
+                    </DataTrigger>
+                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Warning}">
+                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
+                    </DataTrigger>
+                </Label.Triggers>
+            </Label>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

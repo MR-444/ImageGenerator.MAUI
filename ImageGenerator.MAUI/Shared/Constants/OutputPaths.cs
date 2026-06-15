@@ -44,4 +44,11 @@ public static class OutputPaths
     // default location — re-pointing the output folder must never strand the user's edited library.
     public static string MutationLibraryDirectory =>
         Path.Combine(DefaultGeneratedImagesDirectory, "mutation-library");
+
+    // Local, non-repo home for the "Describe an idea…" prompt builder's private override. Drop a
+    // "system-prompt.md" here to replace the bundled clean-room builder prompt with a private one
+    // (3-yr prompt IP that must never enter the public repo — open-core split, same as ComfyUI).
+    // INPUT, not output, so it stays anchored at the default location regardless of the output folder.
+    public static string PromptBuilderDirectory =>
+        Path.Combine(DefaultGeneratedImagesDirectory, "prompt-builder");
 }

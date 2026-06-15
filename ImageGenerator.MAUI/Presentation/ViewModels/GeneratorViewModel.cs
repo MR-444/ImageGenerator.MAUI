@@ -666,6 +666,7 @@ public partial class GeneratorViewModel : ObservableObject
         IPollinationsTokenStore pollinationsTokenStore,
         IComfyUiAuthStore comfyUiAuthStore,
         ICivitaiTokenStore civitaiTokenStore,
+        IAnthropicTokenStore anthropicTokenStore,
         ICivitaiPostingService civitaiPostingService,
         IUiStateStore uiStateStore,
         IModelCatalogCoordinator catalogCoordinator,
@@ -681,6 +682,7 @@ public partial class GeneratorViewModel : ObservableObject
         _pollinationsTokenStore = pollinationsTokenStore ?? throw new ArgumentNullException(nameof(pollinationsTokenStore));
         if (comfyUiAuthStore is null) throw new ArgumentNullException(nameof(comfyUiAuthStore));
         if (civitaiTokenStore is null) throw new ArgumentNullException(nameof(civitaiTokenStore));
+        if (anthropicTokenStore is null) throw new ArgumentNullException(nameof(anthropicTokenStore));
         _civitaiPostingService = civitaiPostingService ?? throw new ArgumentNullException(nameof(civitaiPostingService));
         _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
         _catalogCoordinator = catalogCoordinator ?? throw new ArgumentNullException(nameof(catalogCoordinator));
@@ -870,6 +872,16 @@ public partial class GeneratorViewModel : ObservableObject
             helperText: "Optional. Needed only for \"Post to CivitAI\". Create a Full API key at "
                         + "civitai.com/user/account (a free account works). Stored in OS secure storage.",
             store: civitaiTokenStore,
+            syncToParameters: static _ => { }));
+        // No parameters slot: AnthropicPromptBuilderService reads the store per request (the
+        // "Describe an idea…" call has no ImageGenerationParameters).
+        TokenProviders.Add(new TokenProviderViewModel(
+            key: "anthropic",
+            displayName: "Anthropic",
+            placeholder: "Paste your Anthropic API key…",
+            helperText: "Required for \"Describe an idea…\" (the prompt builder). Create a key at "
+                        + "console.anthropic.com. Stored in OS secure storage.",
+            store: anthropicTokenStore,
             syncToParameters: static _ => { }));
         _selectedTokenProvider = TokenProviders[0];
     }
@@ -1196,6 +1208,24 @@ public partial class GeneratorViewModel : ObservableObject
         {
             _logger.LogWarning(ex, "Mutate from image failed for {Path}", filePath);
             SetStatus("Couldn't load this image's caption. See app.log for details.", StatusKind.Error);
+        }
+    }
+
+    /// <summary>
+    /// "Describe an idea…" entry from MainPage: open the prompt-builder page. The page owns the idea
+    /// box + the Claude call and writes the result back through the same Parameters handoff the
+    /// structure editor uses, so there's nothing to stash here — just navigate.
+    /// </summary>
+    [RelayCommand]
+    private async Task OpenIdeaToPromptAsync()
+    {
+        try
+        {
+            await Shell.Current.GoToAsync("idea-to-prompt");
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Couldn't open the prompt builder: {ex.Message}", StatusKind.Error);
         }
     }
 

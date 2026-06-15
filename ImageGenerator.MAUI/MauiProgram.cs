@@ -4,6 +4,7 @@ using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Descriptors.Pollinations;
 using ImageGenerator.MAUI.Extensions;
 using ImageGenerator.MAUI.Infrastructure.Diagnostics;
+using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 using ImageGenerator.MAUI.Infrastructure.External.Civitai;
 using ImageGenerator.MAUI.Infrastructure.External.ComfyUi;
 using ImageGenerator.MAUI.Infrastructure.External.Pollinations;
@@ -92,6 +93,14 @@ public static class MauiProgram
                 perAttemptTimeout: TimeSpan.FromSeconds(120),
                 totalTimeout: TimeSpan.FromMinutes(5));
 
+        // The "Describe an idea…" prompt builder talks to api.anthropic.com. Adaptive thinking at
+        // high effort on Opus 4.8 can run well past the default 60 s, so the per-attempt timeout is
+        // generous. Building a prompt has no side effects, so the standard 5xx/429 retry is safe.
+        builder.Services.AddHttpClient(AnthropicPromptBuilderService.HttpClientName)
+            .ConfigureStandardResilience(
+                perAttemptTimeout: TimeSpan.FromSeconds(120),
+                totalTimeout: TimeSpan.FromMinutes(5));
+
         // 2) Per-model descriptors. Each registers as itself + every narrow interface it
         //    implements, forwarded to the same singleton instance. Adding a new model is now
         //    a single-line edit here plus one new descriptor file.
@@ -143,6 +152,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<IComfyUiAuthStore, ComfyUiAuthStore>();
         builder.Services.AddSingleton<ICivitaiTokenStore, CivitaiTokenStore>();
         builder.Services.AddSingleton<ICivitaiPostingService, CivitaiPostingService>();
+        builder.Services.AddSingleton<IAnthropicTokenStore, AnthropicTokenStore>();
+        builder.Services.AddSingleton<IPromptBuilderService, AnthropicPromptBuilderService>();
         builder.Services.AddSingleton<IUiStateStore, UiStateStore>();
         builder.Services.AddSingleton<IJobRunner, JobRunner>();
         builder.Services.AddSingleton<IModelCatalogCoordinator, ModelCatalogCoordinator>();
@@ -162,6 +173,9 @@ public static class MauiProgram
         // round-trip to MainPage and back — re-initialized only when a genuinely new base loads
         // (same-base detection in InitializeFrom). The page stays transient and binds this one VM.
         builder.Services.AddSingleton<MutationEngineViewModel>();
+        // Singleton so an in-progress idea + status survive a round-trip to MainPage and back; the
+        // page stays transient and binds this one VM (mirrors MutationEngineViewModel above).
+        builder.Services.AddSingleton<IdeaToPromptViewModel>();
 
         // 4) Register MainPage so it (and its constructor) can be injected. See the
         //    Singleton rationale above the GeneratorViewModel registration.
@@ -170,6 +184,7 @@ public static class MauiProgram
         builder.Services.AddTransient<GalleryItemDetailPage>();
         builder.Services.AddTransient<IdeogramStructureEditorPage>();
         builder.Services.AddTransient<MutationEnginePage>();
+        builder.Services.AddTransient<IdeaToPromptPage>();
         // SettingsPage binds the singleton GeneratorViewModel (tokens drive IsValid there);
         // the page itself is cheap to rebuild per navigation.
         builder.Services.AddTransient<SettingsPage>();
