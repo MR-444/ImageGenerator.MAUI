@@ -97,15 +97,19 @@ public partial class GenerationJob : ObservableObject
         if (ResultPath is null) return;
         try
         {
-            // explorer.exe /select,<path> opens the parent folder with the file highlighted.
-            // ArgumentList handles quoting/escaping internally so a filename containing a quote
-            // can't break out of the argument — mirrors Infrastructure/Services/FileLauncher.cs.
+            // explorer.exe /select,<path> opens the parent folder with the file highlighted, but
+            // explorer parses its command line non-standardly: the path MUST be double-quoted
+            // (/select,"<path>") or any path with a comma or space is mis-parsed and explorer falls
+            // back to a default folder — our generated filenames embed the prompt and can contain
+            // commas. Build the argument string directly (ArgumentList escapes quotes the wrong way
+            // for explorer). Injection-safe: '"' is illegal in a Windows path, so it can't break out.
+            // Mirrors Infrastructure/Services/FileLauncher.cs.
             var psi = new ProcessStartInfo
             {
                 FileName = "explorer.exe",
+                Arguments = $"/select,\"{ResultPath}\"",
                 UseShellExecute = true
             };
-            psi.ArgumentList.Add($"/select,{ResultPath}");
             Process.Start(psi);
         }
         catch (Exception ex)
