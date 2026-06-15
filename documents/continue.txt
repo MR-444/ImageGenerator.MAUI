@@ -47,7 +47,9 @@ EVERY element desc co-varied (hair→dry dust currents, sand-dune slope, legs si
   ("Subject & Action:") into the output — the label-echoers are the weaker half. User DECLINED a prompt tweak;
   will judge on Sonnet first. Don't add the "no label echo" line unilaterally.
 
-SLICE 2 (DONE — COMMITTED c8e5598, NOT released; pending user UI verify): breed-from-winners, wired end-to-end.
+SLICE 2 (DONE — COMMITTED c8e5598, NOT released; USER-VERIFIED 2026-06-15 "everything works"): breed-from-winners,
+  wired end-to-end. (Noted: a bred variant occasionally drifts to an adjacent concept — "ice" not "water" — ordinary
+  LLM sampling variance, NOT a bug; tighter on Sonnet/Opus than the quality-agnostic Local tier. No prompt tweak made.)
   Gallery multi-select → new "Breed selected" command (GalleryViewModel) reads each winner's embedded V4 caption
   (IGalleryService.ReadMetadataAsync → "Prompt" → V4JsonPromptSerializer.Deserialize; non-structured images skipped,
   none-qualify → BreedStatusMessage + no navigate) → stashes List<V4JsonPrompt> on the NEW GeneratorViewModel
