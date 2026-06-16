@@ -60,12 +60,21 @@
                 </VerticalStackLayout>
             </HorizontalStackLayout>
 
-            <!-- Build -->
-            <Button Text="Build prompt"
-                    Command="{Binding BuildCommand}"
-                    Style="{StaticResource PrimaryButton}"
-                    HorizontalOptions="Fill"
-                    AutomationId="BuildPromptButton" />
+            <!-- Build / Cancel (Cancel replaces nothing — it appears beside Build only while a build runs) -->
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <Button Grid.Column="0"
+                        Text="Build prompt"
+                        Command="{Binding BuildCommand}"
+                        Style="{StaticResource PrimaryButton}"
+                        HorizontalOptions="Fill"
+                        AutomationId="BuildPromptButton" />
+                <Button Grid.Column="1"
+                        Text="Cancel"
+                        Command="{Binding CancelCommand}"
+                        IsVisible="{Binding IsBusy}"
+                        Style="{StaticResource SecondaryButton}"
+                        AutomationId="CancelBuildButton" />
+            </Grid>
 
             <ActivityIndicator IsRunning="{Binding IsBusy}"
                                IsVisible="{Binding IsBusy}"

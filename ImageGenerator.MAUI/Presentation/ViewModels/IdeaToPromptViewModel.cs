@@ -25,6 +25,11 @@ public partial class IdeaToPromptViewModel : ObservableObject
 
     private V4JsonPrompt? _builtJson;
 
+    // Owns the in-flight build so the user can cancel a slow (paid) Opus call. Recreated per build,
+    // disposed in BuildAsync's finally. The VM is a Singleton, so without this an abandoned build would
+    // keep running — and keep billing — after the user navigates away.
+    private CancellationTokenSource? _cts;
+
     public IdeaToPromptViewModel(
         IPromptBuilderService builder,
         IClipboardService clipboard,
@@ -46,6 +51,7 @@ public partial class IdeaToPromptViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CancelCommand))]
     [NotifyCanExecuteChangedFor(nameof(CopyProseCommand))]
     [NotifyCanExecuteChangedFor(nameof(UseProseCommand))]
     [NotifyCanExecuteChangedFor(nameof(UseJsonCommand))]
@@ -81,6 +87,11 @@ public partial class IdeaToPromptViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanBuild))]
     private async Task BuildAsync()
     {
+        // Fresh token source per build; the previous one (if any) is disposed in this method's finally.
+        var cts = new CancellationTokenSource();
+        _cts = cts;
+        var token = cts.Token;
+
         IsBusy = true;
         // A fresh build invalidates any JSON from a previous run; keep the prose until it's replaced.
         HasJson = false;
@@ -89,7 +100,7 @@ public partial class IdeaToPromptViewModel : ObservableObject
         try
         {
             // Pass 1 (always): idea → prose.
-            var proseResult = await _builder.BuildProseAsync(Idea);
+            var proseResult = await _builder.BuildProseAsync(Idea, token);
             if (!proseResult.Success || proseResult.Prose is null)
             {
                 SetStatus(proseResult.Error ?? "Couldn't build a prompt.", StatusKind.Error);
@@ -106,7 +117,7 @@ public partial class IdeaToPromptViewModel : ObservableObject
 
             // Pass 2 (optional): prose → Ideogram V4 JSON. On failure the prose above stays usable.
             SetStatus("Prose ready — building the Ideogram V4 JSON prompt…", StatusKind.Info);
-            var jsonResult = await _builder.BuildJsonAsync(Prose);
+            var jsonResult = await _builder.BuildJsonAsync(Prose, token);
             if (!jsonResult.Success || jsonResult.Prompt is null)
             {
                 SetStatus(
@@ -119,6 +130,11 @@ public partial class IdeaToPromptViewModel : ObservableObject
             HasJson = true;
             SetStatus("Prose and Ideogram V4 JSON ready. Use either below.", StatusKind.Success);
         }
+        catch (OperationCanceledException)
+        {
+            // User-initiated cancel — not an error. Any prose built in pass 1 stays on the page for reuse.
+            SetStatus("Build cancelled.", StatusKind.Info);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "IdeaToPrompt.{Op}", "Build");
@@ -127,6 +143,25 @@ public partial class IdeaToPromptViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            _cts = null;
+            cts.Dispose();
+        }
+    }
+
+    private bool CanCancel() => IsBusy;
+
+    /// <summary>Aborts the in-flight build. The token flows through to the underlying Anthropic call,
+    /// so a slow paid request is actually stopped (not just hidden behind a disabled button).</summary>
+    [RelayCommand(CanExecute = nameof(CanCancel))]
+    private void Cancel()
+    {
+        try
+        {
+            _cts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The build already finished and disposed its source between the CanExecute check and here.
         }
     }
 

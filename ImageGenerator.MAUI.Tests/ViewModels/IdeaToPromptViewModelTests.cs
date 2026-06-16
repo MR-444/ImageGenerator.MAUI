@@ -137,6 +137,31 @@ public class IdeaToPromptViewModelTests
         generator.Parameters.Prompt.Should().Be(originalPrompt);
     }
 
+    // ---- Cancellation -------------------------------------------------------------------
+
+    [Fact]
+    public async Task Cancel_AbortsAnInFlightBuild_AndReportsCancelled()
+    {
+        var builder = new CancellableProseBuilder();
+        var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance, generator: null);
+        vm.Idea = "a red fox in snow";
+
+        // Start the build; it parks at the (infinite) prose call until the token fires.
+        var build = vm.BuildCommand.ExecuteAsync(null);
+        vm.IsBusy.Should().BeTrue();
+        vm.CancelCommand.CanExecute(null).Should().BeTrue("a build is in flight");
+
+        vm.CancelCommand.Execute(null);
+        await build;
+
+        builder.WasCancelled.Should().BeTrue("the token must reach the underlying call, not just hide the button");
+        vm.StatusKind.Should().Be(StatusKind.Info);
+        vm.StatusMessage.Should().Be("Build cancelled.");
+        vm.IsBusy.Should().BeFalse();
+        vm.CancelCommand.CanExecute(null).Should().BeFalse("no build is running anymore");
+    }
+
     [Fact]
     public async Task CopyProse_PutsTheProseOnTheClipboard()
     {
@@ -169,6 +194,31 @@ public class IdeaToPromptViewModelTests
 
         public Task<PromptBuilderResult> BuildJsonAsync(string prose, CancellationToken cancellationToken = default) =>
             Task.FromResult(json);
+    }
+
+    // Parks pass 1 until the token is cancelled, then propagates the cancellation — lets a test prove
+    // the token actually flows to the underlying call rather than the button merely being disabled.
+    private sealed class CancellableProseBuilder : IPromptBuilderService
+    {
+        public bool WasCancelled { get; private set; }
+
+        public async Task<ProseResult> BuildProseAsync(string idea, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                WasCancelled = true;
+                throw;
+            }
+
+            return ProseResult.Ok(Prose);
+        }
+
+        public Task<PromptBuilderResult> BuildJsonAsync(string prose, CancellationToken cancellationToken = default) =>
+            Task.FromResult(PromptBuilderResult.Fail("not reached in the cancellation test"));
     }
 
     // A GeneratorViewModel built from bare mocks — mirrors GeneratorViewModelTests; we only touch
