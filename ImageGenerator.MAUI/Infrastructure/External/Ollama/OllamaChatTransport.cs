@@ -26,6 +26,11 @@ internal static class OllamaChatTransport
     /// the larger retry turn with headroom; well under the models' trained max, modest extra KV-cache VRAM.</summary>
     private const int NumCtx = 8192;
 
+    /// <summary>Sampling loosened (above Ollama's 0.8 default) so the N independent Local-tier variants
+    /// diverge more — with thinking off the model is otherwise conservative and variants look alike.</summary>
+    private const double Temperature = 1.0;
+    private const double TopP = 0.95;
+
     private static readonly JsonSerializerOptions BodyJson = new()
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
@@ -62,8 +67,9 @@ internal static class OllamaChatTransport
             think = false,
             // Native structured output: the JSON schema object goes straight into `format`.
             format = schema is { } s ? (object)s : null,
-            // Pin the context so the bigger retry turn can't overflow Ollama's 4096 default and truncate.
-            options = new { num_ctx = NumCtx }
+            // Pin the context so the bigger retry turn can't overflow Ollama's 4096 default and truncate;
+            // loosen sampling so the independent variants diverge more.
+            options = new { num_ctx = NumCtx, temperature = Temperature, top_p = TopP }
         };
 
         var endpoint = $"{baseUrl.TrimEnd('/')}/api/chat";
