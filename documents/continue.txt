@@ -1,53 +1,50 @@
 ImageGenerator.MAUI — Open Work Queue
 =====================================
 
-Last updated: 2026-06-16. v1.9.1 RELEASED (tag v1.9.1 on 542e601). This file holds ONLY the
-open backlog. Forensics of completed work live in git history (`git log <prev-tag>..`) and in
-~/.claude memory; the latest full audit is documents/audit/csharp-audit-2026-06-16.md.
+Last updated: 2026-06-16 (end of a long AI-mutation tuning session; 1169 tests green, 0 warnings).
+v1.9.1 RELEASED (tag v1.9.1 on 542e601). This file holds ONLY the open backlog + a short pointer to
+the last session. Full forensics live in git history (`git log v1.9.1..`) and in ~/.claude memory
+([[reference_audit_2026_06_16]], [[reference_ollama_local_tier]], [[reference_mutation_prompt_craft]]).
 
   [ ] = open      [~] = in progress (commit not yet on master)
 
 
-PENDING VERIFY (shipped, awaiting user UI check)
-------------------------------------------------
-[x] LOCAL-LLM MUTATION TIMEOUT FIX — USER-VERIFIED 2026-06-16 ("blindingly fast now", all variants render).
-    Root cause was the local model's THINKING mode (per-caption gen ran minutes → tripped the 5-min
-    per-attempt timeout → only ~2 of 4 variants reached the render queue; confirmed in app.log = Polly
-    TimeoutRejectedException, NOT validation/denial). Fix (commit 46c54a1): OllamaChatTransport switched
-    OpenAI-compat /v1/chat/completions → NATIVE /api/chat so we can set think:false + options.num_ctx
-    (8192, so the validator-retry turn can't overflow Ollama's 4096 default and truncate the system prompt)
-    + native format schema + markdown-fence strip. Gen dropped minutes → ~1s/call (qwen3.6:35b). Plus a
-    partial-outcome action-bar status (GeneratorViewModel.ReportAiMutationOutcome). Cold model LOAD is slow
-    ONLY the very first time (user confirmed): after that the GGUF stays in OS page cache, so reloads — even
-    swapping two Ollama models — are fast. KNOWN/ACCEPTED: Local-tier scenes now have LOWER variance between
-    variants (think:false makes the model more conservative; Local is the free verification path, real
-    variance comes from Sonnet/Opus). If more Local variance is ever wanted, the cheap lever is a higher
-    options.temperature/top_p in OllamaChatTransport — NOT done (user finds the current output acceptable).
-[ ] AI caption RESTYLE UI-verify: on the Mutation page, AI mode → pick a saved style ("Saved style"
-    picker) → confirm the N variants render coherently in that style (whole-scene restyle, not just
-    the art_style field). AI round-trip itself already user-verified (Local good / Sonnet + Opus very
-    good); this is the one outstanding manual check from the pin-a-style slice (commit 13426eb).
+SESSION 2026-06-16 — AUDIT + AI MUTATION QUALITY (all committed to master, NOT released)
+----------------------------------------------------------------------------------------
+Commits in order:
+  - Whole-app audit documents/audit/csharp-audit-2026-06-16.md (very good health, no Critical) + ALL
+    follow-ups fixed: F1 f8cafbc (IdeaToPrompt cancellation), F2 b513ad2 (reset IsAiMode on ordinary
+    visit), F3 233def9 (DescBudget doc — greedy best-fit is intentional), F4/F6/F7 c3ed11b (polish),
+    docs 0e7edcf. F5/F8-F11 = no-action by design. See [[reference_audit_2026_06_16]].
+  - Local-LLM timeout fix 46c54a1: OllamaChatTransport → NATIVE /api/chat with think:false + num_ctx=8192
+    + fence-strip. Root cause was THINKING mode (minutes/call → 5-min timeout → ~2 of 4 variants). USER-
+    VERIFIED "blindingly fast". Cold model load slow only the FIRST time (OS page cache after).
+  - Local sampling 60f1828 (temperature=1.0, top_p=0.95) for more variant spread.
+  - Per-index creative lens 0acebf9 + lens-DEFERS-to-steer 6f5b9f8: a blind call can't "differ from
+    siblings", so each index gets a concrete lens (time/season/mood/composition/narrative/focal); when a
+    steer is present it DOMINATES and the lens steps aside. See [[reference_mutation_prompt_craft]].
+  - HLD=overview + detail-in-bbox'd-elements 233b8bf, then forced lean-HLD + bbox-on-EVERY-element 812015e.
+    Dodges the Ideogram OPEN-WEIGHTS checkpoint's over-eager block on holistic phrasing (content inside a
+    bbox'd element is DECOUPLED and renders even when the same words in high_level_description get gated).
+    USER-VERIFIED: no blocked images; lean HLDs + bboxes present in output.
+  - Style-library honest names 09c4e71: gouache/anime → real clean styles (were botanist samples),
+    density → "vignette" (real photo edge-darken effect), NEW "occult_botanical" preserves the look.
+    SEED + the user's LIVE library (Pictures\...\mutation-library\style-fragments.json) both migrated.
+
+MODEL NOTES (local Ollama tier — see [[reference_ollama_local_tier]]): qwen3.6:35b = faithful (preserves
+the pinned style, follows structure); Qwen3-Next-80B-A3B-Instruct = drifts/over-associates ("3am → bed",
+restyles off the lock, dropped bboxes). All installed models are thinking-capable. 35B is the safer bet.
 
 
-AUDIT FOLLOW-UPS — documents/audit/csharp-audit-2026-06-16.md (very good health; no Critical)
---------------------------------------------------------------------------------------------
-[x] F1 (High) — FIXED, committed f8cafbc: IdeaToPromptViewModel now owns a per-build
-    CancellationTokenSource, threads the token into BuildProseAsync/BuildJsonAsync, and exposes a
-    CancelCommand (+ "Cancel" button on IdeaToPromptPage, visible while busy). OperationCanceledException
-    → neutral "Build cancelled." status; prose from pass 1 stays usable. +1 test (cancellation), 8/8 green.
-[x] F2 (Med) — FIXED: MutationEngineViewModel.Initialize now sets IsAiMode = IsBreedMode, so an ordinary
-    visit resets to the free deterministic engine (a prior Breed flow no longer silently leaves the
-    singleton VM on the paid LLM path). +1 regression test, 35/35 MutationEngineViewModelTests green.
-[x] F3 (Med) — DECIDED: keep the code, fix the doc. The greedy best-fit `continue` is INTENTIONAL and
-    pinned by DescBudgetTests.Fit_GreedilySkipsTooBigPhrase_ButTakesSmallerLaterOne (a too-big high-tier
-    phrase is skipped, a smaller low-tier one back-fills). `break` would reverse a named test + drop
-    ornament detail. Reworded the Fit/class XML doc to describe best-fit-within-priority + added a guard
-    comment at the `continue` so it isn't "fixed" back to `break`. Doc-only; 11/11 DescBudgetTests green.
-[x] Polish bundle (Minor) — FIXED: F6 MutationEngineViewModel.InitializeFrom now re-rolls Seed on a
-    genuinely new base (same-base early-return still preserves it across nav); F7 MutationLibrary ctor
-    defensive-copies its 4 collections (+isolation test); F4 both transports throw HttpRequestException
-    (carrying HttpStatusCode) on non-2xx, keeping InvalidOperationException only for a malformed 2xx body.
-    1167 tests green, 0 warnings. (F5/F8/F9/F10/F11 = no-action per the report; do NOT re-discover as new.)
+PENDING VERIFY (shipped this session, awaiting more user eyeballing)
+-------------------------------------------------------------------
+[ ] BBOX-DECOUPLE reliability: only ONE clean no-block run confirmed. Re-run a few previously-blocked
+    prompts on BOTH qwen3.6:35b and the 80B; confirm lean-HLD + every-element-bbox holds and blocks stay
+    gone (the 80B ignored structure once — 35B safer).
+[ ] AI caption RESTYLE UI-verify: AI mode → pick a saved style → variants render coherently in that style
+    (whole-scene restyle). AI round-trip already verified; this is the pin-a-style check (commit 13426eb).
+[ ] Style-rename sanity: pin gouache (real gouache, no flora), occult_botanical (flowers on purpose),
+    vignette (darkened-edge photo) — confirm names now match output.
 
 
 ROADMAP / OUTLOOK — recorded forward plan (each = its own future task)
