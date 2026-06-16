@@ -60,9 +60,11 @@ The object has exactly three top-level keys, in this order:
      - `type` (string, required) — `"obj"` for a visual object, or `"text"` for rendered words.
      - `desc` (string, required) — a vivid description of this element, under ~60 words.
      - `text` (string) — REQUIRED when `type` is `"text"`: the literal words to render. Omit for `obj`.
-     - `bbox` (array of 4 integers, optional) — placement on a fixed 1000×1000 grid (origin top-left),
-       ordered `[y_min, x_min, y_max, x_max]`. Every value 0–1000, with `y_min ≤ y_max` and
-       `x_min ≤ x_max`. Preserve the base element's bbox unless the request changes the layout.
+     - `bbox` (array of 4 integers) — REQUIRED: give EVERY element a bbox so its description renders as its
+       own placed region (this is what decouples the detail from the headline). Placement on a fixed
+       1000×1000 grid (origin top-left), ordered `[y_min, x_min, y_max, x_max]`. Every value 0–1000, with
+       `y_min ≤ y_max` and `x_min ≤ x_max`. Preserve the base element's bbox unless the request changes the
+       layout; if a base element has none, assign a sensible one — never drop a bbox.
      - `color_palette` (array of up to 5 strings) — OPTIONAL per-element palette, same `#RRGGBB` rule.
 
 # Rules
@@ -72,5 +74,5 @@ The object has exactly three top-level keys, in this order:
 - Hex colors are uppercase `#RRGGBB`. If unsure of exact colors, omit the palette rather than inventing.
 - Keep ground, floor, sky, walls, and water in `background`, never as elements.
 - Keep each element `desc` under ~60 words; trim incidental detail before subject identity.
-- bbox values stay within 0–1000 and keep min ≤ max on both axes.
+- Give EVERY element a bbox (never drop one); values stay within 0–1000 and keep min ≤ max on both axes.
 - Place the primary subject first in `elements`.

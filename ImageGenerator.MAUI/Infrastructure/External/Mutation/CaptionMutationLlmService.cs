@@ -220,9 +220,10 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
         // Diversity directive: with NO steer, spread the variants across a concrete index-keyed lens; with a
         // steer the user's direction dominates and the lens defers (so a fixed axis can't contradict it).
         sb.Append($"This is variation #{index + 1}. {VariationDirective(steer, index)} ")
-          .Append("Rewrite the WHOLE caption coherently so the high_level_description, background and every ")
-          .Append("element's desc reflect that direction together; never leave any part in the original framing. ")
-          .Append("Return ONLY the resulting V4 JSON object.");
+          .Append("Rewrite the WHOLE caption coherently so the style, background and every element's desc reflect ")
+          .Append("that direction together; never leave any part in the original framing. Keep the ")
+          .Append("high_level_description a short, plain overview and carry the vivid, specific detail in the ")
+          .Append("bbox'd elements (give every element a bbox), not the headline. Return ONLY the resulting V4 JSON object.");
         return sb.ToString();
     }
 
@@ -244,8 +245,9 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
           .Append(string.IsNullOrWhiteSpace(steer)
               ? $"push it in this distinct direction: {LensFor(index)} "
               : "give it an interpretation clearly distinct from the other offspring (different staging, emphasis or detail) without contradicting the BREEDING REQUEST above. ")
-          .Append("Keep the whole caption coherent across background and every element desc. ")
-          .Append("Return ONLY the resulting V4 JSON object.");
+          .Append("Keep the whole caption coherent across background and every element desc; keep the ")
+          .Append("high_level_description a short, plain overview and carry the vivid detail in the bbox'd ")
+          .Append("elements (give every element a bbox), not the headline. Return ONLY the resulting V4 JSON object.");
         return sb.ToString();
     }
 
