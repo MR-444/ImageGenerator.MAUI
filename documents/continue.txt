@@ -53,6 +53,16 @@ Respect scope rules (no multi-image-per-click; no kontext/negative_prompt/A1111-
 [ ] One-click upscale of a result — route a finished image through an existing provider (a Replicate
     upscaler model, or a ComfyUI upscale workflow). New operation type, reuses dispatch/provider plumbing.
 [ ] Saved parameter presets — name + recall a model+params combo.
+[ ] Auto-fill missing REQUIRED node inputs from /object_info (ComfyUI resilience). The app submits frozen
+    API-format workflows; when ComfyUI adds a new required input to a node, the GUI silently fills its
+    default but the API does NOT, so old saved workflows fail validation and the render dies with a silent
+    "no output image". Already bit us once: ComfyUI 0.25.0 added required `multiple` to ResolutionSelector
+    (fixed by hand in the sample, commit 5e6a638; user's own wf patched outside the repo). Fix: right before
+    submit, GET /object_info once and for every node insert any missing required input using its schema
+    default — mirrors what the GUI does, immunizes against this whole class of break. Catch:
+    ComfyUiWorkflowPatcher is a PURE OFFLINE transform, so feed object_info IN from the service layer (which
+    already talks to ComfyUI) rather than having the patcher make the network call. See
+    [[reference_comfyui_resolutionselector_multiple]].
 
 NOT selected (record so they aren't re-pitched as new): gallery delete/search/favorites; compare/A-B
 view; seed-variation "more like this" (only OK as a sequential batch, never multi-output).
