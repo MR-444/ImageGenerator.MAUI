@@ -10,6 +10,19 @@ open backlog. Forensics of completed work live in git history (`git log <prev-ta
 
 PENDING VERIFY (shipped, awaiting user UI check)
 ------------------------------------------------
+[x] LOCAL-LLM MUTATION TIMEOUT FIX — USER-VERIFIED 2026-06-16 ("blindingly fast now", all variants render).
+    Root cause was the local model's THINKING mode (per-caption gen ran minutes → tripped the 5-min
+    per-attempt timeout → only ~2 of 4 variants reached the render queue; confirmed in app.log = Polly
+    TimeoutRejectedException, NOT validation/denial). Fix (commit 46c54a1): OllamaChatTransport switched
+    OpenAI-compat /v1/chat/completions → NATIVE /api/chat so we can set think:false + options.num_ctx
+    (8192, so the validator-retry turn can't overflow Ollama's 4096 default and truncate the system prompt)
+    + native format schema + markdown-fence strip. Gen dropped minutes → ~1s/call (qwen3.6:35b). Plus a
+    partial-outcome action-bar status (GeneratorViewModel.ReportAiMutationOutcome). Cold model LOAD is slow
+    ONLY the very first time (user confirmed): after that the GGUF stays in OS page cache, so reloads — even
+    swapping two Ollama models — are fast. KNOWN/ACCEPTED: Local-tier scenes now have LOWER variance between
+    variants (think:false makes the model more conservative; Local is the free verification path, real
+    variance comes from Sonnet/Opus). If more Local variance is ever wanted, the cheap lever is a higher
+    options.temperature/top_p in OllamaChatTransport — NOT done (user finds the current output acceptable).
 [ ] AI caption RESTYLE UI-verify: on the Mutation page, AI mode → pick a saved style ("Saved style"
     picker) → confirm the N variants render coherently in that style (whole-scene restyle, not just
     the art_style field). AI round-trip itself already user-verified (Local good / Sonnet + Opus very
