@@ -28,8 +28,9 @@ internal static class OllamaChatTransport
     /// One chat-completions call against <paramref name="baseUrl"/>. The system prompt is sent as a
     /// leading <c>system</c> message. When <paramref name="schema"/> is non-null the call requests a
     /// json_schema-constrained response; the first choice's message content is returned. Ollama ignores
-    /// auth, so no key is sent. Throws <see cref="InvalidOperationException"/> on a non-2xx status or an
-    /// empty response.
+    /// auth, so no key is sent. Throws <see cref="HttpRequestException"/> (carrying the
+    /// <see cref="System.Net.HttpStatusCode"/>) on a non-2xx status, or <see cref="InvalidOperationException"/>
+    /// on a 2xx response carrying no message content.
     /// </summary>
     public static async Task<string> SendAsync(
         IHttpClientFactory httpClientFactory,
@@ -69,8 +70,10 @@ internal static class OllamaChatTransport
             logger.LogWarning(
                 "Ollama HTTP {StatusCode} Url={Url} Body={Body}",
                 (int)response.StatusCode, endpoint, Truncate(responseBody, 1000));
-            throw new InvalidOperationException(
-                $"HTTP {(int)response.StatusCode} — {ExtractErrorMessage(responseBody) ?? Truncate(responseBody, 200)}");
+            throw new HttpRequestException(
+                $"HTTP {(int)response.StatusCode} — {ExtractErrorMessage(responseBody) ?? Truncate(responseBody, 200)}",
+                inner: null,
+                statusCode: response.StatusCode);
         }
 
         return ExtractContent(responseBody);

@@ -33,8 +33,9 @@ internal static class AnthropicMessagesTransport
     /// <summary>
     /// One Messages call: assemble the body, POST it, return the model's first text block. When
     /// <paramref name="schema"/> is non-null the call is constrained to that JSON schema (structured
-    /// outputs); when null it's a plain text call. Throws <see cref="InvalidOperationException"/> on a
-    /// non-2xx status or a response carrying no text block.
+    /// outputs); when null it's a plain text call. Throws <see cref="HttpRequestException"/> (carrying the
+    /// <see cref="System.Net.HttpStatusCode"/>) on a non-2xx status, or <see cref="InvalidOperationException"/>
+    /// on a 2xx response carrying no text block.
     /// </summary>
     public static async Task<string> SendAsync(
         IHttpClientFactory httpClientFactory,
@@ -84,8 +85,10 @@ internal static class AnthropicMessagesTransport
             logger.LogWarning(
                 "Anthropic HTTP {StatusCode} Body={Body}",
                 (int)response.StatusCode, Truncate(responseBody, 1000));
-            throw new InvalidOperationException(
-                $"HTTP {(int)response.StatusCode} — {ExtractErrorMessage(responseBody) ?? Truncate(responseBody, 200)}");
+            throw new HttpRequestException(
+                $"HTTP {(int)response.StatusCode} — {ExtractErrorMessage(responseBody) ?? Truncate(responseBody, 200)}",
+                inner: null,
+                statusCode: response.StatusCode);
         }
 
         return ExtractText(responseBody);

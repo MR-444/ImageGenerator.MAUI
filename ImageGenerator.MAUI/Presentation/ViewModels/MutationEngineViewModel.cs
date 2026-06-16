@@ -370,7 +370,10 @@ public partial class MutationEngineViewModel : ObservableObject
         HasBase = _base is not null;
         GenerateCommand.NotifyCanExecuteChanged();
 
-        if (Seed == 0) Seed = Random.Shared.Next();
+        // Fresh base ⇒ fresh seed, so each base gets its own comparison grid. The same-base early return
+        // above preserves the seed (and the rest of the run state) across navigation; only a genuinely new
+        // base re-rolls. The user can still pin a value via the seed entry / Randomize button afterward.
+        Seed = Random.Shared.Next();
         (TargetWidth, TargetHeight) = DeriveTarget(aspectRatio, resolution);
 
         SlotReview.Clear();
