@@ -315,6 +315,21 @@ public class MutationEngineViewModelTests
     }
 
     [Fact]
+    public void Initialize_OrdinaryVisitAfterBreed_ResetsToDeterministicEngine()
+    {
+        var sut = CreateSutWithAi(new StubMutationLlm());
+        sut.SetBreedSetForTest(new[] { MutationTestData.BaseCaption(), MutationTestData.BaseCaption() });
+        sut.IsAiMode.Should().BeTrue("breeding forced the paid LLM path on");
+
+        // An ordinary re-entry (no breed hand-off) must drop back to the free deterministic engine,
+        // not silently leave the singleton VM on the paid AI path.
+        sut.Initialize();
+
+        sut.IsBreedMode.Should().BeFalse();
+        sut.IsAiMode.Should().BeFalse("an ordinary visit resets to the free deterministic engine");
+    }
+
+    [Fact]
     public async Task BreedMode_FansOutBreedAsync_NotMutate()
     {
         var stub = new StubMutationLlm();

@@ -278,11 +278,12 @@ public partial class MutationEngineViewModel : ObservableObject
         if (_generator is not null) _generator.PendingBreedSet = null;
         _breedSet = breed is { Count: > 0 } ? breed : null;
         IsBreedMode = _breedSet is not null;
+        // Breeding is an AI-only path and forces the LLM engine on; an ordinary visit resets to the free
+        // deterministic engine. Without this, a prior Breed flow (which sets IsAiMode = true) would
+        // silently leave the singleton VM on the paid LLM path the next time the user opens the page.
+        IsAiMode = IsBreedMode;
         if (IsBreedMode)
-        {
-            IsAiMode = true;
             BreedSummary = $"Breeding from {_breedSet!.Count} winner(s) — set a steer + model, then run.";
-        }
 
         var pending = _breedSet?[0] ?? _generator?.PendingMutationBase;
         if (_generator is not null) _generator.PendingMutationBase = null;
