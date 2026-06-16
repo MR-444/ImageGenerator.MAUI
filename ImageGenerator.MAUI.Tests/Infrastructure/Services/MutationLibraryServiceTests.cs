@@ -116,7 +116,7 @@ public sealed class MutationLibraryServiceTests : IDisposable
         var library = await CreateSut(RealSeedOpener).LoadAsync();
 
         library.StyleFragments.Select(f => f.Name).Should().Equal(
-            "gouache", "anime", "density",
+            "gouache", "anime", "vignette", "occult_botanical",
             "oil_impasto", "watercolor", "pastel_soft", "charcoal_sketch", "woodcut",
             "ukiyo_e", "risograph", "art_nouveau", "art_deco", "comic_ink",
             "cyberpunk_neon", "synthwave", "low_poly", "pixel_art", "concept_matte",
