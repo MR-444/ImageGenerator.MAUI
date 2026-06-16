@@ -1,494 +1,72 @@
 ImageGenerator.MAUI — Open Work Queue
 =====================================
 
-Last updated: 2026-06-15 (prompt-builder v2 two-pass committed; see top section). v1.9.0 RELEASED. v1.9.0 bundles the post-1.8.0 work:
-Remix from an image (flagship), Gallery multi-select → one CivitAI draft post,
-Configurable output folder, Clear finished jobs, Faster byte-identical PNG saves,
-and the custom app icon. Earlier: v1.8.0 (CivitAI posting: one-click publish +
-Gallery multi-select → one draft post). Custom app icon shipped (framed-scene
-glyph replacing the .NET template, commit 01a75cd). The v1.5.0 Structure-Editor
-& ComfyUI work and the full csharp-auditor pass (0 Critical / 2 High / 3 Medium
-/ 2 Low) are ALL shipped. Full per-item forensics of completed work live in this
-file's git history (audit report at documents/audit/csharp-audit-2026-06-11.md).
-
-This file holds ONLY the open backlog. Update it when you start an item
-(set [~]) and when you finish (set [x] + commit hash, then prune on the
-next pass).
+Last updated: 2026-06-16. v1.9.1 RELEASED (tag v1.9.1 on 542e601). This file holds ONLY the
+open backlog. Forensics of completed work live in git history (`git log <prev-tag>..`) and in
+~/.claude memory; the latest full audit is documents/audit/csharp-audit-2026-06-16.md.
 
   [ ] = open      [~] = in progress (commit not yet on master)
 
 
-AI-STEERED CAPTION MUTATION (LLM mutation engine) — ALL 3 SLICES COMMITTED 2026-06-15 (not released)
-------------------------------------------------------------------------------------------------
-A second, AI path beside the deterministic mutation engine on the Mutation page. Plan (3 slices) at
-~/.claude/plans/implement-the-plan-at-fuzzy-emerson.md. Decisions locked: directed steer + breed-from-winners
-+ anchor/persist; Sonnet 4.6 default / Opus 4.8 / Local Ollama; one call per variant; NOT reproducible
-(render seed still pinned across the batch so only the caption differs).
-
-SLICE 1 (DONE, NOT yet released): free-text steer → N coherent whole-scene variants via the existing
-_generator.Batch.RunBatchAsync handoff. USER-VERIFIED on local qwen3.5:27b — underwater base → desert variants,
-EVERY element desc co-varied (hair→dry dust currents, sand-dune slope, legs sink into powdery sand). 1130 tests, 0 warnings.
-  - Shared Anthropic transport extracted: AnthropicMessagesTransport.SendAsync(... modelId param ...) +
-    V4StructuredSchema. Prompt builder refactored onto it, behaviour unchanged; ChatTurn is now top-level in
-    the Anthropic namespace (one test ref updated). HttpClientName "anthropic" moved onto the transport.
-  - ICaptionMutationLlmService / CaptionMutationLlmService: MutateAsync/BreedAsync, ModelTier {Sonnet,Opus,Local},
-    one validated variant per call (validator + 1 retry feeding errors back), index-varied user turn for diversity,
-    tier→transport routing. Bundled clean-room Resources/Raw/Mutation/mutation-system.md + private override
-    "mutation-prompt.md" in OutputPaths.PromptBuilderDirectory (mirrors the builder's open-core boundary).
-  - Local tier = FREE technical-verification path: OllamaChatTransport (OpenAI-compatible /v1/chat/completions,
-    response_format json_schema, no key). Settings: OllamaBaseUrl (default http://fireengine:11434, logs <null>→falls
-    back to default) + OllamaModel, persisted in UiStateStore. Model dropdown on BOTH Settings AND the Mutation page
-    (shown when Local tier) via IOllamaModelCatalog (GET /api/tags) + Refresh. Ollama HttpClient = 5min/attempt,
-    10min total; Local tier runs SEQUENTIALLY (concurrency 1) — one GPU can't do parallel 27B gens within the timeout.
-  - Mutation page: Deterministic/AI engine toggle; AI reveals steer Editor + model Picker + live cost estimate
-    (N×rate: Sonnet ~$0.017/call, Opus ~$0.028/call, Local free) and hides deterministic-only controls.
-  - BreedAsync is BUILT + unit-tested but NOT wired to UI yet — that is slice 2.
-  KNOWN (open, do NOT fix without the user): a weak local model sometimes echoes base HLD field-labels
-  ("Subject & Action:") into the output — the label-echoers are the weaker half. User DECLINED a prompt tweak;
-  will judge on Sonnet first. Don't add the "no label echo" line unilaterally.
-
-SLICE 2 (DONE — COMMITTED c8e5598, NOT released; USER-VERIFIED 2026-06-15 "everything works"): breed-from-winners,
-  wired end-to-end. (Noted: a bred variant occasionally drifts to an adjacent concept — "ice" not "water" — ordinary
-  LLM sampling variance, NOT a bug; tighter on Sonnet/Opus than the quality-agnostic Local tier. No prompt tweak made.)
-  Gallery multi-select → new "Breed selected" command (GalleryViewModel) reads each winner's embedded V4 caption
-  (IGalleryService.ReadMetadataAsync → "Prompt" → V4JsonPromptSerializer.Deserialize; non-structured images skipped,
-  none-qualify → BreedStatusMessage + no navigate) → stashes List<V4JsonPrompt> on the NEW GeneratorViewModel
-  .PendingBreedSet → Shell.GoToAsync("mutation-engine"). GalleryViewModel now injects the GeneratorViewModel SINGLETON
-  (transient→singleton, no cycle: generator depends on IGalleryService not the gallery VM); ctor + GalleryViewModelTests
-  BuildGenerator() helper updated. MutationEngineViewModel.Initialize consumes PendingBreedSet FIRST (resets _breedSet
-  on every ordinary visit so no stale winners), seeds _base from winner[0] (so HasBase run-gate + target-frame still
-  work), flips IsAiMode=true, sets IsBreedMode + BreedSummary banner. MutateWithAiAsync branches: _breedSet present →
-  fan out BreedAsync(breedSet, steer, i, tier); else MutateAsync. Same seed-pinned DispatchAiResultsAsync/RunBatchAsync
-  handoff, unchanged. NO LLM UI duplicated in the Gallery (steer + model tier set on the Mutation page). New test seam
-  SetBreedSetForTest mirrors the hand-off without a generator. UI: "Breed selected" button + status in the Gallery
-  selection action-bar card; breed banner card on the Mutation page (IsVisible IsBreedMode). +5 tests (1135), 0 warnings.
-  GOTCHA confirmed: Shell.Current is null in tests → BreedSelectedAsync stashes BEFORE navigating, GoToAsync throws,
-  caught → tests assert the stash (the observable effect).
-SLICE 3 (DONE — COMMITTED 26b459a, NOT released; AI round-trip user-verified 2026-06-15: Local good /
-  Sonnet very good / Opus very good "maybe not worth it, puts in implications"). Save-style + anchor presets +
-  pin-a-style:
-  - SAVE STYLE FROM THIS: gallery DETAIL page action "Save style" → DisplayPromptAsync for a name (View) →
-    GalleryItemDetailViewModel.SaveStyleAsync(name) reads "Prompt" metadata → V4JsonPromptSerializer.Deserialize →
-    extracts StyleDescription → appends a named StyleFragment via IMutationLibraryService.SaveAsync. REJECTS a
-    duplicate name (never clobbers). VM gained an IMutationLibraryService ctor param.
-  - ANCHOR PRESETS: new 4th user-editable store anchor-presets.json (seeded from Resources/Raw/MutationDefaults
-    via the same SeedIfMissing path; auto-bundled by the Resources\Raw\** glob). MutationLibrary gained a 4th
-    DEFAULTED AnchorPresets ctor param + PresetByName (every existing 2-/3-arg caller compiles unchanged).
-    "Start from a preset…" picker in the AI steer card REPLACES the steer text on pick. 8 bundled clean-room presets.
-  - PIN A STYLE (the verification-driven addition): a "Saved style" picker (its OWN card, IsVisible ShowStylePin).
-    DETERMINISTIC LOOK = swap to that exact style every variant (MutationRunConfig.PinnedStyleName → MutationContext
-    → SwapStyleOperator; engine restricts the LOOK run to SwapStyle when pinned → one restyled result after the
-    dispatch dedup). AI path (commit 13426eb) = pre-apply the chosen StyleDescription onto the base + prepend a
-    style-LOCK steer preamble → the LLM rewrites the WHOLE scene into that style coherently (the deterministic swap
-    can't — it leaves element wording in the old style; that incoherence is WHY the LLM path exists). Shared
-    SelectedStyleName/StyleNames + RandomStyleSentinel ("Any style (random)"); StyleNames refresh on each page
-    appearance so a just-saved style shows up. ShowStylePin = (IsAiMode && !IsBreedMode) || (IsDeterministicMode &&
-    !IsScene) — hidden in breed mode (breed blends winners' own looks; AI-style-for-breed is a possible follow-up).
-  - 1152 tests, Debug+Release 0 warnings. PENDING: user UI-verify the AI restyle (pick a saved style in AI mode →
-    variants render coherently in that style). Plan: ~/.claude/plans/continue-the-ai-caption-composed-catmull.md.
-
-SHOW-IN-FOLDER FIX (COMMITTED a1f80af, unrelated bug found during slice-3 verify): explorer.exe parses /select
-  non-standardly — the path MUST be double-quoted (/select,"<path>") or any path with a comma/space is mis-parsed
-  and Explorer opens the drive root. Our generated filenames embed the prompt and routinely contain commas. Fixed
-  FileLauncher.RevealInFolder + GenerationJob.ShowInFolder to build /select,"<path>" directly (NOT an unquoted
-  ArgumentList token). Injection-safe: '"' is illegal in a Windows path. (Reverses the audit's QW5 ArgumentList
-  switch, which broke comma paths.)
-
-OBSERVATION (user, 2026-06-15): the deterministic mutation path has "low influence" vs the LLM path — expected;
-  the LLM restyle is the coherent one. Not an action item, just the standing verdict on the two engines.
-
-VRAM UNLOAD (COMMITTED 77c3f4a): on the single-GPU fireEngine the 27B Ollama model (mutation Local tier) and the
-  ComfyUI checkpoint both want VRAM; holding both thrashes. Now each frees when idle:
-  - Ollama ALWAYS: IOllamaModelCatalog.UnloadAsync → POST /api/generate {keep_alive:0}, fired ONCE after the
-    Local fan-out in MutationEngineViewModel (before the ComfyUI render), never per-call. Cloud tiers no-op.
-  - ComfyUI behind a Settings toggle "Free GPU memory after rendering" (default ON, key imggen.free_vram_after_
-    rendering): new IComfyUiVramService → POST /free {unload_models,free_memory}. GeneratorViewModel.MaybeFree
-    fires when rendering is IDLE only — after a single Generate, and once at batch end (gated by
-    Batch.IsBatchRunning so a batch never reloads the checkpoint mid-run; batch-end hook via Batch.PropertyChanged).
-    Best-effort (mirrors /interrupt; never throws). Toggle OFF keeps the checkpoint resident for fast single-image
-    iteration. 1162 tests, 0 warnings. USER-VERIFIED on fireEngine 2026-06-16 ("the ram management works").
+PENDING VERIFY (shipped, awaiting user UI check)
+------------------------------------------------
+[ ] AI caption RESTYLE UI-verify: on the Mutation page, AI mode → pick a saved style ("Saved style"
+    picker) → confirm the N variants render coherently in that style (whole-scene restyle, not just
+    the art_style field). AI round-trip itself already user-verified (Local good / Sonnet + Opus very
+    good); this is the one outstanding manual check from the pin-a-style slice (commit 13426eb).
 
 
-PROMPT BUILDER v2 — TWO-PASS VPE → (optional) IDEOGRAM JSON (SHIPPED + USER-VERIFIED 2026-06-15, v1.9.1)
---------------------------------------------------------------------------------------------------------------
-USER-VERIFIED working end-to-end 2026-06-15. Version bumped 1.9.0 → 1.9.1 / ApplicationVersion 19 → 20;
-README updated (two-pass prose+optional-JSON, result card, both override files, ~3-6¢ prose / ~6-12¢ prose+JSON).
-RELEASED on GitHub: tag v1.9.1 on 542e601, exe 118 MB, marked Latest — the FIRST release with ANY LLM feature
-(prompt-builder v1 f8e3eb1 was committed AFTER the v1.9.0 exe, so no prior release shipped LLM support); notes
-framed it as "first LLM support, for better or worse" (opt-in, paid Anthropic key).
-COST NOTE (user): a prose+JSON build is ~10¢ (Opus 4.8 high effort × 2 calls) — "too expensive" but ACCEPTED;
-feature is opt-in (uncheck JSON for a cheaper prose-only build, or just don't use it). Do NOT re-pitch a
-cheaper model — Opus is the only tier that clears the bar (Haiku=unreliable JSON, Sonnet=lacks creativity).
-Post-ship the user also cleaned their PRIVATE system-prompt.md override (Pictures\...\prompt-builder\): the
-original Claude-SKILL version told the model to run `python scripts/validate.py --minify` + paste validator
-stdout + consult a vendored references file — none of which exist in-app (no code exec; app does validation +
-minify itself + structured-output constraint). Edited that local file (NOT the repo/bundled prompt — clean-room
-boundary intact) to "return only the JSON object; the app validates + compacts". vpe-prompt.md = their real VPE skill.
-
-Rebuilt "Describe an idea" as TWO passes. Pass 1 (VPE, ALWAYS runs): idea → a normal PROSE prompt usable by
-every plain-prompt model (Pollinations, Flux, gpt-image, nano-banana) and by a human. Pass 2 (Ideogram
-adapter, OPTIONAL): prose → schema-valid V4 JSON via the existing validator gate + 1 retry. A CHECKBOX by
-"Build prompt" ("Also build an Ideogram V4 JSON prompt") gates pass 2, DEFAULTED from
-GeneratorViewModel.SupportsJsonPromptEditor (on for Ideogram V4 / ComfyUI, off otherwise). The prose is NEVER
-discarded: a result card shows it (read-only Editor, selectable) with Copy prose / Use prose as prompt /
-Use JSON prompt (last shown only once HasJson). NO auto-navigate on Build now — results stay on the page;
-navigation happens only on a Use* click. Why: the old single-call always-JSON feature was WRONG for
-plain-prompt models (nova-canvas 2000-char 400). Two calls ⇒ no MaxOutputTokens bump.
-
-  - IPromptBuilderService: BuildAsync → BuildProseAsync(idea):ProseResult + BuildJsonAsync(prose):PromptBuilderResult.
-    New record ProseResult(Success,Prose,Error){Ok/Fail}. StructuredCompletion seam gained JsonElement? schema
-    (null ⇒ plain text VPE call, output_config.format OMITTED but effort:"high"+adaptive thinking+ephemeral KEPT;
-    V4Schema ⇒ structured JSON call). BodyJson WhenWritingNull drops the null format.
-  - Override split (override beats bundled, read at call time): VPE = vpe-prompt.md else bundled NEW
-    Resources/Raw/PromptBuilder/vpe-system.md; JSON KEEPS system-prompt.md (back-compat — the user's existing
-    override now drives pass 2 unchanged) else strengthened v4-builder-system.md. README.txt rewritten to
-    document BOTH override files + the two-pass flow.
-  - PUBLIC-BASELINE (user decision): bundled prompts strengthened CLEAN-ROOM from PUBLIC sources only
-    (Ideogram open-source magic-prompt craft, public V4 schema, general prompt-craft) — NEVER the user's
-    *SKILL*.md / VPE skill. v4-builder-system.md gained a "How the renderer reads this structure" section
-    (ground-belongs-in-background, one-element-per-subject, commit-to-one-value, photographic restraint, text
-    elements) and now frames its input as prose. vpe-system.md is a new ~60-130-word prose-prompt instruction.
-  - IdeaToPromptViewModel: + BuildJson / Prose / HasJson / HasProse, _builtJson; injects IClipboardService;
-    CopyProse/UseProse(Prompt=prose,UseJsonPrompt=false)/UseJson(ApplyToGenerator,UseJsonPrompt=true) commands.
-  - 1108 tests (service: VPE schema-less call + override precedence + vpe-system.md guard; VM: checkbox off/on,
-    UseProse/UseJson handoffs, JSON-fail keeps prose, CopyProse). Debug+Release 0 warnings.
-  - REMAINING: user manual UI verify (plain-prompt → prose-only; Ideogram V4/ComfyUI → prose+JSON; Copy;
-    drop private vpe-prompt.md/system-prompt.md and confirm each pass reads its file).
-
-
-COMPLETE FEATURE — IN-APP "DESCRIBE AN IDEA → V4 JSON" PROMPT BUILDER (v1 shipped + user-verified 2026-06-15)
----------------------------------------------------------------------------------------------------------
-Committed f8e3eb1. User-verified end-to-end: idea → Build → valid V4 caption in the box
-(UseJsonPrompt on) → ComfyUI Ideogram render saved (app.log clean; no PromptBuilder errors). 1096 tests
-(+20), Debug+Release 0 warnings. Plan: C:\Users\mr\.claude\plans\continue-txt-design-the-vast-summit.md.
-
-WHAT (as built): MainPage "Describe an idea…" button (in the SupportsJsonPromptEditor block beside Edit
-structure… / Mutate current prompt…) → IdeaToPromptPage/VM (route "idea-to-prompt", AddSingleton VM so an
-in-progress idea survives navigation) → ONE Claude Opus 4.8 call with NATIVE STRUCTURED OUTPUT → V4 JSON →
-V4JsonPromptValidator gate (+1 retry feeding the validator errors back as a user turn) → the established
-handoff (Parameters.Prompt = compact serialize, UseJsonPrompt = true). The app already had the RUNTIME half.
-
-KEY API SHAPE (confirmed via the claude-api skill 2026-06-15 — don't re-derive):
-  - Native structured outputs are GA, no beta header. Body: top-level thinking:{type:"adaptive"};
-    output_config:{ effort:"high", format:{ type:"json_schema", schema:<V4 shape> } }. effort lives INSIDE
-    output_config (NOT top-level — an earlier docs page was wrong; the skill's C#/Java/cURL docs are right).
-    System sent as a cached ephemeral block; result read from content[0].text. Model claude-opus-4-8,
-    $5/$25 per MTok ⇒ ~3-6¢/call.
-  - Schema cannot express string length / numeric ranges / regex, so desc≤60 words, ^#[0-9A-F]{6}$ hex,
-    bbox [y,x,y,x] ordering, art_style XOR photo all stay in V4JsonPromptValidator + the retry. Schema is
-    lean (~9 optional props, under the 24-total / 16-union caps); additionalProperties:false on every object.
-
-TRANSPORT DECISION: raw HttpClient (CivitaiPostingService pattern) over https://api.anthropic.com/v1/messages,
-behind an internal StructuredCompletion delegate seam — chosen over the official `Anthropic` NuGet SDK to
-avoid the unverifiable beta-SDK (v10+) trimmed single-file publish risk. The SDK stays a clean one-method
-swap (replace BuildHttpCompletion). AnthropicPromptBuilderService: public DI ctor (tokenStore, logger,
-IHttpClientFactory) + internal test ctor (tokenStore, logger, StructuredCompletion, dirOverride?, assetOpener?).
-Named "anthropic" HttpClient: ConfigureStandardResilience 120s/5min.
-
-OPEN-CORE / IP (still CRITICAL): App ships a BASIC CLEAN-ROOM prompt at
-Resources/Raw/PromptBuilder/v4-builder-system.md (PUBLIC Ideogram schema only — never paraphrase the user's
-IP). The user's REAL skill loads from a LOCAL non-repo override: Pictures\ImageGenerator.MAUI\prompt-builder\
-system-prompt.md (present → used verbatim instead of the bundled default, read at call time, no rebuild).
-The two private skills live in documents/private/ (GITIGNORED via .gitignore:29, committed in 36180d8 —
-NOT uncommitted as a prior note claimed). NEVER read them to author the public prompt.
-
-POST-SHIP (2026-06-15): the override folder is now self-seeding + documented. AnthropicPromptBuilderService
-.EnsureOverrideReadme() (called atop LoadSystemPromptAsync, best-effort try/catch→LogWarning like
-MutationLibraryService.SeedIfMissingAsync) creates Pictures\ImageGenerator.MAUI\prompt-builder\ and drops a
-README.txt (only if missing) explaining the system-prompt.md override — it NEVER reads/writes/touches the
-user's system-prompt.md. README.md now documents the feature (Features bullet, Anthropic in the API-Tokens
-provider list, a "Describe an idea (AI prompt builder)" usage subsection, idea-to-prompt+mutation-engine in
-the AppShell routes line). 1097 tests (+1 seed test), Debug+Release 0 warnings.
-
-FUTURE (NOT v1): no model-tier picker (Opus too expensive for public users; nothing cheaper clears the
-idea→valid-V4 bar; Fable 5 = the only sensible bump, a one-line const change). IPromptBuilderService is the
-additive swap seam — structured-output reliability is ANTHROPIC-SPECIFIC, each future provider owns its own
-JSON mode. Reference: the user's working-but-messy Python multi-phase Claude stack (3 phases, prompt caching)
-— ask for its caching/orchestration/params ONLY when building the multi-phase private path or a provider
-picker, never for v1, plumbing only.
-
-KNOWN EDGE (not a bug): sending a full V4 JSON caption (2000+ chars) to Pollinations nova-canvas 400s
-upstream (text maxLength 1024) — nova-canvas isn't a structured-prompt model. Use Ideogram/ComfyUI for V4 JSON.
-
-
-COMPLETE FEATURE — Ideogram-4 JSON Caption Mutation Engine (planned + shipped 2026-06-14)
------------------------------------------------------------------------------
-ALL phases 0-6 + AR-persistence (6a) + a UX legibility pass committed & user-verified.
-Final commits e6d876e (Phase 6) + 7ccf936 (AR persistence) + b5a9184 (UX pass). 1076 tests.
-
-UX PASS (b5a9184, user-verified 2026-06-15): operator-led variant "Δ" labels with word-level
-diff (CaptionDiff rewrite — "Style → anime", "Style blended (+ brass charms)", "Moved: x (right)");
-blend labels aggregate new words across ALL style fields; identical variants deduped before dispatch;
-friendly slot-tag names (new SlotTagDisplay) + plain-English "operators that will run"; SCENE target
-frame derives from the real render AR (Parameters.AspectRatio) and the manual W×H field was removed.
-
-MORE / MORE-DIVERSE STYLE FRAGMENTS — DONE 0d81da6 (user-verified 2026-06-15: "I can see differences"
-— expected, style swap is one axis = same scene re-styled, not a different scene). Library grew 3 -> 24:
-the 3 botanist-themed originals (gouache/anime/density) + 21 NEW subject-agnostic fragments distinct in
-aesthetics/lighting/palette (not just art_style): oil_impasto, watercolor, pastel_soft, charcoal_sketch,
-concept_matte (painting); woodcut, ukiyo_e, risograph, art_nouveau, art_deco, comic_ink (print/graphic);
-cyberpunk_neon, synthwave, low_poly, pixel_art (digital); stained_glass, sumi_e, papercut_layered
-(decorative); cinematic_film, film_noir, analog_35mm (FIRST photo-branch styles — the photo branch was
-unused before). The shipped-seed guard test was STRENGTHENED to run EVERY fragment through
-V4JsonPromptValidator (catches a malformed style at test time, not a silent apply-time drop). RE-SEED NOTE:
-LoadAsync only seeds a MISSING store and is lazy (fires on first mutation RUN, MutationEngineViewModel.cs
-~L288, NOT at app start) — to pick up new defaults on an EXISTING install, delete
-Pictures\ImageGenerator.MAUI\mutation-library\style-fragments.json (styles only; ornament-kits/scene-elements
-untouched) then run a batch. MutationTestData.Library() was deliberately LEFT as the 3-fragment botanist
-fixture (no test enforces seed==fixture). 1076 tests.
-
-  Background on the schema (kept for future style/kit/element expansion):
-  Library = user-editable JSON folder; SHIPPED defaults live in
-  ImageGenerator.MAUI/Resources/Raw/MutationDefaults/style-fragments.json (bundled by the Resources\Raw\**
-  MauiAsset glob). Schema per entry: { "name": unique-id, "style": { aesthetics, lighting, medium,
-  art_style XOR photo (single-branch!), color_palette: [<=16 UPPERCASE #RRGGBB] } }. Same pattern applies to
-  ornament-kits.json (LOOK ornament phrases) and scene-elements.json (SCENE addable objects) if expanding
-  those. OPTIONAL companion idea the user floated (still open): an "Open style library" button on the
-  mutation page to reveal the folder.
-
-Detailed plan: C:\Users\mr\.claude\plans\question-about-my-comfyui-tingly-hummingbird.md
-Brief: documents/mutations/ideogram4_mutation_engine_handoff.md (+ botanist_*.json goldens).
-Do PHASE BY PHASE — each phase is one self-contained, committable, tested unit.
-
-WHAT/WHY: a SEPARATE batch feature (one-image-per-click stays). Mutate a base
-caption into N variants → render all at LOW settings → user eyeballs gallery →
-picks winners → promote a winner to FULL quality via existing Remix. Engine's
-only job = base caption → N mutated caption STRINGS → feed EXISTING pipeline.
-
-REUSE (no new plumbing): BatchCoordinator.RunBatchAsync(IReadOnlyList<string>)
-is public + file-picker-independent (the batch seam). Remix metadata read =
-promote + multi-generation. V4JsonPrompt model / V4JsonPromptSerializer (byte-
-canonical, tested) / V4JsonPromptValidator already exist and are reused.
-
-LOCKED DECISIONS:
-  - Algorithm = Interactive Evolutionary Computation (human IS the fitness fn).
-  - ONE change per variant (strict (1+λ)); base included as "variant 0" ref.
-  - Axis pinning: LOOK (style+ornament) ⟂ SCENE (bg+elements+bbox); vary one.
-  - bbox = Gaussian N(0,σ), strength slider subtle/moderate/bold = 2/5/10% of 1000.
-  - palette ops in HSL; categorical genes = seeded library draw; BlendStyle = LOOK crossover.
-  - Multi-generation: "Mutate from this" on a winner → its caption = new base.
-  - Library = user-editable JSON folder (.../mutation-library), seeded from botanist fixtures.
-  - HARD: NO Python ever. Schema-validity via existing C# serializer+validator.
-  - Slot tags: [JsonIgnore] Element.SlotTag, never serialized (ElementJsonConverter
-    writes fixed keys — verified leak-proof); keyword-inference fallback (SlotTagger).
-  - Flexible: operators behind ICaptionOperator, behavior in MutationRunConfig,
-    tunables as named constants — refine after first renders without rearchitecting.
-
-PHASES:
-[x] 0. Domain skeleton (namespace Core/Domain/Ideogram/Mutation): MutationAxis,
-       SlotTag, ICaptionOperator, MutationContext, MutationRunConfig/Result, clone
-       helper + add [JsonIgnore] Element.SlotTag. WRITE THE SLOT-TAG-STRIPPING TEST FIRST.
-       DONE: types under Core/Domain/Ideogram/Mutation/ (MutationAxis, SlotTag w/ nested
-       Subject/Prop/Scene/Text + All, ICaptionOperator, MutationContext {TargetW/H + tag
-       map; MutationLibrary deferred to Phase 4}, MutationRunConfig record, MutationRunResult
-       +MutationVariant, CaptionClone). SlotTagger keyword-inference also deferred to Phase 1.
-       Stripping test ElementSlotTagSerializationTests + CaptionCloneTests (7 tests). 921 green,
-       Release clean. NOT committed yet.
-[x] 1. LOOK operators (SwapStyle, BlendStyle, ApplyOrnamentKit) + DescBudget
-       (60-word trim order: env-micro → color-beyond-harmony → secondary-frame →
-       style-markers; NEVER subject identity/scale/facing). + trim-order test.
-       DONE: Library/ domain types (StyleFragment, OrnamentKit, OrnamentPhrase,
-       DescBudgetCategory, MutationLibrary) — DATA only, service still Phase 4.
-       MutationContext gained Library member (Phase-0 placeholder filled). SlotTagger
-       (keyword inference, deferred from Phase 0) + DescBudget (CountWords == py split;
-       Fit keeps lowest-tier first, trims highest tiers; null if base>60). StyleMath
-       (SameStyle/Clone/UnionTokens/MergePalettes) + ColorMath (HSL saturation).
-       Operators self-pick library entry via rng; clone+validate-or-null. BlendStyle =
-       CURRENT style (precedence) + 1 random fragment (user-confirmed, not two-library).
-       KEY: V4JsonPromptValidator does NOT check 60-word cap — DescBudget is sole guard.
-       32 new tests (953 total green), Release clean. NOT committed yet.
-[x] 2. SCENE operators (Add/Remove/SwapElementDesc, MutateBbox AR-aware, MutatePalette)
-       + BboxMath (Gaussian, ClampBbox repair). + AR/overlap [Theory] tests.
-       DONE (user chose ALL FIVE ops, not the trimmed three): MutationStrength enum
-       {Subtle/Moderate/Bold → σ 20/50/100 via BboxMath.SigmaFor}; defaulted Strength on
-       MutationContext + MutationRunConfig (Phase-3 engine copies config→context). BboxMath
-       (STATELESS Box-Muller — NO static 2nd-variate cache, per-seed reproducible; Translate/
-       Scale-about-center/IoU/IsDegenerate/GridAspectForSquareObject=H/W). ColorMath gained
-       RgbToHsl/HslToRgb/FormatHex (uppercase #RRGGBB, X2+ToUpperInvariant — must pass the
-       ^#[0-9A-F]{6}$ regex or self-validation nulls the variant)/TransformHsl. Five Scene-axis
-       operators: MutateBbox (never moves subject.identity; translate/scale/jitter; AR nudge;
-       rejects unchanged/degenerate(minSpan 15)/duplicate-subject IoU>0.6), MutatePalette
-       (PER-ELEMENT palette only — style palette is LOOK; temp/harmony/saturation/accent in HSL;
-       length never changes so ≤5 holds), RemoveElement (standalone prop/scene/untagged only;
-       floor MinElements=2; never subject.*/text.*), AddElement (+SceneElement library store on
-       MutationLibrary, defaulted 3rd ctor param; rejects subject-overlap IoU>0.4), SwapElementDesc
-       (alternate desc by matching SlotTag, ≤60-word guard, never subject.identity). NOTE: in the
-       botanist golden the figure infers as subject.GARMENT (keyword "tunic"), not identity — the
-       identity guard is exercised by explicitly setting Element.SlotTag in tests. Library service
-       + Resources seeding still DEFERRED to Phase 4 (Phase 2 added domain types + in-code test
-       fixtures only). 60 new tests (1013 total green), Release clean (0 warnings). Committed fcb09c6.
-[x] 3. CaptionMutationEngine.Generate (one-op-per-variant loop, repair+reject,
-       seeded determinism, Count clamp 100). + determinism/canonical tests on goldens.
-       DONE: CaptionMutationEngine (Core/Domain/Ideogram/Mutation) — strict (1+λ): every variant
-       applies exactly ONE pinned-axis operator to the ORIGINAL base (never a chain). Injected
-       IReadOnlyList<ICaptionOperator> catalog + static DefaultOperators (all 8 in a FIXED order —
-       order is part of the determinism contract since op selection draws an index); parameterless
-       ctor for Phase-4 DI. Generate(baseCaption, config, library): emits canonical base as variant 0
-       when IncludeBaseAsReference (OperatorName null, SubSeed=Seed); resolves SlotTagger map +
-       MutationContext ONCE; filters catalog to config.Axis; Count clamped [0,100]. ONE master
-       Random(Seed) advances EXACTLY ONCE per slot (the recorded SubSeed) regardless of attempts ⇒
-       byte-reproducible; per-slot Random owns both operator pick and every Apply. Best-effort +
-       bounded: MaxAttemptsPerVariant=20 (caps work at Count*20, no hang), failed/empty-axis slots
-       skipped with a DropLog line (Variants.Count may be < Count). NO dedup (operators guarantee
-       variant!=base; variant<->variant collisions allowed — test-locked). KEY axis fact: LOOK is
-       style+ornament, and ApplyOrnamentKit/SwapElementDesc BOTH write element.desc — so the clean
-       structural invariant is SCENE-never-touches-style + LOOK-never-touches-scene-geometry
-       (background/bbox/element-palette/count), NOT byte-identical composition. 26 new tests
-       (1039 total green), Release clean (0 warnings). Committed b24d150.
-[x] 4. MutationLibraryService (+ IMutationLibraryService) + Resources/Raw/MutationDefaults
-       seeding + OutputPaths.MutationLibraryDirectory + DI in MauiProgram. + round-trip test.
-       DONE: IMutationLibraryService (Infrastructure/Interfaces) + MutationLibraryService
-       (Infrastructure/Services). Library = a FOLDER of three JSON arrays — style-fragments.json /
-       ornament-kits.json / scene-elements.json — each a list of the matching domain RECORD,
-       serialized DIRECTLY (no DTOs; STJ binds the records' IReadOnlyList/IReadOnlyDictionary ctor
-       params on read — confirmed by the round-trip test). LibraryJson = Web(camelCase) + WriteIndented
-       + WhenWritingNull (drops the unused style branch/null text) + UnsafeRelaxedJsonEscaping (literal
-       #/non-ASCII) + JsonStringEnumConverter (DescBudgetCategory as names). StyleDescription keeps its
-       own [JsonPropertyName] snake_case inside the camelCase wrapper. LoadAsync: CreateDirectory →
-       seed each MISSING store from Resources/Raw/MutationDefaults via injected assetOpener (default
-       FileSystem.OpenAppPackageFileAsync) → read each → new MutationLibrary; a corrupt/missing store
-       degrades to EMPTY + logs (never sinks the whole load). SaveAsync: atomic temp+File.Move(overwrite)
-       per store (ComfyUiCheckpointService convention). Ctor seams: ILogger + dirOverride + assetOpener
-       (mirrors the app's Func<DateTime> clock pattern). OutputPaths.MutationLibraryDirectory =
-       DefaultGeneratedImagesDirectory\mutation-library — ANCHORED at default like comfy-workflows (does
-       NOT follow the output-folder override; OutputPathsTests extended to assert this). DI: one
-       AddSingleton in MauiProgram (after IJsonPromptFileService); NO startup hook — seeding is lazy in
-       LoadAsync. Seed files mirror MutationTestData.Library() (gouache/anime/density + density kit +
-       trailing_ivy/luna_moth); auto-bundled by the existing MauiAsset Resources\Raw\** glob (no .csproj
-       change). 6 new service tests incl. a [CallerFilePath]-located REAL-seed validity test guarding the
-       shipped JSON against schema drift. 1045 total green, Release clean (0 warnings). Committed 2fae988.
-[x] 5. UI: MutationEnginePage/VM (axis, operators, library pickers, N, strength,
-       include-base, seed, slot-tag review) → RunBatchAsync; editor "Mutate…" button
-       + per-element slot picker + PendingMutationBase handoff; MainPage "Mutate current".
-       DONE (committed adc42f3): MutationEngineViewModel (transient) + MutationEnginePage. User chose
-       MINIMAL selectors (axis only; the as-built MutationRunConfig has NO operator/library subset
-       fields — engine runs ALL axis operators + full library, operators self-draw) so operators show
-       READ-ONLY ("OperatorsForAxis", filtered DefaultOperators by axis); NO operator/library multi-
-       select, NO editor slot Picker (user chose slot review on the MUTATION PAGE ONLY). Page = axis
-       Picker (pins other) + Count 1-100 + strength Picker (visible when SCENE) + include-base toggle
-       + seed entry/Randomize/Copy + target W×H (parsed from resolution "WxH", else 1024²) + per-element
-       slot-review CollectionView (inferred default via SlotTagger + "(auto / infer)" sentinel → null)
-       + read-only settings echo. KEY MECHANISM: explicit slot tags reach the engine ONLY via
-       Element.SlotTag on the TYPED base — engine calls SlotTagger.Resolve(base) with no caller map.
-       So editor "Mutate…" hands off the typed model (BuildModel) on GeneratorViewModel.PendingMutationBase
-       (plain property, not observable; consumed+cleared in VM.Initialize), and Run() writes reviewed
-       tags onto base.Elements[].SlotTag before engine.Generate. MainPage "Mutate current prompt…"
-       (gated by SupportsJsonPromptEditor, beside "Edit structure…") deserializes Parameters.Prompt
-       (tags inferred). GenerateAsync → engine.Generate → GoToAsync("..") → Batch.RunBatchAsync(captions).
-       VM seams kept Shell-free + testable: InitializeFrom / Run / SetBaseForTest; MutationSlotReviewItem
-       is TOP-LEVEL (clean XAML x:DataType). DI: CaptionMutationEngine singleton + VM/Page transient in
-       MauiProgram; route "mutation-engine" in AppShell. 11 new VM tests (1056 total green), both configs
-       0 warnings. NEXT = Phase 6.
-[x] 6. Multi-generation "Mutate from this" (gallery/job winner → caption via metadata
-       read → new base) + promotion metadata round-trip test.
-       COMMITTED e6d876e (Phase 6) — user-verified working; 1070 tests green, both configs
-       0 warnings. "Mutate from this" on gallery detail + job card → caption-only
-       (reads "Prompt" from metadata → PendingMutationBase; KEEPS current main-page model/
-       resolution — user works only on Ideogram, so no recipe restore). Threaded via a
-       mutateFromImage callback: GenerationJob optional ctor param + BatchCoordinator required
-       ctor param + gallery //MainPage?mutateFrom= QueryProperty. Plus 4 post-test UX fixes the
-       user requested: (a) pinned render seed — GenerateAsync sets Parameters.Seed=Seed +
-       RandomizeSeed=false so every variant+base render at ONE seed; (b) durable VM —
-       MutationEngineViewModel now AddSingleton with same-base detection (_lastBaseJson) so
-       seed/count/axis/strength/slot-tags survive navigation; (c) before→after variant labels —
-       new CaptionDiff.Describe(base,variant) ("art style: gouache → anime", "placement moved")
-       → RunBatchAsync(prompts,labels) → GenerationJob.MutationLabel → MainPage job-card "Δ …";
-       (d) caption-only mutate (reverted the recipe-restore). Tests: promotion round-trip in
-       ImageFileServiceTests + CaptionDiffTests(10) + BatchCoordinatorTests factory fix.
-       Handoff detail: ~/.claude/plans/continue-phase-6-of-delightful-seahorse.md.
-
-[x] 6a. AspectRatio persistence across restart — COMMITTED 7ccf936, user-verified (AR 2:3
-       survived restart, app.log clean: LoadAspectRatio -> "2:3 (Portrait Photo)" and NO startup
-       PersistAspectRatio clobber). Output AspectRatio was never persisted before (only the
-       resolution/MP preset was). Added per-family keys in UiStateStore (imggen.last_aspect_ratio
-       [.comfyui]) + Load/PersistAspectRatio + IUiStateStore + persist-on-pick hook +
-       LoadSavedUiState restore. The startup-clobber bug (AR Picker's ItemsSource swap in the
-       model-restore RefreshCapabilities pushed a VALID default through a non-suppressed path,
-       clobbering the saved pick before LoadSavedUiState restored it) was fixed with a
-       _suppressAspectRatioPersist flag (mirrors _suppressResolutionPersist) wrapping the
-       RefreshCapabilities AR swap. Regression test
-       LoadSavedUiState_RestoresAspectRatio_DespitePickerPushOnOptionsSwap.
-       BUILD-PATH CORRECTION: committed TFM is net10.0-windows10.0.22621.0 (NOT 19041 — that was a
-       stale leftover dir, now cleaned) and the implicit win-x64 RID nests the exe. Launch
-       bin\Debug\net10.0-windows10.0.22621.0\win-x64\ImageGenerator.MAUI.exe.
-
-SCOPE GUARDS (v1 out): arbitrary from-file base; configurable k / per-gene prob;
-automated fitness/selection; SCENE crossover; validate.py craft-checks beyond word
-caps; any Python; per-job setting overrides in a batch.
-
-
-RECENTLY DONE
--------------
-
-[x] Faster, byte-identical PNG saves — commit 8f32b87 (2026-06-13), user-verified
-    (posted images render on CivitAI after a post). New PngTextChunkWriter
-    (Infrastructure/Imaging) splices a single uncompressed iTXt "Comment" chunk
-    straight into the original PNG bytes: validates the signature, walks chunks,
-    strips any pre-existing text/eXIf chunks (dedup — no double prompt), inserts the
-    new chunk before IEND, hand-rolled CRC32 (no System.IO.Hashing dep). iTXt+UTF-8
-    so emoji/non-Latin prompts survive (ImageSharp already emitted iTXt because the
-    old code set language tag "en", so the reader is unchanged). ImageFileService.
-    SaveImageWithMetadataAsync now fast-paths PNG output when the source is genuine
-    PNG (IsPng): dimensions header-only via Image.IdentifyAsync (the GalleryService
-    pattern), then splice + File.WriteAllBytesAsync — NO decode, NO re-encode, pixels
-    byte-identical to the provider. Metadata-text build is byte-for-byte unchanged so
-    every key + InvariantCulture value round-trips identically; readers (Remix,
-    CivitaiMetaBuilder) untouched. FALLBACK to the old decode+re-encode path for
-    JPG/WebP and for PNG-requested-but-source-is-not-PNG (a provider returning
-    JPEG/WebP still transcodes correctly). Win: CivitAI uploads (read off disk) now
-    carry the exact original image, and the heaviest op (Rgba32 decode) is skipped on
-    the common PNG save. 914 tests (+10).
+AUDIT FOLLOW-UPS — documents/audit/csharp-audit-2026-06-16.md (very good health; no Critical)
+--------------------------------------------------------------------------------------------
+[x] F1 (High) — FIXED, committed f8cafbc: IdeaToPromptViewModel now owns a per-build
+    CancellationTokenSource, threads the token into BuildProseAsync/BuildJsonAsync, and exposes a
+    CancelCommand (+ "Cancel" button on IdeaToPromptPage, visible while busy). OperationCanceledException
+    → neutral "Build cancelled." status; prose from pass 1 stays usable. +1 test (cancellation), 8/8 green.
+[x] F2 (Med) — FIXED: MutationEngineViewModel.Initialize now sets IsAiMode = IsBreedMode, so an ordinary
+    visit resets to the free deterministic engine (a prior Breed flow no longer silently leaves the
+    singleton VM on the paid LLM path). +1 regression test, 35/35 MutationEngineViewModelTests green.
+[x] F3 (Med) — DECIDED: keep the code, fix the doc. The greedy best-fit `continue` is INTENTIONAL and
+    pinned by DescBudgetTests.Fit_GreedilySkipsTooBigPhrase_ButTakesSmallerLaterOne (a too-big high-tier
+    phrase is skipped, a smaller low-tier one back-fills). `break` would reverse a named test + drop
+    ornament detail. Reworded the Fit/class XML doc to describe best-fit-within-priority + added a guard
+    comment at the `continue` so it isn't "fixed" back to `break`. Doc-only; 11/11 DescBudgetTests green.
+[x] Polish bundle (Minor) — FIXED: F6 MutationEngineViewModel.InitializeFrom now re-rolls Seed on a
+    genuinely new base (same-base early-return still preserves it across nav); F7 MutationLibrary ctor
+    defensive-copies its 4 collections (+isolation test); F4 both transports throw HttpRequestException
+    (carrying HttpStatusCode) on non-2xx, keeping InvalidOperationException only for a malformed 2xx body.
+    1167 tests green, 0 warnings. (F5/F8/F9/F10/F11 = no-action per the report; do NOT re-discover as new.)
 
 
 ROADMAP / OUTLOOK — recorded forward plan (each = its own future task)
 ---------------------------------------------------------------------
-
-User-selected 2026-06-13 from a grounded brainstorm. Respect scope rules
-(no multi-image-per-click; no kontext/negative_prompt/A1111-in-saved-files).
-These go INTO the README Outlook AND are the backlog for future contexts.
-(Remix from an image + Clear finished jobs + Configurable output folder — all
-SHIPPED; forensics in this file's git history.)
-
-[ ] One-click upscale of a result — route a finished image through an existing
-    provider (a Replicate upscaler model, or a ComfyUI upscale workflow). New
-    operation type but reuses dispatch/provider plumbing.
+Respect scope rules (no multi-image-per-click; no kontext/negative_prompt/A1111-in-saved-files).
+[ ] One-click upscale of a result — route a finished image through an existing provider (a Replicate
+    upscaler model, or a ComfyUI upscale workflow). New operation type, reuses dispatch/provider plumbing.
 [ ] Saved parameter presets — name + recall a model+params combo.
-(Faster, byte-identical PNG saves — SHIPPED 8f32b87, see RECENTLY DONE.)
 
-NOT selected (record so they aren't re-pitched as new): gallery delete/search/
-favorites, compare/A-B view. Excluded by scope: seed-variation "more like this"
-(only OK as a sequential batch, never multi-output).
+NOT selected (record so they aren't re-pitched as new): gallery delete/search/favorites; compare/A-B
+view; seed-variation "more like this" (only OK as a sequential batch, never multi-output).
 
 
-COMFYUI PHASE 2 POOL — CLOSED 2026-06-11
-----------------------------------------
-
-All six items shipped + USER-VERIFIED on fireEngine (772 tests at close;
-forensics in this file's git history):
-  checkpoint picker d7d33ec, UNETLoader extension 2417a07, POST /interrupt
-  on cancel 3b501e4, WS progress 87312ea, auth header 8103d22 (verified
-  2026-06-11 evening), quality-preset combo 077c656 (index 0-based
-  CONFIRMED live).
-
-Multi-image outputs REJECTED by user 2026-06-11: one image per "Generate
-Image" click IS the architecture — a count box under the button would only
-save clicks, not much gain. Do not re-suggest.
-
-    Watch item: ghost Generate activation (confirmed twice 2026-06-10, none
-    since the forensics landed). If a job card appears without a click:
-    app.log "Generate activated" lines now classify pointer/keyboard/
-    programmatic; JobCount=2 after one click = smoking gun; fix = move focus
-    off the button after click.
+WATCH ITEM
+----------
+[ ] Ghost Generate activation (confirmed twice 2026-06-10, none since the forensics landed). If a job
+    card appears without a click: app.log "Generate activated" lines classify pointer/keyboard/
+    programmatic; JobCount=2 after one click = smoking gun; fix = move focus off the button after click.
 
 
 INERT UNTIL THE USER ASKS (project memory: don't suggest unused features)
 -------------------------------------------------------------------------
-
-[ ] kontext (image-prompt for kontext models) — descriptor pattern,
-    near-zero structural impact.
+[ ] kontext (image-prompt for kontext models) — descriptor pattern, near-zero structural impact.
 [ ] negative_prompt for Pollinations flux/zimage — same.
-[ ] Pollinations image-input — descriptors inherit ImagePrompt:false; the
-    API supports input images (documents/Pollinations API Reference.html).
-    Gap: per-model ImagePrompt:true, BuildUrl image= param (encoding unknown:
-    GET-only API vs the app's base64 — data: URI or host-first?), and
-    MaxImageInputs > 0 where supported.
+[ ] Pollinations image-input — descriptors inherit ImagePrompt:false; API supports input images
+    (documents/Pollinations API Reference.html). Gap: per-model ImagePrompt:true, BuildUrl image= param
+    (encoding unknown: GET-only API vs the app's base64), and MaxImageInputs > 0 where supported.
+
+
+SCOPE GUARDS (standing, do not violate)
+---------------------------------------
+One image per Generate click IS the architecture (no count box, no multi-output). No kontext /
+negative_prompt / A1111-chunk-in-SAVED-files unless explicitly requested (CivitAI POSTING via structured
+meta IS a built feature). HARD: no Python anywhere in the mutation engine — schema-validity via the
+existing C# serializer + validator only.
