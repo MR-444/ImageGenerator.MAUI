@@ -183,6 +183,22 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
         captured.Should().Contain("variation #5");
     }
 
+    [Fact]
+    public async Task MutateAsync_SeedsADistinctCreativeLensPerIndex()
+    {
+        var captured = new List<string>();
+        var sut = CreateSut(KeyStore("sk-ant"),
+            (_, _, _, _, _, messages, _, _) => { captured.Add(messages[0].Content); return Task.FromResult(ValidJson); });
+
+        await sut.MutateAsync(Base, "x", 0, ModelTier.Sonnet);
+        await sut.MutateAsync(Base, "x", 1, ModelTier.Sonnet);
+
+        // A blind call can't "be distinct from the others" — each index gets a concrete, different lens.
+        captured[0].Should().Contain("TIME OF DAY");
+        captured[1].Should().Contain("SEASON");
+        captured[0].Should().NotBe(captured[1]);
+    }
+
     // ---- Breeding ------------------------------------------------------------------------
 
     [Fact]

@@ -179,6 +179,23 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
         _ => SonnetModelId
     };
 
+    /// <summary>Per-variant creative lenses, picked by <c>index</c>. Each call is independent and blind to
+    /// its siblings, so a generic "be distinct from the others" does nothing — handing each variant a
+    /// concrete, different axis is what actually spreads the results. These are SCENE/content axes (not
+    /// medium/art_style) so they diversify without fighting a pinned-style lock, which the VM carries
+    /// separately in the steer; the user's steer always stays dominant.</summary>
+    private static readonly string[] VariationLenses =
+    [
+        "Anchor it on a distinct TIME OF DAY and quality of light (e.g. pre-dawn, harsh noon, golden hour, deep night).",
+        "Shift the SEASON, WEATHER or atmosphere (e.g. dry heat, fog, downpour, snow, drifting haze) so it touches every element.",
+        "Change the EMOTIONAL REGISTER / mood (e.g. serene, tense, wistful, triumphant, uneasy) and let pose, light and colour carry it.",
+        "Re-stage the COMPOSITION — a clearly different vantage, distance or framing (e.g. intimate close-up, high overhead, low and wide).",
+        "Introduce a different NARRATIVE BEAT or implied action so it reads as another moment in the story.",
+        "Emphasise a different FOCAL POINT and colour-temperature lean so attention lands somewhere new.",
+    ];
+
+    private static string LensFor(int index) => VariationLenses[index % VariationLenses.Length];
+
     private static string BuildMutateUserTurn(V4JsonPrompt baseCaption, string steer, int index)
     {
         var sb = new StringBuilder();
@@ -189,11 +206,12 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
             ? "MUTATION REQUEST: reimagine this in a fresh, distinctly different creative direction."
             : $"MUTATION REQUEST: {steer.Trim()}");
         sb.AppendLine();
-        // No seed/temperature is available, so steer diversity by index instead.
-        sb.Append($"This is variation #{index + 1}. Take a creative direction clearly distinct from other ")
-          .Append("variations. Rewrite the WHOLE caption coherently — medium, lighting, colour palette, ")
-          .Append("background, and every element's desc must all reflect the new direction together; never ")
-          .Append("leave any part written in the original style. Return ONLY the resulting V4 JSON object.");
+        // No seed/temperature handle on the cloud path (thinking pins it), so diversity rides on a concrete,
+        // index-keyed lens — not the old "be distinct from the other variations", which a blind call ignores.
+        sb.Append($"This is variation #{index + 1}. {LensFor(index)} ")
+          .Append("Rewrite the WHOLE caption coherently so the high_level_description, background and every ")
+          .Append("element's desc reflect that direction together; never leave any part in the original framing. ")
+          .Append("Return ONLY the resulting V4 JSON object.");
         return sb.ToString();
     }
 
@@ -212,9 +230,9 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
             sb.AppendLine();
         }
         sb.Append($"This is offspring #{index + 1}. Combine the strongest traits of the parents into a NEW ")
-          .Append("coherent caption, then add a distinct creative variation so it differs from its siblings. ")
-          .Append("Keep the whole caption coherent across medium, lighting, palette, background and every ")
-          .Append("element desc. Return ONLY the resulting V4 JSON object.");
+          .Append($"coherent caption, then push it in this distinct direction: {LensFor(index)} ")
+          .Append("Keep the whole caption coherent across background and every element desc. ")
+          .Append("Return ONLY the resulting V4 JSON object.");
         return sb.ToString();
     }
 
