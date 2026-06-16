@@ -179,11 +179,11 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
         _ => SonnetModelId
     };
 
-    /// <summary>Per-variant creative lenses, picked by <c>index</c>. Each call is independent and blind to
-    /// its siblings, so a generic "be distinct from the others" does nothing — handing each variant a
-    /// concrete, different axis is what actually spreads the results. These are SCENE/content axes (not
-    /// medium/art_style) so they diversify without fighting a pinned-style lock, which the VM carries
-    /// separately in the steer; the user's steer always stays dominant.</summary>
+    /// <summary>Per-variant creative lenses for UNDIRECTED batches, picked by <c>index</c>. Each call is
+    /// independent and blind to its siblings, so a generic "be distinct from the others" does nothing —
+    /// handing each variant a concrete, different axis is what actually spreads the results. They fire only
+    /// when the user gave NO steer; once a steer is present the user's direction dominates and the lens
+    /// defers (see <see cref="VariationDirective"/>) so a fixed axis can't fight it.</summary>
     private static readonly string[] VariationLenses =
     [
         "Anchor it on a distinct TIME OF DAY and quality of light (e.g. pre-dawn, harsh noon, golden hour, deep night).",
@@ -196,6 +196,17 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
 
     private static string LensFor(int index) => VariationLenses[index % VariationLenses.Length];
 
+    /// <summary>The per-variant diversity directive. With NO steer, spread the variants across a concrete
+    /// index-keyed <see cref="VariationLenses">lens</see>. With a steer, the user's direction dominates and
+    /// the lens DEFERS — a fixed axis like "pick a different time of day" must never fight an explicit "3am"
+    /// steer; the variant then differs from its siblings by interpretation, not by contradicting the request.</summary>
+    private static string VariationDirective(string steer, int index) =>
+        string.IsNullOrWhiteSpace(steer)
+            ? LensFor(index)
+            : "Treat the MUTATION REQUEST above as the overriding direction; give this variant an interpretation "
+              + "clearly distinct from the others (different secondary detail, staging or emphasis) without ever "
+              + "contradicting that request.";
+
     private static string BuildMutateUserTurn(V4JsonPrompt baseCaption, string steer, int index)
     {
         var sb = new StringBuilder();
@@ -206,9 +217,9 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
             ? "MUTATION REQUEST: reimagine this in a fresh, distinctly different creative direction."
             : $"MUTATION REQUEST: {steer.Trim()}");
         sb.AppendLine();
-        // No seed/temperature handle on the cloud path (thinking pins it), so diversity rides on a concrete,
-        // index-keyed lens — not the old "be distinct from the other variations", which a blind call ignores.
-        sb.Append($"This is variation #{index + 1}. {LensFor(index)} ")
+        // Diversity directive: with NO steer, spread the variants across a concrete index-keyed lens; with a
+        // steer the user's direction dominates and the lens defers (so a fixed axis can't contradict it).
+        sb.Append($"This is variation #{index + 1}. {VariationDirective(steer, index)} ")
           .Append("Rewrite the WHOLE caption coherently so the high_level_description, background and every ")
           .Append("element's desc reflect that direction together; never leave any part in the original framing. ")
           .Append("Return ONLY the resulting V4 JSON object.");
@@ -229,8 +240,10 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
             sb.AppendLine($"BREEDING REQUEST: {steer.Trim()}");
             sb.AppendLine();
         }
-        sb.Append($"This is offspring #{index + 1}. Combine the strongest traits of the parents into a NEW ")
-          .Append($"coherent caption, then push it in this distinct direction: {LensFor(index)} ")
+        sb.Append($"This is offspring #{index + 1}. Combine the strongest traits of the parents into a NEW coherent caption, then ")
+          .Append(string.IsNullOrWhiteSpace(steer)
+              ? $"push it in this distinct direction: {LensFor(index)} "
+              : "give it an interpretation clearly distinct from the other offspring (different staging, emphasis or detail) without contradicting the BREEDING REQUEST above. ")
           .Append("Keep the whole caption coherent across background and every element desc. ")
           .Append("Return ONLY the resulting V4 JSON object.");
         return sb.ToString();

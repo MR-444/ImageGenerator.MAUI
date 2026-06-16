@@ -184,19 +184,34 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task MutateAsync_SeedsADistinctCreativeLensPerIndex()
+    public async Task MutateAsync_NoSteer_SeedsADistinctCreativeLensPerIndex()
     {
         var captured = new List<string>();
         var sut = CreateSut(KeyStore("sk-ant"),
             (_, _, _, _, _, messages, _, _) => { captured.Add(messages[0].Content); return Task.FromResult(ValidJson); });
 
-        await sut.MutateAsync(Base, "x", 0, ModelTier.Sonnet);
-        await sut.MutateAsync(Base, "x", 1, ModelTier.Sonnet);
+        // No steer ⇒ a blind call can't "be distinct from the others", so each index gets a concrete lens.
+        await sut.MutateAsync(Base, "", 0, ModelTier.Sonnet);
+        await sut.MutateAsync(Base, "", 1, ModelTier.Sonnet);
 
-        // A blind call can't "be distinct from the others" — each index gets a concrete, different lens.
         captured[0].Should().Contain("TIME OF DAY");
         captured[1].Should().Contain("SEASON");
         captured[0].Should().NotBe(captured[1]);
+    }
+
+    [Fact]
+    public async Task MutateAsync_WithSteer_DefersTheLens_SoItCannotContradict()
+    {
+        string? captured = null;
+        var sut = CreateSut(KeyStore("sk-ant"),
+            (_, _, _, _, _, messages, _, _) => { captured = messages[0].Content; return Task.FromResult(ValidJson); });
+
+        // A steer dominates; the index-0 lens ("different TIME OF DAY") must NOT appear to fight "3am".
+        await sut.MutateAsync(Base, "3am, high drama", 0, ModelTier.Sonnet);
+
+        captured.Should().Contain("3am, high drama");
+        captured.Should().NotContain("TIME OF DAY");
+        captured.Should().Contain("without ever contradicting");
     }
 
     // ---- Breeding ------------------------------------------------------------------------
