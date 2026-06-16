@@ -681,6 +681,21 @@ public partial class GeneratorViewModel : ObservableObject
         StatusKind = kind;
     }
 
+    /// <summary>Surface an AI-mutation batch's partial outcome on the action-bar status. Without this a
+    /// failed (e.g. timed-out) variant vanishes silently — the user just sees fewer job cards than they
+    /// asked for. No-op when every variant succeeded. Called by the mutation VM as it hands off the batch.</summary>
+    public void ReportAiMutationOutcome(int rendered, int failed)
+    {
+        if (failed <= 0)
+            return;
+
+        var plural = failed == 1 ? "" : "s";
+        SetStatus(
+            $"AI mutation: {rendered} variant(s) queued, {failed} dropped — the local model likely timed out "
+            + $"on {failed} call{plural}. See app.log; try a non-thinking model or fewer variants.",
+            StatusKind.Warning);
+    }
+
     // Keep HasJobs/HasFinishedJobs and the Clear-finished command's CanExecute in sync as the
     // queue mutates. Per-job PropertyChanged is attached/detached here so a running→terminal
     // transition (which flips IsFinished) re-evaluates the gate without polling.

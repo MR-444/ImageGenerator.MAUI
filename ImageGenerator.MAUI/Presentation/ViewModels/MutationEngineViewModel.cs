@@ -710,8 +710,12 @@ public partial class MutationEngineViewModel : ObservableObject
         }
 
         if (failed > 0)
+        {
             _logger.LogInformation("AI mutation: {Ok} of {Total} variants succeeded ({Failed} failed)",
                 ok.Count, results.Count, failed);
+            // Surface the partial outcome on the main page so dropped variants aren't a silent mystery.
+            _generator.ReportAiMutationOutcome(ok.Count, failed);
+        }
 
         // Same seed pin as the deterministic path: every variant renders at one seed so the only visible
         // difference between cards is the mutation itself.

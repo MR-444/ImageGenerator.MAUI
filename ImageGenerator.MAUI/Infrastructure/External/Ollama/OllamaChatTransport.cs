@@ -7,17 +7,24 @@ using Microsoft.Extensions.Logging;
 namespace ImageGenerator.MAUI.Infrastructure.External.Ollama;
 
 /// <summary>
-/// A raw <see cref="HttpClient"/> transport against a local Ollama server's OpenAI-compatible
-/// <c>/v1/chat/completions</c> endpoint (default the user's fireEngine box). It mirrors
-/// <see cref="AnthropicMessagesTransport"/>'s seam — same <see cref="ChatTurn"/> input, same "return the
-/// model's raw text" contract — so the caption mutator can route to it for a FREE technical round-trip
-/// (HTTP → structured output → validator/retry → batch) without paying Anthropic. Output quality is not a
-/// goal of this path; correctness of the plumbing is. Structured output uses the OpenAI
-/// <c>response_format: json_schema</c> contract, which recent Ollama honours.
+/// A raw <see cref="HttpClient"/> transport against a local Ollama server's NATIVE <c>/api/chat</c>
+/// endpoint (default the user's fireEngine box). It mirrors <see cref="AnthropicMessagesTransport"/>'s
+/// seam — same <see cref="ChatTurn"/> input, same "return the model's raw text" contract — so the caption
+/// mutator can route to it for a FREE technical round-trip (HTTP → structured output → validator/retry →
+/// batch) without paying Anthropic. Output quality is not a goal of this path; correctness of the plumbing
+/// is. The native endpoint (not the OpenAI-compatible one) is used deliberately: only it exposes
+/// <c>think</c> and <c>options.num_ctx</c>, the two knobs that keep a small local model inside the
+/// per-attempt timeout. Thinking is DISABLED (a reasoning trace balloons one caption past the timeout) and
+/// the context window is pinned (see <see cref="NumCtx"/>) so the validator-feedback retry — which appends
+/// the bad output + errors — can't overflow Ollama's 4096 default and silently truncate the system prompt.
 /// </summary>
 internal static class OllamaChatTransport
 {
     public const string HttpClientName = "ollama";
+
+    /// <summary>Context window pinned per call. Sized to hold the system prompt + base caption + schema and
+    /// the larger retry turn with headroom; well under the models' trained max, modest extra KV-cache VRAM.</summary>
+    private const int NumCtx = 8192;
 
     private static readonly JsonSerializerOptions BodyJson = new()
     {
@@ -25,12 +32,12 @@ internal static class OllamaChatTransport
     };
 
     /// <summary>
-    /// One chat-completions call against <paramref name="baseUrl"/>. The system prompt is sent as a
-    /// leading <c>system</c> message. When <paramref name="schema"/> is non-null the call requests a
-    /// json_schema-constrained response; the first choice's message content is returned. Ollama ignores
-    /// auth, so no key is sent. Throws <see cref="HttpRequestException"/> (carrying the
-    /// <see cref="System.Net.HttpStatusCode"/>) on a non-2xx status, or <see cref="InvalidOperationException"/>
-    /// on a 2xx response carrying no message content.
+    /// One <c>/api/chat</c> call against <paramref name="baseUrl"/>. The system prompt is sent as a leading
+    /// <c>system</c> message. When <paramref name="schema"/> is non-null the call requests that JSON schema
+    /// as the native <c>format</c>; the message content is returned (markdown fences stripped). Ollama
+    /// ignores auth, so no key is sent. Thinking is off and <see cref="NumCtx"/> is pinned. Throws
+    /// <see cref="HttpRequestException"/> (carrying the <see cref="System.Net.HttpStatusCode"/>) on a non-2xx
+    /// status, or <see cref="InvalidOperationException"/> on a 2xx response carrying no message content.
     /// </summary>
     public static async Task<string> SendAsync(
         IHttpClientFactory httpClientFactory,
@@ -50,12 +57,16 @@ internal static class OllamaChatTransport
             model = modelId,
             messages = allTurns,
             stream = false,
-            response_format = schema is { } s
-                ? (object)new { type = "json_schema", json_schema = new { name = "v4_prompt", schema = s, strict = true } }
-                : null
+            // Disable reasoning: a thinking trace is minutes of generation on a local model and trips the
+            // per-attempt timeout. This path verifies plumbing, not prose quality — thinking buys nothing here.
+            think = false,
+            // Native structured output: the JSON schema object goes straight into `format`.
+            format = schema is { } s ? (object)s : null,
+            // Pin the context so the bigger retry turn can't overflow Ollama's 4096 default and truncate.
+            options = new { num_ctx = NumCtx }
         };
 
-        var endpoint = $"{baseUrl.TrimEnd('/')}/v1/chat/completions";
+        var endpoint = $"{baseUrl.TrimEnd('/')}/api/chat";
         using var client = httpClientFactory.CreateClient(HttpClientName);
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
@@ -79,20 +90,34 @@ internal static class OllamaChatTransport
         return ExtractContent(responseBody);
     }
 
-    /// <summary>Pull <c>choices[0].message.content</c> out of an OpenAI-style chat response.</summary>
+    /// <summary>Pull <c>message.content</c> out of a native <c>/api/chat</c> response.</summary>
     private static string ExtractContent(string responseBody)
     {
         using var doc = JsonDocument.Parse(responseBody);
-        if (doc.RootElement.TryGetProperty("choices", out var choices)
-            && choices.ValueKind == JsonValueKind.Array
-            && choices.GetArrayLength() > 0
-            && choices[0].TryGetProperty("message", out var message)
+        if (doc.RootElement.TryGetProperty("message", out var message)
             && message.TryGetProperty("content", out var content))
         {
-            return content.GetString() ?? string.Empty;
+            return StripJsonFences(content.GetString() ?? string.Empty);
         }
 
         throw new InvalidOperationException("Ollama response carried no message content.");
+    }
+
+    /// <summary>Some local models wrap structured output in a <c>```json … ```</c> markdown fence even with
+    /// a schema set; strip a leading/trailing fence so the JSON parses. (The Anthropic path never fences.)</summary>
+    private static string StripJsonFences(string content)
+    {
+        var trimmed = content.Trim();
+        if (!trimmed.StartsWith("```", StringComparison.Ordinal))
+            return trimmed;
+
+        var firstNewline = trimmed.IndexOf('\n');
+        if (firstNewline >= 0)
+            trimmed = trimmed[(firstNewline + 1)..];   // drop the opening ``` / ```json line
+        if (trimmed.EndsWith("```", StringComparison.Ordinal))
+            trimmed = trimmed[..^3];
+
+        return trimmed.Trim();
     }
 
     private static string? ExtractErrorMessage(string responseBody)
