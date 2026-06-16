@@ -2,7 +2,8 @@
   "37": {
     "inputs": {
       "aspect_ratio": "2:3 (Portrait Photo)",
-      "megapixels": 4
+      "megapixels": 4,
+      "multiple": 8
     },
     "class_type": "ResolutionSelector",
     "_meta": {
