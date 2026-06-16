@@ -6,7 +6,8 @@ namespace ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation;
 /// Enforces Ideogram's 60-word element-desc cap when ornament phrases are spliced into a desc.
 /// <see cref="V4JsonPromptValidator"/> does NOT check word counts (only the reference-only verifier
 /// does), so this is the sole guard. It trims by whole authored phrase, never by NLP: the base desc is
-/// protected, and candidate phrases drop highest-tier-first per <see cref="DescBudgetCategory"/>.
+/// protected, and candidate phrases are tried lowest-drop-priority-first per
+/// <see cref="DescBudgetCategory"/> then packed greedily (best-fit) under the cap — see <see cref="Fit"/>.
 /// </summary>
 public static class DescBudget
 {
@@ -23,9 +24,13 @@ public static class DescBudget
 
     /// <summary>
     /// Splices as many <paramref name="candidates"/> as fit into <paramref name="protectedDesc"/> without
-    /// exceeding <paramref name="maxWords"/>. The base is never trimmed; candidates are admitted lowest
-    /// drop-priority first (style markers before environmental micro-detail) so that, when over budget, the
-    /// highest tiers are the ones left out. Kept phrases are emitted in their authored order. Returns the
+    /// exceeding <paramref name="maxWords"/>. The base is never trimmed. Candidates are <em>tried</em> in
+    /// drop-priority order (lowest drop-priority first — style markers before environmental micro-detail)
+    /// and each is admitted if it still fits. This is greedy best-fit packing, NOT a strict tier cutoff: a
+    /// phrase too large for the remaining budget is skipped, and a smaller higher-drop-priority phrase after
+    /// it can still be admitted, back-filling budget the larger one couldn't use. So the important tiers are
+    /// <em>preferred</em> (tried first), but the result maximizes the detail kept within the cap rather than
+    /// guaranteeing a strict priority prefix. Kept phrases are emitted in their authored order. Returns the
     /// unchanged base when nothing fits, or <c>null</c> when the base alone already exceeds the cap.
     /// </summary>
     public static string? Fit(
@@ -49,6 +54,9 @@ public static class DescBudget
         foreach (var (phrase, index) in ordered)
         {
             var cost = CountWords(phrase.Text);
+            // `continue`, NOT `break`: this is deliberate best-fit packing. A phrase that overflows the
+            // remaining budget is skipped, but a smaller lower-priority phrase later can still back-fill.
+            // (Pinned by DescBudgetTests.Fit_GreedilySkipsTooBigPhrase_ButTakesSmallerLaterOne.)
             if (cost == 0 || used + cost > maxWords)
                 continue;
             keptIndices.Add(index);
