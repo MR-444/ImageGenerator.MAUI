@@ -330,6 +330,18 @@ public class MutationEngineViewModelTests
     }
 
     [Fact]
+    public void Initialize_OrdinaryVisit_KeepsUsersDeliberateAiChoice()
+    {
+        var sut = CreateSutWithAi(new StubMutationLlm());
+        sut.IsAiMode = true;            // user deliberately turns AI on (no breed hand-off)
+
+        sut.Initialize();              // re-open the page the ordinary way
+
+        sut.IsBreedMode.Should().BeFalse();
+        sut.IsAiMode.Should().BeTrue("an ordinary visit keeps the user's deliberate AI-mode choice");
+    }
+
+    [Fact]
     public async Task BreedMode_FansOutBreedAsync_NotMutate()
     {
         var stub = new StubMutationLlm();

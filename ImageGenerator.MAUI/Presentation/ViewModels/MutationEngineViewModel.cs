@@ -166,6 +166,19 @@ public partial class MutationEngineViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowStylePin))]
     private bool _isAiMode;
 
+    /// <summary>The user's last deliberate AI-mode choice on an ordinary (non-breed) visit, remembered
+    /// for the app session so re-opening the page keeps the toggle where the user left it. NOT persisted
+    /// across launches and NOT updated by the breed-forced on-state, so a prior Breed run can't silently
+    /// leave a fresh ordinary visit on the paid LLM path (audit F2).</summary>
+    private bool _userChoseAiMode;
+
+    partial void OnIsAiModeChanged(bool value)
+    {
+        // Record only ordinary-visit choices. Breed forces AiMode on (IsBreedMode is already true when
+        // that set happens), so it never poisons the remembered preference.
+        if (!IsBreedMode) _userChoseAiMode = value;
+    }
+
     /// <summary>Inverse of <see cref="IsAiMode"/> — gates the deterministic-only controls.</summary>
     public bool IsDeterministicMode => !IsAiMode;
 
@@ -278,10 +291,11 @@ public partial class MutationEngineViewModel : ObservableObject
         if (_generator is not null) _generator.PendingBreedSet = null;
         _breedSet = breed is { Count: > 0 } ? breed : null;
         IsBreedMode = _breedSet is not null;
-        // Breeding is an AI-only path and forces the LLM engine on; an ordinary visit resets to the free
-        // deterministic engine. Without this, a prior Breed flow (which sets IsAiMode = true) would
+        // Breeding is an AI-only path and forces the LLM engine on; an ordinary visit restores the user's
+        // last deliberate choice for this session (default off = free deterministic engine). The forced-on
+        // breed state is never recorded as that choice (see OnIsAiModeChanged), so a prior Breed flow can't
         // silently leave the singleton VM on the paid LLM path the next time the user opens the page.
-        IsAiMode = IsBreedMode;
+        IsAiMode = IsBreedMode || _userChoseAiMode;
         if (IsBreedMode)
             BreedSummary = $"Breeding from {_breedSet!.Count} winner(s) — set a steer + model, then run.";
 
