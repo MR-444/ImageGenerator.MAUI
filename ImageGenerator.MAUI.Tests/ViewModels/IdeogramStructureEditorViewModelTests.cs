@@ -686,4 +686,149 @@ public class IdeogramStructureEditorViewModelTests
 
         sut.Invoking(s => s.ApplyToGenerator("{\"a\":1}")).Should().NotThrow();
     }
+
+    // ---- Region-aware enrichment ---------------------------------------------------------
+
+    private IdeogramStructureEditorViewModel CreateSut(IEnrichRegionsLlmService enrich) =>
+        new(_fileService.Object, _fileLauncher.Object, NullLogger<IdeogramStructureEditorViewModel>.Instance, enrich: enrich);
+
+    private static V4JsonPrompt EnrichedOf()
+    {
+        var enriched = V4JsonPromptSerializer.Deserialize(SampleJson);
+        enriched.CompositionalDeconstruction.Elements[0].Desc = "a lighthouse on the left, set against the navy sky";
+        enriched.CompositionalDeconstruction.Elements[1].Desc = "headline across the top band";
+        return enriched;
+    }
+
+    [Fact]
+    public async Task EnrichFromLayout_InvalidModel_ReportsValidationAndNeverCallsTheService()
+    {
+        var enrich = new Mock<IEnrichRegionsLlmService>();
+        var sut = CreateSut(enrich.Object); // empty HLD/background → invalid
+
+        await sut.EnrichFromLayoutCommand.ExecuteAsync(null);
+
+        sut.StatusKind.Should().Be(StatusKind.Error);
+        sut.HasEnrichPreview.Should().BeFalse();
+        enrich.Verify(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<ModelTier>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task EnrichFromLayout_Success_PopulatesPreview_WithoutMutatingDescsYet()
+    {
+        var enrich = new Mock<IEnrichRegionsLlmService>();
+        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<ModelTier>(), It.IsAny<CancellationToken>()))
+              .ReturnsAsync(LlmVariantResult.Ok(EnrichedOf(), "Enriched: x"));
+        var sut = CreateSut(enrich.Object);
+        sut.LoadFromJson(SampleJson);
+
+        await sut.EnrichFromLayoutCommand.ExecuteAsync(null);
+
+        sut.HasEnrichPreview.Should().BeTrue();
+        sut.EnrichPreview.Should().HaveCount(2);
+        sut.EnrichPreview[0].NewDesc.Should().Contain("on the left");
+        sut.Elements[0].Desc.Should().Be("a lighthouse", "the preview must not touch the live elements until Accept");
+    }
+
+    [Fact]
+    public async Task AcceptEnrich_CopiesNewDescsInOrder_PreservingBboxTextAndSelection()
+    {
+        var enrich = new Mock<IEnrichRegionsLlmService>();
+        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<ModelTier>(), It.IsAny<CancellationToken>()))
+              .ReturnsAsync(LlmVariantResult.Ok(EnrichedOf(), "Enriched: x"));
+        var sut = CreateSut(enrich.Object);
+        sut.LoadFromJson(SampleJson);
+        var selected = sut.SelectedElement;
+
+        await sut.EnrichFromLayoutCommand.ExecuteAsync(null);
+        sut.AcceptEnrichCommand.Execute(null);
+
+        sut.Elements[0].Desc.Should().Be("a lighthouse on the left, set against the navy sky");
+        sut.Elements[1].Desc.Should().Be("headline across the top band");
+        sut.Elements[1].Text.Should().Be("BEACON");
+        sut.SelectedElement.Should().BeSameAs(selected);
+        sut.HasEnrichPreview.Should().BeFalse();
+
+        // The bboxes survive the round-trip; only descs changed.
+        var rebuilt = sut.BuildModel();
+        rebuilt.CompositionalDeconstruction.Elements[0].Bbox.Should().Equal(100, 200, 300, 400);
+        rebuilt.CompositionalDeconstruction.Elements[1].Bbox.Should().Equal(0, 0, 100, 1000);
+    }
+
+    [Fact]
+    public async Task DiscardEnrich_LeavesDescsUnchanged()
+    {
+        var enrich = new Mock<IEnrichRegionsLlmService>();
+        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<ModelTier>(), It.IsAny<CancellationToken>()))
+              .ReturnsAsync(LlmVariantResult.Ok(EnrichedOf(), "Enriched: x"));
+        var sut = CreateSut(enrich.Object);
+        sut.LoadFromJson(SampleJson);
+
+        await sut.EnrichFromLayoutCommand.ExecuteAsync(null);
+        sut.DiscardEnrichCommand.Execute(null);
+
+        sut.Elements[0].Desc.Should().Be("a lighthouse");
+        sut.HasEnrichPreview.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task EnrichFromLayout_ServiceFailure_SetsErrorStatus_ElementsUntouched()
+    {
+        var enrich = new Mock<IEnrichRegionsLlmService>();
+        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<ModelTier>(), It.IsAny<CancellationToken>()))
+              .ReturnsAsync(LlmVariantResult.Fail("model said no"));
+        var sut = CreateSut(enrich.Object);
+        sut.LoadFromJson(SampleJson);
+
+        await sut.EnrichFromLayoutCommand.ExecuteAsync(null);
+
+        sut.StatusKind.Should().Be(StatusKind.Error);
+        sut.StatusMessage.Should().Contain("model said no");
+        sut.HasEnrichPreview.Should().BeFalse();
+        sut.Elements[0].Desc.Should().Be("a lighthouse");
+    }
+
+    [Fact]
+    public async Task EnrichFromLayout_TogglesIsEnriching_AroundTheCall()
+    {
+        var gate = new TaskCompletionSource<LlmVariantResult>();
+        var enrich = new Mock<IEnrichRegionsLlmService>();
+        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<ModelTier>(), It.IsAny<CancellationToken>()))
+              .Returns(gate.Task);
+        var sut = CreateSut(enrich.Object);
+        sut.LoadFromJson(SampleJson);
+
+        var run = sut.EnrichFromLayoutCommand.ExecuteAsync(null);
+        sut.IsEnriching.Should().BeTrue();
+
+        gate.SetResult(LlmVariantResult.Ok(EnrichedOf(), "Enriched: x"));
+        await run;
+
+        sut.IsEnriching.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CancelEnrich_CancelsTheCall_WithInfoStatus()
+    {
+        var gate = new TaskCompletionSource();
+        var enrich = new Mock<IEnrichRegionsLlmService>();
+        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<ModelTier>(), It.IsAny<CancellationToken>()))
+              .Returns(async (V4JsonPrompt _, ModelTier _, CancellationToken ct) =>
+              {
+                  await gate.Task;
+                  ct.ThrowIfCancellationRequested();
+                  return LlmVariantResult.Ok(EnrichedOf(), "x");
+              });
+        var sut = CreateSut(enrich.Object);
+        sut.LoadFromJson(SampleJson);
+
+        var run = sut.EnrichFromLayoutCommand.ExecuteAsync(null);
+        sut.CancelEnrichCommand.Execute(null);
+        gate.SetResult();
+        await run;
+
+        sut.StatusKind.Should().Be(StatusKind.Info);
+        sut.StatusMessage.Should().Contain("cancelled");
+        sut.IsEnriching.Should().BeFalse();
+    }
 }

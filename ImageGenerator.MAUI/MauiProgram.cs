@@ -177,6 +177,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IAnthropicTokenStore, AnthropicTokenStore>();
         builder.Services.AddSingleton<IPromptBuilderService, AnthropicPromptBuilderService>();
         builder.Services.AddSingleton<ICaptionMutationLlmService, CaptionMutationLlmService>();
+        builder.Services.AddSingleton<IEnrichRegionsLlmService, EnrichRegionsLlmService>();
         builder.Services.AddSingleton<IOllamaModelCatalog, OllamaModelCatalog>();
         builder.Services.AddSingleton<IUiStateStore, UiStateStore>();
         builder.Services.AddSingleton<IJobRunner, JobRunner>();

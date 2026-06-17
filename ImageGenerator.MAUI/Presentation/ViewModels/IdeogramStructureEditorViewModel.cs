@@ -27,6 +27,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
     private readonly IFileLauncher _fileLauncher;
     private readonly ILogger<IdeogramStructureEditorViewModel> _logger;
     private readonly GeneratorViewModel? _generator;
+    private readonly IEnrichRegionsLlmService? _enrich;
 
     /// <summary>Raised whenever anything the canvas renders may have changed. The page maps it to GraphicsView.Invalidate().</summary>
     public event Action? CanvasInvalidated;
@@ -41,12 +42,14 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
         IJsonPromptFileService fileService,
         IFileLauncher fileLauncher,
         ILogger<IdeogramStructureEditorViewModel> logger,
-        GeneratorViewModel? generator = null)
+        GeneratorViewModel? generator = null,
+        IEnrichRegionsLlmService? enrich = null)
     {
         _fileService = fileService ?? throw new ArgumentNullException(nameof(fileService));
         _fileLauncher = fileLauncher ?? throw new ArgumentNullException(nameof(fileLauncher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _generator = generator;
+        _enrich = enrich;
 
         // Mode snapshot is safe: this VM is transient (fresh per navigation) and the singleton
         // generator's model can't change while the editor is open. On a ComfyUI workflow the
@@ -141,6 +144,33 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
     private string? _exportedPath;
 
     public bool HasExportedPath => !string.IsNullOrEmpty(ExportedPath);
+
+    // --- Region-aware enrichment ----------------------------------------------------------
+    // "Enrich from layout" asks an LLM to rewrite each element's desc against deterministic spatial
+    // facts (RegionGraph). The result lands in a preview the user accepts or discards; accept copies
+    // ONLY the descs onto the live elements (bbox/text/palette/selection untouched).
+
+    /// <summary>Model tiers offered for enrichment (Sonnet default; Local = free round-trip).</summary>
+    public IReadOnlyList<ModelTier> EnrichTierOptions { get; } = [ModelTier.Sonnet, ModelTier.Opus, ModelTier.Local];
+
+    [ObservableProperty]
+    private ModelTier _enrichTier = ModelTier.Sonnet;
+
+    /// <summary>True while a model call is in flight — gates the button + shows the cancel affordance.</summary>
+    [ObservableProperty]
+    private bool _isEnriching;
+
+    /// <summary>True when a finished enrichment is staged for review (Accept/Discard).</summary>
+    [ObservableProperty]
+    private bool _hasEnrichPreview;
+
+    /// <summary>Per-element original→new desc rows shown in the preview card.</summary>
+    public ObservableCollection<EnrichPreviewItemViewModel> EnrichPreview { get; } = [];
+
+    // The validated candidate behind the preview; descs are copied off it on Accept. Kept typed
+    // (not serialized) so Accept can line elements up by index without a re-parse.
+    private V4JsonPrompt? _enrichCandidate;
+    private CancellationTokenSource? _enrichCts;
 
     // --- Target resolution / canvas shape -------------------------------------------------
     // The bbox grid is always 0–1000 per axis (schema constant), but the canvas mirrors the
@@ -640,6 +670,111 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
         {
             _logger.LogError(ex, "IdeogramStructureEditorVM.{Op}", "Cancel");
         }
+    }
+
+    /// <summary>
+    /// Region-aware enrichment: compute spatial facts deterministically, ask the model to rewrite each
+    /// element's desc against them, and stage the result as a preview. Validated first (same gate as
+    /// Apply/Mutate) so an incomplete model never reaches the model. No-op when the service is absent.
+    /// </summary>
+    [RelayCommand]
+    private async Task EnrichFromLayoutAsync()
+    {
+        if (_enrich is null || IsEnriching) return;
+
+        var model = BuildModel();
+        if (!ReportValidation(model)) return;
+
+        ClearEnrichPreview();
+        IsEnriching = true;
+        _enrichCts = new CancellationTokenSource();
+        try
+        {
+            var result = await _enrich.EnrichAsync(model, EnrichTier, _enrichCts.Token);
+            if (!result.Success || result.Prompt is null)
+            {
+                SetStatus(result.Error ?? "The enrichment didn't return a result.", StatusKind.Error);
+                return;
+            }
+
+            _enrichCandidate = result.Prompt;
+            BuildEnrichPreview(model, result.Prompt);
+            HasEnrichPreview = EnrichPreview.Count > 0;
+            SetStatus(HasEnrichPreview
+                ? "Enrichment ready — review the new descriptions, then Accept or Discard."
+                : "The enrichment changed nothing to review.", StatusKind.Info);
+        }
+        catch (OperationCanceledException)
+        {
+            SetStatus("Enrichment cancelled.", StatusKind.Info);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "IdeogramStructureEditorVM.{Op}", "EnrichFromLayout");
+            SetStatus($"Couldn't enrich the layout: {ex.Message}", StatusKind.Error);
+        }
+        finally
+        {
+            IsEnriching = false;
+            _enrichCts?.Dispose();
+            _enrichCts = null;
+        }
+    }
+
+    [RelayCommand]
+    private void CancelEnrich() => _enrichCts?.Cancel();
+
+    /// <summary>
+    /// Apply the staged enrichment: copy ONLY the new descs onto the live elements, in order. Bbox,
+    /// text, palette and selection are untouched; the service's preservation gate guarantees the
+    /// element lists line up index-for-index. Setting Desc fires CanvasInvalidated through the
+    /// per-item change subscription.
+    /// </summary>
+    [RelayCommand]
+    private void AcceptEnrich()
+    {
+        if (_enrichCandidate?.CompositionalDeconstruction?.Elements is not { } enriched) return;
+
+        var count = Math.Min(Elements.Count, enriched.Count);
+        for (var i = 0; i < count; i++)
+            Elements[i].Desc = enriched[i].Desc ?? string.Empty;
+
+        ClearEnrichPreview();
+        SetStatus("Applied the enriched descriptions.", StatusKind.Success);
+    }
+
+    [RelayCommand]
+    private void DiscardEnrich()
+    {
+        ClearEnrichPreview();
+        SetStatus("Discarded the enrichment.", StatusKind.Info);
+    }
+
+    private void BuildEnrichPreview(V4JsonPrompt original, V4JsonPrompt enriched)
+    {
+        EnrichPreview.Clear();
+        var before = original.CompositionalDeconstruction?.Elements ?? [];
+        var after = enriched.CompositionalDeconstruction?.Elements ?? [];
+        var count = Math.Min(before.Count, after.Count);
+        for (var i = 0; i < count; i++)
+            EnrichPreview.Add(new EnrichPreviewItemViewModel(
+                i, SummaryFor(before[i]), before[i].Desc ?? string.Empty, after[i].Desc ?? string.Empty));
+    }
+
+    private void ClearEnrichPreview()
+    {
+        _enrichCandidate = null;
+        EnrichPreview.Clear();
+        HasEnrichPreview = false;
+    }
+
+    private static string SummaryFor(Element element)
+    {
+        var body = element.Type == Element.TextType && !string.IsNullOrWhiteSpace(element.Text)
+            ? $"“{element.Text}”"
+            : element.Desc;
+        if (string.IsNullOrWhiteSpace(body)) body = "(empty)";
+        return $"[{element.Type}] {body}";
     }
 
     [RelayCommand]

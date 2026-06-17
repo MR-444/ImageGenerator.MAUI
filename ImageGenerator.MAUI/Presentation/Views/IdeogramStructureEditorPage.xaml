@@ -325,6 +325,31 @@
                                     HorizontalOptions="Fill"
                                     SemanticProperties.Description="Hand this prompt to the mutation engine to generate variants"
                                     AutomationId="EditorMutateButton" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <Button Grid.Column="0"
+                                        Text="Enrich from layout"
+                                        Command="{Binding EnrichFromLayoutCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        HorizontalOptions="Fill"
+                                        IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
+                                        SemanticProperties.Description="Rewrite each element's description to reflect its spatial relationship to the others"
+                                        AutomationId="EditorEnrichButton" />
+                                <Picker Grid.Column="1"
+                                        Title="Model"
+                                        WidthRequest="110"
+                                        ItemsSource="{Binding EnrichTierOptions}"
+                                        SelectedItem="{Binding EnrichTier, Mode=TwoWay}"
+                                        IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
+                                        AutomationId="EditorEnrichTierPicker" />
+                            </Grid>
+                            <HorizontalStackLayout Spacing="8" IsVisible="{Binding IsEnriching}">
+                                <ActivityIndicator IsRunning="{Binding IsEnriching}" WidthRequest="20" HeightRequest="20" VerticalOptions="Center" />
+                                <Label Text="Enriching…" VerticalOptions="Center" Style="{StaticResource HelperText}" />
+                                <Button Text="Cancel"
+                                        Command="{Binding CancelEnrichCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        AutomationId="EditorEnrichCancelButton" />
+                            </HorizontalStackLayout>
                             <Button Text="Save JSON to file…"
                                     Command="{Binding SaveToFileCommand}"
                                     Style="{StaticResource SecondaryButton}"
@@ -359,6 +384,46 @@
                                     </DataTrigger>
                                 </Label.Triggers>
                             </Label>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- CARD: Enrichment preview (original → spatially-aware desc) -->
+                    <Border Style="{StaticResource Card}" VerticalOptions="Start"
+                            IsVisible="{Binding HasEnrichPreview}"
+                            AutomationId="EditorEnrichPreviewCard">
+                        <VerticalStackLayout Spacing="12">
+                            <Label Text="Enrichment preview" Style="{StaticResource CardTitle}" />
+                            <Label Text="Each element's description rewritten to read its place in the scene. Accept replaces only the descriptions — bounding boxes, text and palettes stay as they are."
+                                   Style="{StaticResource HelperText}"
+                                   MaximumWidthRequest="480" />
+                            <!-- BindableLayout, not CollectionView: a CollectionView nested in this
+                                 page's ScrollView collapses to ~zero height and renders empty. The
+                                 preview is a short, per-element list, so an inline stack is correct. -->
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding EnrichPreview}"
+                                                 Spacing="12"
+                                                 AutomationId="EditorEnrichPreviewList">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:EnrichPreviewItemViewModel">
+                                        <VerticalStackLayout Spacing="3" Padding="0,4">
+                                            <Label Text="{Binding Heading}" FontAttributes="Bold" LineBreakMode="TailTruncation" MaximumWidthRequest="480" />
+                                            <Label Text="Before" Style="{StaticResource HelperText}" FontSize="11" />
+                                            <Label Text="{Binding OriginalDesc}" Style="{StaticResource HelperText}" LineBreakMode="WordWrap" MaximumWidthRequest="480" />
+                                            <Label Text="After" FontSize="11" FontAttributes="Bold" />
+                                            <Label Text="{Binding NewDesc}" LineBreakMode="WordWrap" MaximumWidthRequest="480" />
+                                        </VerticalStackLayout>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                            <HorizontalStackLayout Spacing="8">
+                                <Button Text="Accept"
+                                        Command="{Binding AcceptEnrichCommand}"
+                                        Style="{StaticResource PrimaryButton}"
+                                        AutomationId="EditorEnrichAcceptButton" />
+                                <Button Text="Discard"
+                                        Command="{Binding DiscardEnrichCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        AutomationId="EditorEnrichDiscardButton" />
+                            </HorizontalStackLayout>
                         </VerticalStackLayout>
                     </Border>
 
