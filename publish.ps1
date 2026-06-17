@@ -10,7 +10,8 @@
 # or install PowerShell 7.
 #
 # Output:
-#   ImageGenerator.MAUI/bin/Release/net10.0-windows10.0.22621.0/win-x64/publish/ImageGenerator.MAUI.exe
+#   ImageGenerator.MAUI/bin/Release/net10.0-windows10.0.22621.0/win-x64/publish/Emberforge.exe
+#   (the project folder/csproj stay ImageGenerator.MAUI; only the binary is Emberforge.exe via AssemblyName)
 #
 # Close the running app first — MSBuild can't overwrite a locked .exe.
 
@@ -45,7 +46,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE"
 }
 
-$exe = Join-Path $repoRoot "ImageGenerator.MAUI\bin\Release\$tfm\$rid\publish\ImageGenerator.MAUI.exe"
+$exe = Join-Path $repoRoot "ImageGenerator.MAUI\bin\Release\$tfm\$rid\publish\Emberforge.exe"
 if (-not (Test-Path $exe)) {
     throw "Expected exe not found at $exe"
 }

@@ -1,6 +1,6 @@
 # 🔥 Emberforge
 
-> **Why "Emberforge"?** It started as a plain image generator and grew into a *forge* — a desktop workbench where you don't just press "generate", you heat raw ideas into shape. It melts together many engines (cloud APIs **and** your own local ComfyUI/Ollama rig), hammers prompts into structured, spatially-aware Ideogram V4 captions, and lets variants *evolve* through a mutation/breeding engine. *Forge* for the craft and heat; *ember* nods to the home GPU box ("fireEngine") that does the local rendering. *(The shipped binary is still `ImageGenerator.MAUI.exe` — only the app's display name changed, to avoid churning the build/release pipeline.)*
+> **Why "Emberforge"?** It started as a plain image generator and grew into a *forge* — a desktop workbench where you don't just press "generate", you heat raw ideas into shape. It melts together many engines (cloud APIs **and** your own local ComfyUI/Ollama rig), hammers prompts into structured, spatially-aware Ideogram V4 captions, and lets variants *evolve* through a mutation/breeding engine. *Forge* for the craft and heat; *ember* nods to the home GPU box ("fireEngine") that does the local rendering. *(The repo and project keep their original `ImageGenerator.MAUI` identity; only the app name, the shipped binary — `Emberforge.exe` — and the icon are Emberforge.)*
 
 A Windows desktop (.NET MAUI) image-generation workbench that routes one prompt to many backends — **Replicate** (Flux, Replicate-hosted OpenAI, Google, Ideogram V4), **Pollinations.ai** (Flux, Zimage, Qwen, plus anything their `/models` lists), and **ComfyUI** (your own local/LAN server, any API-format workflow becomes a model) — and adds an LLM-assisted prompt pipeline on top.
 
@@ -23,7 +23,7 @@ A Windows desktop (.NET MAUI) image-generation workbench that routes one prompt 
 
 ## 🖥️ Getting started
 
-**Download.** Grab `ImageGenerator.MAUI.exe` from the latest [release](https://github.com/MR-444/ImageGenerator.MAUI/releases) — self-contained, no installer or runtime prerequisite. It ships unsigned, so on first run Windows SmartScreen shows *"Windows protected your PC"* → **More info → Run anyway**. (Or [build from source](#-building-from-source).)
+**Download.** Grab `Emberforge.exe` from the latest [release](https://github.com/MR-444/ImageGenerator.MAUI/releases) — self-contained, no installer or runtime prerequisite. It ships unsigned, so on first run Windows SmartScreen shows *"Windows protected your PC"* → **More info → Run anyway**. (Or [build from source](#-building-from-source).)
 
 **Tokens & providers.** The **Settings** page has one API-Tokens picker with an independent, DPAPI-secured slot per provider — set whichever you use and switch models freely on the main page:
 

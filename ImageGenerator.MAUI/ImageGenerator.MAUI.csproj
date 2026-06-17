@@ -16,11 +16,19 @@
 		<MauiEnableXamlCBindingWithSourceCompilation>true</MauiEnableXamlCBindingWithSourceCompilation>
 		<NoWarn>MVVMTK0045</NoWarn>
 
-		<!-- Display name (Start menu / taskbar / manifest DisplayName). The project, ApplicationId
-		     and the shipped ImageGenerator.MAUI.exe keep their original identity on purpose — renaming
-		     those would churn publish.ps1, CI and release-asset names. -->
+		<!-- Emberforge identity: display name (Start menu / taskbar / manifest DisplayName), the
+		     produced binary name (AssemblyName -> Emberforge.exe), and the Windows file-properties
+		     fields (Task Manager / Explorer Details). The PROJECT name, csproj filename, .sln,
+		     RootNamespace and ApplicationId keep their original ImageGenerator.MAUI identity on purpose
+		     — renaming those churns the solution and CI for no user-visible gain. -->
 		<ApplicationTitle>Emberforge</ApplicationTitle>
 		<ApplicationId>io.github.mr444.imagegenerator.maui</ApplicationId>
+		<AssemblyName>Emberforge</AssemblyName>
+		<AssemblyTitle>Emberforge</AssemblyTitle>
+		<Product>Emberforge</Product>
+		<Company>Silmas</Company>
+		<Authors>Silmas</Authors>
+		<Description>Emberforge — a desktop image-generation workbench.</Description>
 		<!-- Single source of truth for the app version. AssemblyVersion / FileVersion /
 		     InformationalVersion auto-derive from <Version>; the UI reads the latter via
 		     reflection. AppInfo.Current.VersionString is avoided because on Windows MAUI
@@ -40,7 +48,7 @@
 
 	<ItemGroup>
 		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#15110E" />
 
 		<!-- Splash Screen -->
 		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
