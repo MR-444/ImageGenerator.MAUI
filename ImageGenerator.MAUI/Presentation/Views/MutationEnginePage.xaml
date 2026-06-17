@@ -18,7 +18,7 @@
     </ContentPage.Resources>
 
     <ScrollView>
-        <VerticalStackLayout Padding="24" Spacing="16">
+        <VerticalStackLayout Padding="16" Spacing="12">
 
             <!-- Header -->
             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
@@ -46,7 +46,7 @@
                         <Switch Grid.Column="0" IsToggled="{Binding IsAiMode}" VerticalOptions="Center"
                                 AutomationId="MutationAiModeSwitch" />
                         <Label Grid.Column="1" VerticalOptions="Center"
-                               Text="AI (LLM) mutation — coherent, directed variants from a free-text steer. Off = the deterministic engine (free, reproducible)." />
+                               Text="AI (LLM) mutation — rewrites each variant from your free-text “steer” (an instruction like “make it winter”). Off = deterministic engine (free, reproducible)." />
                     </Grid>
                 </VerticalStackLayout>
             </Border>
@@ -62,19 +62,19 @@
             <!-- CARD: AI steer (AI mode only) -->
             <Border Style="{StaticResource Card}" IsVisible="{Binding IsAiMode}">
                 <VerticalStackLayout Spacing="12">
-                    <Label Text="Describe the change" Style="{StaticResource FieldLabel}" />
+                    <Label Text="Describe the change (the “steer”)" Style="{StaticResource FieldLabel}" />
                     <Editor Text="{Binding Steer}"
                             Placeholder="e.g. make it winter · 1970s film look · explore a bold art movement"
                             AutoSize="TextChanges"
                             MinimumHeightRequest="72"
                             AutomationId="MutationSteerEditor" />
+                    <Label Text="The steer is a free-text instruction telling the AI how to vary each variant; it rewrites the whole caption coherently (medium, lighting, palette, elements)." Style="{StaticResource HelperText}" />
                     <Picker Title="Start from a preset (optional)"
                             ItemsSource="{Binding AnchorPresets}"
                             ItemDisplayBinding="{Binding Name, x:DataType=lib:AnchorPreset}"
                             SelectedItem="{Binding SelectedAnchorPreset}"
                             AutomationId="MutationAnchorPresetPicker" />
-                    <Label Text="Presets are quick starting directions for the steer above — pick one to prefill the text, then edit it. “(No preset)” leaves your text as-is." Style="{StaticResource HelperText}" />
-                    <Label Text="The model rewrites the WHOLE caption coherently for each variant (medium, lighting, palette and every element together)." Style="{StaticResource HelperText}" />
+                    <Label Text="Presets prefill the steer with a starting direction — pick one, then edit. “(No preset)” keeps your text." Style="{StaticResource HelperText}" />
                 </VerticalStackLayout>
             </Border>
 
@@ -85,7 +85,7 @@
                     <Picker ItemsSource="{Binding AxisOptions}"
                             SelectedItem="{Binding SelectedAxis}"
                             AutomationId="MutationAxisPicker" />
-                    <Label Text="LOOK varies style + ornament (placement pinned). SCENE varies background, placement, and elements (style pinned). One axis per run keeps each difference traceable."
+                    <Label Text="LOOK varies style + ornament (placement pinned); SCENE varies background, placement, elements (style pinned). One axis per run keeps each difference traceable."
                            Style="{StaticResource HelperText}" />
 
                     <Label Text="Operators that will run" Style="{StaticResource FieldLabel}" Margin="0,8,0,0" />
@@ -106,7 +106,7 @@
                     <Picker ItemsSource="{Binding StyleNames}"
                             SelectedItem="{Binding SelectedStyleName}"
                             AutomationId="MutationStylePinPicker" />
-                    <Label Text="A preset/steer says HOW to change; a saved style says WHICH look to lock to. Deterministic LOOK swaps to it exactly; AI rewrites the whole scene into it coherently. “Any style (random)” varies the style per variant. Save styles via the gallery’s “Save style”."
+                    <Label Text="A saved style is a look you saved earlier from the gallery (its palette, medium, rendering). The steer says HOW to change; a saved style says WHICH look to lock to. Deterministic LOOK swaps to it exactly; AI rewrites the whole scene into it. “Any style (random)” varies it per variant."
                            Style="{StaticResource HelperText}" />
                 </VerticalStackLayout>
             </Border>
@@ -146,7 +146,7 @@
                     </Grid>
                     <Label Text="Same base + same seed ⇒ identical variants. Every variant (and the base) renders at this one seed, so only the mutation differs."
                            Style="{StaticResource HelperText}" IsVisible="{Binding IsDeterministicMode}" />
-                    <Label Text="The render seed is pinned across the batch so only the caption differs. AI variants are not reproducible (no model seed)."
+                    <Label Text="The render seed is pinned across the batch so only the caption differs. AI variants aren’t reproducible (no model seed)."
                            Style="{StaticResource HelperText}" IsVisible="{Binding IsAiMode}" />
                 </VerticalStackLayout>
             </Border>
@@ -155,7 +155,7 @@
             <Border Style="{StaticResource Card}" IsVisible="{Binding HasBase}">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="What may change in each element" Style="{StaticResource FieldLabel}" />
-                    <Label Text="Each row is one element from your prompt. Its tag decides which part a mutation may touch — leave it on “Auto” to let the app guess from the wording, or pick one. The subject's face/identity is always left untouched."
+                    <Label Text="Each row is one element from your prompt; its tag decides which part a mutation may touch (“Auto” lets the app guess). The subject's face/identity is always left untouched."
                            Style="{StaticResource HelperText}" />
                     <CollectionView ItemsSource="{Binding SlotReview}" AutomationId="MutationSlotReviewList">
                         <CollectionView.ItemTemplate>
@@ -198,7 +198,7 @@
                                     Style="{StaticResource SecondaryButton}"
                                     AutomationId="MutationOllamaRefreshButton" />
                         </Grid>
-                        <Label Text="Set the server URL on the Settings page. A 27B model takes a few minutes on the first (cold) call."
+                        <Label Text="Set the server URL on Settings. A 27B model takes a few minutes on the first (cold) call."
                                Style="{StaticResource HelperText}" />
                     </VerticalStackLayout>
 

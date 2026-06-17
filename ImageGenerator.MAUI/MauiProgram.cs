@@ -51,6 +51,15 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
+#if WINDOWS
+        // Swap every Picker's native WinUI ComboBox for one that ignores the mouse wheel while closed,
+        // so scrolling the (tall) pages over a Picker can't silently change its value — notably the
+        // free Local model flipping to a paid tier. See WheelGuardPickerHandler.
+        builder.ConfigureMauiHandlers(handlers =>
+            handlers.AddHandler<Microsoft.Maui.Controls.Picker,
+                Platforms.Windows.Handlers.WheelGuardPickerHandler>());
+#endif
+
         // NLog config (file target + the namespace Debug rules) was set up by
         // CrashLogger.Install() above; here we just route MEL through NLog so every
         // ILogger<T> resolved from DI lands in the same physical app.log.
