@@ -45,6 +45,10 @@ public partial class App
     {
         var window = new Window(new AppShell())
         {
+            // Sets the OS window caption (title bar / Alt-Tab / taskbar hover). Also makes the
+            // dev "empty MainWindowTitle ⇒ zombie process holding the exe lock" check reliable —
+            // a live window now always reports a non-empty title.
+            Title = "Emberforge",
             MinimumWidth = 900,
             MinimumHeight = 600
         };

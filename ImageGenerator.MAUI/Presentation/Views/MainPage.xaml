@@ -28,7 +28,7 @@
         <!-- Page header -->
         <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
             <VerticalStackLayout Grid.Column="0" Spacing="4">
-                <Label Text="AI Image Generator" Style="{StaticResource PageTitle}" />
+                <Label Text="Emberforge" Style="{StaticResource PageTitle}" />
                 <Label Text="Generate images via Replicate or Pollinations. Prompt and parameters are embedded into the saved file."
                        Style="{StaticResource PageSubtitle}" />
             </VerticalStackLayout>

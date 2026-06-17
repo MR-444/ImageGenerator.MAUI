@@ -234,10 +234,10 @@ public partial class MainPage
     {
         var message =
             $"Version {_viewModel.AppVersion}\n\n" +
-            "A hobby MAUI desktop app for image generation via Replicate, Pollinations.ai, and your own ComfyUI server.\n\n" +
+            "A hobby MAUI desktop workbench for image generation via Replicate, Pollinations.ai, and your own ComfyUI server.\n\n" +
             "MIT License\n" +
             "https://github.com/MR-444/ImageGenerator.MAUI";
-        await DisplayAlertAsync("About AI Image Generator", message, "OK");
+        await DisplayAlertAsync("About Emberforge", message, "OK");
     }
 
     // Drag-and-drop for image-prompt input. MAUI's cross-platform DropGestureRecognizer

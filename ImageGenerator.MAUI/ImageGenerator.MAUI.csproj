@@ -16,7 +16,10 @@
 		<MauiEnableXamlCBindingWithSourceCompilation>true</MauiEnableXamlCBindingWithSourceCompilation>
 		<NoWarn>MVVMTK0045</NoWarn>
 
-		<ApplicationTitle>AI Image Generator</ApplicationTitle>
+		<!-- Display name (Start menu / taskbar / manifest DisplayName). The project, ApplicationId
+		     and the shipped ImageGenerator.MAUI.exe keep their original identity on purpose — renaming
+		     those would churn publish.ps1, CI and release-asset names. -->
+		<ApplicationTitle>Emberforge</ApplicationTitle>
 		<ApplicationId>io.github.mr444.imagegenerator.maui</ApplicationId>
 		<!-- Single source of truth for the app version. AssemblyVersion / FileVersion /
 		     InformationalVersion auto-derive from <Version>; the UI reads the latter via

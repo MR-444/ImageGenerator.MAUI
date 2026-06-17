@@ -1,314 +1,98 @@
-# 🎨 Image Generator MAUI
+# 🔥 Emberforge
 
-A Windows desktop image generation app built on .NET MAUI with three image providers — **Replicate** (Flux, Replicate-hosted OpenAI, Google, Ideogram), **Pollinations.ai** (Flux, Zimage, Qwen Image, plus any free image model their `/models` endpoint surfaces), and **ComfyUI** (your own local or LAN server — every API-format workflow export you drop into a folder becomes a selectable model). Configure each provider once on the Settings page, then route requests just by picking a model; saved images carry the full prompt and generation parameters as EXIF / PNG-Comment metadata so every output is reproducible. Optionally, a checkbox publishes each finished image straight to **CivitAI** — into a model's gallery, generation data included.
+> **Why "Emberforge"?** It started as a plain image generator and grew into a *forge* — a desktop workbench where you don't just press "generate", you heat raw ideas into shape. It melts together many engines (cloud APIs **and** your own local ComfyUI/Ollama rig), hammers prompts into structured, spatially-aware Ideogram V4 captions, and lets variants *evolve* through a mutation/breeding engine. *Forge* for the craft and heat; *ember* nods to the home GPU box ("fireEngine") that does the local rendering. *(The shipped binary is still `ImageGenerator.MAUI.exe` — only the app's display name changed, to avoid churning the build/release pipeline.)*
 
-## 🌟 Features
+A Windows desktop (.NET MAUI) image-generation workbench that routes one prompt to many backends — **Replicate** (Flux, Replicate-hosted OpenAI, Google, Ideogram V4), **Pollinations.ai** (Flux, Zimage, Qwen, plus anything their `/models` lists), and **ComfyUI** (your own local/LAN server, any API-format workflow becomes a model) — and adds an LLM-assisted prompt pipeline on top.
 
-- **Windows 10/11 desktop** (MAUI Windows target, `net10.0-windows10.0.22621.0`) — a self-contained single-file exe, no installer.
-- **Three providers, one app** — **Replicate**, **Pollinations.ai**, and **ComfyUI** (your own local/LAN server). Each provider's token persists independently in OS secure storage; the active provider is inferred from the selected model, so picking a `pollinations/...` model just routes there. Extensible: adding a provider is one entry in the `TokenProviders` collection — no XAML changes. → [setup](#picking-a-provider)
-  - **Models (Replicate)** — Flux 1.1 Pro / 1.1 Pro Ultra · Flux 2 family (`klein-4b`, `flex`, `pro`, `max`) · OpenAI `gpt-image-1.5` / `gpt-image-2` (`quality`, `background` incl. transparent PNG, `moderation`, `input_fidelity`) · Google `nano-banana-2` (15-value aspect enum, 1K/2K/4K, image input; `webp`→`jpg`) · Ideogram V4 `balanced` / `turbo` / `quality` (23 native sizes + `Auto`, structured-JSON prompt, copyright detection). New models surface via **Refresh Models** without recompiling.
-  - **Pollinations.ai** — `flux`, `zimage`, `qwen-image` seeded offline, plus any free image model `/models` surfaces; works anonymously (rate-limited). → [details](#getting-a-pollinations-token-optional)
-  - **ComfyUI (local / LAN)** — workflows-as-models: drop an API-format workflow JSON in a folder and it becomes a selectable model the app patches and streams live progress for. No token, no cloud. → [details](#generating-via-your-own-comfyui-server)
-- **Desktop-grade layout** — settings cards on the left, a results pane on the right (the newest render as a large **Latest result** preview, the job queue below), and an always-visible action bar — nothing scrolls out of reach. **Ctrl+Enter generates** from anywhere on the page, including mid-typing. The window remembers its size and position.
-- **Concurrent generation queue** — Generate while a previous job is still running; each click snapshots its parameters into an independent in-flight card with its own Cancel / Open / Show-in-folder / Use-as-input.
-- **Batch from a textfile** — **Import prompts…** runs a `.txt` of prompts (separated by `---`, `#` lines ignored) sequentially against the current model; failures don't abort the queue. → [details](#running-a-batch-from-a-textfile)
-- **In-app gallery** — a sortable tile grid with live `FileSystemWatcher` updates, multi-select, and a detail page with copyable metadata and one-click **Use as input**. Thumbnails come from the Windows shell cache, so a folder of multi-megabyte PNGs doesn't blow process memory. → [details](#browsing-past-images-gallery)
-- **Post to CivitAI** — one checkbox publishes each finished image to [CivitAI](https://civitai.com), optionally into a specific model's gallery with the generation data attached. Fire-and-forget: a slow or failed post never touches the generation job. → [details](#posting-to-civitai-optional)
-- **Describe an idea (AI prompt builder)** — **Claude Opus 4.8** turns a freeform idea into a polished **prose** prompt that works with any model; tick a box to *also* build a schema-valid Ideogram V4 structured caption. Copy the prose, use it as your prompt, or use the JSON. Needs an Anthropic key; power users can override the bundled instructions with private `vpe-prompt.md` / `system-prompt.md` files. → [details](#describe-an-idea-ai-prompt-builder)
-- **Mutate a structured prompt** — turn any Ideogram V4 structured caption into a batch of **deterministic, schema-valid** one-change variants along a **LOOK** (style/ornament) or **SCENE** (composition) axis, then render them all and pick winners. Seeded and reproducible — no AI, no API key, fully offline. → [details](#mutate-a-structured-prompt-caption-mutation-engine)
-- **Dynamic model catalog** — **Refresh Models** queries Replicate's `text-to-image` collection (filtered to `black-forest-labs`, `openai`, `google`) and Pollinations' `/models` in parallel, merges with the seed entries (Ideogram V4 is pinned — Replicate's collection doesn't list it), and caches to `AppDataDirectory/model-catalog.json`.
-- **Reproducible by default** — every saved file embeds the full prompt, generation parameters, actual pixel dimensions, and model-specific fields, so any output's recipe is recoverable months later. → [reading it back](#reading-back-the-embedded-metadata)
-- **Persisted UI state** — last prompt, model, resolution, and window bounds are restored on next launch.
-- API tokens via `SecureStorage` (Windows DPAPI), independent slots per provider · per-job cancellation with retry/backoff (Polly) · collision-safe filenames · a **diagnostics log** (`app.log` beside the images: startup, every failed generation with reason, caught exceptions; NLog rolls at 5 MB, keeps 5 archives) · MVVM via CommunityToolkit.Mvvm.
+## What makes it interesting
+
+- **Three providers, one app.** Pick a model and the request routes itself; each provider's token lives in its own OS-secure slot. New Replicate/Pollinations models appear via **Refresh Models** without recompiling.
+- **Your own ComfyUI as a first-class backend.** Drop an API-format workflow JSON in a folder and it becomes a selectable model. The app patches prompt / seed / resolution / checkpoint / quality-preset into the graph and streams live per-step progress over the server WebSocket. No cloud, no cost beyond your GPU. → [details](#your-own-comfyui-server)
+- **Describe an idea → prompt (Claude).** Type a plain idea; **Claude Opus 4.8** writes a polished prose prompt that works with any model, and optionally maps it to a schema-valid **Ideogram V4 structured caption**. → [details](#describe-an-idea-claude)
+- **Visual structured-prompt editor.** Build Ideogram V4's `json_prompt` on a canvas — drag/resize element boxes on the 0–1000 grid, set style/palette, and **Enrich from layout**: a geometry-grounded LLM rewrites each element's description to reflect its real spatial relationships (what it rests on, sits beside, or is behind). → [details](#mutation--enrichment)
+- **Mutation & breeding engine.** Turn any structured caption into a batch of one-change variants along a **LOOK** (style) or **SCENE** (composition) axis — fully deterministic, seeded, offline, no key. Or switch on **AI mode** to steer mutations and breed from your favourites via Claude (Sonnet/Opus) or a **local Ollama** model. → [details](#mutation--enrichment)
+- **Post to CivitAI.** One checkbox publishes a finished image — optionally into a specific model's gallery with structured generation data attached. → [details](#posting-to-civitai)
+
+**Everything else, briefly:** a self-contained single-file exe (no installer); a concurrent generation queue with per-job cancel; batch a `.txt` of prompts sequentially; an in-app gallery (sortable, live-watched, multi-select, copyable metadata, *use as input*, *remix*); every saved file embeds its full prompt + parameters (PNG `Comment` / EXIF `UserComment`) so any output is reproducible; per-provider tokens in Windows `SecureStorage` (DPAPI); persisted prompt/model/resolution/window bounds; and a diagnostics log (`app.log` beside the images, NLog, rolls at 5 MB).
 
 ## 📸 Screenshots
 
-![Main page — settings cards on the left, Latest result hero preview and generation queue on the right, always-visible action bar with Generate (Ctrl+Enter) at the bottom](<documents/MainPage_Screenshot 2026-06-12.png>)
+![Main page — settings cards left, latest-result hero and generation queue right](<documents/MainPage_Screenshot 2026-06-12.png>)
 
-![Ideogram structure editor — visual builder for the structured JSON prompt: description and style fields with example pickers, a layout grid for positioning text elements, and one-click Apply to prompt / Save JSON to file](<documents/Ideogram_structure_editor.png>)
+![Ideogram structure editor — visual builder for the structured JSON prompt with a layout grid for element placement](<documents/Ideogram_structure_editor.png>)
 
-![In-app gallery — tile grid with sort modes, live FileSystemWatcher updates, and a detail page with copyable metadata](<documents/Gallery_Screenshot 2026-05-04 193429.png>)
+## 🖥️ Getting started
 
-## 🖥️ Using the app (end users)
+**Download.** Grab `ImageGenerator.MAUI.exe` from the latest [release](https://github.com/MR-444/ImageGenerator.MAUI/releases) — self-contained, no installer or runtime prerequisite. It ships unsigned, so on first run Windows SmartScreen shows *"Windows protected your PC"* → **More info → Run anyway**. (Or [build from source](#-building-from-source).)
 
-### Download
+**Tokens & providers.** The **Settings** page has one API-Tokens picker with an independent, DPAPI-secured slot per provider — set whichever you use and switch models freely on the main page:
 
-Grab `ImageGenerator.MAUI.exe` from the latest [release](https://github.com/MR-444/ImageGenerator.MAUI/releases). It's a self-contained single-file executable — no installer, no .NET runtime prerequisite. First launch unpacks the bundle once (a few seconds of apparent hang); subsequent launches are fast.
+| Provider | What it's for | Where to get it |
+|---|---|---|
+| **Replicate** | Flux · OpenAI `gpt-image` · Google `nano-banana-2` · Ideogram V4 | [replicate.com/account/api-tokens](https://replicate.com/account/api-tokens) |
+| **Pollinations** | `flux` / `zimage` / `qwen-image` etc. — works anonymously (rate-limited); a token raises the limit | [auth.pollinations.ai](https://auth.pollinations.ai) |
+| **Anthropic** | the *Describe an idea* builder + AI mutation/enrichment (never image gen) | [console.anthropic.com](https://console.anthropic.com) |
+| **CivitAI** | publishing finished images (Media-Write scope) | [civitai.com/user/account](https://civitai.com/user/account) |
+| **ComfyUI** | a server base URL (and optional `Authorization` header) instead of a token | your own server |
 
-### Windows SmartScreen warning
+> Reproducibility note: Pollinations honours `seed` only on `flux`, `zimage`, `seedream`, `klein`, `seedance`, `nova-reel`; other models ignore it.
 
-The exe ships unsigned — buying a code-signing certificate is expensive for a hobby project. On first run, Windows SmartScreen will show **"Windows protected your PC"**. That's expected. Click **More info → Run anyway**. Reputation builds with downloads over time, so the warning will soften eventually.
+### Your own ComfyUI server
 
-If you'd rather not click through a SmartScreen warning, you can always [build from source](#-building-from-source).
+The ComfyUI provider talks to a [ComfyUI](https://github.com/comfyanonymous/ComfyUI) instance you run (localhost or LAN — start it with `--listen` for LAN, and don't expose a bare port to the internet). The app never builds graphs; you bring your own. In ComfyUI use **Workflow → Export (API)** and save the JSON into `Pictures\ImageGenerator.MAUI\comfy-workflows\` — every file there becomes a model entry, re-scanned on launch / Refresh Models. (Normal Ctrl+S saves are the UI format and can't be queued; the app tells you to re-export.)
 
-### Picking a provider
+At submit time the app patches the graph: your **prompt** into the lowest-id `CLIPTextEncode` (or, in structured mode, into `Ideogram4PromptBuilderKJ` / a JSON-literal `CLIPTextEncode`); re-rolls every literal `seed` / `noise_seed`; writes **aspect-ratio + megapixels** into a `ResolutionSelector` if present; offers a **checkpoint** picker for a baked `CheckpointLoaderSimple` or single literal `UNETLoader` (multi-UNET pairings keep their models); offers a **quality-preset** picker for a single `CustomCombo`; and expands `%date:…%` filename tokens app-side. Minimum a workflow needs: a `CLIPTextEncode` with literal text and a `SaveImage`.
 
-The **Settings** button (top right) opens the configuration page. Its **API Tokens** card has a provider dropdown — switch between **Replicate**, **Pollinations**, **ComfyUI**, **CivitAI**, and **Anthropic** to edit each slot independently (ComfyUI needs a server base URL instead of a token; the CivitAI slot is for publishing finished images, not generating; the Anthropic slot powers the *Describe an idea…* prompt builder, not image generation). All slots are stored separately and save as you type, so you can keep them all configured and just flip the selected model on the main page to route requests one way or the other.
+[`comfy-workflows/Ideogram4-Sample.json`](comfy-workflows/Ideogram4-Sample.json) is a ready-to-use Ideogram 4 workflow using **stock ComfyUI nodes only**; it needs the usual Ideogram 4 model files on the server (`ideogram4_fp8_scaled` + `ideogram4_unconditional_fp8_scaled`, `qwen3vl_8b_fp8_scaled` text encoder, `flux2-vae`). Canceling in the app drains pending jobs and interrupts the active render when it's the app's own.
 
-### Getting a Replicate API token
+### Describe an idea (Claude)
 
-The Replicate branch covers the Flux family, the OpenAI-hosted `gpt-image-1.5` / `gpt-image-2`, Google's `nano-banana-2`, and the Ideogram V4 family (`balanced` / `turbo` / `quality`).
+**Describe an idea…** runs two passes: Pass 1 always turns a plain-English idea into a polished **prose** prompt (good for any model); Pass 2 optionally maps that onto a schema-valid **Ideogram V4 JSON** caption. The result card lets you copy the prose, use it as the prompt, or use the JSON. Each pass is one Opus call at high effort (~3–6¢, so prose-only ~3–6¢ and prose+JSON ~6–12¢); the model is hardcoded. Power users can override the bundled clean-room instructions with private `vpe-prompt.md` / `system-prompt.md` files in `Pictures\ImageGenerator.MAUI\prompt-builder\` (read fresh, never enter the repo — an open-core split).
 
-1. Sign up at [replicate.com](https://replicate.com).
-2. Go to **Account → API tokens** (or directly [replicate.com/account/api-tokens](https://replicate.com/account/api-tokens)).
-3. Create a token, copy it.
-4. In **Settings**, with "Replicate" selected in the API Tokens picker, paste it into the **API Token** field. It's stored locally with Windows `SecureStorage` (DPAPI, per-user) — never leaves your machine except to call Replicate.
+### Mutation & enrichment
 
-### Getting a Pollinations token (optional)
+From any Ideogram V4 *structured* caption (hand-built, from *Describe an idea*, or remixed from a saved image):
 
-Pollinations works anonymously — pick a `pollinations/...` model in the picker, type a prompt, and hit Generate. The anonymous tier is rate-limited to 1 request every 15 seconds. With a free Seed-tier account that goes to 1 request every 5 seconds.
+- **Mutate** it into a batch of one-change variants — **LOOK** (style/ornament; 24 built-in style fragments) or **SCENE** (background, placement, element presence; aspect-ratio-aware bbox moves) — one axis per run so every difference is traceable. Deterministic, seeded, offline by default. Per-element **slot tags** decide what a mutation may touch; the subject's identity is always preserved.
+- **AI mode** (optional, needs an Anthropic key or a local Ollama endpoint) lets you steer mutations in plain language and **breed** new captions from the variants you liked.
+- **Enrich from layout** (in the structure editor) rewrites each element's description to read its spatial place in the scene. A deterministic pass computes the geometry (relative position, support/contact, background band, overlap) and the LLM turns it into natural relational prose — deciding *front/behind* from the geometry **and** each description's own wording, never from list order. You preview before/after per element and accept or discard.
 
-1. Sign up at [auth.pollinations.ai](https://auth.pollinations.ai).
-2. Generate a token in your account dashboard.
-3. In **Settings**, with "Pollinations" selected in the API Tokens picker, paste it into the field. Same DPAPI-backed secure storage as the Replicate slot, just keyed independently.
+Render a batch at one fixed seed (so only the change differs), pick winners in the gallery, and promote one with **Remix**.
 
-Note on reproducibility: per Pollinations' own spec, the `seed` parameter is honored only by `flux`, `zimage`, `seedream`, `klein`, `seedance`, `nova-reel`. Other models silently ignore it, so re-running the same prompt+seed pair won't produce the same image on `qwen-image` etc.
+### Posting to CivitAI
 
-### Generating via your own ComfyUI server
-
-The ComfyUI provider talks to a [ComfyUI](https://github.com/comfyanonymous/ComfyUI) instance you run yourself — on the same machine or anywhere on your LAN. No token, no cloud, no cost beyond your own GPU time.
-
-**Server setup**
-
-1. Run a reasonably current ComfyUI build. If the server is on another machine, start it with `--listen` so it binds to the LAN (default is localhost-only), and make sure the port (default `8188`) is open in its firewall.
-2. In the app's **Settings** page, enter the server's base URL into the ComfyUI server field, e.g. `http://192.168.1.50:8188` (default is `http://127.0.0.1:8188`). On a plain LAN no auth is needed. If your server sits behind an authenticating reverse proxy, paste the full `Authorization` header value (scheme included, e.g. `Bearer eyJ…` or `Basic dXNlcjpwYXNz`) into the ComfyUI token field — it's sent verbatim on every HTTP request and the WebSocket connect. Either way, don't expose a bare ComfyUI port to the internet.
-
-**Workflows as models**
-
-The app never builds node graphs itself — you bring your own workflow. In ComfyUI, open your workflow and use **Workflow → Export (API)**, saving the JSON into `Pictures\ImageGenerator.MAUI\comfy-workflows\` (the app creates the folder on first run). Every file there becomes its own entry in the model picker under provider "ComfyUI" — the folder is re-scanned on launch and on **Refresh Models**. Normal saves (Ctrl+S / PNG-embedded workflows) are the UI format and can't be queued over the API; the app detects them and tells you to re-export.
-
-At generation time the app patches the exported graph and submits it:
-
-- **Prompt** — plain mode writes your prompt into the lowest-id `CLIPTextEncode` node with a literal text value. With **Structured JSON prompt** checked, the JSON goes into every `Ideogram4PromptBuilderKJ` node (kjnodes pack) and/or replaces any `CLIPTextEncode` literal that is itself a JSON object (a frozen caption from an Ideogram-style workflow).
-- **Seeds** — every literal `seed` / `noise_seed` is re-rolled per run. ComfyUI's "randomize after generate" lives in the browser frontend, so API submissions would otherwise reproduce the identical image forever.
-- **Aspect ratio + resolution** — if the workflow has a `ResolutionSelector` node, the app's aspect-ratio and megapixels pickers write into it; without one the workflow keeps its own resolution (silently).
-- **Model** — a workflow with a baked `CheckpointLoaderSimple` (or exactly one literal `UNETLoader`) gets a model picker fed live from the server's `/object_info`; your pick is patched in, remembered per workflow. Multi-UNET graphs (deliberate pairings like Ideogram 4's dual model) keep their baked models and hide the picker.
-- **Quality preset** — a workflow with exactly one `CustomCombo` node (like the sample's Quality / Default / Turbo / Ultra table) gets a preset picker; choice and slot index are patched together. The option values are your workflow's own strings — the app treats them as opaque.
-- **`%date:...%` filename tokens** — expanded app-side. The ComfyUI server takes `filename_prefix` literally (token expansion is frontend-only), and the `:` in an unexpanded token is path-invalid on Windows servers.
-
-So the minimum a workflow needs: a `CLIPTextEncode` with a literal text prompt and a `SaveImage` node. Everything else is optional.
-
-**Sample workflow**
-
-[`comfy-workflows/Ideogram4-Sample.json`](comfy-workflows/Ideogram4-Sample.json) is a ready-to-use Ideogram 4 text-to-image workflow using **stock ComfyUI nodes only** (no custom node packs). Copy it into `Pictures\ImageGenerator.MAUI\comfy-workflows\`, and it appears in the picker as "Ideogram4-Sample (ComfyUI)". It supports both plain prompts and the structured-JSON mode (including the in-app visual structure editor), aspect-ratio/megapixels selection (4 MP default with an aspect-preserving 3072 px long-side cap), the quality-preset picker (Quality default · Default · Turbo · Ultra), and dated output subfolders on the server. Your server needs the Ideogram 4 model files the graph references, in the usual ComfyUI model folders: `ideogram4_fp8_scaled.safetensors` + `ideogram4_unconditional_fp8_scaled.safetensors` (diffusion models), `qwen3vl_8b_fp8_scaled.safetensors` (text encoder), `flux2-vae.safetensors` (VAE) — the same files ComfyUI's built-in Ideogram 4 template uses.
-
-Generations run on your GPU and can take minutes; the job card shows live per-step progress streamed over the server's WebSocket. Canceling in the app removes pending jobs from the server queue and interrupts the active render when it's the app's own job — no orphaned GPU work.
-
-### Posting to CivitAI (optional)
-
-Check **Post to CivitAI** in the output options and every finished image is published on your CivitAI profile the moment it's saved — one step, no manual upload or publish click. A free account is enough.
-
-**Setup (once):**
-
-1. On [civitai.com/user/account](https://civitai.com/user/account), create an API key. A **Full** key works; a scoped key needs at least **Media Write**.
-2. In **Settings**, pick "CivitAI" in the API Tokens dropdown and paste the key (same per-slot DPAPI secure storage as the other providers).
-3. Click **Test connection** on the CivitAI card — it should greet you by username.
-
-**Per generation:**
-
-- **Post to model gallery (optional)** — paste a CivitAI model page URL (it carries `modelVersionId=…`) or the bare version id, and the post is associated with that model, appearing in its gallery. The field is remembered across sessions; leave it empty for a plain profile post.
-- **Include generation data** — attaches prompt, seed, and model as structured metadata so the post shows proper generation info on CivitAI. This travels in the API call only; the saved local file keeps the app's own metadata format untouched. (Note: CivitAI never parses metadata out of API-uploaded files — structured metadata is the only way generation data reaches a post.)
-- The post title is derived from the prompt (for structured-JSON prompts, from its description field); the upload is the saved file, byte-identical.
-
-Posting runs after the image is safely on disk and never blocks or fails the generation itself — the job card gets its own status line and an **Open post** button. The checkboxes reset to off on every launch, so nothing is ever published by accident. Under the hood this uses CivitAI's official [MCP server](https://mcp.civitai.com/) for the upload plus one direct API call for the post itself — plain HTTP either way, your key never goes anywhere but civitai.com.
-
-### Describe an idea (AI prompt builder)
-
-Writing a good image prompt by hand is fiddly. **Describe an idea…** does it for you in two passes. **Pass 1 (always):** type a plain-English idea and **Claude Opus 4.8** writes a polished **prose** prompt — a normal description that works directly with *any* model (Pollinations, Flux, gpt-image, nano-banana, Ideogram) and reads well to a human. **Pass 2 (optional):** tick **Also build an Ideogram V4 JSON prompt** and it maps that prose onto a schema-valid V4 *structured* caption for Ideogram V4 / ComfyUI.
-
-The prose is never thrown away: the result card lets you **Copy prose**, **Use prose as prompt**, or **Use JSON prompt** (the last appears only when the JSON was built).
-
-**Setup (once):**
-
-1. Create an Anthropic API key at [console.anthropic.com](https://console.anthropic.com).
-2. In **Settings**, pick "Anthropic" in the API Tokens dropdown and paste it (same per-slot DPAPI secure storage as the other providers). This key is used only for the prompt builder — never for image generation.
-
-**Per use:**
-
-1. Click **Describe an idea…**, type your idea. The **Also build an Ideogram V4 JSON prompt** checkbox defaults on for Ideogram V4 / ComfyUI structured models and off otherwise — flip it as you like.
-2. Hit **Build prompt**. The prose appears in the result card; if the box was ticked, the V4 JSON is built too.
-3. **Use prose as prompt** (plain-prompt models) or **Use JSON prompt** (turns on **Structured JSON prompt**; refine it with **Edit structure…**), then **Generate**.
-
-Each pass is one Opus call at high effort — roughly **3–6¢**, so a prose-only build is ~3–6¢ and a prose + JSON build is ~6–12¢. The model is hardcoded (it's the only tier that reliably produces valid, creative prompts).
-
-**Private overrides (optional, power users):** the app ships deliberately *basic* clean-room prompts for both passes. To use your own, drop `vpe-prompt.md` (pass 1, prose) and/or `system-prompt.md` (pass 2, JSON) in `Pictures\ImageGenerator.MAUI\prompt-builder\` (the folder is created on first use, with a `README.txt` explaining both files). They're read fresh on every build — no restart — and used verbatim instead of the bundled prompts; delete a file to revert that pass. This is an open-core split: the bundled prompts are public, your private prompts stay local and never enter the repo.
-
-### Mutate a structured prompt (caption mutation engine)
-
-Once you have an Ideogram V4 *structured* caption — built by hand, generated by **Describe an idea…**, or remixed from a saved image — the **mutation engine** turns it into a batch of one-change variants and renders them all at once. It's fully **deterministic and offline**: no AI, no API key, no cost. The same base caption plus the same seed always reproduces the same variants, and every variant is guaranteed schema-valid (it shares one operator set and one validity contract with the manual **Edit structure…** editor, so hand edits and engine output can't drift apart).
-
-Mutations run along two independent axes — **one axis per run**, so every difference stays traceable:
-
-- **LOOK** — varies **style + ornament**, placement pinned. Swap in one of the **24 built-in style fragments** (gouache, anime, Venetian, …) or layer in ornament detail.
-- **SCENE** — varies **background, element placement, and which elements are present**, style pinned. Bbox moves are aspect-ratio-aware, with a **Placement strength** of subtle / moderate / bold (2 / 5 / 10 % of the grid).
-
-Per-element **slot tags** decide what a mutation may touch — leave them on *Auto* to let the app infer from the wording, or pick one. The subject's face/identity is always left untouched.
-
-**Per use:**
-
-1. With a structured (JSON) prompt active, click **Mutate current prompt…** — or hit **Mutate from this** on any finished generation to start from that image's caption.
-2. Choose the **axis**, the **number of variants** (1–100), and the **seed** (with **Randomize** / **Copy**); optionally include the unmutated base as variant 0 for reference.
-3. **Generate variants** renders the whole batch at that one seed (so only the mutation differs). Pick the winners in the gallery and promote one to full quality with **Remix**.
+Check **Post to CivitAI** and a finished image is published the moment it's saved — optionally into a model's gallery (paste the model URL or version id) with prompt/seed/model attached as structured metadata (CivitAI ignores file metadata on API uploads, so this is how generation data reaches a post). It runs after the file is on disk and never blocks or fails the generation; the checkbox resets off each launch. Uses CivitAI's official [MCP server](https://mcp.civitai.com/) for the upload plus one direct API call for the post.
 
 ### Costs
 
-**Replicate**: roughly **$0.003 – $0.05** per generation depending on the model — Flux Pro is on the cheaper end; `gpt-image-1.5` at high quality and `nano-banana-2` at 4K land on the higher end. See [replicate.com/pricing](https://replicate.com/pricing) for current per-model rates. Pay-as-you-go — no monthly commitment.
-
-**Pollinations**: the seeded models (`flux`, `zimage`, `qwen-image`) and every other model the catalog returns are **free** at both anonymous and Seed tiers. Paid-tier models (Pollinations marks them `paid_only` in `/models`) are filtered out and never appear in the picker.
-
-### Where images are saved
-
-Generated images land in `%USERPROFILE%\Pictures\ImageGenerator.MAUI\` with collision-safe filenames (timestamp + truncated prompt + seed). Each completed job card has its own **Show in folder** button that opens Explorer with that specific file highlighted; the bottom action bar also has an **Open output folder** shortcut and a **Gallery** button that opens the in-app browser.
-
-### Browsing past images (gallery)
-
-The **Gallery** button on the main page opens an in-app grid of every image in the output folder, sorted however you like (newest first by default). Click a tile to open the image in your default OS viewer; click **Show metadata** to open the detail page with a larger preview, the parsed metadata as selectable text, and one-click actions: **Copy metadata** to clipboard, **Use as input** (sends the image back to the generator as an input-image attachment), **Open in viewer**, **Show in folder**. The gallery uses the OS shell thumbnail cache, so opening a folder with many large PNGs is instant.
-
-### Running a batch from a textfile
-
-Pick a model and configure the parameters you want to apply to the batch (aspect ratio, output format, seed mode, and so on), then click **Import prompts…** in the bottom action bar. Choose a `.txt` file shaped like this:
-
-```
-A young woman holding a bouquet,
-standing in a sunlit meadow,
-cinematic lighting
----
-# disabled — skip this one
-Mountain range at golden hour, ultra-wide
----
-Portrait of an elderly fisherman, 85mm
-```
-
-Rules: a line containing only `---` separates prompts; multi-line prompts are fine; lines starting with `#` are comments and are skipped; empty chunks are ignored. The picker confirms the count (e.g. *"Run 12 prompts using Flux 1.1 Pro?"*) before anything submits. Hard cap is 100 prompts per file.
-
-The batch runs **strictly sequentially** — one job at a time — and reuses the existing queue, so each prompt becomes its own card with status, thumbnail, and per-job actions. Failures don't abort the run; the end-of-batch status reads e.g. *"Batch complete — 11 ok, 1 failed, 0 canceled."*
-
-Click **Cancel batch** at any time to stop the queue from starting any further prompts. The currently-running job is allowed to finish — once a Replicate prediction has been submitted you're paying for it whether you keep the image or not.
-
-### Reading back the embedded metadata
-
-The app embeds the full prompt and generation parameters into the saved file so you can recover the recipe months later. For **PNG** the metadata lives in the standard `Comment` text chunk; for **JPG/WebP** it's written as EXIF `UserComment`. (CivitAI posting doesn't rely on this — it sends the generation data as structured fields in the API call, because CivitAI ignores file metadata on API uploads.) The fastest way to inspect it is the in-app gallery's **Show metadata** button (also lets you copy it to the clipboard); externally, **[MediaInfo](https://mediaarea.net/en/MediaInfo)** (GUI + CLI, cross-platform, free) or `exiftool` work too. Besides the prompt and seed you'll see the actual pixel dimensions produced by the API and the model-specific options (GPT quality/background/moderation/input-fidelity, nano-banana resolution, Flux Ultra raw/image-prompt-strength, Ideogram resolution/JSON-mode/copyright-detection) so two people with the metadata can reproduce the same image.
-
-## 🛠️ Technologies
-
-- .NET MAUI 10 (Windows target)
-- CommunityToolkit.Mvvm 8.4.2
-- Refit 10 with `System.Text.Json` (custom `NullSkippingDictionaryConverter` so dict-based Replicate payloads never send `"field": null`, which Replicate rejects with 422)
-- Microsoft.Extensions.Http.Resilience (retry + timeout policy)
-- SixLabors.ImageSharp 3 (image encoding + EXIF metadata)
-- Moq + xUnit + FluentAssertions for tests
-
-## 📋 Prerequisites
-
-- .NET 10.0 SDK
-- Visual Studio 2022 (17.12+) / JetBrains Rider with the MAUI workload
-- Windows 10 1809 (build 17763) or newer
-- Replicate API token and/or OpenAI API key
+**Replicate** is pay-as-you-go, roughly **$0.003–$0.05** per image by model ([pricing](https://replicate.com/pricing)). **Pollinations** free models stay free; `paid_only` models are filtered out of the picker. **Anthropic** applies only to the prompt builder / AI mutation, billed per call as above.
 
 ## 🚀 Building from source
 
-1. Clone the repository:
+Needs the **.NET 10 SDK** + the MAUI workload (VS 2022 17.12+ or Rider), Windows 10 1809+.
+
 ```bash
 git clone https://github.com/MR-444/ImageGenerator.MAUI.git
 ```
 
-2. Open `ImageGenerator.MAUI.sln` in Visual Studio or Rider, restore NuGet packages, build.
+Open `ImageGenerator.MAUI.sln`, restore, build, run. For the self-contained single-file release exe, run `pwsh ./publish.ps1` from the repo root. Tests: `dotnet test` (1219 tests — provider payloads, the ComfyUI patcher, catalog filtering/persistence, the V4 structured-prompt model + validator, the deterministic mutation operators and the RegionGraph geometry, the LLM seams via fakes, CivitAI posting, gallery + UI-state persistence).
 
-3. Run the app. Paste an API token, click **Refresh Models** to populate the picker, pick a model + prompt, and **Generate**.
+## 🛠️ Stack
 
-4. To produce the self-contained single-file release exe, run `pwsh ./publish.ps1` from the repo root.
-
-## 🏗️ Project Structure
-
-```
-ImageGenerator.MAUI/
-├── Core/
-│   ├── Application/          # IImageGenerationService, IModelCatalogService, IGalleryService,
-│   │                         # IPromptBatchParser (+ PromptBatchParser implementation)
-│   └── Domain/               # Entities (incl. GalleryItem), value objects (Flux/Pollinations/
-│                             # ComfyUi request shapes), ModelCapabilities, ComfyUi/ (workflow
-│                             # patcher), Descriptors/Pollinations/ + Descriptors/ComfyUi/
-│                             # (seed + fallback descriptors mirroring the Replicate pattern)
-├── Infrastructure/
-│   ├── Diagnostics/          # CrashLogger (NLog backend, app.log + WinUI dispatcher hook)
-│   ├── External/
-│   │   ├── ComfyUi/          # ComfyUiImageGenerationService (POST /prompt → poll /history →
-│   │   │                     # GET /view), ComfyUiWorkflowCatalogService (folder scan)
-│   │   ├── OpenAi/           # Refit client + DTOs + service
-│   │   ├── Pollinations/     # PollinationsImageGenerationService, PollinationsCatalogService
-│   │   └── Replicate/        # Refit client + DTOs + service + image encoding helpers
-│   └── Services/             # ImageFileService, ModelCatalogService, GalleryService,
-│                             # ImageGenerationDispatcher (routes by model-id prefix),
-│                             # FileLauncher, ClipboardService
-├── Presentation/
-│   ├── ViewModels/           # GeneratorViewModel, GalleryViewModel, GalleryItemDetailViewModel,
-│   │                         # IdeogramStructureEditorViewModel
-│   ├── Views/                # MainPage, SettingsPage, GalleryPage, GalleryItemDetailPage,
-│   │                         # IdeogramStructureEditorPage (.xaml + .cs)
-│   ├── Behaviors/            # NumericOnlyBehavior
-│   └── Converters/           # ShellThumbnail / ShellPreview / StringToEnum / Inverse / NonEmptyString
-├── Shared/Constants/         # ModelConstants, ValidationConstants, OutputPaths
-├── Resources/                # Styles, Colors, Fonts, Images
-├── Extensions/               # RefitServiceExtensions (serializer + resilience pipeline)
-├── AppShell.xaml             # Shell + route registration (gallery, detail, ideogram-editor,
-│                             # mutation-engine, idea-to-prompt, settings)
-└── MauiProgram.cs            # DI registration + app bootstrap
-```
-
-## 🧪 Testing
-
-```bash
-dotnet test
-```
-
-858 tests covering: model factory payload shapes, the ComfyUI provider (workflow patcher incl. seed re-roll / `%date%` expansion / structured-JSON targeting, the shipped sample workflow's contract, catalog folder scan, HTTP service flows), Replicate service HTTP flows (via Refit mocks), the `NullSkippingDictionaryConverter`, model catalog filtering and persistence (both Replicate + Pollinations branches), the Ideogram V4 payload (prompt vs `json_prompt` string, resolution omit-on-`Auto`, PNG-locked output, structured-JSON validation), image file naming + EXIF round-trip, the CivitAI posting pipeline (JSON-RPC envelope + Bearer auth, upload→create ordering, structured meta and model-gallery association, model-URL parsing, JSON-prompt title derivation, the local file staying byte-identical, failures never demoting a saved job), GeneratorViewModel commands and state machine (including batch order, partial failure, distinct seeds, Cancel-batch leaves the in-flight job alone, the latest-result hero tracking, and the tabbed token slots stay independent across providers), UI-state persistence (prompt debounce, per-family resolution keys, window bounds round-trip incl. malformed-value fallback), prompt batch parser (delimiter, comments, multi-line, BOM, CRLF, hard-cap), GalleryService enumeration + metadata reads + partial-write guard, GalleryViewModel sort modes + watcher debounce, GalleryItemDetailViewModel actions, and CrashLogger smoke + concurrency.
-
-## 📱 Supported Platforms
-
-Windows 10 (build 17763 / 1809) and later, including Windows 11. Compiled against the Windows 11 22H2 SDK.
-
-## 🤝 Feedback & contributions
-
-This is a small side project — bug reports, feature requests, and pull requests are all very welcome. There's no formal process: open an [issue](https://github.com/MR-444/ImageGenerator.MAUI/issues) if something's broken or missing, and I'll take a look. Please be kind and patient, but don't be shy.
-
-If you'd like to contribute code:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Commit (`git commit -m 'Add your feature'`)
-4. Push to the branch (`git push origin feature/your-feature`)
-5. Open a Pull Request
+.NET MAUI 10 (Windows) · CommunityToolkit.Mvvm · Refit + `System.Text.Json` · Microsoft.Extensions.Http.Resilience (Polly) · SixLabors.ImageSharp 3 · raw `HttpClient` for the Anthropic/Ollama LLM calls · xUnit + Moq + FluentAssertions.
 
 ## ⚠️ Known issues
 
-Limitations that didn't block shipping but are worth knowing:
+- Error-path UX (401s, mid-generation network drops, 5xx/quota) isn't exhaustively audited — happy path, Cancel, and concurrent jobs work as expected.
+- Gallery has no in-app delete/rename/search yet (manage files in Explorer; the watcher picks changes up within ~1 s).
+- Pollinations `kontext` (image-to-image) has no input-image plumbing — use a Replicate Flux model for image-prompted edits.
 
-- **Error-path UX hasn't been exhaustively audited** — for failures like a bad/revoked token (401), a mid-generation network drop, or rate-limit / quota / 5xx responses from Replicate, the status message on the affected job card may be less actionable than it could be. Happy-path generation, explicit Cancel, and concurrent generations all work as expected.
-- **GPT 1.5 `input_fidelity=high` with an input image** is not regression-tested. The other GPT options (`quality`, `background`, `moderation`, `input_fidelity=low`) have been verified.
-- **Job queue has no eviction policy** — finished job cards accumulate until the app is closed. Cosmetic for short sessions; a "Clear finished" control is on the [roadmap](#-roadmap--outlook).
-- **Gallery has no in-app delete / rename / search yet** — multi-select is in (for CivitAI batch posting), but managing files still means Explorer (the gallery picks the change up via `FileSystemWatcher` within ~1 s). On the [roadmap](#-roadmap--outlook).
-- **Pollinations `kontext` (image-to-image) isn't supported** — the Pollinations route has no input-image plumbing yet, so the `kontext` model surfaces in the catalog but won't accept reference images. Use a Replicate Flux model for image-prompted edits today.
+Hitting something? [Open an issue](https://github.com/MR-444/ImageGenerator.MAUI/issues) with the status text from `Pictures\ImageGenerator.MAUI\app.log` and what you were generating.
 
-If you hit any of the above, please [open an issue](https://github.com/MR-444/ImageGenerator.MAUI/issues) with the status text from `Pictures\ImageGenerator.MAUI\app.log` and what you were trying to generate — that's the fastest way these get tightened up.
+## 🔭 Roadmap
 
-## 🔭 Roadmap / Outlook
-
-This is a small side project, so treat these as directions under consideration rather than commitments or a dated plan — roughly in order of interest:
-
-- **One-click upscale** — upscale a finished result through an existing provider (a Replicate upscaler, or a ComfyUI upscale workflow), reusing plumbing that's already there.
-- **Saved parameter presets** — name and recall a model + parameters combo.
-
-Got a feature request? [Open an issue](https://github.com/MR-444/ImageGenerator.MAUI/issues) — see [Feedback & contributions](#-feedback--contributions).
+Directions under consideration (a small side project, not commitments): one-click upscale (via a Replicate/ComfyUI upscaler) · saved parameter presets · finer per-element control in the enrichment preview.
 
 ## 📄 License
 
-MIT — see the LICENSE file for details.
-
-## 👥 Authors
-
-- Silmas — Initial work
-
-## 🙏 Acknowledgments
-
-- .NET MAUI team for the framework
-- Replicate and OpenAI for the image generation APIs
+MIT — see [LICENSE](LICENSE). Initial work by **Silmas**. Thanks to the .NET MAUI team and the image-generation API providers.
