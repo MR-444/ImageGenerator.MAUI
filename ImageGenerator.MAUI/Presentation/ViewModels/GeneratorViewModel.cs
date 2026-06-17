@@ -189,18 +189,19 @@ public partial class GeneratorViewModel : ObservableObject
         }
     }
 
-    // The configurable output folder (where generated images are saved). Preferences-backed like
-    // the ComfyUI URL; the change hook also applies the override to OutputPaths so saves, the
-    // gallery and "Open output folder" follow it live. Defaults to the fixed Pictures location
-    // for display until the user picks another.
+    // The configurable ROOT data folder (images, json-prompts, comfy-workflows, mutation-library
+    // and prompt-builder all live under it). Preferences-backed like the ComfyUI URL; the change
+    // hook applies the override to OutputPaths so saves, the gallery and "Open output folder"
+    // follow it live. Defaults to the fixed Pictures\Emberforge location for display until the
+    // user picks another.
     [ObservableProperty]
-    private string _outputFolder = OutputPaths.DefaultGeneratedImagesDirectory;
+    private string _outputFolder = OutputPaths.DefaultRootDirectory;
 
     partial void OnOutputFolderChanged(string value)
     {
         var trimmed = value?.Trim();
         _uiStateStore.PersistOutputFolder(trimmed ?? string.Empty);
-        OutputPaths.SetGeneratedImagesOverride(trimmed);
+        OutputPaths.SetRootOverride(trimmed);
     }
 
     [RelayCommand]

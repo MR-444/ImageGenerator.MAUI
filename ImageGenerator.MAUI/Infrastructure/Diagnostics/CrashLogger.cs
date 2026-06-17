@@ -26,7 +26,7 @@ public static class CrashLogger
     private static bool _hooksInstalled;
 
     /// <summary>
-    /// Installs NLog targets at the user's <c>Pictures\ImageGenerator.MAUI</c> folder
+    /// Installs NLog targets at the user's <c>%LOCALAPPDATA%\Emberforge</c> folder
     /// (fallback: <c>FileSystem.AppDataDirectory</c>) and registers process-wide
     /// unhandled-exception hooks. Writes a "startup OK" line so an empty file unambiguously
     /// means "the logger never ran" rather than "nothing crashed".
@@ -58,17 +58,18 @@ public static class CrashLogger
     {
         try
         {
-            // Anchored at the DEFAULT location, not the configurable output folder: the log is
-            // diagnostics, and keeping it at a stable, known path means it never moves to a
-            // user-chosen (possibly flaky/network) drive — and it's written here pre-DI before
-            // any output-folder override is even loaded.
-            var preferred = rootDir ?? OutputPaths.DefaultGeneratedImagesDirectory;
+            // The Windows-standard per-app diagnostics location (%LOCALAPPDATA%\Emberforge),
+            // NOT the configurable data root: the log is diagnostics, not user content, so it
+            // stays at a stable, known path and never moves to a user-chosen (possibly
+            // flaky/network) output drive — and it's written here pre-DI before any
+            // output-folder override is even loaded.
+            var preferred = rootDir ?? OutputPaths.DiagnosticsDirectory;
             Directory.CreateDirectory(preferred);
             _logPath = Path.Combine(preferred, LogFileName);
         }
         catch
         {
-            // Pictures path unavailable (perms, redirected user folder). Fall back to the
+            // LocalAppData path unavailable (perms, redirected user folder). Fall back to the
             // MAUI-managed app data dir; better something written somewhere than nothing.
             try
             {

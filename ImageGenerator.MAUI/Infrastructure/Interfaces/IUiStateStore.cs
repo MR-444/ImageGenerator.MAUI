@@ -41,10 +41,10 @@ public interface IUiStateStore
     /// </summary>
     string? LoadOllamaModel();
     /// <summary>
-    /// The user's configured output folder for generated images. Null when never set — callers
-    /// fall back to <c>OutputPaths.DefaultGeneratedImagesDirectory</c>. Only the images and their
-    /// json-prompt exports follow this; the ComfyUI workflow templates and app.log stay anchored
-    /// at the default location.
+    /// The user's configured ROOT data folder. Null when never set — callers fall back to
+    /// <c>OutputPaths.DefaultRootDirectory</c>. Every data folder (images under <c>pictures\</c>,
+    /// json-prompts, comfy-workflows, mutation-library, prompt-builder) follows this root; only
+    /// app.log stays anchored at the default location (it's configured pre-DI, before this loads).
     /// </summary>
     string? LoadOutputFolder();
     /// <summary>

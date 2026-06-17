@@ -102,13 +102,14 @@ public class GalleryServiceTests : IDisposable
     [Fact]
     public async Task EnumerateAsync_WithNoExplicitRoot_FollowsLiveOutputFolderOverride()
     {
-        await SaveImageAsync(SampleParams("override-me", 1, ImageOutputFormat.Png));
-
         // No ctor directory => production behaviour: resolve OutputPaths live per enumeration.
         var sut = new GalleryService(rootDirectory: null, () => _imageClock.AddYears(1));
         try
         {
-            ImageGenerator.MAUI.Shared.Constants.OutputPaths.SetGeneratedImagesOverride(_tempDir);
+            // The override is the ROOT; images resolve to <root>\pictures, so save there.
+            ImageGenerator.MAUI.Shared.Constants.OutputPaths.SetRootOverride(_tempDir);
+            var picturesDir = ImageGenerator.MAUI.Shared.Constants.OutputPaths.GeneratedImagesDirectory;
+            await SaveImageAsync(SampleParams("override-me", 1, ImageOutputFormat.Png), picturesDir);
 
             var items = await CollectAsync(sut.EnumerateAsync());
 
@@ -118,7 +119,7 @@ public class GalleryServiceTests : IDisposable
         finally
         {
             // Process-global static state — reset so sibling tests see the default.
-            ImageGenerator.MAUI.Shared.Constants.OutputPaths.SetGeneratedImagesOverride(null);
+            ImageGenerator.MAUI.Shared.Constants.OutputPaths.SetRootOverride(null);
         }
     }
 
@@ -190,10 +191,12 @@ public class GalleryServiceTests : IDisposable
         meta.Should().BeNull();
     }
 
-    private async Task<string> SaveImageAsync(ImageGenerationParameters parameters)
+    private async Task<string> SaveImageAsync(ImageGenerationParameters parameters, string? directory = null)
     {
+        var target = directory ?? _tempDir;
+        Directory.CreateDirectory(target);
         var bytes = Build1x1Image(parameters.OutputFormat);
-        var path = _imageFileService.GetUniqueSavePath(_tempDir, parameters);
+        var path = _imageFileService.GetUniqueSavePath(target, parameters);
         await _imageFileService.SaveImageWithMetadataAsync(path, bytes, parameters);
         return path;
     }

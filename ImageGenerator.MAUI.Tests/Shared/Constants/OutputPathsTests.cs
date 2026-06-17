@@ -7,27 +7,28 @@ namespace ImageGenerator.MAUI.Tests.Shared.Constants;
 public class OutputPathsTests : IDisposable
 {
     // Always restore the default after each test — the override is process-global static state.
-    public void Dispose() => OutputPaths.SetGeneratedImagesOverride(null);
+    public void Dispose() => OutputPaths.SetRootOverride(null);
 
     [Fact]
-    public void GeneratedImagesDirectory_NoOverride_IsTheDefaultPicturesPath()
+    public void GeneratedImagesDirectory_NoOverride_IsThePicturesSubfolderOfTheDefaultRoot()
     {
-        OutputPaths.GeneratedImagesDirectory.Should().Be(OutputPaths.DefaultGeneratedImagesDirectory);
+        OutputPaths.GeneratedImagesDirectory.Should().Be(
+            Path.Combine(OutputPaths.DefaultRootDirectory, "pictures"));
     }
 
     [Fact]
-    public void SetOverride_MovesImagesAndJsonPrompts_ButNotComfyWorkflowsOrMutationLibrary()
+    public void SetOverride_MovesEveryDataFolderUnderTheConfiguredRoot()
     {
-        OutputPaths.SetGeneratedImagesOverride(@"D:\out");
+        OutputPaths.SetRootOverride(@"D:\out");
 
-        OutputPaths.GeneratedImagesDirectory.Should().Be(@"D:\out");
+        // Images get their own "pictures" subfolder under the root.
+        OutputPaths.GeneratedImagesDirectory.Should().Be(Path.Combine(@"D:\out", "pictures"));
         OutputPaths.JsonPromptsDirectory.Should().Be(Path.Combine(@"D:\out", "json-prompts"));
-        // comfy-workflows are inputs (picker models) — anchored at the default, never moved.
-        OutputPaths.ComfyWorkflowsDirectory.Should().Be(
-            Path.Combine(OutputPaths.DefaultGeneratedImagesDirectory, "comfy-workflows"));
-        // the mutation library is hand-edited input too — also anchored at the default.
-        OutputPaths.MutationLibraryDirectory.Should().Be(
-            Path.Combine(OutputPaths.DefaultGeneratedImagesDirectory, "mutation-library"));
+        // comfy-workflows / mutation-library / prompt-builder now follow the root too, so the
+        // whole app stays together when the output folder is re-pointed.
+        OutputPaths.ComfyWorkflowsDirectory.Should().Be(Path.Combine(@"D:\out", "comfy-workflows"));
+        OutputPaths.MutationLibraryDirectory.Should().Be(Path.Combine(@"D:\out", "mutation-library"));
+        OutputPaths.PromptBuilderDirectory.Should().Be(Path.Combine(@"D:\out", "prompt-builder"));
     }
 
     [Theory]
@@ -36,17 +37,17 @@ public class OutputPathsTests : IDisposable
     [InlineData("   ")]
     public void SetOverride_NullOrWhitespace_RestoresDefault(string? value)
     {
-        OutputPaths.SetGeneratedImagesOverride(@"D:\out");
-        OutputPaths.SetGeneratedImagesOverride(value);
+        OutputPaths.SetRootOverride(@"D:\out");
+        OutputPaths.SetRootOverride(value);
 
-        OutputPaths.GeneratedImagesDirectory.Should().Be(OutputPaths.DefaultGeneratedImagesDirectory);
+        OutputPaths.RootDirectory.Should().Be(OutputPaths.DefaultRootDirectory);
     }
 
     [Fact]
     public void SetOverride_TrimsSurroundingWhitespace()
     {
-        OutputPaths.SetGeneratedImagesOverride(@"  D:\out  ");
+        OutputPaths.SetRootOverride(@"  D:\out  ");
 
-        OutputPaths.GeneratedImagesDirectory.Should().Be(@"D:\out");
+        OutputPaths.RootDirectory.Should().Be(@"D:\out");
     }
 }

@@ -39,7 +39,7 @@ A Windows desktop (.NET MAUI) image-generation workbench that routes one prompt 
 
 ### Your own ComfyUI server
 
-The ComfyUI provider talks to a [ComfyUI](https://github.com/comfyanonymous/ComfyUI) instance you run (localhost or LAN — start it with `--listen` for LAN, and don't expose a bare port to the internet). The app never builds graphs; you bring your own. In ComfyUI use **Workflow → Export (API)** and save the JSON into `Pictures\ImageGenerator.MAUI\comfy-workflows\` — every file there becomes a model entry, re-scanned on launch / Refresh Models. (Normal Ctrl+S saves are the UI format and can't be queued; the app tells you to re-export.)
+The ComfyUI provider talks to a [ComfyUI](https://github.com/comfyanonymous/ComfyUI) instance you run (localhost or LAN — start it with `--listen` for LAN, and don't expose a bare port to the internet). The app never builds graphs; you bring your own. In ComfyUI use **Workflow → Export (API)** and save the JSON into your data folder's `comfy-workflows\` subfolder (default `Pictures\Emberforge\comfy-workflows\`, or `<output folder>\comfy-workflows\` when you've set one in Settings) — every file there becomes a model entry, re-scanned on launch / Refresh Models. (Normal Ctrl+S saves are the UI format and can't be queued; the app tells you to re-export.)
 
 At submit time the app patches the graph: your **prompt** into the lowest-id `CLIPTextEncode` (or, in structured mode, into `Ideogram4PromptBuilderKJ` / a JSON-literal `CLIPTextEncode`); re-rolls every literal `seed` / `noise_seed`; writes **aspect-ratio + megapixels** into a `ResolutionSelector` if present; offers a **checkpoint** picker for a baked `CheckpointLoaderSimple` or single literal `UNETLoader` (multi-UNET pairings keep their models); offers a **quality-preset** picker for a single `CustomCombo`; and expands `%date:…%` filename tokens app-side. Minimum a workflow needs: a `CLIPTextEncode` with literal text and a `SaveImage`.
 
@@ -47,7 +47,7 @@ At submit time the app patches the graph: your **prompt** into the lowest-id `CL
 
 ### Describe an idea (Claude)
 
-**Describe an idea…** runs two passes: Pass 1 always turns a plain-English idea into a polished **prose** prompt (good for any model); Pass 2 optionally maps that onto a schema-valid **Ideogram V4 JSON** caption. The result card lets you copy the prose, use it as the prompt, or use the JSON. Each pass is one Opus call at high effort (~3–6¢, so prose-only ~3–6¢ and prose+JSON ~6–12¢); the model is hardcoded. Power users can override the bundled clean-room instructions with private `vpe-prompt.md` / `system-prompt.md` files in `Pictures\ImageGenerator.MAUI\prompt-builder\` (read fresh, never enter the repo — an open-core split).
+**Describe an idea…** runs two passes: Pass 1 always turns a plain-English idea into a polished **prose** prompt (good for any model); Pass 2 optionally maps that onto a schema-valid **Ideogram V4 JSON** caption. The result card lets you copy the prose, use it as the prompt, or use the JSON. Each pass is one Opus call at high effort (~3–6¢, so prose-only ~3–6¢ and prose+JSON ~6–12¢); the model is hardcoded. Power users can override the bundled clean-room instructions with private `vpe-prompt.md` / `system-prompt.md` files in your data folder's `prompt-builder\` subfolder (default `Pictures\Emberforge\prompt-builder\`) (read fresh, never enter the repo — an open-core split).
 
 ### Mutation & enrichment
 
@@ -87,7 +87,7 @@ Open `ImageGenerator.MAUI.sln`, restore, build, run. For the self-contained sing
 - Gallery has no in-app delete/rename/search yet (manage files in Explorer; the watcher picks changes up within ~1 s).
 - Pollinations `kontext` (image-to-image) has no input-image plumbing — use a Replicate Flux model for image-prompted edits.
 
-Hitting something? [Open an issue](https://github.com/MR-444/ImageGenerator.MAUI/issues) with the status text from `Pictures\ImageGenerator.MAUI\app.log` and what you were generating.
+Hitting something? [Open an issue](https://github.com/MR-444/ImageGenerator.MAUI/issues) with the status text from `%LOCALAPPDATA%\Emberforge\app.log` (i.e. `C:\Users\<you>\AppData\Local\Emberforge\app.log`) and what you were generating.
 
 ## 🔭 Roadmap
 

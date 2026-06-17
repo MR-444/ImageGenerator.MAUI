@@ -93,12 +93,14 @@ public class GeneratorViewModelTests
 
             _viewModel.OutputFolder.Should().Be(picked);
             _mockUiStateStore.Verify(s => s.PersistOutputFolder(picked), Times.Once);
-            OutputPaths.GeneratedImagesDirectory.Should().Be(picked);
+            // The picked folder is the root; images land in its "pictures" subfolder.
+            OutputPaths.RootDirectory.Should().Be(picked);
+            OutputPaths.GeneratedImagesDirectory.Should().Be(Path.Combine(picked, "pictures"));
         }
         finally
         {
             // Process-global static state — never leak the override into sibling tests.
-            OutputPaths.SetGeneratedImagesOverride(null);
+            OutputPaths.SetRootOverride(null);
         }
     }
 
@@ -121,15 +123,15 @@ public class GeneratorViewModelTests
         {
             _viewModel.OutputFolder = @"E:\elsewhere";
 
-            OutputPaths.GeneratedImagesDirectory.Should().Be(@"E:\elsewhere");
-            // json-prompts follow the override; comfy-workflows stay at the default.
+            OutputPaths.GeneratedImagesDirectory.Should().Be(Path.Combine(@"E:\elsewhere", "pictures"));
+            // Every data folder follows the configured root now, including comfy-workflows.
             OutputPaths.JsonPromptsDirectory.Should().StartWith(@"E:\elsewhere");
             OutputPaths.ComfyWorkflowsDirectory.Should().Be(
-                Path.Combine(OutputPaths.DefaultGeneratedImagesDirectory, "comfy-workflows"));
+                Path.Combine(@"E:\elsewhere", "comfy-workflows"));
         }
         finally
         {
-            OutputPaths.SetGeneratedImagesOverride(null);
+            OutputPaths.SetRootOverride(null);
         }
     }
 

@@ -220,7 +220,7 @@ public static class MauiProgram
         // VM init order. CrashLogger already configured app.log against the fixed default above —
         // intended: the log stays anchored regardless of this setting.
         var savedOutputFolder = app.Services.GetRequiredService<IUiStateStore>().LoadOutputFolder();
-        Shared.Constants.OutputPaths.SetGeneratedImagesOverride(savedOutputFolder);
+        Shared.Constants.OutputPaths.SetRootOverride(savedOutputFolder);
 
         return app;
     }
