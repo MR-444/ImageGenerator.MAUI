@@ -1,7 +1,9 @@
 ImageGenerator.MAUI — Open Work Queue
 =====================================
 
-Last updated: 2026-06-18 (cut release v2.0.1; 1219 tests green, 0 warnings).
+Last updated: 2026-06-19 (post-release housekeeping; 1219 tests green, 0 warnings).
+The 2026-06-16 AI-mutation quality chain (bbox-decouple, restyle, style renames) is now
+USER-VERIFIED over ~2 days of daily use — all good, the pending-verify checks are closed.
 v2.0.1 RELEASED (NEW tag v2.0.1 on 680b455, marked Latest) — a patch shipping the two unreleased
 Windows-standards/data-path commits on top of v2.0.0: b56886f (one configurable Emberforge root;
 app.log -> %LOCALAPPDATA%\Emberforge\app.log) + a837a58 (publisher User Name -> MR-444). Release-prep
@@ -13,8 +15,15 @@ live in git history (`git log v2.0.1..`) and in ~/.claude memory ([[project_data
   [ ] = open      [~] = in progress (commit not yet on master)
 
 
-SESSION 2026-06-16 — AUDIT + AI MUTATION QUALITY (all committed to master, NOT released)
-----------------------------------------------------------------------------------------
+NEXT UP — the only forward work the user intends right now
+----------------------------------------------------------
+[ ] UX polish pass — button ordering + too-much-scrolling. App is good after ~2 days of
+    daily use; specific issues TBD (user will state exactly which buttons / which pages).
+    Mostly about the ORDER of buttons and reducing how much the user has to scroll.
+
+
+SESSION 2026-06-16 — AUDIT + AI MUTATION QUALITY (historical record; SHIPPED in v2.0.0/v2.0.1)
+---------------------------------------------------------------------------------------------
 Commits in order:
   - Whole-app audit documents/audit/csharp-audit-2026-06-16.md (very good health, no Critical) + ALL
     follow-ups fixed: F1 f8cafbc (IdeaToPrompt cancellation), F2 b513ad2 (reset IsAiMode on ordinary
@@ -40,17 +49,6 @@ the pinned style, follows structure); Qwen3-Next-80B-A3B-Instruct = drifts/over-
 restyles off the lock, dropped bboxes). All installed models are thinking-capable. 35B is the safer bet.
 
 
-PENDING VERIFY (shipped this session, awaiting more user eyeballing)
--------------------------------------------------------------------
-[ ] BBOX-DECOUPLE reliability: only ONE clean no-block run confirmed. Re-run a few previously-blocked
-    prompts on BOTH qwen3.6:35b and the 80B; confirm lean-HLD + every-element-bbox holds and blocks stay
-    gone (the 80B ignored structure once — 35B safer).
-[ ] AI caption RESTYLE UI-verify: AI mode → pick a saved style → variants render coherently in that style
-    (whole-scene restyle). AI round-trip already verified; this is the pin-a-style check (commit 13426eb).
-[ ] Style-rename sanity: pin gouache (real gouache, no flora), occult_botanical (flowers on purpose),
-    vignette (darkened-edge photo) — confirm names now match output.
-
-
 ROADMAP / OUTLOOK — recorded forward plan (each = its own future task)
 ---------------------------------------------------------------------
 Respect scope rules (no multi-image-per-click; no kontext/negative_prompt/A1111-in-saved-files).
@@ -70,22 +68,6 @@ Respect scope rules (no multi-image-per-click; no kontext/negative_prompt/A1111-
 
 NOT selected (record so they aren't re-pitched as new): gallery delete/search/favorites; compare/A-B
 view; seed-variation "more like this" (only OK as a sequential batch, never multi-output).
-
-
-WATCH ITEM
-----------
-[ ] Ghost Generate activation (confirmed twice 2026-06-10, none since the forensics landed). If a job
-    card appears without a click: app.log "Generate activated" lines classify pointer/keyboard/
-    programmatic; JobCount=2 after one click = smoking gun; fix = move focus off the button after click.
-
-
-INERT UNTIL THE USER ASKS (project memory: don't suggest unused features)
--------------------------------------------------------------------------
-[ ] kontext (image-prompt for kontext models) — descriptor pattern, near-zero structural impact.
-[ ] negative_prompt for Pollinations flux/zimage — same.
-[ ] Pollinations image-input — descriptors inherit ImagePrompt:false; API supports input images
-    (documents/Pollinations API Reference.html). Gap: per-model ImagePrompt:true, BuildUrl image= param
-    (encoding unknown: GET-only API vs the app's base64), and MaxImageInputs > 0 where supported.
 
 
 SCOPE GUARDS (standing, do not violate)
