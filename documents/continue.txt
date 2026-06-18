@@ -1,10 +1,14 @@
 ImageGenerator.MAUI — Open Work Queue
 =====================================
 
-Last updated: 2026-06-16 (end of a long AI-mutation tuning session; 1169 tests green, 0 warnings).
-v1.9.1 RELEASED (tag v1.9.1 on 542e601). This file holds ONLY the open backlog + a short pointer to
-the last session. Full forensics live in git history (`git log v1.9.1..`) and in ~/.claude memory
-([[reference_audit_2026_06_16]], [[reference_ollama_local_tier]], [[reference_mutation_prompt_craft]]).
+Last updated: 2026-06-18 (cut release v2.0.1; 1219 tests green, 0 warnings).
+v2.0.1 RELEASED (NEW tag v2.0.1 on 680b455, marked Latest) — a patch shipping the two unreleased
+Windows-standards/data-path commits on top of v2.0.0: b56886f (one configurable Emberforge root;
+app.log -> %LOCALAPPDATA%\Emberforge\app.log) + a837a58 (publisher User Name -> MR-444). Release-prep
+commit 680b455 bumped Version 2.0.0->2.0.1 / ApplicationVersion 21->22 and fixed the stale README
+app.log line. Migration is DOCUMENT-ONLY (notes at documents/release-notes-v2.0.1.md). Full forensics
+live in git history (`git log v2.0.1..`) and in ~/.claude memory ([[project_data_layout_emberforge]],
+[[reference_audit_2026_06_16]], [[reference_ollama_local_tier]], [[reference_mutation_prompt_craft]]).
 
   [ ] = open      [~] = in progress (commit not yet on master)
 
