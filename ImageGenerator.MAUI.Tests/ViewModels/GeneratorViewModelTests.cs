@@ -214,6 +214,87 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.Model.Should().Be(ModelConstants.Flux.Klein4b);
     }
 
+    // --- GPU gate: a ComfyUI render holds the shared fireEngine permit; cloud providers don't ---
+
+    private GeneratorViewModel BuildGatedViewModel(IGpuGate gate) =>
+        new(
+            _mockJobRunner.Object,
+            _mockTokenStore.Object,
+            _mockPollinationsTokenStore.Object,
+            _mockComfyUiAuthStore.Object,
+            _mockCivitaiTokenStore.Object,
+            _mockAnthropicTokenStore.Object,
+            _mockCivitaiPostingService.Object,
+            _mockUiStateStore.Object,
+            _mockCatalogCoordinator.Object,
+            ModelDescriptorRegistry.Default(),
+            _mockPromptBatchParser.Object,
+            _mockCheckpointService.Object,
+            _mockGalleryService.Object,
+            _mockFolderPicker.Object,
+            NullLogger<GeneratorViewModel>.Instance,
+            ollamaModelCatalog: null,
+            comfyVram: null,
+            gpuGate: gate);
+
+    [Fact]
+    public async Task GenerateImage_ComfyUiModel_SameHostAsOllama_AcquiresAndReleasesGpuGate()
+    {
+        var gate = new FakeGpuGate();
+        var vm = BuildGatedViewModel(gate);
+        vm.ComfyUiBaseUrl = "http://fireEngine:8188";   // note the case difference vs the Ollama default
+        vm.OllamaBaseUrl = "http://fireengine:11434";
+        vm.Parameters.Model = "comfyui/test";            // tokenless local provider
+        vm.Parameters.Prompt = "a cat";
+
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
+
+        await ((IAsyncRelayCommand)vm.GenerateImageCommand).ExecuteAsync(null);
+
+        gate.Acquired.Should().Be(1, "the render must hold the local GPU while it runs");
+        gate.Released.Should().Be(1, "the gate is released after the post-render VRAM free");
+    }
+
+    [Fact]
+    public async Task GenerateImage_NonComfyUiModel_DoesNotAcquireGpuGate()
+    {
+        var gate = new FakeGpuGate();
+        var vm = BuildGatedViewModel(gate);
+        vm.ComfyUiBaseUrl = "http://fireengine:8188";
+        vm.OllamaBaseUrl = "http://fireengine:11434";
+        vm.Parameters.Model = ModelConstants.Flux.Pro11;  // Replicate — never touches fireEngine's VRAM
+        vm.Parameters.ApiToken = "valid-token";
+        vm.Parameters.Prompt = "a cat";
+
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
+
+        await ((IAsyncRelayCommand)vm.GenerateImageCommand).ExecuteAsync(null);
+
+        gate.Acquired.Should().Be(0, "cloud providers don't contend for the local GPU");
+    }
+
+    private sealed class FakeGpuGate : IGpuGate
+    {
+        public int Acquired { get; private set; }
+        public int Released { get; private set; }
+
+        public Task<IDisposable> AcquireAsync(CancellationToken ct = default)
+        {
+            Acquired++;
+            return Task.FromResult<IDisposable>(new Lease(() => Released++));
+        }
+
+        private sealed class Lease(Action onRelease) : IDisposable
+        {
+            private Action? _onRelease = onRelease;
+            public void Dispose() => Interlocked.Exchange(ref _onRelease, null)?.Invoke();
+        }
+    }
+
     [Fact]
     public async Task GenerateImage_WithValidParameters_ShouldGenerateImage()
     {

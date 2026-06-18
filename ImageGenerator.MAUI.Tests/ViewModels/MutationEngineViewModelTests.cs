@@ -1,4 +1,6 @@
 using FluentAssertions;
+using ImageGenerator.MAUI.Core.Application.Interfaces;
+using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library;
@@ -6,6 +8,7 @@ using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
 using ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
 
@@ -517,6 +520,108 @@ public class MutationEngineViewModelTests
         await sut.MutateWithAiCommand.ExecuteAsync(null);
 
         catalog.UnloadCalls.Should().Be(0, "cloud tiers hold no local VRAM");
+    }
+
+    // ---- GPU gate: Local mutation shares fireEngine's VRAM with ComfyUI, so it takes the gate ----
+
+    [Fact]
+    public async Task MutateWithAi_LocalTier_SameHost_AcquiresAndReleasesGpuGate()
+    {
+        var gate = new FakeGpuGate();
+        var sut = CreateSutWithAiAndGate(
+            new FailingMutationLlm(), new StubOllamaCatalog(), gate,
+            BuildGenerator("http://fireEngine:8188", "http://fireengine:11434"));
+        sut.SetBaseForTest(MutationTestData.BaseCaption());
+        sut.IsAiMode = true;
+        sut.SelectedModelTier = ModelTier.Local;
+        sut.Count = 2;
+
+        await sut.MutateWithAiCommand.ExecuteAsync(null);
+
+        gate.Acquired.Should().Be(1, "the Local tier holds the shared GPU gate across its LLM calls");
+        gate.Released.Should().Be(1, "and releases it before handing the variants off to render");
+    }
+
+    [Fact]
+    public async Task MutateWithAi_CloudTier_NeverAcquiresGpuGate()
+    {
+        var gate = new FakeGpuGate();
+        var sut = CreateSutWithAiAndGate(
+            new FailingMutationLlm(), new StubOllamaCatalog(), gate,
+            BuildGenerator("http://fireengine:8188", "http://fireengine:11434"));
+        sut.SetBaseForTest(MutationTestData.BaseCaption());
+        sut.IsAiMode = true;
+        sut.SelectedModelTier = ModelTier.Sonnet;
+        sut.Count = 2;
+
+        await sut.MutateWithAiCommand.ExecuteAsync(null);
+
+        gate.Acquired.Should().Be(0, "cloud tiers hold no local VRAM");
+    }
+
+    private static MutationEngineViewModel CreateSutWithAiAndGate(
+        ICaptionMutationLlmService llm, IOllamaModelCatalog ollamaCatalog, IGpuGate gate, GeneratorViewModel generator) =>
+        new(new StubLibraryService(),
+            new CaptionMutationEngine(),
+            NullLogger<MutationEngineViewModel>.Instance,
+            generator: generator,
+            clipboard: null,
+            mutationLlm: llm,
+            ollamaCatalog: ollamaCatalog,
+            gpuGate: gate);
+
+    // A generator just so the same-host check has a ComfyUI URL to compare; all variants fail in these
+    // tests so DispatchAiResultsAsync returns before it ever touches the real render batch.
+    private static GeneratorViewModel BuildGenerator(string comfyUrl, string ollamaUrl)
+    {
+        var gen = new GeneratorViewModel(
+            Mock.Of<IJobRunner>(),
+            Mock.Of<IApiTokenStore>(),
+            Mock.Of<IPollinationsTokenStore>(),
+            Mock.Of<IComfyUiAuthStore>(),
+            Mock.Of<ICivitaiTokenStore>(),
+            Mock.Of<IAnthropicTokenStore>(),
+            Mock.Of<ICivitaiPostingService>(),
+            Mock.Of<IUiStateStore>(),
+            Mock.Of<IModelCatalogCoordinator>(),
+            ModelDescriptorRegistry.Default(),
+            Mock.Of<IPromptBatchParser>(),
+            Mock.Of<IComfyUiCheckpointService>(),
+            Mock.Of<IGalleryService>(),
+            Mock.Of<IFolderPicker>(),
+            NullLogger<GeneratorViewModel>.Instance);
+        gen.ComfyUiBaseUrl = comfyUrl;
+        gen.OllamaBaseUrl = ollamaUrl;
+        return gen;
+    }
+
+    private sealed class FailingMutationLlm : ICaptionMutationLlmService
+    {
+        public Task<LlmVariantResult> MutateAsync(
+            V4JsonPrompt baseCaption, string steer, int index, ModelTier tier, CancellationToken ct = default) =>
+            Task.FromResult(LlmVariantResult.Fail("test: no variant"));
+
+        public Task<LlmVariantResult> BreedAsync(
+            IReadOnlyList<V4JsonPrompt> winners, string steer, int index, ModelTier tier, CancellationToken ct = default) =>
+            Task.FromResult(LlmVariantResult.Fail("test: no variant"));
+    }
+
+    private sealed class FakeGpuGate : IGpuGate
+    {
+        public int Acquired { get; private set; }
+        public int Released { get; private set; }
+
+        public Task<IDisposable> AcquireAsync(CancellationToken ct = default)
+        {
+            Acquired++;
+            return Task.FromResult<IDisposable>(new Lease(() => Released++));
+        }
+
+        private sealed class Lease(Action onRelease) : IDisposable
+        {
+            private Action? _onRelease = onRelease;
+            public void Dispose() => Interlocked.Exchange(ref _onRelease, null)?.Invoke();
+        }
     }
 
     private sealed class StubOllamaCatalog : IOllamaModelCatalog

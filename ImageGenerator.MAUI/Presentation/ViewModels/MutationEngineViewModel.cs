@@ -48,6 +48,7 @@ public partial class MutationEngineViewModel : ObservableObject
     private readonly ICaptionMutationLlmService? _mutationLlm;
     private readonly IClipboardService? _clipboard;
     private readonly IOllamaModelCatalog? _ollamaCatalog;
+    private readonly IGpuGate? _gpuGate;
     private readonly ILogger<MutationEngineViewModel> _logger;
 
     /// <summary>The typed base whose elements (and their slot tags) the run mutates.</summary>
@@ -75,7 +76,8 @@ public partial class MutationEngineViewModel : ObservableObject
         GeneratorViewModel? generator = null,
         IClipboardService? clipboard = null,
         ICaptionMutationLlmService? mutationLlm = null,
-        IOllamaModelCatalog? ollamaCatalog = null)
+        IOllamaModelCatalog? ollamaCatalog = null,
+        IGpuGate? gpuGate = null)
     {
         _libraryService = libraryService ?? throw new ArgumentNullException(nameof(libraryService));
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
@@ -84,6 +86,7 @@ public partial class MutationEngineViewModel : ObservableObject
         _clipboard = clipboard;
         _mutationLlm = mutationLlm;
         _ollamaCatalog = ollamaCatalog;
+        _gpuGate = gpuGate;
     }
 
     // --- Run configuration (bound to the page) ---------------------------------------------------
@@ -587,19 +590,44 @@ public partial class MutationEngineViewModel : ObservableObject
         try
         {
             var verb = breedSet is { Count: > 0 } ? "breed" : "produce";
-            SetStatus($"Asking {tier} to {verb} {count} variant{(count == 1 ? "" : "s")}…", StatusKind.Info);
 
-            var results = breedSet is { Count: > 0 }
-                ? await FanOutAsync(count, ConcurrencyFor(tier),
-                    i => _mutationLlm.BreedAsync(breedSet, steer, i, tier))
-                : await FanOutAsync(count, ConcurrencyFor(tier),
-                    i => _mutationLlm.MutateAsync(baseCaption, steer, i, tier));
+            // The Local tier runs on fireEngine's GPU, which ComfyUI also uses — take the shared GPU gate
+            // so the Ollama model never co-loads with an in-flight render (that thrashes VRAM and hangs the
+            // call to its timeout). Cloud tiers hold no local VRAM, and a split-host setup needs no gate.
+            // Held only across the LLM calls + unload, then released BEFORE dispatch so the renders we hand
+            // off can take the gate in turn.
+            var gpuGated = tier == ModelTier.Local
+                && _gpuGate is not null
+                && GpuColocation.SameHost(_generator?.ComfyUiBaseUrl, ResolveOllamaBaseUrl());
 
-            // Free the local GPU before the ComfyUI render: the 27B is done generating captions and
-            // both models won't fit. Fires once after the whole (sequential) Local batch; cloud tiers
-            // hold no local VRAM. Best-effort — the catalog swallows failures.
-            if (tier == ModelTier.Local && _ollamaCatalog is not null)
-                await UnloadLocalModelAsync();
+            IDisposable? gpuLease = null;
+            if (gpuGated)
+            {
+                SetStatus("Waiting for the current render to finish…", StatusKind.Info);
+                gpuLease = await _gpuGate!.AcquireAsync();
+            }
+
+            LlmVariantResult[] results;
+            try
+            {
+                SetStatus($"Asking {tier} to {verb} {count} variant{(count == 1 ? "" : "s")}…", StatusKind.Info);
+
+                results = breedSet is { Count: > 0 }
+                    ? await FanOutAsync(count, ConcurrencyFor(tier),
+                        i => _mutationLlm.BreedAsync(breedSet, steer, i, tier))
+                    : await FanOutAsync(count, ConcurrencyFor(tier),
+                        i => _mutationLlm.MutateAsync(baseCaption, steer, i, tier));
+
+                // Free the local GPU before the ComfyUI render: the 27B is done generating captions and
+                // both models won't fit. Fires once after the whole (sequential) Local batch; cloud tiers
+                // hold no local VRAM. Best-effort — the catalog swallows failures.
+                if (tier == ModelTier.Local && _ollamaCatalog is not null)
+                    await UnloadLocalModelAsync();
+            }
+            finally
+            {
+                gpuLease?.Dispose();
+            }
 
             await DispatchAiResultsAsync(results);
         }
@@ -642,10 +670,14 @@ public partial class MutationEngineViewModel : ObservableObject
     /// model the service used (generator settings, else the constants' defaults). Best-effort.</summary>
     private async Task UnloadLocalModelAsync()
     {
-        var baseUrl = _generator?.OllamaBaseUrl is { Length: > 0 } u ? u : ModelConstants.Ollama.DefaultBaseUrl;
         var model = _generator?.OllamaModel is { Length: > 0 } m ? m : ModelConstants.Ollama.DefaultModel;
-        await _ollamaCatalog!.UnloadAsync(baseUrl, model);
+        await _ollamaCatalog!.UnloadAsync(ResolveOllamaBaseUrl(), model);
     }
+
+    /// <summary>The Ollama endpoint the Local tier talks to: the generator's setting, else the default
+    /// (fireEngine). Shared by the unload call and the GPU-gate same-host check.</summary>
+    private string ResolveOllamaBaseUrl() =>
+        _generator?.OllamaBaseUrl is { Length: > 0 } u ? u : ModelConstants.Ollama.DefaultBaseUrl;
 
     /// <summary>A local model on one GPU serves requests serially, so concurrent calls would queue
     /// server-side and trip the per-call timeout; run the Local tier one-at-a-time. Cloud tiers fan out.</summary>

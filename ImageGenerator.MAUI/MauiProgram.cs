@@ -154,6 +154,9 @@ public static class MauiProgram
         builder.Services.AddSingleton<PollinationsImageGenerationService>();
         builder.Services.AddSingleton<ComfyUiImageGenerationService>();
         builder.Services.AddSingleton<IComfyUiVramService, ComfyUiVramService>();
+        // One permit shared by ComfyUI renders + the local Ollama mutation tier: they share fireEngine's
+        // VRAM, so only one GPU workload runs at a time (see GpuGate / IGpuGate).
+        builder.Services.AddSingleton<IGpuGate, GpuGate>();
         builder.Services.AddSingleton<IImageGenerationService, ImageGenerationDispatcher>();
         builder.Services.AddSingleton<IModelCatalogService, ModelCatalogService>();
         builder.Services.AddSingleton<IPollinationsCatalogService, PollinationsCatalogService>();

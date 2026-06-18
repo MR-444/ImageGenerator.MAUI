@@ -35,6 +35,7 @@ public partial class GeneratorViewModel : ObservableObject
     private readonly IFolderPicker _folderPicker;
     private readonly IOllamaModelCatalog? _ollamaModelCatalog;
     private readonly IComfyUiVramService? _comfyVram;
+    private readonly IGpuGate? _gpuGate;
     private readonly ILogger<GeneratorViewModel> _logger;
 
     [ObservableProperty]
@@ -756,7 +757,8 @@ public partial class GeneratorViewModel : ObservableObject
         IFolderPicker folderPicker,
         ILogger<GeneratorViewModel> logger,
         IOllamaModelCatalog? ollamaModelCatalog = null,
-        IComfyUiVramService? comfyVram = null)
+        IComfyUiVramService? comfyVram = null,
+        IGpuGate? gpuGate = null)
     {
         _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
@@ -773,6 +775,7 @@ public partial class GeneratorViewModel : ObservableObject
         _folderPicker = folderPicker ?? throw new ArgumentNullException(nameof(folderPicker));
         _ollamaModelCatalog = ollamaModelCatalog;
         _comfyVram = comfyVram;
+        _gpuGate = gpuGate;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         if (promptBatchParser is null) throw new ArgumentNullException(nameof(promptBatchParser));
 
@@ -1021,6 +1024,36 @@ public partial class GeneratorViewModel : ObservableObject
 
     private async Task RunJobAsync(GenerationJob job)
     {
+        // Serialize GPU work: a ComfyUI render and the local Ollama mutation tier share fireEngine's
+        // VRAM, so co-loading both thrashes/OOMs. Hold the gate from before submit until the post-render
+        // VRAM free, so a mutation (or another render) waits rather than collides. Non-ComfyUI providers
+        // and split-host setups (ComfyUI ≠ Ollama box) skip the gate entirely.
+        var gpuGated = _gpuGate is not null
+            && ModelConstants.ComfyUi.IsId(job.Parameters.Model)
+            && GpuColocation.SameHost(ComfyUiBaseUrl, OllamaBaseUrl);
+        IDisposable? gpuLease = null;
+        if (gpuGated)
+        {
+            try
+            {
+                gpuLease = await _gpuGate!.AcquireAsync(job.Cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancelled while queued behind another GPU workload — nothing rendered.
+                _logger.LogInformation("Job finished Kind=Canceled Path=(null)");
+                DispatchToUi(() =>
+                {
+                    job.StatusMessage = "Canceled.";
+                    job.StatusKind = StatusKind.Canceled;
+                    job.IsRunning = false;
+                    job.HasProgress = false;
+                });
+                job.Cts.Dispose();
+                return;
+            }
+        }
+
         try
         {
             // Start/finish lines bracket BOTH single and batch runs (shared chokepoint).
@@ -1113,8 +1146,17 @@ public partial class GeneratorViewModel : ObservableObject
 
         // Rendering for this job is done — free the ComfyUI GPU when idle. A batch ITEM sees
         // IsBatchRunning true and skips (no mid-batch checkpoint reload); the batch-completion hook
-        // frees once at the end. A single Generate frees here.
-        await MaybeFreeComfyUiVramAsync(job.Parameters.Model);
+        // frees once at the end. A single Generate frees here. The GPU gate is released only after the
+        // free, so a queued mutation gets a freed card (the inner try/catch never rethrows, so control
+        // always reaches here; the finally guards against a future change or a throwing free).
+        try
+        {
+            await MaybeFreeComfyUiVramAsync(job.Parameters.Model);
+        }
+        finally
+        {
+            gpuLease?.Dispose();
+        }
     }
 
     /// <summary>
