@@ -14,35 +14,54 @@ namespace ImageGenerator.MAUI.Tests.Infrastructure.Services;
 
 /// <summary>
 /// The region-enricher's seam: a fake <see cref="EnrichRegionsLlmService.EnrichCompletion"/> replaces the
-/// network so the facts-block build, tier routing, validate-retry loop, override precedence, and (the
-/// enrichment-specific) preservation gate run without disk or HTTP.
+/// network so the facts-block build, tier routing, validate-retry loop, override precedence, and the
+/// desc-splice preservation (preserved fields come from the original, only descs from the model) run
+/// without disk or HTTP.
 /// </summary>
 public sealed class EnrichRegionsLlmServiceTests : IDisposable
 {
-    // Two placed elements with bboxes + descs — gives the fact block content and the preservation gate
-    // something to guard.
+    // Two placed elements with bboxes + descs — gives the fact block content and the desc-splice
+    // something to map.
     private const string BaseJson =
         """{"high_level_description":"A red fox in fresh snow","compositional_deconstruction":{"background":"a quiet snowy field at dawn","elements":[{"type":"obj","bbox":[400,0,800,400],"desc":"a russet fox mid-step"},{"type":"text","bbox":[100,100,200,500],"text":"WINTER","desc":"title lettering"}]}}""";
 
-    // Same scene, ONLY the descs rewritten → passes the validator AND the preservation gate.
+    // Same scene, the descs rewritten → the spliced result passes the validator.
     private const string EnrichedJson =
         """{"high_level_description":"A red fox in fresh snow","compositional_deconstruction":{"background":"a quiet snowy field at dawn","elements":[{"type":"obj","bbox":[400,0,800,400],"desc":"a russet fox mid-step in the lower-left, set against the snowfield"},{"type":"text","bbox":[100,100,200,500],"text":"WINTER","desc":"title lettering across the upper sky band"}]}}""";
 
-    // Parses, passes the validator, but MOVES a bbox → only the preservation gate catches it.
+    // Aligned (same count + types), but MOVES a bbox → the bbox is spliced from the base, so the move is ignored.
     private const string MovedBboxJson =
         """{"high_level_description":"A red fox in fresh snow","compositional_deconstruction":{"background":"a quiet snowy field at dawn","elements":[{"type":"obj","bbox":[401,0,800,400],"desc":"a russet fox mid-step"},{"type":"text","bbox":[100,100,200,500],"text":"WINTER","desc":"title lettering"}]}}""";
 
-    // Parses, passes the validator, but DROPS an element.
-    private const string DroppedElementJson =
-        """{"high_level_description":"A red fox in fresh snow","compositional_deconstruction":{"background":"a quiet snowy field at dawn","elements":[{"type":"obj","bbox":[400,0,800,400],"desc":"a russet fox mid-step"}]}}""";
-
-    // Parses, passes the validator, but CHANGES the literal text.
+    // Aligned, but CHANGES the literal text → text is spliced from the base, so the change is ignored.
     private const string ChangedTextJson =
         """{"high_level_description":"A red fox in fresh snow","compositional_deconstruction":{"background":"a quiet snowy field at dawn","elements":[{"type":"obj","bbox":[400,0,800,400],"desc":"a russet fox mid-step"},{"type":"text","bbox":[100,100,200,500],"text":"SUMMER","desc":"title lettering"}]}}""";
 
-    // Parses but fails the validator outright (blank background) — the validator path, not preservation.
+    // DROPS an element → count mismatch the splice can't map 1:1.
+    private const string DroppedElementJson =
+        """{"high_level_description":"A red fox in fresh snow","compositional_deconstruction":{"background":"a quiet snowy field at dawn","elements":[{"type":"obj","bbox":[400,0,800,400],"desc":"a russet fox mid-step"}]}}""";
+
+    // RETYPES element #1 (text → obj) → type mismatch; a desc would map onto the wrong subject.
+    private const string RetypedElementJson =
+        """{"high_level_description":"A red fox in fresh snow","compositional_deconstruction":{"background":"a quiet snowy field at dawn","elements":[{"type":"obj","bbox":[400,0,800,400],"desc":"a russet fox mid-step"},{"type":"obj","bbox":[100,100,200,500],"desc":"title lettering"}]}}""";
+
+    // Aligned, but BLANKS a desc → the spliced result fails the validator (desc is the model's to set).
     private const string ValidationFailJson =
-        """{"high_level_description":"x","compositional_deconstruction":{"background":"","elements":[{"type":"obj","bbox":[400,0,800,400],"desc":"y"}]}}""";
+        """{"high_level_description":"A red fox in fresh snow","compositional_deconstruction":{"background":"a quiet snowy field at dawn","elements":[{"type":"obj","bbox":[400,0,800,400],"desc":""},{"type":"text","bbox":[100,100,200,500],"text":"WINTER","desc":"title lettering"}]}}""";
+
+    // The real-world bug: a web-pasted prompt whose headline AND style carry a curly apostrophe (U+2019)
+    // in "worm’s-eye". The model returns the same scene with both straightened to ASCII — which the old
+    // exact-match gate rejected, but the splice keeps the original bytes.
+    private const string Curly = "’";
+
+    private static readonly string CurlyBaseJson =
+        "{\"high_level_description\":\"A worm" + Curly + "s-eye view of a red fox\"," +
+        "\"style_description\":{\"medium\":\"photographic film\",\"photo\":\"worm" + Curly + "s-eye cinematic shot\"}," +
+        "\"compositional_deconstruction\":{\"background\":\"a quiet snowy field\",\"elements\":[" +
+        "{\"type\":\"obj\",\"bbox\":[400,0,800,400],\"desc\":\"a russet fox mid-step\"}]}}";
+
+    private const string CurlyStraightenedReply =
+        """{"high_level_description":"A worm's-eye view of a red fox","style_description":{"medium":"photographic film","photo":"worm's-eye cinematic shot"},"compositional_deconstruction":{"background":"a quiet snowy field","elements":[{"type":"obj","bbox":[400,0,800,400],"desc":"a russet fox mid-step in the lower-left against the snowfield"}]}}""";
 
     private static readonly V4JsonPrompt Base = V4JsonPromptSerializer.Deserialize(BaseJson);
 
@@ -185,19 +204,62 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
         result.Error.Should().Contain("couldn't reach the model");
     }
 
-    // ---- Preservation gate (only descs may change) ---------------------------------------
+    // ---- Desc-splice preservation (only descs are taken from the model) -------------------
 
     [Theory]
     [InlineData(nameof(MovedBboxJson))]
-    [InlineData(nameof(DroppedElementJson))]
     [InlineData(nameof(ChangedTextJson))]
-    public async Task EnrichAsync_NonDescChange_RetriesThenFails(string which)
+    public async Task EnrichAsync_ModelTouchesPreservedField_SilentlyCorrectedFromBase(string which)
+    {
+        var reply = which switch
+        {
+            nameof(MovedBboxJson) => MovedBboxJson,
+            _ => ChangedTextJson
+        };
+        var calls = 0;
+        var sut = CreateSut(KeyStore("sk-ant"),
+            (_, _, _, _, _, _, _, _) => { calls++; return Task.FromResult(reply); });
+
+        var result = await sut.EnrichAsync(Base, ModelTier.Sonnet);
+
+        result.Success.Should().BeTrue("preserved fields are spliced from the original, never validated away");
+        calls.Should().Be(1, "no retry needed — the model's preserved-field edit is simply ignored");
+        // bbox + literal text come from the base regardless of what the model returned.
+        result.Prompt!.CompositionalDeconstruction.Elements[0].Bbox.Should().Equal(400, 0, 800, 400);
+        result.Prompt.CompositionalDeconstruction.Elements[1].Text.Should().Be("WINTER");
+    }
+
+    [Fact]
+    public async Task EnrichAsync_ModelStraightensCurlyApostrophe_PreservesOriginalBytesExactly()
+    {
+        // The reported bug: U+2019 in the headline and style; the model straightens both. Splicing
+        // keeps the user's original bytes, so the enrichment succeeds instead of failing the old gate.
+        var baseCaption = V4JsonPromptSerializer.Deserialize(CurlyBaseJson);
+        var calls = 0;
+        var sut = CreateSut(KeyStore("sk-ant"),
+            (_, _, _, _, _, _, _, _) => { calls++; return Task.FromResult(CurlyStraightenedReply); });
+
+        var result = await sut.EnrichAsync(baseCaption, ModelTier.Sonnet);
+
+        result.Success.Should().BeTrue("preserved fields come from the original, so a straightened quote can't fail it");
+        calls.Should().Be(1, "preserved fields are never compared against the model output");
+        result.Prompt!.HighLevelDescription.Should().Be(baseCaption.HighLevelDescription)
+            .And.Contain(Curly, "the curly apostrophe survives byte-for-byte");
+        result.Prompt.StyleDescription!.Photo.Should().Be(baseCaption.StyleDescription!.Photo)
+            .And.Contain(Curly);
+        // The element desc, by contrast, IS the model's rewrite.
+        result.Prompt.CompositionalDeconstruction.Elements[0].Desc.Should().Contain("lower-left");
+    }
+
+    [Theory]
+    [InlineData(nameof(DroppedElementJson))]
+    [InlineData(nameof(RetypedElementJson))]
+    public async Task EnrichAsync_ElementListMisaligned_RetriesThenFails(string which)
     {
         var bad = which switch
         {
-            nameof(MovedBboxJson) => MovedBboxJson,
             nameof(DroppedElementJson) => DroppedElementJson,
-            _ => ChangedTextJson
+            _ => RetypedElementJson
         };
         var calls = 0;
         var sut = CreateSut(KeyStore("sk-ant"),
@@ -205,21 +267,8 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
 
         var result = await sut.EnrichAsync(Base, ModelTier.Sonnet);
 
-        result.Success.Should().BeFalse("enrichment may only rewrite descs");
-        calls.Should().Be(2, "the preservation violation triggers the one feedback retry");
-    }
-
-    [Fact]
-    public async Task EnrichAsync_NonDescChangeThenClean_Succeeds()
-    {
-        var call = 0;
-        var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, _, _, _) => Task.FromResult(call++ == 0 ? MovedBboxJson : EnrichedJson));
-
-        var result = await sut.EnrichAsync(Base, ModelTier.Sonnet);
-
-        result.Success.Should().BeTrue();
-        result.Prompt!.CompositionalDeconstruction.Elements[0].Bbox.Should().Equal(400, 0, 800, 400);
+        result.Success.Should().BeFalse("a misaligned element list can't be spliced 1:1");
+        calls.Should().Be(2, "the misalignment triggers the one feedback retry");
     }
 
     // ---- Facts block ---------------------------------------------------------------------

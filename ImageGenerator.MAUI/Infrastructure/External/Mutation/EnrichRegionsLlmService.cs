@@ -16,9 +16,11 @@ namespace ImageGenerator.MAUI.Infrastructure.External.Mutation;
 /// <summary>
 /// Region-aware caption enricher. Computes deterministic spatial facts with <see cref="RegionGraph"/>, then
 /// asks the model to rewrite ONLY each element's <c>desc</c> against those facts. Shares the exact transport
-/// seam, schema, prompt-override convention and validate-retry loop of <see cref="CaptionMutationLlmService"/>,
-/// and adds an enrichment-specific preservation gate (<see cref="EnrichmentPreservation"/>) so the model can't
-/// quietly move a bbox, drop an element or rewrite the headline.
+/// seam, schema, prompt-override convention and validate-retry loop of <see cref="CaptionMutationLlmService"/>.
+/// Preservation is guaranteed <em>structurally</em>: only the model's element <c>desc</c> rewrites are kept,
+/// while the headline, style, background and every bbox/text/palette are spliced back from the user's
+/// original — so the model cannot quietly move a bbox, drop an element or "tidy" the headline (e.g. straighten
+/// a curly apostrophe), which would otherwise fail an exact-match gate on a web-pasted prompt.
 /// </summary>
 public sealed class EnrichRegionsLlmService : IEnrichRegionsLlmService
 {
@@ -143,13 +145,21 @@ public sealed class EnrichRegionsLlmService : IEnrichRegionsLlmService
                 continue;
             }
 
-            // Schema/semantic validity first, then the enrichment-only invariant. Both feed the same retry.
-            var errors = V4JsonPromptValidator.Validate(prompt);
+            // Region enrichment only rewrites element descs. Rather than trust the model to echo every
+            // other field back byte-for-byte (it won't — a creative tier "tidies" curly quotes, spacing,
+            // key order), we splice: keep ONLY the model's descs and copy headline/style/background/bbox/
+            // text/palette from the user's original. The one thing a splice can't fix is a misaligned
+            // element list, so that's the only structural check — then the validator vets the new descs.
+            IReadOnlyList<string> errors = CheckElementAlignment(baseCaption, prompt);
+            V4JsonPrompt? spliced = null;
             if (errors.Count == 0)
-                errors = EnrichmentPreservation.Check(baseCaption, prompt);
+            {
+                spliced = SpliceDescs(baseCaption, prompt);
+                errors = V4JsonPromptValidator.Validate(spliced);
+            }
 
             if (errors.Count == 0)
-                return LlmVariantResult.Ok(prompt, BuildLabel(prompt));
+                return LlmVariantResult.Ok(spliced!, BuildLabel(spliced!));
 
             if (attempt >= MaxAttempts)
                 return LlmVariantResult.Fail("The enriched prompt didn't satisfy the rules:\n• " + string.Join("\n• ", errors));
@@ -162,6 +172,50 @@ public sealed class EnrichRegionsLlmService : IEnrichRegionsLlmService
 
         // Unreachable: the loop returns on the final attempt either way.
         return LlmVariantResult.Fail("The enrichment gave up after a retry.");
+    }
+
+    /// <summary>
+    /// Preservation is enforced structurally by <see cref="SpliceDescs"/>; the single thing the splice
+    /// can't paper over is a misaligned element list — a different count or a reordered/retyped element
+    /// would map a desc onto the wrong subject. That (and only that) is checked and fed into the retry.
+    /// </summary>
+    private static List<string> CheckElementAlignment(V4JsonPrompt baseCaption, V4JsonPrompt candidate)
+    {
+        var errors = new List<string>();
+        var baseElems = baseCaption.CompositionalDeconstruction?.Elements ?? [];
+        var candidateElems = candidate.CompositionalDeconstruction?.Elements ?? [];
+
+        if (baseElems.Count != candidateElems.Count)
+        {
+            errors.Add($"element count changed from {baseElems.Count} to {candidateElems.Count} — keep every element in its original order.");
+            return errors; // index-wise comparison below would be meaningless
+        }
+
+        for (var i = 0; i < baseElems.Count; i++)
+            if (!string.Equals(baseElems[i].Type, candidateElems[i].Type, StringComparison.Ordinal))
+                errors.Add($"element #{i} type changed ('{baseElems[i].Type}' → '{candidateElems[i].Type}') — keep elements in order; only rewrite each desc.");
+
+        return errors;
+    }
+
+    /// <summary>
+    /// Build the enriched result: a deep clone of the user's original with each element's <c>desc</c>
+    /// replaced by the model's rewrite at the same index. Everything else — high_level_description,
+    /// style_description, background, every bbox, text and palette — comes from the original, so a model
+    /// that "tidies" a preserved field cannot alter it. Callers must run <see cref="CheckElementAlignment"/>
+    /// first so the indices line up.
+    /// </summary>
+    private static V4JsonPrompt SpliceDescs(V4JsonPrompt baseCaption, V4JsonPrompt enriched)
+    {
+        // Round-trip clone so we never mutate the editor's live model.
+        var result = V4JsonPromptSerializer.Deserialize(V4JsonPromptSerializer.Serialize(baseCaption));
+        var resultElems = result.CompositionalDeconstruction.Elements;
+        var enrichedElems = enriched.CompositionalDeconstruction?.Elements ?? [];
+
+        for (var i = 0; i < resultElems.Count && i < enrichedElems.Count; i++)
+            resultElems[i].Desc = enrichedElems[i].Desc;
+
+        return result;
     }
 
     private string ResolveModelId(ModelTier tier) => tier switch
