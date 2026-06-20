@@ -65,7 +65,18 @@ public partial class GenerationJob : ObservableObject
         var modelShort = parameters.Model.Contains('/')
             ? parameters.Model[(parameters.Model.LastIndexOf('/') + 1)..]
             : parameters.Model;
-        MetaLine = $"{modelShort} · {parameters.AspectRatio} · seed {parameters.Seed}";
+
+        // For ComfyUI the model column above is the workflow filename, which doesn't say which
+        // checkpoint actually rendered. Surface the resolved model (and a non-default preset)
+        // so the job card answers "what model produced this". Both empty for other providers.
+        var segments = new List<string> { modelShort };
+        if (!string.IsNullOrWhiteSpace(parameters.ComfyUiModelDisplay))
+            segments.Add(parameters.ComfyUiModelDisplay);
+        if (!string.IsNullOrWhiteSpace(parameters.ComfyUiPreset))
+            segments.Add(parameters.ComfyUiPreset);
+        segments.Add(parameters.AspectRatio);
+        segments.Add($"seed {parameters.Seed}");
+        MetaLine = string.Join(" · ", segments);
     }
 
     [RelayCommand]

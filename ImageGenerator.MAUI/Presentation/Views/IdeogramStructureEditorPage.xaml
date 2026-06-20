@@ -289,47 +289,6 @@
             <ScrollView Grid.Column="1">
                 <VerticalStackLayout Spacing="16" Padding="0,0,0,8">
 
-                    <!-- CARD: Secondary actions (Apply lives in the pinned bar below) -->
-                    <Border Style="{StaticResource Card}" VerticalOptions="Start">
-                        <VerticalStackLayout Spacing="12">
-                            <Button Text="Mutate…"
-                                    Command="{Binding MutateCommand}"
-                                    Style="{StaticResource SecondaryButton}"
-                                    HorizontalOptions="Fill"
-                                    SemanticProperties.Description="Hand this prompt to the mutation engine to generate variants"
-                                    AutomationId="EditorMutateButton" />
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                <Button Grid.Column="0"
-                                        Text="Enrich from layout"
-                                        Command="{Binding EnrichFromLayoutCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        HorizontalOptions="Fill"
-                                        IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
-                                        SemanticProperties.Description="Rewrite each element's description to reflect its spatial relationship to the others"
-                                        AutomationId="EditorEnrichButton" />
-                                <Picker Grid.Column="1"
-                                        Title="Model"
-                                        WidthRequest="110"
-                                        ItemsSource="{Binding EnrichTierOptions}"
-                                        SelectedItem="{Binding EnrichTier, Mode=TwoWay}"
-                                        IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
-                                        AutomationId="EditorEnrichTierPicker" />
-                            </Grid>
-                            <Button Text="Save JSON to file…"
-                                    Command="{Binding SaveToFileCommand}"
-                                    Style="{StaticResource SecondaryButton}"
-                                    HorizontalOptions="Fill"
-                                    SemanticProperties.Description="Validate and export the pretty-printed JSON to the json-prompts folder"
-                                    AutomationId="EditorSaveJsonButton" />
-                            <Button Text="Show in folder"
-                                    Command="{Binding ShowExportInFolderCommand}"
-                                    Style="{StaticResource SecondaryButton}"
-                                    HorizontalOptions="Start"
-                                    IsVisible="{Binding HasExportedPath}"
-                                    AutomationId="EditorShowExportButton" />
-                        </VerticalStackLayout>
-                    </Border>
-
                     <!-- CARD: Canvas -->
                     <Border Style="{StaticResource Card}" VerticalOptions="Start">
                         <VerticalStackLayout Spacing="8">
@@ -460,24 +419,62 @@
 
         <!-- ActionBar (fixed): Apply + enriching progress + status, always reachable. -->
         <Border Grid.Row="2" Style="{StaticResource ActionBar}">
-            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="12">
-                <Button Grid.Column="0"
-                        Text="Apply to prompt"
-                        Command="{Binding ApplyCommand}"
-                        Style="{StaticResource PrimaryButton}"
-                        SemanticProperties.Description="Validate and write the compact JSON into the generator's prompt box"
-                        AutomationId="EditorApplyButton" />
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <!-- Apply (primary) + the secondary prompt actions, all in the pinned bar. -->
+                <HorizontalStackLayout Grid.Column="0" Spacing="8" VerticalOptions="Center">
+                    <Button Text="Apply to prompt"
+                            Command="{Binding ApplyCommand}"
+                            Style="{StaticResource PrimaryButton}"
+                            SemanticProperties.Description="Validate and write the compact JSON into the generator's prompt box"
+                            AutomationId="EditorApplyButton" />
+                    <Button Text="Mutate…"
+                            Command="{Binding MutateCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            SemanticProperties.Description="Hand this prompt to the mutation engine to generate variants"
+                            AutomationId="EditorMutateButton" />
+                    <Button Text="Enrich from layout"
+                            Command="{Binding EnrichFromLayoutCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
+                            SemanticProperties.Description="Rewrite each element's description to reflect its spatial relationship to the others"
+                            AutomationId="EditorEnrichButton" />
+                    <Picker Title="Model"
+                            WidthRequest="110"
+                            ItemsSource="{Binding EnrichTierOptions}"
+                            SelectedItem="{Binding EnrichTier, Mode=TwoWay}"
+                            IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
+                            VerticalOptions="Center"
+                            AutomationId="EditorEnrichTierPicker" />
+                    <!-- Local tier has no Ollama picker here (it's an app-wide setting); name it so
+                         the user can see which LLM will run. -->
+                    <Label Text="{Binding EnrichLocalModel, StringFormat='Ollama: {0}'}"
+                           Style="{StaticResource HelperText}"
+                           VerticalOptions="Center"
+                           IsVisible="{Binding ShowEnrichLocalModel}"
+                           AutomationId="EditorEnrichLocalModelLabel" />
+                    <Button Text="Save JSON to file…"
+                            Command="{Binding SaveToFileCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            SemanticProperties.Description="Validate and export the pretty-printed JSON to the json-prompts folder"
+                            AutomationId="EditorSaveJsonButton" />
+                    <Button Text="Show in folder"
+                            Command="{Binding ShowExportInFolderCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            IsVisible="{Binding HasExportedPath}"
+                            AutomationId="EditorShowExportButton" />
 
-                <HorizontalStackLayout Grid.Column="1" Spacing="8" IsVisible="{Binding IsEnriching}" VerticalOptions="Center">
-                    <ActivityIndicator IsRunning="{Binding IsEnriching}" WidthRequest="20" HeightRequest="20" VerticalOptions="Center" />
-                    <Label Text="Enriching…" VerticalOptions="Center" Style="{StaticResource HelperText}" />
+                    <!-- Enriching progress (inline, only while running). -->
+                    <ActivityIndicator IsRunning="{Binding IsEnriching}" IsVisible="{Binding IsEnriching}"
+                                       WidthRequest="20" HeightRequest="20" VerticalOptions="Center" />
+                    <Label Text="Enriching…" IsVisible="{Binding IsEnriching}" VerticalOptions="Center" Style="{StaticResource HelperText}" />
                     <Button Text="Cancel"
                             Command="{Binding CancelEnrichCommand}"
                             Style="{StaticResource SecondaryButton}"
+                            IsVisible="{Binding IsEnriching}"
                             AutomationId="EditorEnrichCancelButton" />
                 </HorizontalStackLayout>
 
-                <Label Grid.Column="2"
+                <Label Grid.Column="1"
                        Text="{Binding StatusMessage}"
                        Style="{StaticResource StatusLabel}"
                        VerticalOptions="Center"

@@ -2,6 +2,7 @@ using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
+using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Element = ImageGenerator.MAUI.Core.Domain.Ideogram.Element;
@@ -41,6 +42,30 @@ public class IdeogramStructureEditorViewModelTests
         sut.ResolutionPickerTitle.Should().Be("Target resolution");
         sut.ResolutionOptions.Should().Contain("Auto").And.Contain("1440x2880");
         sut.SelectedResolution.Should().Be("Auto");
+    }
+
+    [Fact]
+    public void EnrichLocalModel_HintHiddenForCloudTiers_ShownForLocal()
+    {
+        var sut = CreateSut();
+
+        sut.EnrichTier.Should().Be(ModelTier.Sonnet);
+        sut.ShowEnrichLocalModel.Should().BeFalse("the cloud tiers name themselves");
+
+        sut.EnrichTier = ModelTier.Local;
+        sut.ShowEnrichLocalModel.Should().BeTrue();
+
+        sut.EnrichTier = ModelTier.Opus;
+        sut.ShowEnrichLocalModel.Should().BeFalse();
+    }
+
+    [Fact]
+    public void EnrichLocalModel_WithoutGenerator_FallsBackToDefaultOllamaModel()
+    {
+        // Stand-alone construction has no generator, so the Local tier names the app default.
+        var sut = CreateSut();
+
+        sut.EnrichLocalModel.Should().Be(ModelConstants.Ollama.DefaultModel);
     }
 
     [Fact]

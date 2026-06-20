@@ -114,6 +114,13 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private string _comfyUiPreset = string.Empty;
 
+    // ComfyUI only, DISPLAY-ONLY: human-readable name of the model actually in use — the
+    // selected checkpoint/diffusion model INCLUDING the workflow's baked-in default. Unlike
+    // ComfyUiCheckpoint (empty = no patch) this is set even for the default, so the job card
+    // can show "what model produced this". Empty for non-ComfyUI providers. Never patched.
+    [ObservableProperty]
+    private string _comfyUiModelDisplay = string.Empty;
+
     // Post the saved image to CivitAI as an unpublished draft after generation. Session-only
     // (defaults OFF every launch, never persisted): it triggers an upload side effect, so a
     // sticky-on across sessions would be worse than re-checking it.
@@ -161,6 +168,7 @@ public partial class ImageGenerationParameters : ObservableObject
             EnableCopyrightDetection = EnableCopyrightDetection,
             ComfyUiCheckpoint = ComfyUiCheckpoint,
             ComfyUiPreset    = ComfyUiPreset,
+            ComfyUiModelDisplay = ComfyUiModelDisplay,
             PostToCivitai    = PostToCivitai,
             CivitaiIncludeMeta = CivitaiIncludeMeta,
             CivitaiModelRef  = CivitaiModelRef,

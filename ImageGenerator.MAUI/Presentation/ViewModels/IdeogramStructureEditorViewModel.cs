@@ -8,6 +8,7 @@ using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.Common;
 using ImageGenerator.MAUI.Presentation.Drawing;
+using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
 // MAUI's implicit usings bring in Microsoft.Maui.Controls.Element — disambiguate.
 using Element = ImageGenerator.MAUI.Core.Domain.Ideogram.Element;
@@ -155,6 +156,23 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
 
     [ObservableProperty]
     private ModelTier _enrichTier = ModelTier.Sonnet;
+
+    /// <summary>True only when the Local (Ollama) tier is selected — gates the model-name hint.</summary>
+    public bool ShowEnrichLocalModel => EnrichTier == ModelTier.Local;
+
+    /// <summary>
+    /// Resolved Ollama model the Local tier will use. Display-only: the editor has no Ollama
+    /// picker (the model is an app-wide setting changed on the Mutate page / Settings), so we
+    /// surface its name. Same resolution as <see cref="MutationEngineViewModel"/>'s Local path.
+    /// </summary>
+    public string EnrichLocalModel =>
+        _generator?.OllamaModel is { Length: > 0 } m ? m : ModelConstants.Ollama.DefaultModel;
+
+    partial void OnEnrichTierChanged(ModelTier value)
+    {
+        OnPropertyChanged(nameof(ShowEnrichLocalModel));
+        OnPropertyChanged(nameof(EnrichLocalModel));
+    }
 
     /// <summary>True while a model call is in flight — gates the button + shows the cancel affordance.</summary>
     [ObservableProperty]

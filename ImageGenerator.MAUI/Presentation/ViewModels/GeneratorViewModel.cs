@@ -288,6 +288,10 @@ public partial class GeneratorViewModel : ObservableObject
         Parameters.ComfyUiCheckpoint =
             value == _workflowDefaultCheckpoint ? string.Empty : value;
 
+        // Display-only: record the resolved model name (default OR picked) so the job card
+        // can show which ComfyUI model produced the image, not just the workflow filename.
+        Parameters.ComfyUiModelDisplay = value;
+
         // Membership guard, same as resolution: only a value the picker actually offers can
         // be a user pick.
         if (!_suppressCheckpointPersist && CheckpointOptions.Contains(value))
@@ -538,7 +542,10 @@ public partial class GeneratorViewModel : ObservableObject
             SelectedCheckpoint = null;
             CheckpointLabel = "Checkpoint";
             // A stale checkpoint must not linger in Clone() snapshots of other models.
+            // (SelectedCheckpoint=null returns early in OnSelectedCheckpointChanged, so the
+            // display field is cleared here too, not there.)
             Parameters.ComfyUiCheckpoint = string.Empty;
+            Parameters.ComfyUiModelDisplay = string.Empty;
         }
         finally { _suppressCheckpointPersist = false; }
     });

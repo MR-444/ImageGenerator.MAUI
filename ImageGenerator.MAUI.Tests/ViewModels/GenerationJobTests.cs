@@ -50,6 +50,29 @@ public class GenerationJobTests
     }
 
     [Fact]
+    public void Constructor_MetaLine_SurfacesComfyUiModelAndPreset()
+    {
+        var p = MakeParameters(model: "Ideogram_wf_san_v2", aspectRatio: "4.0 MP", seed: 9);
+        p.ComfyUiModelDisplay = "ideogram_v4_fp8.safetensors";
+        p.ComfyUiPreset = "Turbo";
+
+        var job = new GenerationJob(p);
+
+        job.MetaLine.Should().Be("Ideogram_wf_san_v2 · ideogram_v4_fp8.safetensors · Turbo · 4.0 MP · seed 9");
+    }
+
+    [Fact]
+    public void Constructor_MetaLine_OmitsComfyUiSegmentsWhenEmpty()
+    {
+        // Non-ComfyUI providers leave the display/preset fields empty — the line stays compact.
+        var p = MakeParameters(model: "openai/gpt-image-2", aspectRatio: "1:1", seed: 42);
+
+        var job = new GenerationJob(p);
+
+        job.MetaLine.Should().Be("gpt-image-2 · 1:1 · seed 42");
+    }
+
+    [Fact]
     public void InitialState_IsRunningTrueAndNoResult()
     {
         var job = new GenerationJob(MakeParameters());

@@ -121,27 +121,29 @@
                                        Style="{StaticResource HelperText}"
                                        IsVisible="{Binding JsonPromptStateText, Converter={StaticResource NonEmptyStringToBool}}"
                                        AutomationId="JsonPromptStateLabel" />
-                                <Button Text="Describe an idea…"
-                                        Command="{Binding OpenIdeaToPromptCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        HorizontalOptions="Start"
-                                        Margin="0,6,0,0"
-                                        SemanticProperties.Description="Turn a freeform idea into a structured JSON prompt with Claude"
-                                        AutomationId="DescribeIdeaButton" />
-                                <Button Text="Edit structure…"
-                                        Command="{Binding OpenIdeogramEditorCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        HorizontalOptions="Start"
-                                        Margin="0,6,0,0"
-                                        SemanticProperties.Description="Open the visual builder for Ideogram's structured JSON prompt"
-                                        AutomationId="EditStructureButton" />
-                                <Button Text="Mutate current prompt…"
-                                        Command="{Binding OpenMutationEngineCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        HorizontalOptions="Start"
-                                        Margin="0,6,0,0"
-                                        SemanticProperties.Description="Generate variants of the current structured prompt as a batch"
-                                        AutomationId="MutateCurrentButton" />
+                                <!-- Prompt tools: a wrapping toolbar of related actions, so they
+                                     group as one row (and wrap, not clip) instead of three stacked rows. -->
+                                <FlexLayout Wrap="Wrap" AlignItems="Center" Margin="0,6,0,0"
+                                            AutomationId="PromptToolsBar">
+                                    <Button Text="Describe an idea…"
+                                            Command="{Binding OpenIdeaToPromptCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Margin="0,0,8,6"
+                                            SemanticProperties.Description="Turn a freeform idea into a structured JSON prompt with Claude"
+                                            AutomationId="DescribeIdeaButton" />
+                                    <Button Text="Edit structure…"
+                                            Command="{Binding OpenIdeogramEditorCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Margin="0,0,8,6"
+                                            SemanticProperties.Description="Open the visual builder for Ideogram's structured JSON prompt"
+                                            AutomationId="EditStructureButton" />
+                                    <Button Text="Mutate current prompt…"
+                                            Command="{Binding OpenMutationEngineCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Margin="0,0,0,6"
+                                            SemanticProperties.Description="Generate variants of the current structured prompt as a batch"
+                                            AutomationId="MutateCurrentButton" />
+                                </FlexLayout>
                             </VerticalStackLayout>
 
                             <HorizontalStackLayout Spacing="8" IsVisible="{Binding Capabilities.PromptUpsampling}">
