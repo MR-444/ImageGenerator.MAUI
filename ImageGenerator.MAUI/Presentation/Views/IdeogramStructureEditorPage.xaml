@@ -18,28 +18,33 @@
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <ScrollView>
-        <VerticalStackLayout Padding="24" Spacing="16">
+    <!-- Fixed header (row 0) and action bar (row 2); the form (left) and canvas (right)
+         in row 1 scroll independently, so the canvas and Apply never scroll out of view. -->
+    <Grid RowDefinitions="Auto,*,Auto"
+          Padding="24,16,24,12"
+          RowSpacing="16">
 
-            <!-- Header: back + title -->
-            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                <Button Grid.Column="0"
-                        Text="← Back"
-                        Command="{Binding CancelCommand}"
-                        Style="{StaticResource SecondaryButton}"
-                        VerticalOptions="Start"
-                        AutomationId="EditorBackButton" />
-                <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
-                    <Label Text="Structured prompt builder" Style="{StaticResource CardTitle}" />
-                    <Label Text="Build Ideogram V4's json_prompt visually. Apply writes it into the prompt box; Save exports a portable .json file."
-                           Style="{StaticResource HelperText}" />
-                </VerticalStackLayout>
-            </Grid>
+        <!-- Header: back + title -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="12">
+            <Button Grid.Column="0"
+                    Text="← Back"
+                    Command="{Binding CancelCommand}"
+                    Style="{StaticResource SecondaryButton}"
+                    VerticalOptions="Start"
+                    AutomationId="EditorBackButton" />
+            <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                <Label Text="Structured prompt builder" Style="{StaticResource CardTitle}" />
+                <Label Text="Build Ideogram V4's json_prompt visually. Apply writes it into the prompt box; Save exports a portable .json file."
+                       Style="{StaticResource HelperText}" />
+            </VerticalStackLayout>
+        </Grid>
 
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+        <!-- Two independently scrolling panes: form left, canvas + tools right. -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="16">
 
-                <!-- LEFT: form cards -->
-                <VerticalStackLayout Grid.Column="0" Spacing="16">
+            <!-- LEFT PANE: form cards -->
+            <ScrollView Grid.Column="0">
+                <VerticalStackLayout Spacing="16" Padding="0,0,12,8">
 
                     <!-- CARD: Description -->
                     <Border Style="{StaticResource Card}" VerticalOptions="Start">
@@ -278,47 +283,15 @@
                     </Border>
 
                 </VerticalStackLayout>
+            </ScrollView>
 
-                <!-- RIGHT: canvas + actions -->
-                <VerticalStackLayout Grid.Column="1" Spacing="16">
+            <!-- RIGHT PANE: canvas + tools -->
+            <ScrollView Grid.Column="1">
+                <VerticalStackLayout Spacing="16" Padding="0,0,0,8">
 
-                    <!-- CARD: Canvas -->
-                    <Border Style="{StaticResource Card}" VerticalOptions="Start">
-                        <VerticalStackLayout Spacing="8">
-                            <Label Text="Layout (1000 × 1000 grid)" Style="{StaticResource CardTitle}" />
-                            <VerticalStackLayout Spacing="4">
-                                <Label Text="{Binding ResolutionPickerTitle}" Style="{StaticResource FieldLabel}" />
-                                <Picker ItemsSource="{Binding ResolutionOptions}"
-                                        SelectedItem="{Binding SelectedResolution}"
-                                        ItemDisplayBinding="{Binding Path=., Converter={StaticResource ResolutionAspectRatio}, x:DataType='x:String'}"
-                                        MaximumWidthRequest="190"
-                                        HorizontalOptions="Start"
-                                        AutomationId="EditorResolutionPicker" />
-                            </VerticalStackLayout>
-                            <GraphicsView x:Name="StructureCanvas"
-                                          WidthRequest="{Binding CanvasWidthRequest}"
-                                          HeightRequest="{Binding CanvasHeightRequest}"
-                                          HorizontalOptions="Center"
-                                          StartInteraction="OnCanvasStartInteraction"
-                                          DragInteraction="OnCanvasDragInteraction"
-                                          EndInteraction="OnCanvasEndInteraction"
-                                          CancelInteraction="OnCanvasCancelInteraction"
-                                          AutomationId="EditorCanvas" />
-                            <Label Text="The canvas mirrors the target resolution's aspect ratio (Auto shows a square — Ideogram picks the shape itself). Origin is top-left; coordinates are always 0–1000 per axis. Tap a box to select it; drag to move it, drag a red corner handle to resize. The sliders stay in sync. Apply also hands the chosen resolution back to the generator."
-                                   Style="{StaticResource HelperText}"
-                                   MaximumWidthRequest="480" />
-                        </VerticalStackLayout>
-                    </Border>
-
-                    <!-- CARD: Actions -->
+                    <!-- CARD: Secondary actions (Apply lives in the pinned bar below) -->
                     <Border Style="{StaticResource Card}" VerticalOptions="Start">
                         <VerticalStackLayout Spacing="12">
-                            <Button Text="Apply to prompt"
-                                    Command="{Binding ApplyCommand}"
-                                    Style="{StaticResource PrimaryButton}"
-                                    HorizontalOptions="Fill"
-                                    SemanticProperties.Description="Validate and write the compact JSON into the generator's prompt box"
-                                    AutomationId="EditorApplyButton" />
                             <Button Text="Mutate…"
                                     Command="{Binding MutateCommand}"
                                     Style="{StaticResource SecondaryButton}"
@@ -342,14 +315,6 @@
                                         IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
                                         AutomationId="EditorEnrichTierPicker" />
                             </Grid>
-                            <HorizontalStackLayout Spacing="8" IsVisible="{Binding IsEnriching}">
-                                <ActivityIndicator IsRunning="{Binding IsEnriching}" WidthRequest="20" HeightRequest="20" VerticalOptions="Center" />
-                                <Label Text="Enriching…" VerticalOptions="Center" Style="{StaticResource HelperText}" />
-                                <Button Text="Cancel"
-                                        Command="{Binding CancelEnrichCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        AutomationId="EditorEnrichCancelButton" />
-                            </HorizontalStackLayout>
                             <Button Text="Save JSON to file…"
                                     Command="{Binding SaveToFileCommand}"
                                     Style="{StaticResource SecondaryButton}"
@@ -362,28 +327,34 @@
                                     HorizontalOptions="Start"
                                     IsVisible="{Binding HasExportedPath}"
                                     AutomationId="EditorShowExportButton" />
+                        </VerticalStackLayout>
+                    </Border>
 
-                            <Label Text="{Binding StatusMessage}"
-                                   Style="{StaticResource StatusLabel}"
-                                   IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
-                                   LineBreakMode="WordWrap"
-                                   MaximumWidthRequest="480"
-                                   AutomationId="EditorStatusLabel">
-                                <Label.Triggers>
-                                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
-                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
-                                    </DataTrigger>
-                                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
-                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
-                                    </DataTrigger>
-                                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Warning}">
-                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
-                                    </DataTrigger>
-                                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Info}">
-                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusInfoLight}, Dark={StaticResource StatusInfoDark}}" />
-                                    </DataTrigger>
-                                </Label.Triggers>
-                            </Label>
+                    <!-- CARD: Canvas -->
+                    <Border Style="{StaticResource Card}" VerticalOptions="Start">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Layout (1000 × 1000 grid)" Style="{StaticResource CardTitle}" />
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="{Binding ResolutionPickerTitle}" Style="{StaticResource FieldLabel}" />
+                                <Picker ItemsSource="{Binding ResolutionOptions}"
+                                        SelectedItem="{Binding SelectedResolution}"
+                                        ItemDisplayBinding="{Binding Path=., Converter={StaticResource ResolutionAspectRatio}, x:DataType='x:String'}"
+                                        MaximumWidthRequest="190"
+                                        HorizontalOptions="Start"
+                                        AutomationId="EditorResolutionPicker" />
+                            </VerticalStackLayout>
+                            <GraphicsView x:Name="StructureCanvas"
+                                          WidthRequest="{Binding CanvasWidthRequest}"
+                                          HeightRequest="{Binding CanvasHeightRequest}"
+                                          HorizontalOptions="Center"
+                                          StartInteraction="OnCanvasStartInteraction"
+                                          DragInteraction="OnCanvasDragInteraction"
+                                          EndInteraction="OnCanvasEndInteraction"
+                                          CancelInteraction="OnCanvasCancelInteraction"
+                                          AutomationId="EditorCanvas" />
+                            <Label Text="The canvas mirrors the target resolution's aspect ratio (Auto = square). Origin is top-left; coordinates are 0–1000 per axis. Tap a box to select, drag to move, drag a red corner handle to resize."
+                                   Style="{StaticResource HelperText}"
+                                   MaximumWidthRequest="480" />
                         </VerticalStackLayout>
                     </Border>
 
@@ -393,7 +364,7 @@
                             AutomationId="EditorEnrichPreviewCard">
                         <VerticalStackLayout Spacing="12">
                             <Label Text="Enrichment preview" Style="{StaticResource CardTitle}" />
-                            <Label Text="Each element's description rewritten to read its place in the scene. Accept replaces only the descriptions — bounding boxes, text and palettes stay as they are."
+                            <Label Text="Each element's description rewritten to read its place in the scene. Accept replaces only descriptions."
                                    Style="{StaticResource HelperText}"
                                    MaximumWidthRequest="480" />
                             <!-- BindableLayout, not CollectionView: a CollectionView nested in this
@@ -484,8 +455,52 @@
                     </Border>
 
                 </VerticalStackLayout>
-            </Grid>
+            </ScrollView>
+        </Grid>
 
-        </VerticalStackLayout>
-    </ScrollView>
+        <!-- ActionBar (fixed): Apply + enriching progress + status, always reachable. -->
+        <Border Grid.Row="2" Style="{StaticResource ActionBar}">
+            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="12">
+                <Button Grid.Column="0"
+                        Text="Apply to prompt"
+                        Command="{Binding ApplyCommand}"
+                        Style="{StaticResource PrimaryButton}"
+                        SemanticProperties.Description="Validate and write the compact JSON into the generator's prompt box"
+                        AutomationId="EditorApplyButton" />
+
+                <HorizontalStackLayout Grid.Column="1" Spacing="8" IsVisible="{Binding IsEnriching}" VerticalOptions="Center">
+                    <ActivityIndicator IsRunning="{Binding IsEnriching}" WidthRequest="20" HeightRequest="20" VerticalOptions="Center" />
+                    <Label Text="Enriching…" VerticalOptions="Center" Style="{StaticResource HelperText}" />
+                    <Button Text="Cancel"
+                            Command="{Binding CancelEnrichCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            AutomationId="EditorEnrichCancelButton" />
+                </HorizontalStackLayout>
+
+                <Label Grid.Column="2"
+                       Text="{Binding StatusMessage}"
+                       Style="{StaticResource StatusLabel}"
+                       VerticalOptions="Center"
+                       IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
+                       LineBreakMode="WordWrap"
+                       AutomationId="EditorStatusLabel">
+                    <Label.Triggers>
+                        <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Warning}">
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Info}">
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusInfoLight}, Dark={StaticResource StatusInfoDark}}" />
+                        </DataTrigger>
+                    </Label.Triggers>
+                </Label>
+            </Grid>
+        </Border>
+
+    </Grid>
 </ContentPage>
