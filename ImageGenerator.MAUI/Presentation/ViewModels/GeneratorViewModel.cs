@@ -61,6 +61,21 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private string? _aiMutationStatus;
 
+    // True while either this VM's own ComfyUI render or the mutation engine's local-Ollama tier
+    // holds the shared single-GPU gate (see GpuGate). Pushed directly from both acquire/release
+    // sites — mirrors the IsAiMutationRunning cross-VM push above, no new gate-side plumbing.
+    [ObservableProperty]
+    private bool _isGpuBusy;
+
+    // All-time count of images in the output folder, shown in the header. Null until the
+    // background enumeration in LoadTotalImagesGeneratedAsync completes.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TotalImagesGeneratedText))]
+    private int? _totalImagesGenerated;
+
+    public string TotalImagesGeneratedText =>
+        TotalImagesGenerated is { } n ? $"{n} image{(n == 1 ? "" : "s")}" : "…";
+
     public ObservableCollection<GenerationJob> Jobs { get; } = [];
     public bool HasJobs => Jobs.Count > 0;
 
@@ -69,8 +84,32 @@ public partial class GeneratorViewModel : ObservableObject
     // per-job PropertyChanged wiring in the ctor).
     public bool HasFinishedJobs => Jobs.Any(j => j.IsFinished);
 
+    // Compact header summary, e.g. "2 running · 1 queued · 5 done". A "queued" batch job is
+    // !IsRunning with StatusKind still at the default Info (see GenerationJob.IsFinished comment) —
+    // recomputed from the same hooks that already track HasFinishedJobs.
+    public string JobStatusSummary
+    {
+        get
+        {
+            var running = Jobs.Count(j => j.IsRunning);
+            var queued = Jobs.Count(j => !j.IsRunning && j.StatusKind == StatusKind.Info);
+            var done = Jobs.Count(j => j.IsFinished);
+            var parts = new List<string>(3);
+            if (running > 0) parts.Add($"{running} running");
+            if (queued > 0) parts.Add($"{queued} queued");
+            if (done > 0) parts.Add($"{done} done");
+            return parts.Count > 0 ? string.Join(" · ", parts) : "No jobs yet";
+        }
+    }
+
     public ProviderFilterCoordinator ProviderFilter { get; }
     public BatchCoordinator Batch { get; }
+
+    // Compact header summary, e.g. "Replicate · flux-dev".
+    public string SelectedModelSummary =>
+        ProviderFilter.SelectedModel is { } model
+            ? $"{ProviderFilter.SelectedProvider} · {model.Display}"
+            : ProviderFilter.SelectedProvider;
 
     [ObservableProperty]
     private List<string> _aspectRatioOptions = [];  // hydrated from registry in ctor
@@ -757,6 +796,7 @@ public partial class GeneratorViewModel : ObservableObject
     private void RaiseFinishedJobsChanged()
     {
         OnPropertyChanged(nameof(HasFinishedJobs));
+        OnPropertyChanged(nameof(JobStatusSummary));
         ClearFinishedJobsCommand.NotifyCanExecuteChanged();
     }
 
@@ -850,6 +890,14 @@ public partial class GeneratorViewModel : ObservableObject
             currentModelAccessor: () => Parameters.Model,
             setParametersModel: model => Parameters.Model = model,
             refreshCapabilities: RefreshCapabilities);
+
+        // Keep the header's SelectedModelSummary in sync as the provider/model pickers change.
+        ProviderFilter.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(ProviderFilterCoordinator.SelectedProvider)
+                or nameof(ProviderFilterCoordinator.SelectedModel))
+                OnPropertyChanged(nameof(SelectedModelSummary));
+        };
 
         Batch = new BatchCoordinator(
             promptBatchParser: promptBatchParser,
@@ -1072,6 +1120,7 @@ public partial class GeneratorViewModel : ObservableObject
             try
             {
                 gpuLease = await _gpuGate!.AcquireAsync(job.Cts.Token);
+                DispatchToUi(() => IsGpuBusy = true);
             }
             catch (OperationCanceledException)
             {
@@ -1126,6 +1175,10 @@ public partial class GeneratorViewModel : ObservableObject
                     if (LatestCompletedJob is not null) LatestCompletedJob.IsFeatured = false;
                     job.IsFeatured = true;
                     LatestCompletedJob = job;
+
+                    // Guarded on "already loaded" so a job finishing before the startup folder
+                    // enumeration completes can't fabricate a count from null.
+                    if (TotalImagesGenerated is { } n) TotalImagesGenerated = n + 1;
                 }
                 job.StatusMessage = outcome.Message;
                 job.StatusKind = outcome.Kind switch
@@ -1191,6 +1244,7 @@ public partial class GeneratorViewModel : ObservableObject
         finally
         {
             gpuLease?.Dispose();
+            if (gpuGated) DispatchToUi(() => IsGpuBusy = false);
         }
     }
 
@@ -1728,6 +1782,23 @@ public partial class GeneratorViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Model catalog hydrate failed");
+        }
+    }
+
+    // Decorative header counter — a plain count via the existing gallery enumeration, not a
+    // shared cache with GalleryViewModel (which needs the full item list for its own display).
+    // Called fire-and-forget from OnAppearing so a large output folder never delays real startup work.
+    public async Task LoadTotalImagesGeneratedAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var count = 0;
+            await foreach (var _ in _galleryService.EnumerateAsync(ct)) count++;
+            DispatchToUi(() => TotalImagesGenerated = count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Total-images count failed");
         }
     }
 

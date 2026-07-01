@@ -49,6 +49,14 @@
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
     </Style>
 
+    <!-- Compact single-row title used in MainPage's header, next to the live status strip. -->
+    <Style x:Key="PageTitleCompact" TargetType="Label">
+        <Setter Property="FontFamily" Value="OpenSansSemibold" />
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontAttributes" Value="Bold" />
+        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}" />
+    </Style>
+
     <Style x:Key="PageSubtitle" TargetType="Label">
         <Setter Property="FontFamily" Value="OpenSansRegular" />
         <Setter Property="FontSize" Value="13" />

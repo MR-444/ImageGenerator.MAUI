@@ -171,6 +171,9 @@ public partial class MainPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        // Fire-and-forget: a decorative header counter must never delay real startup work or
+        // block on walking a large output folder.
+        _ = _viewModel.LoadTotalImagesGeneratedAsync();
         // async void: callees swallow internally today, but a future refactor that lets one
         // through would crash via SynchronizationContext. Keep a defensive net here.
         try

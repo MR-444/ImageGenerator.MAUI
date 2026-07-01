@@ -25,25 +25,39 @@
           Padding="24,16,24,12"
           RowSpacing="12">
 
-        <!-- Page header -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
-            <VerticalStackLayout Grid.Column="0" Spacing="4">
-                <Label Text="Emberforge" Style="{StaticResource PageTitle}" />
-                <Label Text="Generate images via Replicate or Pollinations. Prompt and parameters are embedded into the saved file."
-                       Style="{StaticResource PageSubtitle}" />
-            </VerticalStackLayout>
-            <Button Grid.Column="1"
+        <!-- Page header: compact single-row title + a live status strip (job counts, selected
+             model, image total, GPU busy) replacing the old title/static-subtitle stack. All
+             four segments are computed on GeneratorViewModel. -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="16">
+            <Label Grid.Column="0"
+                   Text="Emberforge"
+                   Style="{StaticResource PageTitleCompact}"
+                   VerticalOptions="Center" />
+            <HorizontalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
+                <Label Text="{Binding JobStatusSummary}" Style="{StaticResource PageSubtitle}" />
+                <Label Text="·" Style="{StaticResource PageSubtitle}" />
+                <Label Text="{Binding SelectedModelSummary}" Style="{StaticResource PageSubtitle}" />
+                <Label Text="·" Style="{StaticResource PageSubtitle}" />
+                <Label Text="{Binding TotalImagesGeneratedText}" Style="{StaticResource PageSubtitle}" />
+                <Label Text="·" Style="{StaticResource PageSubtitle}" IsVisible="{Binding IsGpuBusy}" />
+                <Label Text="GPU busy"
+                       Style="{StaticResource PageSubtitle}"
+                       TextColor="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}"
+                       FontAttributes="Bold"
+                       IsVisible="{Binding IsGpuBusy}" />
+            </HorizontalStackLayout>
+            <Button Grid.Column="2"
                     Text="Settings"
                     Style="{StaticResource SecondaryButton}"
                     Command="{Binding OpenSettingsCommand}"
-                    VerticalOptions="Start"
+                    VerticalOptions="Center"
                     SemanticProperties.Description="API tokens and ComfyUI server configuration"
                     AutomationId="SettingsButton" />
-            <Button Grid.Column="2"
+            <Button Grid.Column="3"
                     Text="About"
                     Style="{StaticResource SecondaryButton}"
                     Clicked="OnAboutClicked"
-                    VerticalOptions="Start"
+                    VerticalOptions="Center"
                     AutomationId="AboutButton" />
         </Grid>
 
