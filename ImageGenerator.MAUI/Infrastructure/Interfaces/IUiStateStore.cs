@@ -1,3 +1,5 @@
+using Microsoft.Maui;
+
 namespace ImageGenerator.MAUI.Infrastructure.Interfaces;
 
 /// <summary>
@@ -28,6 +30,12 @@ public interface IUiStateStore
     /// <summary>Whether to POST /free to ComfyUI when rendering goes idle, freeing GPU memory for the
     /// Ollama mutation tier. TRUE when never persisted (default-on; the user can disable it in Settings).</summary>
     bool LoadFreeVramAfterRendering();
+    /// <summary>
+    /// The user's chosen color theme. <see cref="AppTheme.Unspecified"/> ("System", follow OS) when never
+    /// persisted — preserving the app's original OS-following behavior. Any out-of-range stored value
+    /// degrades to <see cref="AppTheme.Unspecified"/> rather than throwing.
+    /// </summary>
+    AppTheme LoadAppTheme();
     /// <summary>Null when never persisted — callers fall back to ModelConstants.ComfyUi.DefaultBaseUrl.</summary>
     string? LoadComfyUiBaseUrl();
     /// <summary>
@@ -72,6 +80,8 @@ public interface IUiStateStore
     void PersistUseJsonPrompt(bool value);
     /// <inheritdoc cref="LoadFreeVramAfterRendering"/>
     void PersistFreeVramAfterRendering(bool value);
+    /// <inheritdoc cref="LoadAppTheme"/>
+    void PersistAppTheme(AppTheme value);
     void PersistComfyUiBaseUrl(string value);
     /// <inheritdoc cref="LoadOllamaBaseUrl"/>
     void PersistOllamaBaseUrl(string value);

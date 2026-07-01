@@ -34,6 +34,12 @@ public partial class App
         _pollinationsTokenStore = pollinationsTokenStore;
         _comfyUiAuthStore = comfyUiAuthStore;
         _civitaiTokenStore = civitaiTokenStore;
+
+        // Apply the saved color theme before the first window paints, so a forced Light/Dark pick
+        // takes effect immediately on launch rather than flashing the OS theme first. Default
+        // Unspecified = follow OS (the app's original behavior); the Settings "Appearance" picker
+        // writes through here via IUiStateStore. The whole UI is AppThemeBinding-driven.
+        UserAppTheme = _uiStateStore.LoadAppTheme();
     }
 
     /// <summary>

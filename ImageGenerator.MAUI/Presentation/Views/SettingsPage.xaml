@@ -20,6 +20,31 @@
                              MaximumWidthRequest="560"
                              HorizontalOptions="Start">
 
+            <!-- CARD: Appearance -->
+            <Border Style="{StaticResource Card}"
+                    VerticalOptions="Start">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Appearance" Style="{StaticResource CardTitle}" />
+                    <!-- The whole UI is already AppThemeBinding-driven, so this just selects which
+                         variant to force. System follows the OS (the app's original behavior). The
+                         picker's SelectedIndex maps straight onto the AppTheme enum: 0=Unspecified
+                         (System), 1=Light, 2=Dark — keep this order in sync with AppThemeIndex. -->
+                    <Label Text="Choose the color theme. System follows your Windows setting."
+                           Style="{StaticResource HelperText}" />
+                    <Picker SelectedIndex="{Binding AppThemeIndex, Mode=TwoWay}"
+                            SemanticProperties.Description="Color theme"
+                            AutomationId="AppThemePicker">
+                        <Picker.ItemsSource>
+                            <x:Array Type="{x:Type x:String}">
+                                <x:String>System</x:String>
+                                <x:String>Light</x:String>
+                                <x:String>Dark</x:String>
+                            </x:Array>
+                        </Picker.ItemsSource>
+                    </Picker>
+                </VerticalStackLayout>
+            </Border>
+
             <!-- CARD: API Tokens (one row per provider, switch via the picker) -->
             <Border Style="{StaticResource Card}"
                     VerticalOptions="Start">

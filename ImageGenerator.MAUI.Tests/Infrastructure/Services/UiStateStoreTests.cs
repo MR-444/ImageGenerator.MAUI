@@ -2,6 +2,7 @@ using FluentAssertions;
 using ImageGenerator.MAUI.Infrastructure.Services;
 using ImageGenerator.MAUI.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Maui;
 
 namespace ImageGenerator.MAUI.Tests.Infrastructure.Services;
 
@@ -444,6 +445,75 @@ public class UiStateStoreTests
         _preferences.ThrowOnSet = new InvalidOperationException("backend down");
 
         var act = () => _sut.PersistWindowBounds(1, 2, 3, 4);
+
+        act.Should().NotThrow();
+    }
+
+    // Color theme: stored as the AppTheme enum int. Default Unspecified = "System" (follow OS),
+    // preserving the app's original behavior. The key shape is pinned like the others above.
+    private const string AppThemeKey = "imggen.app_theme";
+
+    [Fact]
+    public void LoadAppTheme_KeyMissing_ReturnsUnspecified()
+    {
+        _sut.LoadAppTheme().Should().Be(AppTheme.Unspecified);
+    }
+
+    [Theory]
+    [InlineData(AppTheme.Light)]
+    [InlineData(AppTheme.Dark)]
+    [InlineData(AppTheme.Unspecified)]
+    public void AppTheme_RoundTripsThroughPreferences(AppTheme theme)
+    {
+        _sut.PersistAppTheme(theme);
+
+        _sut.LoadAppTheme().Should().Be(theme);
+    }
+
+    [Fact]
+    public void PersistAppTheme_WritesTheEnumIntUnderTheThemeKey()
+    {
+        _sut.PersistAppTheme(AppTheme.Dark);
+
+        _preferences.Get(AppThemeKey, -1).Should().Be((int)AppTheme.Dark,
+            "the key shape and int encoding are pinned like the others above");
+    }
+
+    [Fact]
+    public void LoadAppTheme_OutOfRangeStoredValue_DegradesToUnspecified()
+    {
+        // A corrupt/foreign int must not feed an undefined enum into UserAppTheme at startup.
+        _preferences.Seed(AppThemeKey, 99);
+
+        _sut.LoadAppTheme().Should().Be(AppTheme.Unspecified);
+    }
+
+    [Fact]
+    public void PersistAppTheme_UnchangedValue_SkipsTheWrite()
+    {
+        _sut.PersistAppTheme(AppTheme.Dark);
+
+        _sut.PersistAppTheme(AppTheme.Dark);
+
+        _preferences.SetCallCount.Should().Be(1, "identical rewrites are wasted I/O");
+        _sut.LoadAppTheme().Should().Be(AppTheme.Dark);
+    }
+
+    [Fact]
+    public void LoadAppTheme_GetThrows_SwallowedAndReturnsUnspecified()
+    {
+        _preferences.Seed(AppThemeKey, (int)AppTheme.Dark);
+        _preferences.ThrowOnGet = new InvalidOperationException("backend down");
+
+        _sut.LoadAppTheme().Should().Be(AppTheme.Unspecified);
+    }
+
+    [Fact]
+    public void PersistAppTheme_SetThrows_IsSwallowed()
+    {
+        _preferences.ThrowOnSet = new InvalidOperationException("backend down");
+
+        var act = () => _sut.PersistAppTheme(AppTheme.Dark);
 
         act.Should().NotThrow();
     }

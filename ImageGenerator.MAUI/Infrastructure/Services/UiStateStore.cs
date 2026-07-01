@@ -1,6 +1,7 @@
 using System.Globalization;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using Microsoft.Extensions.Logging;
+using Microsoft.Maui;
 using Microsoft.Maui.Storage;
 
 namespace ImageGenerator.MAUI.Infrastructure.Services;
@@ -11,6 +12,7 @@ public sealed class UiStateStore : IUiStateStore
     private const string ModelKey = "imggen.last_model";
     private const string UseJsonPromptKey = "imggen.use_json_prompt";
     private const string FreeVramAfterRenderingKey = "imggen.free_vram_after_rendering";
+    private const string AppThemeKey = "imggen.app_theme";
     private const string ResolutionKey = "imggen.last_resolution";
     private const string ComfyUiResolutionKey = "imggen.last_resolution.comfyui";
     private const string AspectRatioKey = "imggen.last_aspect_ratio";
@@ -314,6 +316,45 @@ public sealed class UiStateStore : IUiStateStore
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Preferences.Set({Key}) failed", FreeVramAfterRenderingKey);
+        }
+    }
+
+    public AppTheme LoadAppTheme()
+    {
+        try
+        {
+            // Stored as the AppTheme enum int. Default Unspecified = "System" (follow OS), the app's
+            // original behavior. Validate the stored int: a corrupt/foreign value degrades to
+            // Unspecified rather than feeding an undefined enum into UserAppTheme at startup.
+            var stored = _preferences.Get(AppThemeKey, (int)AppTheme.Unspecified);
+            var theme = stored switch
+            {
+                (int)AppTheme.Light => AppTheme.Light,
+                (int)AppTheme.Dark => AppTheme.Dark,
+                _ => AppTheme.Unspecified
+            };
+            _logger.LogDebug("UiStateStore.LoadAppTheme -> {Value}", theme);
+            return theme;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Preferences.Get({Key}) failed", AppThemeKey);
+            return AppTheme.Unspecified;
+        }
+    }
+
+    public void PersistAppTheme(AppTheme value)
+    {
+        try
+        {
+            if (_preferences.ContainsKey(AppThemeKey)
+                && _preferences.Get(AppThemeKey, (int)AppTheme.Unspecified) == (int)value) return;
+            _preferences.Set(AppThemeKey, (int)value);
+            _logger.LogDebug("UiStateStore.PersistAppTheme({Value})", value);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Preferences.Set({Key}) failed", AppThemeKey);
         }
     }
 

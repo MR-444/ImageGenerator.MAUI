@@ -146,6 +146,28 @@ public partial class GeneratorViewModel : ObservableObject
     partial void OnFreeVramAfterRenderingChanged(bool value) =>
         _uiStateStore.PersistFreeVramAfterRendering(value);
 
+    // Color theme selection for the Settings "Appearance" picker. Bound as an int so the picker's
+    // SelectedIndex maps straight onto the AppTheme enum (0=Unspecified/System, 1=Light, 2=Dark) with
+    // no value converter. Persists the pick and applies it live to Application.UserAppTheme; the whole
+    // UI is already AppThemeBinding-driven so it repaints immediately. Loaded at VM init below.
+    [ObservableProperty]
+    private int _appThemeIndex; // 0=System, 1=Light, 2=Dark
+
+    partial void OnAppThemeIndexChanged(int value)
+    {
+        var theme = (AppTheme)value;
+        _uiStateStore.PersistAppTheme(theme);
+        ApplyAppTheme(theme);
+    }
+
+    // Applying UserAppTheme touches the visual tree, so marshal to the UI thread — the change hook can
+    // fire off it. No-op when there's no live Application (unit tests construct the VM headless).
+    private static void ApplyAppTheme(AppTheme theme)
+    {
+        if (Application.Current is { } app)
+            app.Dispatcher.Dispatch(() => app.UserAppTheme = theme);
+    }
+
     // The local Ollama server + model for the AI caption mutator's free "Local" tier. Preferences-backed
     // like the ComfyUI URL; the mutation service re-reads the store per request, so edits apply instantly.
     [ObservableProperty]
@@ -1516,6 +1538,10 @@ public partial class GeneratorViewModel : ObservableObject
         // Default-on; only flips the field when the user previously turned it off (OnChanged re-persist is
         // a harmless echo — nothing else writes this field).
         FreeVramAfterRendering = _uiStateStore.LoadFreeVramAfterRendering();
+
+        // Echo the saved theme into the picker (the theme itself is already applied at startup in
+        // App.xaml.cs). OnChanged re-persists/re-applies harmlessly. Default 0 = System (follow OS).
+        AppThemeIndex = (int)_uiStateStore.LoadAppTheme();
 
         // The override was already applied at the composition root; this just echoes the saved
         // value into the bound field so Settings shows it. OnChanged re-applies harmlessly.
