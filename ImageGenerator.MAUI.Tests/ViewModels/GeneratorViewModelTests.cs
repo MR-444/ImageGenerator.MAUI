@@ -2342,6 +2342,8 @@ public class GeneratorViewModelTests
         _viewModel.QualityPresetOptions.Should().Equal("Default", "Quality", "Turbo");
         _viewModel.SelectedQualityPreset.Should().Be("Default");
         _viewModel.Parameters.ComfyUiPreset.Should().BeEmpty("the baked selection means no patch");
+        _viewModel.Parameters.ComfyUiPresetDisplay.Should().Be("Default",
+            "the display field records the resolved preset even for the baked default");
     }
 
     [Fact]
@@ -2369,11 +2371,14 @@ public class GeneratorViewModelTests
         _viewModel.SelectedQualityPreset = "Turbo";
 
         _viewModel.Parameters.ComfyUiPreset.Should().Be("Turbo");
+        _viewModel.Parameters.ComfyUiPresetDisplay.Should().Be("Turbo");
         _mockUiStateStore.Verify(s => s.PersistComfyUiPreset("Turbo", ComfyWorkflowName), Times.Once);
 
         _viewModel.SelectedQualityPreset = "Default";
 
         _viewModel.Parameters.ComfyUiPreset.Should().BeEmpty("re-picking the baked choice means no patch again");
+        _viewModel.Parameters.ComfyUiPresetDisplay.Should().Be("Default",
+            "but the display field still records it, so the metadata/card report the baked default");
     }
 
     [Fact]
@@ -2413,6 +2418,8 @@ public class GeneratorViewModelTests
         _viewModel.QualityPresetOptions.Should().BeEmpty();
         _viewModel.Parameters.ComfyUiPreset.Should().BeEmpty(
             "a stale preset must not linger in Clone() snapshots of other models");
+        _viewModel.Parameters.ComfyUiPresetDisplay.Should().BeEmpty(
+            "the display field is cleared too, so other models' cards don't show a stale preset");
     }
 
     [Fact]

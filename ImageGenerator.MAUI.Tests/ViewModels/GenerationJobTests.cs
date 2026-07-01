@@ -54,11 +54,25 @@ public class GenerationJobTests
     {
         var p = MakeParameters(model: "Ideogram_wf_san_v2", aspectRatio: "4.0 MP", seed: 9);
         p.ComfyUiModelDisplay = "ideogram_v4_fp8.safetensors";
-        p.ComfyUiPreset = "Turbo";
+        p.ComfyUiPresetDisplay = "Turbo";
 
         var job = new GenerationJob(p);
 
         job.MetaLine.Should().Be("Ideogram_wf_san_v2 · ideogram_v4_fp8.safetensors · Turbo · 4.0 MP · seed 9");
+    }
+
+    [Fact]
+    public void Constructor_MetaLine_SurfacesBakedDefaultPreset()
+    {
+        // Regression: a baked-default preset pick blanks ComfyUiPreset (no patch) but sets
+        // ComfyUiPresetDisplay. The card reads the display field, so the preset still shows.
+        var p = MakeParameters(model: "Ideogram_wf_san_v2", aspectRatio: "4.0 MP", seed: 9);
+        p.ComfyUiPreset = string.Empty;
+        p.ComfyUiPresetDisplay = "Quality";
+
+        var job = new GenerationJob(p);
+
+        job.MetaLine.Should().Contain("· Quality ·");
     }
 
     [Fact]

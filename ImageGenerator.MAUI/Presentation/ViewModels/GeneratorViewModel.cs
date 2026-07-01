@@ -348,6 +348,11 @@ public partial class GeneratorViewModel : ObservableObject
         Parameters.ComfyUiPreset =
             value == _workflowDefaultPreset ? string.Empty : value;
 
+        // Display-only: record the resolved preset (default OR picked) so the metadata and job
+        // card report which preset rendered the image. Unlike ComfyUiPreset (empty = no patch),
+        // this is set even when the pick equals the baked default — mirrors ComfyUiModelDisplay.
+        Parameters.ComfyUiPresetDisplay = value;
+
         if (!_suppressPresetPersist && QualityPresetOptions.Contains(value))
         {
             _uiStateStore.PersistComfyUiPreset(
@@ -637,6 +642,7 @@ public partial class GeneratorViewModel : ObservableObject
             SelectedQualityPreset = null;
             // A stale preset must not linger in Clone() snapshots of other models.
             Parameters.ComfyUiPreset = string.Empty;
+            Parameters.ComfyUiPresetDisplay = string.Empty;
         }
         finally { _suppressPresetPersist = false; }
     });

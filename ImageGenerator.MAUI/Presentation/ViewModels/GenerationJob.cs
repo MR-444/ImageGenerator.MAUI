@@ -67,13 +67,14 @@ public partial class GenerationJob : ObservableObject
             : parameters.Model;
 
         // For ComfyUI the model column above is the workflow filename, which doesn't say which
-        // checkpoint actually rendered. Surface the resolved model (and a non-default preset)
+        // checkpoint actually rendered. Surface the resolved model and preset (default OR picked)
         // so the job card answers "what model produced this". Both empty for other providers.
+        // Use the *Display fields, not the patch sentinels, so a baked-default pick still shows.
         var segments = new List<string> { modelShort };
         if (!string.IsNullOrWhiteSpace(parameters.ComfyUiModelDisplay))
             segments.Add(parameters.ComfyUiModelDisplay);
-        if (!string.IsNullOrWhiteSpace(parameters.ComfyUiPreset))
-            segments.Add(parameters.ComfyUiPreset);
+        if (!string.IsNullOrWhiteSpace(parameters.ComfyUiPresetDisplay))
+            segments.Add(parameters.ComfyUiPresetDisplay);
         segments.Add(parameters.AspectRatio);
         segments.Add($"seed {parameters.Seed}");
         MetaLine = string.Join(" · ", segments);

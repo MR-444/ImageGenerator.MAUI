@@ -121,6 +121,14 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private string _comfyUiModelDisplay = string.Empty;
 
+    // ComfyUI only, DISPLAY-ONLY: the quality preset actually in use, INCLUDING the workflow's
+    // baked-in default. Counterpart to ComfyUiModelDisplay for the preset combo: ComfyUiPreset
+    // is a patch sentinel (empty = "selection equals baked default, no patch"), so reading it for
+    // provenance drops the preset whenever the user picks the baked default. This field records
+    // the selected label regardless, so the metadata/job card always report it. Never patched.
+    [ObservableProperty]
+    private string _comfyUiPresetDisplay = string.Empty;
+
     // Post the saved image to CivitAI as an unpublished draft after generation. Session-only
     // (defaults OFF every launch, never persisted): it triggers an upload side effect, so a
     // sticky-on across sessions would be worse than re-checking it.
@@ -169,6 +177,7 @@ public partial class ImageGenerationParameters : ObservableObject
             ComfyUiCheckpoint = ComfyUiCheckpoint,
             ComfyUiPreset    = ComfyUiPreset,
             ComfyUiModelDisplay = ComfyUiModelDisplay,
+            ComfyUiPresetDisplay = ComfyUiPresetDisplay,
             PostToCivitai    = PostToCivitai,
             CivitaiIncludeMeta = CivitaiIncludeMeta,
             CivitaiModelRef  = CivitaiModelRef,

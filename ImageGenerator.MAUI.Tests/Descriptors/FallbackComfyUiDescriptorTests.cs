@@ -130,10 +130,24 @@ public class FallbackComfyUiDescriptorTests
     {
         var defaulted = Parameters();
         var picked = Parameters();
-        picked.ComfyUiPreset = "Turbo";
+        picked.ComfyUiPresetDisplay = "Turbo";
 
         _sut.Lines(defaulted).Should().NotContain(l => l.StartsWith("Preset:"));
         _sut.Lines(picked).Should().Contain("Preset: Turbo");
+    }
+
+    [Fact]
+    public void Lines_BakedDefaultPreset_StillWritesThePresetLine()
+    {
+        // Regression: the user picks the workflow's baked-default preset (e.g. "Quality"), so
+        // ComfyUiPreset is blanked (no patch) but ComfyUiPresetDisplay records the label. The
+        // Preset line must read the display field — earlier it read the blanked sentinel and
+        // dropped the line entirely for any baked-default selection.
+        var bakedDefaultPick = Parameters();
+        bakedDefaultPick.ComfyUiPreset = string.Empty;
+        bakedDefaultPick.ComfyUiPresetDisplay = "Quality";
+
+        _sut.Lines(bakedDefaultPick).Should().Contain("Preset: Quality");
     }
 
     // ---- Apply (Remix from an image) --------------------------------------------------------

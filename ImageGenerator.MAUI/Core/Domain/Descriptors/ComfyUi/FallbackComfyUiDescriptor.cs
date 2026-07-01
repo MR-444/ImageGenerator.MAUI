@@ -61,8 +61,10 @@ public sealed class FallbackComfyUiDescriptor : IPayloadBuilder, ICapabilityProv
             yield return $"Megapixels: {mp.ToString(CultureInfo.InvariantCulture)}";
         if (!string.IsNullOrWhiteSpace(p.ComfyUiCheckpoint))
             yield return $"Checkpoint: {p.ComfyUiCheckpoint}";
-        if (!string.IsNullOrWhiteSpace(p.ComfyUiPreset))
-            yield return $"Preset: {p.ComfyUiPreset}";
+        // Use the display field, not ComfyUiPreset: the latter is blanked when the pick equals
+        // the workflow's baked default (no-patch sentinel), which would drop the Preset line.
+        if (!string.IsNullOrWhiteSpace(p.ComfyUiPresetDisplay))
+            yield return $"Preset: {p.ComfyUiPresetDisplay}";
     }
 
     // Remix: restore the recipe a ComfyUI render carries that we CAN re-apply without the async
