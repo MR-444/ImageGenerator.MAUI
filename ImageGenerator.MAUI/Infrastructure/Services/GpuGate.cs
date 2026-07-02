@@ -5,7 +5,7 @@ namespace ImageGenerator.MAUI.Infrastructure.Services;
 
 /// <summary>
 /// Default <see cref="IGpuGate"/>: a single <see cref="SemaphoreSlim"/>(1,1). Registered as a singleton so
-/// every caller (ComfyUI renders, the local Ollama mutation tier) shares one permit and the local GPU runs
+/// every caller (ComfyUI renders, local Ollama prompt/AI work) shares one permit and the local GPU runs
 /// one workload at a time. Logs at Debug when a caller actually has to wait, so app.log shows the
 /// serialization (a mutation queued behind an in-flight render, or vice-versa).
 /// </summary>

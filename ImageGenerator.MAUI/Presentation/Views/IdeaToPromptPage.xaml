@@ -28,7 +28,7 @@
                         AutomationId="IdeaToPromptBackButton" />
                 <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
                     <Label Text="Describe an idea → prompt" Style="{StaticResource CardTitle}" />
-                    <Label Text="Type a plain-English idea. Claude Opus 4.8 writes a polished prose prompt you can use with any model. Optionally it also builds an Ideogram V4 JSON prompt for structured models."
+                    <Label Text="Type a plain-English idea. Pick Claude or a local Ollama model to write a polished prose prompt you can use with any model. Optionally it also builds an Ideogram V4 JSON prompt for structured models."
                            Style="{StaticResource HelperText}" />
                 </VerticalStackLayout>
             </Grid>
@@ -59,6 +59,38 @@
                            Style="{StaticResource HelperText}" />
                 </VerticalStackLayout>
             </HorizontalStackLayout>
+
+            <!-- Model tier -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="Prompt writer" Style="{StaticResource FieldLabel}" />
+                <Picker ItemsSource="{Binding ModelTierOptions}"
+                        SelectedItem="{Binding SelectedModelTier}"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                        AutomationId="IdeaPromptModelTierPicker" />
+                <Label Text="{Binding ModelSummary}"
+                       Style="{StaticResource HelperText}"
+                       AutomationId="IdeaPromptModelSummaryLabel" />
+
+                <VerticalStackLayout Spacing="8" IsVisible="{Binding IsLocalTier}">
+                    <Label Text="Local model (Ollama)" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Picker Grid.Column="0"
+                                ItemsSource="{Binding Generator.OllamaModels}"
+                                SelectedItem="{Binding Generator.OllamaModel, Mode=TwoWay}"
+                                Title="Refresh, then pick a model…"
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                AutomationId="IdeaPromptOllamaModelPicker" />
+                        <Button Grid.Column="1"
+                                Text="Refresh"
+                                Command="{Binding Generator.RefreshOllamaModelsCommand}"
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                Style="{StaticResource SecondaryButton}"
+                                AutomationId="IdeaPromptOllamaRefreshButton" />
+                    </Grid>
+                    <Label Text="The Ollama server URL is shared with AI mutation and configured in Settings."
+                           Style="{StaticResource HelperText}" />
+                </VerticalStackLayout>
+            </VerticalStackLayout>
 
             <!-- Build / Cancel (Cancel replaces nothing — it appears beside Build only while a build runs) -->
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">

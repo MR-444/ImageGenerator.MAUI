@@ -28,7 +28,7 @@ public interface IUiStateStore
     /// <summary>False when never persisted — the toggle is opt-in per session by default.</summary>
     bool LoadUseJsonPrompt();
     /// <summary>Whether to POST /free to ComfyUI when rendering goes idle, freeing GPU memory for the
-    /// Ollama mutation tier. TRUE when never persisted (default-on; the user can disable it in Settings).</summary>
+    /// local Ollama prompt/AI tools. TRUE when never persisted (default-on; the user can disable it in Settings).</summary>
     bool LoadFreeVramAfterRendering();
     /// <summary>
     /// The user's chosen color theme. <see cref="AppTheme.Unspecified"/> ("System", follow OS) when never
@@ -39,12 +39,12 @@ public interface IUiStateStore
     /// <summary>Null when never persisted — callers fall back to ModelConstants.ComfyUi.DefaultBaseUrl.</summary>
     string? LoadComfyUiBaseUrl();
     /// <summary>
-    /// The local Ollama server URL used by the AI caption mutator's free "Local" tier. Null when never
+    /// The local Ollama server URL used by the prompt builder and AI tools' free "Local" tier. Null when never
     /// set — callers fall back to <c>ModelConstants.Ollama.DefaultBaseUrl</c>.
     /// </summary>
     string? LoadOllamaBaseUrl();
     /// <summary>
-    /// The Ollama model name (tag) the "Local" tier requests. Null when never set — callers fall back to
+    /// The Ollama model name (tag) the prompt builder and AI tools' "Local" tier requests. Null when never set — callers fall back to
     /// <c>ModelConstants.Ollama.DefaultModel</c>.
     /// </summary>
     string? LoadOllamaModel();

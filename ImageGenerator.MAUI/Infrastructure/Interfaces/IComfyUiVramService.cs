@@ -2,7 +2,7 @@ namespace ImageGenerator.MAUI.Infrastructure.Interfaces;
 
 /// <summary>
 /// Asks the user's ComfyUI server to unload models and free GPU memory (its <c>POST /free</c>) once
-/// rendering is idle, so the Ollama mutation tier (and the OS) get the VRAM back. Best-effort: never
+/// rendering is idle, so local Ollama prompt/AI work (and the OS) get the VRAM back. Best-effort: never
 /// throws — freeing memory is an optimization, not part of the render outcome.
 /// </summary>
 public interface IComfyUiVramService

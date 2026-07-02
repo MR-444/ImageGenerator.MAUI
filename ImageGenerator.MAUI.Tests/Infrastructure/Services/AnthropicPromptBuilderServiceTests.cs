@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 using FluentAssertions;
 using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
@@ -23,6 +24,9 @@ public sealed class AnthropicPromptBuilderServiceTests : IDisposable
 
     private readonly string _tempDir = Path.Combine(
         Path.GetTempPath(), "prompt-builder-tests-" + Guid.NewGuid().ToString("N"));
+
+    private delegate Task<string> LegacyCompletion(
+        string apiKey, string systemPrompt, IReadOnlyList<ChatTurn> messages, JsonElement? schema, CancellationToken ct);
 
     public void Dispose()
     {
@@ -65,6 +69,37 @@ public sealed class AnthropicPromptBuilderServiceTests : IDisposable
 
         result.Success.Should().BeFalse();
         called.Should().BeFalse("an empty prose input must not reach the model");
+    }
+
+    [Fact]
+    public async Task BuildProseAsync_LocalTier_UsesOllamaModelAndBaseUrl_AndNeedsNoKey()
+    {
+        var keyStore = KeyStore(null);
+        var uiStore = UiStore("http://host:11434", "qwen3");
+        ModelTier? seenTier = null;
+        string? seenModel = null;
+        string? seenBaseUrl = null;
+        string? seenApiKey = "unexpected";
+
+        var sut = CreateRoutedSut(keyStore, uiStore,
+            (tier, modelId, apiKey, baseUrl, _, _, schema, _) =>
+            {
+                seenTier = tier;
+                seenModel = modelId;
+                seenBaseUrl = baseUrl;
+                seenApiKey = apiKey;
+                schema.HasValue.Should().BeFalse("the prose pass is schema-less even on Ollama");
+                return Task.FromResult(ProseReply);
+            });
+
+        var result = await sut.BuildProseAsync("a red fox", tier: ModelTier.Local);
+
+        result.Success.Should().BeTrue("the Local tier needs no Anthropic key");
+        seenTier.Should().Be(ModelTier.Local);
+        seenModel.Should().Be("qwen3");
+        seenBaseUrl.Should().Be("http://host:11434");
+        seenApiKey.Should().BeNull();
+        keyStore.Verify(s => s.LoadAsync(), Times.Never);
     }
 
     // ---- Pass 1: VPE prose --------------------------------------------------------------
@@ -283,8 +318,17 @@ public sealed class AnthropicPromptBuilderServiceTests : IDisposable
 
     private AnthropicPromptBuilderService CreateSut(
         Mock<IAnthropicTokenStore> store,
+        LegacyCompletion completion) =>
+        CreateRoutedSut(store, UiStore(),
+            (tier, modelId, apiKey, baseUrl, systemPrompt, messages, schema, ct) =>
+                completion(apiKey ?? string.Empty, systemPrompt, messages, schema, ct));
+
+    private AnthropicPromptBuilderService CreateRoutedSut(
+        Mock<IAnthropicTokenStore> store,
+        Mock<IUiStateStore> uiStore,
         AnthropicPromptBuilderService.StructuredCompletion completion) =>
         new(store.Object,
+            uiStore.Object,
             NullLogger<AnthropicPromptBuilderService>.Instance,
             completion,
             promptDirectoryOverride: _tempDir,
@@ -294,6 +338,14 @@ public sealed class AnthropicPromptBuilderServiceTests : IDisposable
     {
         var mock = new Mock<IAnthropicTokenStore>();
         mock.Setup(s => s.LoadAsync()).ReturnsAsync(key);
+        return mock;
+    }
+
+    private static Mock<IUiStateStore> UiStore(string? ollamaUrl = null, string? ollamaModel = null)
+    {
+        var mock = new Mock<IUiStateStore>();
+        mock.Setup(s => s.LoadOllamaBaseUrl()).Returns(ollamaUrl);
+        mock.Setup(s => s.LoadOllamaModel()).Returns(ollamaModel);
         return mock;
     }
 

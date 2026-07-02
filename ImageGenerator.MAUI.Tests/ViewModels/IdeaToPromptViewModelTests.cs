@@ -98,6 +98,22 @@ public class IdeaToPromptViewModelTests
     }
 
     [Fact]
+    public async Task Build_SelectedLocalTier_IsPassedToBothPromptBuilderPasses()
+    {
+        var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+        var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance, generator: null);
+        vm.SelectedModelTier = ModelTier.Local;
+        vm.BuildJson = true;
+        vm.Idea = "a red fox in snow";
+
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        builder.ProseTiers.Should().Equal(ModelTier.Local);
+        builder.JsonTiers.Should().Equal(ModelTier.Local);
+    }
+
+    [Fact]
     public async Task Build_JsonChecked_JsonFails_KeepsProseVisibleAndSurfacesError()
     {
         var generator = BuildGenerator();
@@ -189,11 +205,41 @@ public class IdeaToPromptViewModelTests
 
     private sealed class FakePromptBuilder(ProseResult prose, PromptBuilderResult json) : IPromptBuilderService
     {
-        public Task<ProseResult> BuildProseAsync(string idea, CancellationToken cancellationToken = default) =>
+        public Task<ProseResult> BuildProseAsync(
+            string idea,
+            CancellationToken cancellationToken = default,
+            ModelTier tier = ModelTier.Opus) =>
             Task.FromResult(prose);
 
-        public Task<PromptBuilderResult> BuildJsonAsync(string prose, CancellationToken cancellationToken = default) =>
+        public Task<PromptBuilderResult> BuildJsonAsync(
+            string prose,
+            CancellationToken cancellationToken = default,
+            ModelTier tier = ModelTier.Opus) =>
             Task.FromResult(json);
+    }
+
+    private sealed class TrackingPromptBuilder(ProseResult prose, PromptBuilderResult json) : IPromptBuilderService
+    {
+        public List<ModelTier> ProseTiers { get; } = [];
+        public List<ModelTier> JsonTiers { get; } = [];
+
+        public Task<ProseResult> BuildProseAsync(
+            string idea,
+            CancellationToken cancellationToken = default,
+            ModelTier tier = ModelTier.Opus)
+        {
+            ProseTiers.Add(tier);
+            return Task.FromResult(prose);
+        }
+
+        public Task<PromptBuilderResult> BuildJsonAsync(
+            string prose,
+            CancellationToken cancellationToken = default,
+            ModelTier tier = ModelTier.Opus)
+        {
+            JsonTiers.Add(tier);
+            return Task.FromResult(json);
+        }
     }
 
     // Parks pass 1 until the token is cancelled, then propagates the cancellation — lets a test prove
@@ -202,7 +248,10 @@ public class IdeaToPromptViewModelTests
     {
         public bool WasCancelled { get; private set; }
 
-        public async Task<ProseResult> BuildProseAsync(string idea, CancellationToken cancellationToken = default)
+        public async Task<ProseResult> BuildProseAsync(
+            string idea,
+            CancellationToken cancellationToken = default,
+            ModelTier tier = ModelTier.Opus)
         {
             try
             {
@@ -217,7 +266,10 @@ public class IdeaToPromptViewModelTests
             return ProseResult.Ok(Prose);
         }
 
-        public Task<PromptBuilderResult> BuildJsonAsync(string prose, CancellationToken cancellationToken = default) =>
+        public Task<PromptBuilderResult> BuildJsonAsync(
+            string prose,
+            CancellationToken cancellationToken = default,
+            ModelTier tier = ModelTier.Opus) =>
             Task.FromResult(PromptBuilderResult.Fail("not reached in the cancellation test"));
     }
 

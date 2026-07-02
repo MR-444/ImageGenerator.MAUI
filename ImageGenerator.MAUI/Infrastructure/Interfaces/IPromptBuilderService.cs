@@ -8,17 +8,22 @@ namespace ImageGenerator.MAUI.Infrastructure.Interfaces;
 /// Pass 2 (<see cref="BuildJsonAsync"/>) is an Ideogram adapter that maps that prose onto the
 /// schema-valid V4 structure. The "authoring half" of the pipeline — the runtime half
 /// (<see cref="V4JsonPrompt"/>, serializer, validator, structure editor, mutation engine) already
-/// exists. This is the swap seam: the only implementation today is Anthropic Opus 4.8, but a future
-/// provider/model picker is purely additive behind this interface (each provider owns its own
-/// structured-output mechanism).
+/// exists. This is the swap seam: callers can pick a cloud Anthropic tier or the local Ollama tier,
+/// while each provider owns its own structured-output mechanism.
 /// </summary>
 public interface IPromptBuilderService
 {
     /// <summary>Pass 1: idea → a normal prose image prompt (no JSON, no validator). Usable on its own.</summary>
-    Task<ProseResult> BuildProseAsync(string idea, CancellationToken cancellationToken = default);
+    Task<ProseResult> BuildProseAsync(
+        string idea,
+        CancellationToken cancellationToken = default,
+        ModelTier tier = ModelTier.Opus);
 
     /// <summary>Pass 2: prose → a schema-valid Ideogram V4 structured prompt (structured output + validate-retry).</summary>
-    Task<PromptBuilderResult> BuildJsonAsync(string prose, CancellationToken cancellationToken = default);
+    Task<PromptBuilderResult> BuildJsonAsync(
+        string prose,
+        CancellationToken cancellationToken = default,
+        ModelTier tier = ModelTier.Opus);
 }
 
 /// <summary>Outcome of the VPE pass: either a prose prompt or a user-facing error.</summary>

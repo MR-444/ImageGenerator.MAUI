@@ -104,17 +104,17 @@ public static class MauiProgram
                 perAttemptTimeout: TimeSpan.FromSeconds(120),
                 totalTimeout: TimeSpan.FromMinutes(5));
 
-        // The "Describe an idea…" prompt builder and the AI caption mutator both talk to
-        // api.anthropic.com. Adaptive thinking at high effort can run well past the default 60 s, so the
-        // per-attempt timeout is generous. Neither has side effects, so the standard 5xx/429 retry is safe.
+        // Claude tiers for the prompt builder and AI caption tools talk to api.anthropic.com. Adaptive
+        // thinking at high effort can run well past the default 60 s, so the per-attempt timeout is
+        // generous. These calls have no side effects, so the standard 5xx/429 retry is safe.
         builder.Services.AddHttpClient(AnthropicMessagesTransport.HttpClientName)
             .ConfigureStandardResilience(
                 perAttemptTimeout: TimeSpan.FromSeconds(120),
                 totalTimeout: TimeSpan.FromMinutes(5));
 
         // No BaseAddress: the Ollama endpoint (e.g. the user's fireEngine box) is a runtime setting, so
-        // the transport composes the absolute URL per request. This is the FREE local path for verifying
-        // the AI-mutation plumbing. A large local model (e.g. a 27B) cold-loads into VRAM and then
+        // the transport composes the absolute URL per request. This is the FREE local path for the prompt
+        // builder and AI caption tools. A large local model (e.g. a 27B) cold-loads into VRAM and then
         // generates, which easily exceeds a couple of minutes on the first call, so the per-attempt
         // timeout is very generous. Generating a caption has no side effects, so the 5xx/429 retry is safe.
         builder.Services.AddHttpClient(OllamaChatTransport.HttpClientName)
@@ -154,7 +154,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<PollinationsImageGenerationService>();
         builder.Services.AddSingleton<ComfyUiImageGenerationService>();
         builder.Services.AddSingleton<IComfyUiVramService, ComfyUiVramService>();
-        // One permit shared by ComfyUI renders + the local Ollama mutation tier: they share fireEngine's
+        // One permit shared by ComfyUI renders + local Ollama prompt/AI work: they share fireEngine's
         // VRAM, so only one GPU workload runs at a time (see GpuGate / IGpuGate).
         builder.Services.AddSingleton<IGpuGate, GpuGate>();
         builder.Services.AddSingleton<IImageGenerationService, ImageGenerationDispatcher>();

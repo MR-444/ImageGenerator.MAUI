@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
+using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
 
 namespace ImageGenerator.MAUI.Presentation.ViewModels;
@@ -21,6 +22,8 @@ public partial class IdeaToPromptViewModel : ObservableObject
     private readonly IPromptBuilderService _builder;
     private readonly IClipboardService _clipboard;
     private readonly GeneratorViewModel? _generator;
+    private readonly IOllamaModelCatalog? _ollamaCatalog;
+    private readonly IGpuGate? _gpuGate;
     private readonly ILogger<IdeaToPromptViewModel> _logger;
 
     private V4JsonPrompt? _builtJson;
@@ -34,12 +37,16 @@ public partial class IdeaToPromptViewModel : ObservableObject
         IPromptBuilderService builder,
         IClipboardService clipboard,
         ILogger<IdeaToPromptViewModel> logger,
-        GeneratorViewModel? generator = null)
+        GeneratorViewModel? generator = null,
+        IOllamaModelCatalog? ollamaCatalog = null,
+        IGpuGate? gpuGate = null)
     {
         _builder = builder ?? throw new ArgumentNullException(nameof(builder));
         _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _generator = generator;
+        _ollamaCatalog = ollamaCatalog;
+        _gpuGate = gpuGate;
 
         // Default the JSON pass on for structured-JSON models (Ideogram V4 / ComfyUI), off otherwise.
         BuildJson = generator?.SupportsJsonPromptEditor ?? false;
@@ -60,6 +67,25 @@ public partial class IdeaToPromptViewModel : ObservableObject
     /// <summary>The checkbox: also run pass 2 (prose → Ideogram V4 JSON). Defaults from the model.</summary>
     [ObservableProperty]
     private bool _buildJson;
+
+    public IReadOnlyList<ModelTier> ModelTierOptions { get; } = [ModelTier.Opus, ModelTier.Sonnet, ModelTier.Local];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLocalTier))]
+    [NotifyPropertyChangedFor(nameof(ModelSummary))]
+    private ModelTier _selectedModelTier = ModelTier.Opus;
+
+    public bool IsLocalTier => SelectedModelTier == ModelTier.Local;
+
+    public string ModelSummary => SelectedModelTier switch
+    {
+        ModelTier.Sonnet => "Claude Sonnet: paid Anthropic call, faster and cheaper than Opus.",
+        ModelTier.Local => "Local Ollama: free, uses the configured Ollama server/model from Settings.",
+        _ => "Claude Opus: paid Anthropic call, strongest prompt-builder default."
+    };
+
+    /// <summary>Expose the host generator so the page can reuse the shared Ollama model picker.</summary>
+    public GeneratorViewModel? Generator => _generator;
 
     /// <summary>The pass-1 prose prompt. Shown on the page, copyable, and applyable on its own.</summary>
     [ObservableProperty]
@@ -96,11 +122,24 @@ public partial class IdeaToPromptViewModel : ObservableObject
         // A fresh build invalidates any JSON from a previous run; keep the prose until it's replaced.
         HasJson = false;
         _builtJson = null;
-        SetStatus("Asking Claude to write a prompt… (Opus 4.8, may take a few seconds)", StatusKind.Info);
+        var tier = SelectedModelTier;
+        var gpuGated = tier == ModelTier.Local
+            && _gpuGate is not null
+            && GpuColocation.SameHost(_generator?.ComfyUiBaseUrl, ResolveOllamaBaseUrl());
+        IDisposable? gpuLease = null;
         try
         {
+            if (gpuGated)
+            {
+                SetStatus("Waiting for the current render to finish…", StatusKind.Info);
+                gpuLease = await _gpuGate!.AcquireAsync();
+                if (_generator is not null) _generator.IsGpuBusy = true;
+            }
+
+            SetStatus($"Asking {ModelDisplay(tier)} to write a prompt…", StatusKind.Info);
+
             // Pass 1 (always): idea → prose.
-            var proseResult = await _builder.BuildProseAsync(Idea, token);
+            var proseResult = await _builder.BuildProseAsync(Idea, token, tier);
             if (!proseResult.Success || proseResult.Prose is null)
             {
                 SetStatus(proseResult.Error ?? "Couldn't build a prompt.", StatusKind.Error);
@@ -117,7 +156,7 @@ public partial class IdeaToPromptViewModel : ObservableObject
 
             // Pass 2 (optional): prose → Ideogram V4 JSON. On failure the prose above stays usable.
             SetStatus("Prose ready — building the Ideogram V4 JSON prompt…", StatusKind.Info);
-            var jsonResult = await _builder.BuildJsonAsync(Prose, token);
+            var jsonResult = await _builder.BuildJsonAsync(Prose, token, tier);
             if (!jsonResult.Success || jsonResult.Prompt is null)
             {
                 SetStatus(
@@ -142,6 +181,12 @@ public partial class IdeaToPromptViewModel : ObservableObject
         }
         finally
         {
+            if (tier == ModelTier.Local && _ollamaCatalog is not null)
+                await _ollamaCatalog.UnloadAsync(ResolveOllamaBaseUrl(), ResolveOllamaModel());
+
+            gpuLease?.Dispose();
+            if (gpuGated && _generator is not null) _generator.IsGpuBusy = false;
+
             IsBusy = false;
             _cts = null;
             cts.Dispose();
@@ -241,4 +286,17 @@ public partial class IdeaToPromptViewModel : ObservableObject
         StatusMessage = message;
         StatusKind = kind;
     }
+
+    private static string ModelDisplay(ModelTier tier) => tier switch
+    {
+        ModelTier.Sonnet => "Claude Sonnet",
+        ModelTier.Local => "local Ollama",
+        _ => "Claude Opus"
+    };
+
+    private string ResolveOllamaBaseUrl() =>
+        _generator?.OllamaBaseUrl is { Length: > 0 } u ? u : ModelConstants.Ollama.DefaultBaseUrl;
+
+    private string ResolveOllamaModel() =>
+        _generator?.OllamaModel is { Length: > 0 } m ? m : ModelConstants.Ollama.DefaultModel;
 }

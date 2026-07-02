@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
+using ImageGenerator.MAUI.Infrastructure.External.Ollama;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
@@ -7,9 +8,8 @@ using Microsoft.Extensions.Logging;
 namespace ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 
 /// <summary>
-/// Builds a V4 structured prompt from a freeform idea with one Claude Opus 4.8 call using the
-/// Messages API's native structured outputs (<c>output_config.format = json_schema</c>, GA — no beta
-/// header). Constrained decoding guarantees the JSON parses and matches the schema's <em>shape</em>;
+/// Builds a V4 structured prompt from a freeform idea using either Anthropic Messages or a local
+/// Ollama model. Structured-output support constrains the JSON pass to the schema's <em>shape</em>;
 /// the semantic rules the schema can't express (art_style XOR photo, uppercase #RRGGBB, bbox ordering,
 /// the ~60-word desc cap) are caught by <see cref="V4JsonPromptValidator"/>, with one retry that feeds
 /// the validator's complaints back to the model.
@@ -23,8 +23,11 @@ namespace ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 /// </summary>
 public sealed class AnthropicPromptBuilderService : IPromptBuilderService
 {
-    /// <summary>Hardcoded model. User-verified the only viable tier; Fable 5 is the one-line future bump.</summary>
-    public const string ModelId = "claude-opus-4-8";
+    private const string SonnetModelId = "claude-sonnet-4-6";
+    private const string OpusModelId = "claude-opus-4-8";
+
+    /// <summary>Kept for existing diagnostics/tests that refer to the original prompt-builder model.</summary>
+    public const string ModelId = OpusModelId;
 
     // VPE pass (idea → prose). Override beats bundled.
     private const string VpeSystemPromptAsset = "PromptBuilder/vpe-system.md";
@@ -58,7 +61,7 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
         bundled clean-room prompt is used. The prose pass always runs; the JSON pass is optional.
 
         - Read fresh on every "Build prompt" click — no app restart needed after you edit either file.
-        - Model: Claude Opus 4.8 (hardcoded, both passes).
+        - Model: picked in the app: Claude Sonnet/Opus, or the configured local Ollama model.
         - Delete a file to revert that pass to its bundled prompt.
 
         This file (README.txt) is just documentation and is safe to delete; the app re-creates it on
@@ -66,16 +69,17 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
         """;
 
     /// <summary>
-    /// Transport seam: given the API key + assembled turns, return the model's raw text. When
-    /// <paramref name="schema"/> is non-null the call uses structured outputs (constrained to that JSON
-    /// schema, the JSON pass); when null it's a plain text call (the VPE prose pass). Production = one
-    /// Anthropic Messages call; tests inject a fake so the request build, override precedence, and
-    /// validate-retry logic run without disk or network.
+    /// Transport seam: route a prompt-builder call to the right backend. For <see cref="ModelTier.Local"/>
+    /// it hits Ollama at <paramref name="baseUrl"/> (no key); otherwise the Anthropic Messages API with
+    /// <paramref name="apiKey"/>. When <paramref name="schema"/> is non-null the call uses structured
+    /// outputs (the JSON pass); when null it's a plain text call (the VPE prose pass).
     /// </summary>
     internal delegate Task<string> StructuredCompletion(
-        string apiKey, string systemPrompt, IReadOnlyList<ChatTurn> messages, JsonElement? schema, CancellationToken ct);
+        ModelTier tier, string modelId, string? apiKey, string baseUrl,
+        string systemPrompt, IReadOnlyList<ChatTurn> messages, JsonElement? schema, CancellationToken ct);
 
     private readonly IAnthropicTokenStore _tokenStore;
+    private readonly IUiStateStore _uiStateStore;
     private readonly ILogger<AnthropicPromptBuilderService> _logger;
     private readonly Func<string, Task<Stream>> _assetOpener;
     private readonly string _promptDirectory;
@@ -85,9 +89,10 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
     /// HttpClient. The token store, logger, and factory are all resolved from the container.</summary>
     public AnthropicPromptBuilderService(
         IAnthropicTokenStore tokenStore,
+        IUiStateStore uiStateStore,
         ILogger<AnthropicPromptBuilderService> logger,
         IHttpClientFactory httpClientFactory)
-        : this(tokenStore, logger,
+        : this(tokenStore, uiStateStore, logger,
             BuildHttpCompletion(httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory)), logger))
     {
     }
@@ -101,12 +106,14 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
     /// </summary>
     internal AnthropicPromptBuilderService(
         IAnthropicTokenStore tokenStore,
+        IUiStateStore uiStateStore,
         ILogger<AnthropicPromptBuilderService> logger,
         StructuredCompletion completion,
         string? promptDirectoryOverride = null,
         Func<string, Task<Stream>>? assetOpener = null)
     {
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+        _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _complete = completion ?? throw new ArgumentNullException(nameof(completion));
         _assetOpener = assetOpener ?? FileSystem.OpenAppPackageFileAsync;
@@ -116,14 +123,18 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
     }
 
     /// <summary>Pass 1 (VPE): idea → a normal prose prompt. One plain text call, no validator.</summary>
-    public async Task<ProseResult> BuildProseAsync(string idea, CancellationToken cancellationToken = default)
+    public async Task<ProseResult> BuildProseAsync(
+        string idea,
+        CancellationToken cancellationToken = default,
+        ModelTier tier = ModelTier.Opus)
     {
         if (string.IsNullOrWhiteSpace(idea))
             return ProseResult.Fail("Describe an idea first.");
 
-        var apiKey = await _tokenStore.LoadAsync();
-        if (string.IsNullOrWhiteSpace(apiKey))
-            return ProseResult.Fail("No Anthropic API key — add it on the Settings page.");
+        var modelId = ResolveModelId(tier);
+        var (apiKey, baseUrl, credentialError) = await ResolveBackendAsync(tier);
+        if (credentialError is not null)
+            return ProseResult.Fail(credentialError);
 
         string systemPrompt;
         try
@@ -142,7 +153,7 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
         try
         {
             // schema = null → a plain text call; the VPE pass emits prose, not JSON.
-            raw = await _complete(apiKey!, systemPrompt, messages, null, cancellationToken);
+            raw = await _complete(tier, modelId, apiKey, baseUrl, systemPrompt, messages, null, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -151,25 +162,29 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
         catch (Exception ex)
         {
             _logger.LogError(ex, "PromptBuilder: VPE call failed");
-            return ProseResult.Fail($"The prompt builder couldn't reach Claude: {ex.Message}");
+            return ProseResult.Fail($"The prompt builder couldn't reach {ProviderLabel(tier)}: {ex.Message}");
         }
 
         var prose = raw.Trim();
         if (string.IsNullOrEmpty(prose))
-            return ProseResult.Fail("Claude returned an empty prompt. Try rephrasing the idea.");
+            return ProseResult.Fail($"{ProviderLabel(tier)} returned an empty prompt. Try rephrasing the idea.");
 
         return ProseResult.Ok(prose);
     }
 
     /// <summary>Pass 2 (Ideogram adapter): prose → a schema-valid V4 prompt with one validator-feedback retry.</summary>
-    public async Task<PromptBuilderResult> BuildJsonAsync(string prose, CancellationToken cancellationToken = default)
+    public async Task<PromptBuilderResult> BuildJsonAsync(
+        string prose,
+        CancellationToken cancellationToken = default,
+        ModelTier tier = ModelTier.Opus)
     {
         if (string.IsNullOrWhiteSpace(prose))
             return PromptBuilderResult.Fail("Build a prose prompt first.");
 
-        var apiKey = await _tokenStore.LoadAsync();
-        if (string.IsNullOrWhiteSpace(apiKey))
-            return PromptBuilderResult.Fail("No Anthropic API key — add it on the Settings page.");
+        var modelId = ResolveModelId(tier);
+        var (apiKey, baseUrl, credentialError) = await ResolveBackendAsync(tier);
+        if (credentialError is not null)
+            return PromptBuilderResult.Fail(credentialError);
 
         string systemPrompt;
         try
@@ -189,7 +204,8 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
             string raw;
             try
             {
-                raw = await _complete(apiKey!, systemPrompt, messages, V4StructuredSchema.Schema, cancellationToken);
+                raw = await _complete(
+                    tier, modelId, apiKey, baseUrl, systemPrompt, messages, V4StructuredSchema.Schema, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -197,8 +213,8 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "PromptBuilder: Anthropic call failed (attempt {Attempt})", attempt);
-                return PromptBuilderResult.Fail($"The prompt builder couldn't reach Claude: {ex.Message}");
+                _logger.LogError(ex, "PromptBuilder: model call failed (tier {Tier}, attempt {Attempt})", tier, attempt);
+                return PromptBuilderResult.Fail($"The prompt builder couldn't reach {ProviderLabel(tier)}: {ex.Message}");
             }
 
             V4JsonPrompt prompt;
@@ -209,7 +225,8 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
             catch (V4JsonPromptParseException ex)
             {
                 if (attempt >= MaxAttempts)
-                    return PromptBuilderResult.Fail($"Claude returned text that isn't a valid structured prompt: {ex.Message}");
+                    return PromptBuilderResult.Fail(
+                        $"{ProviderLabel(tier)} returned text that isn't a valid structured prompt: {ex.Message}");
 
                 messages.Add(new("assistant", raw));
                 messages.Add(new("user",
@@ -222,7 +239,8 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
                 return PromptBuilderResult.Ok(prompt);
 
             if (attempt >= MaxAttempts)
-                return PromptBuilderResult.Fail("Claude's prompt didn't satisfy the schema:\n• " + string.Join("\n• ", errors));
+                return PromptBuilderResult.Fail(
+                    $"{ProviderLabel(tier)}'s prompt didn't satisfy the schema:\n• " + string.Join("\n• ", errors));
 
             messages.Add(new("assistant", raw));
             messages.Add(new("user",
@@ -275,7 +293,34 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
         }
     }
 
+    private async Task<(string? ApiKey, string BaseUrl, string? Error)> ResolveBackendAsync(ModelTier tier)
+    {
+        if (tier == ModelTier.Local)
+        {
+            var baseUrl = _uiStateStore.LoadOllamaBaseUrl() is { Length: > 0 } u
+                ? u
+                : ModelConstants.Ollama.DefaultBaseUrl;
+            return (null, baseUrl, null);
+        }
+
+        var apiKey = await _tokenStore.LoadAsync();
+        return string.IsNullOrWhiteSpace(apiKey)
+            ? (null, string.Empty, "No Anthropic API key — add it on the Settings page.")
+            : (apiKey, string.Empty, null);
+    }
+
+    private string ResolveModelId(ModelTier tier) => tier switch
+    {
+        ModelTier.Sonnet => SonnetModelId,
+        ModelTier.Local => _uiStateStore.LoadOllamaModel() is { Length: > 0 } m ? m : ModelConstants.Ollama.DefaultModel,
+        _ => OpusModelId
+    };
+
+    private static string ProviderLabel(ModelTier tier) => tier == ModelTier.Local ? "Ollama" : "Claude";
+
     private static StructuredCompletion BuildHttpCompletion(IHttpClientFactory httpClientFactory, ILogger logger) =>
-        (apiKey, systemPrompt, messages, schema, ct) =>
-            AnthropicMessagesTransport.SendAsync(httpClientFactory, logger, ModelId, apiKey, systemPrompt, messages, schema, ct);
+        (tier, modelId, apiKey, baseUrl, systemPrompt, messages, schema, ct) =>
+            tier == ModelTier.Local
+                ? OllamaChatTransport.SendAsync(httpClientFactory, logger, baseUrl, modelId, systemPrompt, messages, schema, ct)
+                : AnthropicMessagesTransport.SendAsync(httpClientFactory, logger, modelId, apiKey!, systemPrompt, messages, schema, ct);
 }

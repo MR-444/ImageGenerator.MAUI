@@ -8,7 +8,7 @@ A Windows desktop (.NET MAUI) image-generation workbench that routes one prompt 
 
 - **Three providers, one app.** Pick a model and the request routes itself; each provider's token lives in its own OS-secure slot. New Replicate/Pollinations models appear via **Refresh Models** without recompiling.
 - **Your own ComfyUI as a first-class backend.** Drop an API-format workflow JSON in a folder and it becomes a selectable model. The app patches prompt / seed / resolution / checkpoint / quality-preset into the graph and streams live per-step progress over the server WebSocket. No cloud, no cost beyond your GPU. → [details](#your-own-comfyui-server)
-- **Describe an idea → prompt (Claude).** Type a plain idea; **Claude Opus 4.8** writes a polished prose prompt that works with any model, and optionally maps it to a schema-valid **Ideogram V4 structured caption**. → [details](#describe-an-idea-claude)
+- **Describe an idea → prompt (Claude or Ollama).** Type a plain idea; **Claude Opus/Sonnet** or a **local Ollama** model writes a polished prose prompt that works with any model, and optionally maps it to a schema-valid **Ideogram V4 structured caption**. → [details](#describe-an-idea-claude-or-ollama)
 - **Visual structured-prompt editor.** Build Ideogram V4's `json_prompt` on a canvas — drag/resize element boxes on the 0–1000 grid, set style/palette, and **Enrich from layout**: a geometry-grounded LLM rewrites each element's description to reflect its real spatial relationships (what it rests on, sits beside, or is behind). → [details](#mutation--enrichment)
 - **Mutation & breeding engine.** Turn any structured caption into a batch of one-change variants along a **LOOK** (style) or **SCENE** (composition) axis — fully deterministic, seeded, offline, no key. Or switch on **AI mode** to steer mutations and breed from your favourites via Claude (Sonnet/Opus) or a **local Ollama** model. → [details](#mutation--enrichment)
 - **Post to CivitAI.** One checkbox publishes a finished image — optionally into a specific model's gallery with structured generation data attached. → [details](#posting-to-civitai)
@@ -31,7 +31,7 @@ A Windows desktop (.NET MAUI) image-generation workbench that routes one prompt 
 |---|---|---|
 | **Replicate** | Flux · OpenAI `gpt-image` · Google `nano-banana-2` · Ideogram V4 | [replicate.com/account/api-tokens](https://replicate.com/account/api-tokens) |
 | **Pollinations** | `flux` / `zimage` / `qwen-image` etc. — works anonymously (rate-limited); a token raises the limit | [auth.pollinations.ai](https://auth.pollinations.ai) |
-| **Anthropic** | the *Describe an idea* builder + AI mutation/enrichment (never image gen) | [console.anthropic.com](https://console.anthropic.com) |
+| **Anthropic** | Claude tiers for *Describe an idea* + AI mutation/enrichment (never image gen) | [console.anthropic.com](https://console.anthropic.com) |
 | **CivitAI** | publishing finished images (Media-Write scope) | [civitai.com/user/account](https://civitai.com/user/account) |
 | **ComfyUI** | a server base URL (and optional `Authorization` header) instead of a token | your own server |
 
@@ -45,9 +45,9 @@ At submit time the app patches the graph: your **prompt** into the lowest-id `CL
 
 [`comfy-workflows/Ideogram4-Sample.json`](comfy-workflows/Ideogram4-Sample.json) is a ready-to-use Ideogram 4 workflow using **stock ComfyUI nodes only**; it needs the usual Ideogram 4 model files on the server (`ideogram4_fp8_scaled` + `ideogram4_unconditional_fp8_scaled`, `qwen3vl_8b_fp8_scaled` text encoder, `flux2-vae`). Canceling in the app drains pending jobs and interrupts the active render when it's the app's own.
 
-### Describe an idea (Claude)
+### Describe an idea (Claude or Ollama)
 
-**Describe an idea…** runs two passes: Pass 1 always turns a plain-English idea into a polished **prose** prompt (good for any model); Pass 2 optionally maps that onto a schema-valid **Ideogram V4 JSON** caption. The result card lets you copy the prose, use it as the prompt, or use the JSON. Each pass is one Opus call at high effort (~3–6¢, so prose-only ~3–6¢ and prose+JSON ~6–12¢); the model is hardcoded. Power users can override the bundled clean-room instructions with private `vpe-prompt.md` / `system-prompt.md` files in your data folder's `prompt-builder\` subfolder (default `Pictures\Emberforge\prompt-builder\`) (read fresh, never enter the repo — an open-core split).
+**Describe an idea…** runs two passes: Pass 1 always turns a plain-English idea into a polished **prose** prompt (good for any model); Pass 2 optionally maps that onto a schema-valid **Ideogram V4 JSON** caption. The result card lets you copy the prose, use it as the prompt, or use the JSON. Pick **Claude Opus**, **Claude Sonnet**, or **Local** (your configured Ollama server/model). Anthropic tiers are billed per pass; Local needs no token and quality depends on the installed model. Power users can override the bundled clean-room instructions with private `vpe-prompt.md` / `system-prompt.md` files in your data folder's `prompt-builder\` subfolder (default `Pictures\Emberforge\prompt-builder\`) (read fresh, never enter the repo — an open-core split).
 
 ### Mutation & enrichment
 
@@ -65,7 +65,7 @@ Check **Post to CivitAI** and a finished image is published the moment it's save
 
 ### Costs
 
-**Replicate** is pay-as-you-go, roughly **$0.003–$0.05** per image by model ([pricing](https://replicate.com/pricing)). **Pollinations** free models stay free; `paid_only` models are filtered out of the picker. **Anthropic** applies only to the prompt builder / AI mutation, billed per call as above.
+**Replicate** is pay-as-you-go, roughly **$0.003–$0.05** per image by model ([pricing](https://replicate.com/pricing)). **Pollinations** free models stay free; `paid_only` models are filtered out of the picker. **Anthropic** applies only when you pick a Claude tier for the prompt builder / AI mutation, billed per call.
 
 ## 🚀 Building from source
 

@@ -100,7 +100,7 @@
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,8,0,0">
                         <VerticalStackLayout Grid.Column="0" Spacing="2">
                             <Label Text="Free GPU memory after rendering" Style="{StaticResource FieldLabel}" />
-                            <Label Text="Unloads ComfyUI models when rendering is idle so the Ollama mutation tier has VRAM. Turn off to keep the checkpoint loaded for faster single-image iteration."
+                            <Label Text="Unloads ComfyUI models when rendering is idle so local Ollama prompt work has VRAM. Turn off to keep the checkpoint loaded for faster single-image iteration."
                                    Style="{StaticResource HelperText}" />
                         </VerticalStackLayout>
                         <Switch Grid.Column="1"
@@ -117,9 +117,9 @@
                     VerticalOptions="Start">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="Local LLM (Ollama)" Style="{StaticResource CardTitle}" />
-                    <!-- The free "Local" tier of AI mutation: verifies the technical round-trip without
-                         paying Anthropic. No token needed; output quality is not the goal here. -->
-                    <Label Text="Local Ollama server for the AI mutation 'Local' tier — a free path to test the round-trip (no token). Output quality isn't guaranteed."
+                    <!-- The free "Local" LLM tier: prompt builder, AI mutation, and enrichment can use it
+                         without paying Anthropic. No token needed; output quality depends on the model. -->
+                    <Label Text="Local Ollama server for the prompt builder and AI tools' Local tier — a free path with no token. Output quality depends on the installed model."
                            Style="{StaticResource HelperText}" />
                     <Entry Text="{Binding OllamaBaseUrl, Mode=TwoWay}"
                            Placeholder="http://fireengine:11434"
@@ -142,7 +142,7 @@
                                 SemanticProperties.Description="List models from the Ollama server"
                                 AutomationId="OllamaModelRefreshButton" />
                     </Grid>
-                    <Label Text="A 27B model cold-loads into VRAM on the first call — expect the first variant to take a few minutes."
+                    <Label Text="A large model cold-loads into VRAM on the first call — expect the first local response to take a few minutes."
                            Style="{StaticResource HelperText}" />
                 </VerticalStackLayout>
             </Border>

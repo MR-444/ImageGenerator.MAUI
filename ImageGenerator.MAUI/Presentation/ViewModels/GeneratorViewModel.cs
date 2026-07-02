@@ -177,7 +177,7 @@ public partial class GeneratorViewModel : ObservableObject
     partial void OnComfyUiBaseUrlChanged(string value) =>
         _uiStateStore.PersistComfyUiBaseUrl(value ?? string.Empty);
 
-    // When on, POST /free to ComfyUI once rendering is idle so the Ollama mutation tier (and the OS) get
+    // When on, POST /free to ComfyUI once rendering is idle so local Ollama prompt/AI work (and the OS) get
     // the VRAM back. Default on; turn off to keep the checkpoint resident for faster single-image iteration.
     [ObservableProperty]
     private bool _freeVramAfterRendering = true;
@@ -1051,13 +1051,12 @@ public partial class GeneratorViewModel : ObservableObject
                         + "civitai.com/user/account (a free account works). Stored in OS secure storage.",
             store: civitaiTokenStore,
             syncToParameters: static _ => { }));
-        // No parameters slot: AnthropicPromptBuilderService reads the store per request (the
-        // "Describe an idea…" call has no ImageGenerationParameters).
+        // No parameters slot: Claude prompt-builder / AI-tool tiers read the store per request.
         TokenProviders.Add(new TokenProviderViewModel(
             key: "anthropic",
             displayName: "Anthropic",
             placeholder: "Paste your Anthropic API key…",
-            helperText: "Required for \"Describe an idea…\" (the prompt builder). Create a key at "
+            helperText: "Required when \"Describe an idea…\" or AI tools use a Claude tier. Create a key at "
                         + "console.anthropic.com. Stored in OS secure storage.",
             store: anthropicTokenStore,
             syncToParameters: static _ => { }));
@@ -1107,7 +1106,7 @@ public partial class GeneratorViewModel : ObservableObject
 
     private async Task RunJobAsync(GenerationJob job)
     {
-        // Serialize GPU work: a ComfyUI render and the local Ollama mutation tier share fireEngine's
+        // Serialize GPU work: a ComfyUI render and local Ollama prompt/AI work share fireEngine's
         // VRAM, so co-loading both thrashes/OOMs. Hold the gate from before submit until the post-render
         // VRAM free, so a mutation (or another render) waits rather than collides. Non-ComfyUI providers
         // and split-host setups (ComfyUI ≠ Ollama box) skip the gate entirely.
@@ -1467,7 +1466,7 @@ public partial class GeneratorViewModel : ObservableObject
 
     /// <summary>
     /// "Describe an idea…" entry from MainPage: open the prompt-builder page. The page owns the idea
-    /// box + the Claude call and writes the result back through the same Parameters handoff the
+    /// box + the selected model call and writes the result back through the same Parameters handoff the
     /// structure editor uses, so there's nothing to stash here — just navigate.
     /// </summary>
     [RelayCommand]
