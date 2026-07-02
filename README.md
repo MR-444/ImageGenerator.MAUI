@@ -9,7 +9,7 @@ A Windows desktop (.NET MAUI) image-generation workbench that routes one prompt 
 - **Three providers, one app.** Pick a model and the request routes itself; each provider's token lives in its own OS-secure slot. New Replicate/Pollinations models appear via **Refresh Models** without recompiling.
 - **Your own ComfyUI as a first-class backend.** Drop an API-format workflow JSON in a folder and it becomes a selectable model. The app patches prompt / seed / resolution / checkpoint / quality-preset into the graph and streams live per-step progress over the server WebSocket. No cloud, no cost beyond your GPU. → [details](#your-own-comfyui-server)
 - **Describe an idea → prompt (Claude or Ollama).** Type a plain idea; **Claude Opus/Sonnet** or a **local Ollama** model writes a polished prose prompt that works with any model, and optionally maps it to a schema-valid **Ideogram V4 structured caption**. → [details](#describe-an-idea-claude-or-ollama)
-- **Visual structured-prompt editor.** Build Ideogram V4's `json_prompt` on a canvas — drag/resize element boxes on the 0–1000 grid, set style/palette, and **Enrich from layout**: a geometry-grounded LLM rewrites each element's description to reflect its real spatial relationships (what it rests on, sits beside, or is behind). → [details](#mutation--enrichment)
+- **Visual structured-prompt editor.** Build Ideogram V4's `json_prompt` in a three-pane workspace with an inspector, responsive canvas, and live JSON output — drag/resize element boxes on the 0–1000 grid, set style/palette, and **Enrich from layout**: a geometry-grounded LLM rewrites each element's description to reflect its real spatial relationships (what it rests on, sits beside, or is behind). → [details](#mutation--enrichment)
 - **Mutation & breeding engine.** Turn any structured caption into a batch of one-change variants along a **LOOK** (style) or **SCENE** (composition) axis — fully deterministic, seeded, offline, no key. Or switch on **AI mode** to steer mutations and breed from your favourites via Claude (Sonnet/Opus) or a **local Ollama** model. → [details](#mutation--enrichment)
 - **Post to CivitAI.** One checkbox publishes a finished image — optionally into a specific model's gallery with structured generation data attached. → [details](#posting-to-civitai)
 
@@ -75,7 +75,7 @@ Needs the **.NET 10 SDK** + the MAUI workload (VS 2022 17.12+ or Rider), Windows
 git clone https://github.com/MR-444/ImageGenerator.MAUI.git
 ```
 
-Open `ImageGenerator.MAUI.sln`, restore, build, run. For the self-contained single-file release exe, run `pwsh ./publish.ps1` from the repo root. Tests: `dotnet test` (1219 tests — provider payloads, the ComfyUI patcher, catalog filtering/persistence, the V4 structured-prompt model + validator, the deterministic mutation operators and the RegionGraph geometry, the LLM seams via fakes, CivitAI posting, gallery + UI-state persistence).
+Open `ImageGenerator.MAUI.sln`, restore, build, run. For the self-contained single-file release exe, run `pwsh ./publish.ps1` from the repo root. Tests: `dotnet test` (1252 tests — provider payloads, the ComfyUI patcher, catalog filtering/persistence, the V4 structured-prompt model + validator, the deterministic mutation operators and the RegionGraph geometry, the LLM seams via fakes, CivitAI posting, gallery + UI-state persistence).
 
 ## 🛠️ Stack
 

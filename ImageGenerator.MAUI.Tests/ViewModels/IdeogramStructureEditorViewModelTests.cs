@@ -102,6 +102,20 @@ public class IdeogramStructureEditorViewModelTests
     }
 
     [Fact]
+    public void JsonPreview_PrettyPrintsAndTracksElementEdits()
+    {
+        var sut = FillValid(CreateSut());
+        sut.AddObjElementCommand.Execute(null);
+
+        sut.JsonPreview.Should().Contain(Environment.NewLine);
+        sut.JsonPreview.Should().Contain("\"high_level_description\": \"A poster\"");
+
+        sut.SelectedElement!.Desc = "a bright lighthouse";
+
+        sut.JsonPreview.Should().Contain("a bright lighthouse");
+    }
+
+    [Fact]
     public void LoadFromJson_Garbage_StartsFreshWithWarning_WithoutThrowing()
     {
         var sut = CreateSut();
@@ -485,6 +499,18 @@ public class IdeogramStructureEditorViewModelTests
 
         sut.CanvasWidthRequest.Should().BeApproximately(width, 0.001);
         sut.CanvasHeightRequest.Should().BeApproximately(height, 0.001);
+    }
+
+    [Fact]
+    public void SetCanvasFitBox_ReshapesCurrentCanvasWithinStageBounds()
+    {
+        var sut = CreateSut();
+        sut.SelectedResolution = "1440x2880";
+
+        sut.SetCanvasFitBox(640);
+
+        sut.CanvasWidthRequest.Should().BeApproximately(320, 0.001);
+        sut.CanvasHeightRequest.Should().BeApproximately(640, 0.001);
     }
 
     [Fact]

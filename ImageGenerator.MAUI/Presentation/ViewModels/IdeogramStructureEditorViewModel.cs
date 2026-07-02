@@ -80,39 +80,49 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
     public string ResolutionPickerTitle => IsAspectRatioMode ? "Aspect ratio" : "Target resolution";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(JsonPreview))]
     private string _highLevelDescription = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(JsonPreview))]
     private string _background = string.Empty;
 
     // Style card. IncludeStyle gates whether style_description is emitted at all; IsPhoto
     // swaps which of the mutually exclusive art_style / photo fields is editable + emitted.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(JsonPreview))]
     private bool _includeStyle;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(JsonPreview))]
     private string _aesthetics = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(JsonPreview))]
     private string _lighting = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(JsonPreview))]
     private string _medium = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsArtStyle))]
+    [NotifyPropertyChangedFor(nameof(JsonPreview))]
     private bool _isPhoto;
 
     public bool IsArtStyle => !IsPhoto;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(JsonPreview))]
     private string _artStyle = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(JsonPreview))]
     private string _photoStyle = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StylePaletteSwatches))]
+    [NotifyPropertyChangedFor(nameof(JsonPreview))]
     private string _stylePaletteText = string.Empty;
 
     // Mirrors ElementItemViewModel.OnPaletteTextChanged: uppercase live so the Entry's
@@ -160,11 +170,10 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
     /// <summary>True only when the Local (Ollama) tier is selected — gates the model-name hint.</summary>
     public bool ShowEnrichLocalModel => EnrichTier == ModelTier.Local;
 
-    /// <summary>
-    /// Resolved Ollama model the Local tier will use. Display-only: the editor has no Ollama
-    /// picker (the model is an app-wide setting changed on the Mutate page / Settings), so we
-    /// surface its name. Same resolution as <see cref="MutationEngineViewModel"/>'s Local path.
-    /// </summary>
+    /// <summary>The host generator, exposed so the page can reuse the shared Ollama model picker.</summary>
+    public GeneratorViewModel? Generator => _generator;
+
+    /// <summary>Resolved Ollama model the Local tier will use when the editor is hosted stand-alone.</summary>
     public string EnrichLocalModel =>
         _generator?.OllamaModel is { Length: > 0 } m ? m : ModelConstants.Ollama.DefaultModel;
 
@@ -195,8 +204,13 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
     // target image's aspect ratio so boxes preview where they'll actually land. The picker is
     // seeded from the generator's current resolution and handed back on Apply.
 
-    /// <summary>Longest canvas side in device-independent pixels; the other side shrinks to the AR.</summary>
+    /// <summary>Default longest canvas side in device-independent pixels; the stage can grow or shrink it.</summary>
     public const double CanvasFitBox = 480;
+
+    public const double CanvasMinFitBox = 320;
+    public const double CanvasMaxFitBox = 720;
+
+    private double _canvasFitBox = CanvasFitBox;
 
     /// <summary>Ctor-assigned: Ideogram's resolution list, or the generator's AR combos in <see cref="IsAspectRatioMode"/>.</summary>
     public IReadOnlyList<string> ResolutionOptions { get; }
@@ -218,22 +232,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
 
     partial void OnSelectedResolutionChanged(string value)
     {
-        int width, height;
-        var parsed = IsAspectRatioMode
-            ? CanvasCoordinateMapper.TryParseAspectRatioLabel(value, out width, out height)
-            : CanvasCoordinateMapper.TryParseResolution(value, out width, out height);
-        if (parsed)
-        {
-            var aspectRatio = (double)width / height;
-            CanvasWidthRequest = aspectRatio >= 1 ? CanvasFitBox : CanvasFitBox * aspectRatio;
-            CanvasHeightRequest = aspectRatio >= 1 ? CanvasFitBox / aspectRatio : CanvasFitBox;
-        }
-        else
-        {
-            // "Auto" (Ideogram picks the AR itself) or anything unparseable -> square preview.
-            CanvasWidthRequest = CanvasFitBox;
-            CanvasHeightRequest = CanvasFitBox;
-        }
+        UpdateCanvasRequest();
         CanvasInvalidated?.Invoke();
 
         // Write the pick through to the generator immediately so it survives leaving the
@@ -251,6 +250,38 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
         else if (_generator.ResolutionOptions.Contains(value))
         {
             _generator.Parameters.Resolution = value;
+        }
+    }
+
+    public void SetCanvasFitBox(double fitBox)
+    {
+        if (double.IsNaN(fitBox) || double.IsInfinity(fitBox)) return;
+
+        var clamped = Math.Clamp(fitBox, CanvasMinFitBox, CanvasMaxFitBox);
+        if (Math.Abs(clamped - _canvasFitBox) < 0.5) return;
+
+        _canvasFitBox = clamped;
+        UpdateCanvasRequest();
+        CanvasInvalidated?.Invoke();
+    }
+
+    private void UpdateCanvasRequest()
+    {
+        int width, height;
+        var parsed = IsAspectRatioMode
+            ? CanvasCoordinateMapper.TryParseAspectRatioLabel(SelectedResolution, out width, out height)
+            : CanvasCoordinateMapper.TryParseResolution(SelectedResolution, out width, out height);
+        if (parsed)
+        {
+            var aspectRatio = (double)width / height;
+            CanvasWidthRequest = aspectRatio >= 1 ? _canvasFitBox : _canvasFitBox * aspectRatio;
+            CanvasHeightRequest = aspectRatio >= 1 ? _canvasFitBox / aspectRatio : _canvasFitBox;
+        }
+        else
+        {
+            // "Auto" (Ideogram picks the AR itself) or anything unparseable -> square preview.
+            CanvasWidthRequest = _canvasFitBox;
+            CanvasHeightRequest = _canvasFitBox;
         }
     }
 
@@ -379,10 +410,15 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
             foreach (ElementItemViewModel item in e.OldItems) item.PropertyChanged -= OnElementItemChanged;
         if (e.NewItems is not null)
             foreach (ElementItemViewModel item in e.NewItems) item.PropertyChanged += OnElementItemChanged;
+        OnPropertyChanged(nameof(JsonPreview));
         CanvasInvalidated?.Invoke();
     }
 
-    private void OnElementItemChanged(object? sender, PropertyChangedEventArgs e) => CanvasInvalidated?.Invoke();
+    private void OnElementItemChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(JsonPreview));
+        CanvasInvalidated?.Invoke();
+    }
 
     /// <summary>
     /// Seeds the editor from the prompt box content handed over via the Shell route. Anything
@@ -449,6 +485,8 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject
             Elements = Elements.Select(e => e.ToElement()).ToList()
         }
     };
+
+    public string JsonPreview => V4JsonPromptSerializer.Serialize(BuildModel(), indented: true);
 
     /// <summary>Snapshot for the drawable; pulled on every draw via the BoxesProvider hook.</summary>
     public IReadOnlyList<CanvasBox> BuildCanvasBoxes() =>
