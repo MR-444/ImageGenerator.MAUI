@@ -142,8 +142,50 @@
                                 SemanticProperties.Description="List models from the Ollama server"
                                 AutomationId="OllamaModelRefreshButton" />
                     </Grid>
+                    <Label Text="Vision model" Style="{StaticResource FieldLabel}" />
+                    <Picker ItemsSource="{Binding OllamaVisionModels}"
+                            SelectedItem="{Binding OllamaVisionModel, Mode=TwoWay}"
+                            Title="Refresh, then pick a vision model…"
+                            SemanticProperties.Description="Pick an installed Ollama vision model"
+                            AutomationId="OllamaVisionModelPicker" />
                     <Label Text="A large model cold-loads into VRAM on the first call — expect the first local response to take a few minutes."
                            Style="{StaticResource HelperText}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- CARD: OpenRouter vision -->
+            <Border Style="{StaticResource Card}"
+                    VerticalOptions="Start">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="OpenRouter vision" Style="{StaticResource CardTitle}" />
+                    <Label Text="Optional remote image observer for Describe an idea. Set the API key under API Tokens above, then enter any OpenRouter model id that accepts image input and returns text."
+                           Style="{StaticResource HelperText}" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Picker Grid.Column="0"
+                                ItemsSource="{Binding OpenRouterVisionModels}"
+                                SelectedItem="{Binding OpenRouterVisionModel, Mode=TwoWay}"
+                                Title="Refresh, then pick a model…"
+                                SemanticProperties.Description="OpenRouter vision model id"
+                                AutomationId="OpenRouterVisionModelPicker" />
+                        <Button Grid.Column="1"
+                                Text="Refresh"
+                                Command="{Binding RefreshOpenRouterVisionModelsCommand}"
+                                Style="{StaticResource SecondaryButton}"
+                                SemanticProperties.Description="List OpenRouter vision models"
+                                AutomationId="OpenRouterVisionModelRefreshButton" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <VerticalStackLayout Grid.Column="0" Spacing="2">
+                            <Label Text="Free models only" Style="{StaticResource FieldLabel}" />
+                            <Label Text="Filters the OpenRouter picker to models with zero prompt and completion pricing."
+                                   Style="{StaticResource HelperText}" />
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1"
+                                IsToggled="{Binding OpenRouterVisionFreeOnly, Mode=TwoWay}"
+                                VerticalOptions="Center"
+                                SemanticProperties.Description="Show free OpenRouter vision models only"
+                                AutomationId="OpenRouterVisionFreeOnlySwitch" />
+                    </Grid>
                 </VerticalStackLayout>
             </Border>
 

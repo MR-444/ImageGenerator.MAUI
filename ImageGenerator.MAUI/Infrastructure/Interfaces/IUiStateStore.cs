@@ -49,6 +49,18 @@ public interface IUiStateStore
     /// </summary>
     string? LoadOllamaModel();
     /// <summary>
+    /// The Ollama vision-capable model used by image-to-prompt observation. Null when never set — callers
+    /// fall back to the ordinary Ollama model, then to <c>ModelConstants.Ollama.DefaultModel</c>.
+    /// </summary>
+    string? LoadOllamaVisionModel();
+    /// <summary>
+    /// The OpenRouter model id used by image-to-prompt observation. Null when never set — callers fall
+    /// back to <c>ModelConstants.OpenRouter.DefaultVisionModel</c>.
+    /// </summary>
+    string? LoadOpenRouterVisionModel();
+    /// <summary>Whether the OpenRouter vision model picker should show free models only. Default true.</summary>
+    bool LoadOpenRouterVisionFreeOnly();
+    /// <summary>
     /// The user's configured ROOT data folder. Null when never set — callers fall back to
     /// <c>OutputPaths.DefaultRootDirectory</c>. Every data folder (images under <c>pictures\</c>,
     /// json-prompts, comfy-workflows, mutation-library, prompt-builder) follows this root; only
@@ -87,6 +99,12 @@ public interface IUiStateStore
     void PersistOllamaBaseUrl(string value);
     /// <inheritdoc cref="LoadOllamaModel"/>
     void PersistOllamaModel(string value);
+    /// <inheritdoc cref="LoadOllamaVisionModel"/>
+    void PersistOllamaVisionModel(string value);
+    /// <inheritdoc cref="LoadOpenRouterVisionModel"/>
+    void PersistOpenRouterVisionModel(string value);
+    /// <inheritdoc cref="LoadOpenRouterVisionFreeOnly"/>
+    void PersistOpenRouterVisionFreeOnly(bool value);
     /// <inheritdoc cref="LoadOutputFolder"/>
     void PersistOutputFolder(string value);
     /// <inheritdoc cref="LoadCivitaiModelRef"/>

@@ -28,22 +28,124 @@
                         AutomationId="IdeaToPromptBackButton" />
                 <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
                     <Label Text="Describe an idea → prompt" Style="{StaticResource CardTitle}" />
-                    <Label Text="Type a plain-English idea. Pick Claude or a local Ollama model to write a polished prose prompt you can use with any model. Optionally it also builds an Ideogram V4 JSON prompt for structured models."
+                    <Label Text="Type a plain-English idea or pick a reference image. The builder writes a polished prose prompt you can use with any model, and can optionally build an Ideogram V4 JSON prompt."
                            Style="{StaticResource HelperText}" />
                 </VerticalStackLayout>
             </Grid>
 
+            <!-- Source mode -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="Idea source" Style="{StaticResource FieldLabel}" />
+                <Picker ItemsSource="{Binding SourceModeOptions}"
+                        SelectedItem="{Binding SourceMode}"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                        AutomationId="IdeaSourceModePicker" />
+            </VerticalStackLayout>
+
+            <!-- CARD: Reference image -->
+            <Border Style="{StaticResource Card}"
+                    IsVisible="{Binding IsImageSource}"
+                    AutomationId="ReferenceImageCard">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Reference image" Style="{StaticResource FieldLabel}" />
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <Label Grid.Column="0"
+                               Text="{Binding ReferenceImageFileName}"
+                               Style="{StaticResource HelperText}"
+                               VerticalOptions="Center" />
+                        <Button Grid.Column="1"
+                                Text="Pick image"
+                                Command="{Binding PickReferenceImageCommand}"
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                Style="{StaticResource SecondaryButton}"
+                                AutomationId="PickReferenceImageButton" />
+                        <Button Grid.Column="2"
+                                Text="Clear"
+                                Command="{Binding ClearReferenceImageCommand}"
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                Style="{StaticResource SecondaryButton}"
+                                AutomationId="ClearReferenceImageButton" />
+                    </Grid>
+                    <Image Source="{Binding ReferenceImagePreview}"
+                           IsVisible="{Binding HasReferenceImage}"
+                           HeightRequest="220"
+                           Aspect="AspectFit"
+                           BackgroundColor="{AppThemeBinding Light=#F3F4F6, Dark=#1F2937}"
+                           AutomationId="ReferenceImagePreview" />
+                    <Label Text="The image is observed first, then that observation goes through the normal VPE prompt pass."
+                           Style="{StaticResource HelperText}" />
+
+                    <Label Text="Vision observer" Style="{StaticResource FieldLabel}" />
+                    <Picker ItemsSource="{Binding VisionProviderOptions}"
+                            SelectedItem="{Binding SelectedVisionProvider}"
+                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                            AutomationId="VisionProviderPicker" />
+                    <Grid ColumnDefinitions="*,Auto"
+                          ColumnSpacing="8"
+                          IsVisible="{Binding IsLocalVisionProvider}">
+                        <Picker Grid.Column="0"
+                                ItemsSource="{Binding Generator.OllamaVisionModels}"
+                                SelectedItem="{Binding Generator.OllamaVisionModel, Mode=TwoWay}"
+                                Title="Refresh, then pick a vision model…"
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                AutomationId="IdeaPromptOllamaVisionModelPicker" />
+                        <Button Grid.Column="1"
+                                Text="Refresh"
+                                Command="{Binding Generator.RefreshOllamaModelsCommand}"
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                Style="{StaticResource SecondaryButton}"
+                                AutomationId="IdeaPromptOllamaVisionRefreshButton" />
+                    </Grid>
+                    <Label Text="Only installed Ollama models advertising vision + completion appear after refresh."
+                           IsVisible="{Binding IsLocalVisionProvider}"
+                           Style="{StaticResource HelperText}" />
+                    <Grid ColumnDefinitions="*,Auto"
+                          ColumnSpacing="8"
+                          IsVisible="{Binding IsOpenRouterVisionProvider}">
+                        <Picker Grid.Column="0"
+                                ItemsSource="{Binding Generator.OpenRouterVisionModels}"
+                                SelectedItem="{Binding Generator.OpenRouterVisionModel, Mode=TwoWay}"
+                                Title="Refresh, then pick a model…"
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                AutomationId="IdeaPromptOpenRouterVisionModelPicker" />
+                        <Button Grid.Column="1"
+                                Text="Refresh"
+                                Command="{Binding Generator.RefreshOpenRouterVisionModelsCommand}"
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                Style="{StaticResource SecondaryButton}"
+                                AutomationId="IdeaPromptOpenRouterVisionRefreshButton" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto"
+                          ColumnSpacing="12"
+                          IsVisible="{Binding IsOpenRouterVisionProvider}">
+                        <VerticalStackLayout Grid.Column="0" Spacing="2">
+                            <Label Text="Free models only" Style="{StaticResource FieldLabel}" />
+                            <Label Text="Filters to OpenRouter models with zero prompt and completion pricing."
+                                   Style="{StaticResource HelperText}" />
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1"
+                                IsToggled="{Binding Generator.OpenRouterVisionFreeOnly, Mode=TwoWay}"
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                VerticalOptions="Center"
+                                AutomationId="IdeaPromptOpenRouterVisionFreeOnlySwitch" />
+                    </Grid>
+                    <Label Text="Set the OpenRouter API key in Settings. The image is sent to the selected remote provider."
+                           IsVisible="{Binding IsOpenRouterVisionProvider}"
+                           Style="{StaticResource HelperText}" />
+                </VerticalStackLayout>
+            </Border>
+
             <!-- CARD: Idea -->
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="8">
-                    <Label Text="Your idea" Style="{StaticResource FieldLabel}" />
+                    <Label Text="Your idea / notes" Style="{StaticResource FieldLabel}" />
                     <Editor Text="{Binding Idea}"
                             AutoSize="TextChanges"
                             MinimumHeightRequest="140"
                             Placeholder="e.g. A cozy bookshop on a rainy evening, warm lamplight, a cat asleep in the window"
                             IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                             AutomationId="IdeaEditor" />
-                    <Label Text="One or two sentences works best — name the subject, setting, and mood. The builder fills in the rest."
+                    <Label Text="In text mode this is the idea. In image mode it is optional guidance for the prompt pass."
                            Style="{StaticResource HelperText}" />
                 </VerticalStackLayout>
             </Border>
@@ -130,6 +232,20 @@
                     </DataTrigger>
                 </Label.Triggers>
             </Label>
+
+            <!-- CARD: Observation -->
+            <Border Style="{StaticResource Card}"
+                    IsVisible="{Binding ShowObservation}"
+                    AutomationId="ImageObservationCard">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="Image observation" Style="{StaticResource FieldLabel}" />
+                    <Editor Text="{Binding ObservedImageDescription}"
+                            IsReadOnly="True"
+                            AutoSize="TextChanges"
+                            MinimumHeightRequest="100"
+                            AutomationId="ImageObservationEditor" />
+                </VerticalStackLayout>
+            </Border>
 
             <!-- CARD: Result (prose, copyable + applyable; JSON button appears when built) -->
             <Border Style="{StaticResource Card}"

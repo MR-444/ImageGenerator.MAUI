@@ -629,6 +629,8 @@ public class MutationEngineViewModelTests
         public int UnloadCalls { get; private set; }
         public Task<IReadOnlyList<string>> ListModelsAsync(string baseUrl, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<string>>([]);
+        public Task<IReadOnlyList<OllamaModelInfo>> ListModelInfosAsync(string baseUrl, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<OllamaModelInfo>>([]);
         public Task UnloadAsync(string baseUrl, string model, CancellationToken ct = default)
         {
             UnloadCalls++;

@@ -12,6 +12,7 @@ using ImageGenerator.MAUI.Infrastructure.External.Ollama;
 using ImageGenerator.MAUI.Infrastructure.External.Pollinations;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate;
 using ImageGenerator.MAUI.Infrastructure.External.Replicate.Interfaces;
+using ImageGenerator.MAUI.Infrastructure.External.Vision;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.Services;
 using ImageGenerator.MAUI.Presentation.ViewModels;
@@ -112,6 +113,18 @@ public static class MauiProgram
                 perAttemptTimeout: TimeSpan.FromSeconds(120),
                 totalTimeout: TimeSpan.FromMinutes(5));
 
+        // OpenRouter is used for optional remote vision observation in "Describe an idea". Calls carry
+        // base64 image data, so give them the same generous budget as the other LLM transports.
+        builder.Services.AddHttpClient(VisionObservationService.OpenRouterHttpClientName)
+            .ConfigureStandardResilience(
+                perAttemptTimeout: TimeSpan.FromSeconds(120),
+                totalTimeout: TimeSpan.FromMinutes(5));
+
+        // Fast Ollama catalog lookups for Settings / Describe model pickers. If the server is down,
+        // Refresh should return control quickly; cold-load generation still uses the long client below.
+        builder.Services.AddHttpClient(OllamaModelCatalog.HttpClientName, client =>
+            client.Timeout = TimeSpan.FromSeconds(5));
+
         // No BaseAddress: the Ollama endpoint (e.g. the user's fireEngine box) is a runtime setting, so
         // the transport composes the absolute URL per request. This is the FREE local path for the prompt
         // builder and AI caption tools. A large local model (e.g. a 27B) cold-loads into VRAM and then
@@ -178,7 +191,10 @@ public static class MauiProgram
         builder.Services.AddSingleton<ICivitaiTokenStore, CivitaiTokenStore>();
         builder.Services.AddSingleton<ICivitaiPostingService, CivitaiPostingService>();
         builder.Services.AddSingleton<IAnthropicTokenStore, AnthropicTokenStore>();
+        builder.Services.AddSingleton<IOpenRouterTokenStore, OpenRouterTokenStore>();
         builder.Services.AddSingleton<IPromptBuilderService, AnthropicPromptBuilderService>();
+        builder.Services.AddSingleton<IVisionObservationService, VisionObservationService>();
+        builder.Services.AddSingleton<IOpenRouterModelCatalog, OpenRouterModelCatalog>();
         builder.Services.AddSingleton<ICaptionMutationLlmService, CaptionMutationLlmService>();
         builder.Services.AddSingleton<IEnrichRegionsLlmService, EnrichRegionsLlmService>();
         builder.Services.AddSingleton<IOllamaModelCatalog, OllamaModelCatalog>();

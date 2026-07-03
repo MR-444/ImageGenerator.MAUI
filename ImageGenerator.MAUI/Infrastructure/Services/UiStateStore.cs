@@ -20,6 +20,9 @@ public sealed class UiStateStore : IUiStateStore
     private const string ComfyUiBaseUrlKey = "imggen.comfyui_base_url";
     private const string OllamaBaseUrlKey = "imggen.ollama_base_url";
     private const string OllamaModelKey = "imggen.ollama_model";
+    private const string OllamaVisionModelKey = "imggen.ollama_vision_model";
+    private const string OpenRouterVisionModelKey = "imggen.openrouter_vision_model";
+    private const string OpenRouterVisionFreeOnlyKey = "imggen.openrouter_vision_free_only";
     private const string CivitaiModelRefKey = "imggen.civitai_model_ref";
     private const string OutputFolderKey = "imggen.output_folder";
     private const string WindowBoundsKey = "imggen.window_bounds";
@@ -229,6 +232,62 @@ public sealed class UiStateStore : IUiStateStore
     {
         if (SafeSet(OllamaModelKey, value))
             _logger.LogDebug("UiStateStore.PersistOllamaModel({Value})", Quote(value));
+    }
+
+    public string? LoadOllamaVisionModel()
+    {
+        var v = SafeGet(OllamaVisionModelKey);
+        _logger.LogDebug("UiStateStore.LoadOllamaVisionModel -> {Value}", Quote(v));
+        return v;
+    }
+
+    public void PersistOllamaVisionModel(string value)
+    {
+        if (SafeSet(OllamaVisionModelKey, value))
+            _logger.LogDebug("UiStateStore.PersistOllamaVisionModel({Value})", Quote(value));
+    }
+
+    public string? LoadOpenRouterVisionModel()
+    {
+        var v = SafeGet(OpenRouterVisionModelKey);
+        _logger.LogDebug("UiStateStore.LoadOpenRouterVisionModel -> {Value}", Quote(v));
+        return v;
+    }
+
+    public void PersistOpenRouterVisionModel(string value)
+    {
+        if (SafeSet(OpenRouterVisionModelKey, value))
+            _logger.LogDebug("UiStateStore.PersistOpenRouterVisionModel({Value})", Quote(value));
+    }
+
+    public bool LoadOpenRouterVisionFreeOnly()
+    {
+        try
+        {
+            var value = _preferences.Get(OpenRouterVisionFreeOnlyKey, true);
+            _logger.LogDebug("UiStateStore.LoadOpenRouterVisionFreeOnly -> {Value}", value);
+            return value;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Preferences.Get({Key}) failed", OpenRouterVisionFreeOnlyKey);
+            return true;
+        }
+    }
+
+    public void PersistOpenRouterVisionFreeOnly(bool value)
+    {
+        try
+        {
+            if (_preferences.ContainsKey(OpenRouterVisionFreeOnlyKey)
+                && _preferences.Get(OpenRouterVisionFreeOnlyKey, true) == value) return;
+            _preferences.Set(OpenRouterVisionFreeOnlyKey, value);
+            _logger.LogDebug("UiStateStore.PersistOpenRouterVisionFreeOnly({Value})", value);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Preferences.Set({Key}) failed", OpenRouterVisionFreeOnlyKey);
+        }
     }
 
     public string? LoadOutputFolder()

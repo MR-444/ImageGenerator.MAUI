@@ -76,4 +76,11 @@ public static class ModelConstants
         // tier, not output quality, so any installed json-schema-capable model works — overridable.
         public const string DefaultModel = "qwen2.5";
     }
+
+    public static class OpenRouter
+    {
+        // A current multimodal default for image observation. OpenRouter model ids change over time, so
+        // Settings lets the user replace this with any text+image->text model id.
+        public const string DefaultVisionModel = "google/gemini-3.1-flash-image";
+    }
 }

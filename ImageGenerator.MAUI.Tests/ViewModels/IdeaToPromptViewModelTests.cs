@@ -114,6 +114,65 @@ public class IdeaToPromptViewModelTests
     }
 
     [Fact]
+    public void BuildCommand_ImageMode_RequiresReferenceImage()
+    {
+        var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+
+        vm.SourceMode = IdeaSourceMode.Image;
+
+        vm.BuildCommand.CanExecute(null).Should().BeFalse("image mode needs an image, not typed text");
+
+        vm.SetReferenceImageForTest("ref.png", [1, 2, 3, 4]);
+
+        vm.BuildCommand.CanExecute(null).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Build_ImageMode_ObservesImageBeforeVpe_AndKeepsObservationVisible()
+    {
+        var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+        var observer = new FakeVisionObserver(VisionObservationResult.Ok("A boy on a playground swing in warm sun."));
+        var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance, generator: null, visionObserver: observer);
+        vm.SourceMode = IdeaSourceMode.Image;
+        vm.Idea = "make it uplifting";
+        vm.BuildJson = false;
+        vm.SetReferenceImageForTest("swing.png", [1, 2, 3, 4]);
+
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        observer.Requests.Should().ContainSingle();
+        observer.Requests[0].Provider.Should().Be(VisionObservationProvider.LocalOllama);
+        observer.Requests[0].FileName.Should().Be("swing.png");
+        vm.ObservedImageDescription.Should().Be("A boy on a playground swing in warm sun.");
+        vm.HasObservation.Should().BeTrue();
+        builder.ProseInputs.Should().ContainSingle()
+            .Which.Should().Contain("A boy on a playground swing")
+            .And.Contain("make it uplifting");
+        vm.Prose.Should().Be(Prose);
+        vm.StatusKind.Should().Be(StatusKind.Success);
+    }
+
+    [Fact]
+    public async Task Build_ImageMode_ObservationFailure_StopsBeforeVpe()
+    {
+        var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+        var observer = new FakeVisionObserver(VisionObservationResult.Fail("not a vision model"));
+        var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance, generator: null, visionObserver: observer);
+        vm.SourceMode = IdeaSourceMode.Image;
+        vm.SetReferenceImageForTest("ref.png", [1, 2, 3, 4]);
+
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        observer.Requests.Should().ContainSingle();
+        builder.ProseInputs.Should().BeEmpty("a failed observation must not spend a later model call");
+        vm.StatusKind.Should().Be(StatusKind.Error);
+        vm.StatusMessage.Should().Contain("not a vision model");
+        vm.HasProse.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Build_JsonChecked_JsonFails_KeepsProseVisibleAndSurfacesError()
     {
         var generator = BuildGenerator();
@@ -220,6 +279,7 @@ public class IdeaToPromptViewModelTests
 
     private sealed class TrackingPromptBuilder(ProseResult prose, PromptBuilderResult json) : IPromptBuilderService
     {
+        public List<string> ProseInputs { get; } = [];
         public List<ModelTier> ProseTiers { get; } = [];
         public List<ModelTier> JsonTiers { get; } = [];
 
@@ -228,6 +288,7 @@ public class IdeaToPromptViewModelTests
             CancellationToken cancellationToken = default,
             ModelTier tier = ModelTier.Opus)
         {
+            ProseInputs.Add(idea);
             ProseTiers.Add(tier);
             return Task.FromResult(prose);
         }
@@ -271,6 +332,19 @@ public class IdeaToPromptViewModelTests
             CancellationToken cancellationToken = default,
             ModelTier tier = ModelTier.Opus) =>
             Task.FromResult(PromptBuilderResult.Fail("not reached in the cancellation test"));
+    }
+
+    private sealed class FakeVisionObserver(VisionObservationResult result) : IVisionObservationService
+    {
+        public List<VisionObservationRequest> Requests { get; } = [];
+
+        public Task<VisionObservationResult> ObserveAsync(
+            VisionObservationRequest request,
+            CancellationToken ct = default)
+        {
+            Requests.Add(request);
+            return Task.FromResult(result);
+        }
     }
 
     // A GeneratorViewModel built from bare mocks — mirrors GeneratorViewModelTests; we only touch

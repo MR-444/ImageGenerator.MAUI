@@ -48,14 +48,17 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
         "Describe an idea" prompt builder — private overrides
         ======================================================
 
-        The builder runs in two passes, each with its own override file you can drop in this folder:
+        The builder can start from text or from a reference image. Each pass has its own override file
+        you can drop in this folder:
 
-          1. vpe-prompt.md   — Pass 1 (VPE). Turns your idea into a normal PROSE image prompt that
-                               works directly with every plain-prompt model (Pollinations, Flux,
-                               gpt-image, nano-banana) and reads well to a human.
-          2. system-prompt.md — Pass 2 (Ideogram JSON adapter). Maps that prose onto the schema-valid
-                               Ideogram V4 structured caption. Only runs when "Also build an Ideogram
-                               V4 JSON prompt" is ticked.
+          1. image-observation.md — Image source pre-pass. Describes a reference image factually before
+                                    the normal VPE pass shapes it into a render prompt.
+          2. vpe-prompt.md        — Pass 1 (VPE). Turns your idea (or image observation) into a normal
+                                    PROSE image prompt that works directly with every plain-prompt model
+                                    (Pollinations, Flux, gpt-image, nano-banana) and reads well to a human.
+          3. system-prompt.md     — Pass 2 (Ideogram JSON adapter). Maps that prose onto the schema-valid
+                                    Ideogram V4 structured caption. Only runs when "Also build an Ideogram
+                                    V4 JSON prompt" is ticked.
 
         When a file is present it REPLACES the matching bundled prompt verbatim; otherwise the app's
         bundled clean-room prompt is used. The prose pass always runs; the JSON pass is optional.

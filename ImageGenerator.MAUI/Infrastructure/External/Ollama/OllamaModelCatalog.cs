@@ -8,10 +8,13 @@ namespace ImageGenerator.MAUI.Infrastructure.External.Ollama;
 
 /// <summary>
 /// Reads <c>GET {baseUrl}/api/tags</c> on the local Ollama server and returns the installed model tags.
-/// Uses the shared "ollama" named client (so it inherits the generous timeout/retry).
+/// Uses a short-timeout named client: refresh should fail quickly when Ollama is offline, unlike
+/// generation calls that need a generous cold-load budget.
 /// </summary>
 public sealed class OllamaModelCatalog : IOllamaModelCatalog
 {
+    public const string HttpClientName = "ollama-catalog";
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<OllamaModelCatalog> _logger;
 
@@ -23,11 +26,17 @@ public sealed class OllamaModelCatalog : IOllamaModelCatalog
 
     public async Task<IReadOnlyList<string>> ListModelsAsync(string baseUrl, CancellationToken ct = default)
     {
+        var infos = await ListModelInfosAsync(baseUrl, ct);
+        return infos.Select(i => i.Name).ToArray();
+    }
+
+    public async Task<IReadOnlyList<OllamaModelInfo>> ListModelInfosAsync(string baseUrl, CancellationToken ct = default)
+    {
         if (string.IsNullOrWhiteSpace(baseUrl))
             throw new InvalidOperationException("No Ollama server URL is set.");
 
         var endpoint = $"{baseUrl.TrimEnd('/')}/api/tags";
-        using var client = _httpClientFactory.CreateClient(OllamaChatTransport.HttpClientName);
+        using var client = _httpClientFactory.CreateClient(HttpClientName);
         using var response = await client.GetAsync(endpoint, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
 
@@ -38,18 +47,30 @@ public sealed class OllamaModelCatalog : IOllamaModelCatalog
         }
 
         using var doc = JsonDocument.Parse(body);
-        var names = new List<string>();
+        var infos = new List<OllamaModelInfo>();
         if (doc.RootElement.TryGetProperty("models", out var models) && models.ValueKind == JsonValueKind.Array)
         {
             foreach (var model in models.EnumerateArray())
             {
                 if (model.TryGetProperty("name", out var name) && name.GetString() is { Length: > 0 } n)
-                    names.Add(n);
+                {
+                    var capabilities = new List<string>();
+                    if (model.TryGetProperty("capabilities", out var caps) && caps.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var cap in caps.EnumerateArray())
+                        {
+                            if (cap.GetString() is { Length: > 0 } c)
+                                capabilities.Add(c);
+                        }
+                    }
+
+                    infos.Add(new OllamaModelInfo(n, capabilities));
+                }
             }
         }
 
-        names.Sort(StringComparer.OrdinalIgnoreCase);
-        return names;
+        infos.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+        return infos;
     }
 
     // Short budget: a dead/slow host must not stall the mutation→render handoff. The unload is a

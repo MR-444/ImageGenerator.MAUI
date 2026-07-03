@@ -36,6 +36,8 @@ public partial class GeneratorViewModel : ObservableObject
     private readonly IOllamaModelCatalog? _ollamaModelCatalog;
     private readonly IComfyUiVramService? _comfyVram;
     private readonly IGpuGate? _gpuGate;
+    private readonly IOpenRouterTokenStore? _openRouterTokenStore;
+    private readonly IOpenRouterModelCatalog? _openRouterModelCatalog;
     private readonly ILogger<GeneratorViewModel> _logger;
 
     [ObservableProperty]
@@ -221,8 +223,61 @@ public partial class GeneratorViewModel : ObservableObject
     partial void OnOllamaModelChanged(string value) =>
         _uiStateStore.PersistOllamaModel(value ?? string.Empty);
 
+    [ObservableProperty]
+    private string _ollamaVisionModel = ModelConstants.Ollama.DefaultModel;
+
+    partial void OnOllamaVisionModelChanged(string value) =>
+        _uiStateStore.PersistOllamaVisionModel(value ?? string.Empty);
+
+    [ObservableProperty]
+    private string _openRouterVisionModel = ModelConstants.OpenRouter.DefaultVisionModel;
+
+    partial void OnOpenRouterVisionModelChanged(string value) =>
+        _uiStateStore.PersistOpenRouterVisionModel(value ?? string.Empty);
+
+    [ObservableProperty]
+    private bool _openRouterVisionFreeOnly = true;
+
+    partial void OnOpenRouterVisionFreeOnlyChanged(bool value) =>
+        _uiStateStore.PersistOpenRouterVisionFreeOnly(value);
+
+    public ObservableCollection<string> OpenRouterVisionModels { get; } = [];
+
+    [RelayCommand]
+    private async Task RefreshOpenRouterVisionModelsAsync()
+    {
+        if (_openRouterModelCatalog is null) return;
+        try
+        {
+            var models = await _openRouterModelCatalog.ListVisionModelsAsync(OpenRouterVisionFreeOnly);
+            var current = OpenRouterVisionModel;
+
+            OpenRouterVisionModels.Clear();
+            foreach (var model in models)
+                OpenRouterVisionModels.Add(model.Id);
+
+            if (!OpenRouterVisionFreeOnly
+                && !string.IsNullOrWhiteSpace(current)
+                && !OpenRouterVisionModels.Contains(current))
+                OpenRouterVisionModels.Add(current);
+
+            SetStatus(models.Count > 0
+                ? $"Found {models.Count} OpenRouter vision model(s){(OpenRouterVisionFreeOnly ? " with free pricing." : ".")}"
+                : "No OpenRouter vision models matched the current filter.",
+                models.Count > 0 ? StatusKind.Success : StatusKind.Warning);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Couldn't list OpenRouter vision models");
+            SetStatus($"Couldn't refresh OpenRouter models: {ex.Message}", StatusKind.Error);
+        }
+    }
+
     /// <summary>Installed Ollama models for the Settings picker; filled by <see cref="RefreshOllamaModelsCommand"/>.</summary>
     public ObservableCollection<string> OllamaModels { get; } = [];
+
+    /// <summary>Installed Ollama models that advertise both vision and completion capabilities.</summary>
+    public ObservableCollection<string> OllamaVisionModels { get; } = [];
 
     /// <summary>Pull the model list from the configured Ollama server into the picker.</summary>
     [RelayCommand]
@@ -231,18 +286,28 @@ public partial class GeneratorViewModel : ObservableObject
         if (_ollamaModelCatalog is null) return;
         try
         {
-            var models = await _ollamaModelCatalog.ListModelsAsync(OllamaBaseUrl);
+            var modelInfos = await _ollamaModelCatalog.ListModelInfosAsync(OllamaBaseUrl);
+            var models = modelInfos.Select(m => m.Name).ToArray();
+            var visionModels = modelInfos
+                .Where(m => m.SupportsCompletion && m.SupportsVision)
+                .Select(m => m.Name)
+                .ToArray();
 
             var current = OllamaModel;
+            var currentVision = OllamaVisionModel;
             OllamaModels.Clear();
             foreach (var m in models) OllamaModels.Add(m);
+            OllamaVisionModels.Clear();
+            foreach (var m in visionModels) OllamaVisionModels.Add(m);
             // Preserve the saved selection even if the server doesn't list it (e.g. typo / not pulled yet).
             if (!string.IsNullOrWhiteSpace(current) && !OllamaModels.Contains(current))
                 OllamaModels.Add(current);
+            if (!string.IsNullOrWhiteSpace(currentVision) && !OllamaVisionModels.Contains(currentVision))
+                OllamaVisionModels.Add(currentVision);
 
-            SetStatus(models.Count > 0
-                ? $"Found {models.Count} Ollama model(s)."
-                : "No models installed on the Ollama server.", models.Count > 0 ? StatusKind.Success : StatusKind.Warning);
+            SetStatus(models.Length > 0
+                ? $"Found {models.Length} Ollama model(s), {visionModels.Length} with vision."
+                : "No models installed on the Ollama server.", models.Length > 0 ? StatusKind.Success : StatusKind.Warning);
         }
         catch (Exception ex)
         {
@@ -833,7 +898,9 @@ public partial class GeneratorViewModel : ObservableObject
         ILogger<GeneratorViewModel> logger,
         IOllamaModelCatalog? ollamaModelCatalog = null,
         IComfyUiVramService? comfyVram = null,
-        IGpuGate? gpuGate = null)
+        IGpuGate? gpuGate = null,
+        IOpenRouterTokenStore? openRouterTokenStore = null,
+        IOpenRouterModelCatalog? openRouterModelCatalog = null)
     {
         _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
@@ -851,6 +918,8 @@ public partial class GeneratorViewModel : ObservableObject
         _ollamaModelCatalog = ollamaModelCatalog;
         _comfyVram = comfyVram;
         _gpuGate = gpuGate;
+        _openRouterTokenStore = openRouterTokenStore;
+        _openRouterModelCatalog = openRouterModelCatalog;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         if (promptBatchParser is null) throw new ArgumentNullException(nameof(promptBatchParser));
 
@@ -1060,6 +1129,16 @@ public partial class GeneratorViewModel : ObservableObject
                         + "console.anthropic.com. Stored in OS secure storage.",
             store: anthropicTokenStore,
             syncToParameters: static _ => { }));
+        if (_openRouterTokenStore is not null)
+        {
+            TokenProviders.Add(new TokenProviderViewModel(
+                key: "openrouter",
+                displayName: "OpenRouter",
+                placeholder: "Paste your OpenRouter API key…",
+                helperText: "Required when image observation uses OpenRouter. The model id is configured below.",
+                store: _openRouterTokenStore,
+                syncToParameters: static _ => { }));
+        }
         _selectedTokenProvider = TokenProviders[0];
     }
 
@@ -1590,9 +1669,28 @@ public partial class GeneratorViewModel : ObservableObject
         {
             OllamaModel = savedOllamaModel;
         }
+
+        var savedOllamaVisionModel = _uiStateStore.LoadOllamaVisionModel();
+        if (!string.IsNullOrEmpty(savedOllamaVisionModel))
+        {
+            OllamaVisionModel = savedOllamaVisionModel;
+        }
         // Seed the picker with the current model so it shows a value before the first live refresh.
         if (!string.IsNullOrWhiteSpace(OllamaModel) && !OllamaModels.Contains(OllamaModel))
             OllamaModels.Add(OllamaModel);
+        if (!string.IsNullOrWhiteSpace(OllamaVisionModel) && !OllamaVisionModels.Contains(OllamaVisionModel))
+            OllamaVisionModels.Add(OllamaVisionModel);
+
+        var savedOpenRouterVisionModel = _uiStateStore.LoadOpenRouterVisionModel();
+        if (!string.IsNullOrEmpty(savedOpenRouterVisionModel))
+        {
+            OpenRouterVisionModel = savedOpenRouterVisionModel;
+        }
+        OpenRouterVisionFreeOnly = _uiStateStore.LoadOpenRouterVisionFreeOnly();
+        if (!OpenRouterVisionFreeOnly
+            && !string.IsNullOrWhiteSpace(OpenRouterVisionModel)
+            && !OpenRouterVisionModels.Contains(OpenRouterVisionModel))
+            OpenRouterVisionModels.Add(OpenRouterVisionModel);
 
         // Default-on; only flips the field when the user previously turned it off (OnChanged re-persist is
         // a harmless echo — nothing else writes this field).

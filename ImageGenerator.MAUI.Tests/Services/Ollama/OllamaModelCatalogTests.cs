@@ -30,6 +30,34 @@ public sealed class OllamaModelCatalogTests
     }
 
     [Fact]
+    public async Task ListModelInfosAsync_UsesCatalogClientAndParsesCapabilities()
+    {
+        var factory = new CapturingFactory(new HttpClient(new JsonHandler(
+            """{"models":[{"name":"qwen3-vl","capabilities":["vision","completion"]},{"name":"nomic","capabilities":["embedding"]}]}""")));
+        var catalog = new OllamaModelCatalog(factory, NullLogger<OllamaModelCatalog>.Instance);
+
+        var models = await catalog.ListModelInfosAsync("http://fireengine:11434");
+
+        factory.Names.Should().ContainSingle().Which.Should().Be(OllamaModelCatalog.HttpClientName);
+        models.Should().HaveCount(2);
+        models[0].Name.Should().Be("nomic", "model names are sorted for picker stability");
+        models[1].Name.Should().Be("qwen3-vl");
+        models[1].SupportsVision.Should().BeTrue();
+        models[1].SupportsCompletion.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UnloadAsync_StillUsesLongGenerationClient()
+    {
+        var factory = new CapturingFactory(new HttpClient(new JsonHandler("{}")));
+        var catalog = new OllamaModelCatalog(factory, NullLogger<OllamaModelCatalog>.Instance);
+
+        await catalog.UnloadAsync("http://fireengine:11434", "qwen3-vl");
+
+        factory.Names.Should().ContainSingle().Which.Should().Be(OllamaChatTransport.HttpClientName);
+    }
+
+    [Fact]
     public async Task UnloadAsync_PostsKeepAliveZeroForTheModel()
     {
         var catalog = BuildCatalog(() => new HttpResponseMessage(System.Net.HttpStatusCode.OK));
@@ -61,5 +89,29 @@ public sealed class OllamaModelCatalogTests
         var act = async () => await catalog.UnloadAsync("http://fireengine:11434", "qwen3.5:27b");
 
         await act.Should().NotThrowAsync("the unload is a best-effort GPU-free, not part of the result");
+    }
+
+    private sealed class CapturingFactory(HttpClient client) : IHttpClientFactory
+    {
+        public List<string> Names { get; } = [];
+
+        public HttpClient CreateClient(string name)
+        {
+            Names.Add(name);
+            return client;
+        }
+    }
+
+    private sealed class JsonHandler(string json) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(json)
+            });
+        }
     }
 }

@@ -20,13 +20,15 @@ public partial class App
     private readonly IPollinationsTokenStore _pollinationsTokenStore;
     private readonly IComfyUiAuthStore _comfyUiAuthStore;
     private readonly ICivitaiTokenStore _civitaiTokenStore;
+    private readonly IOpenRouterTokenStore _openRouterTokenStore;
 
     public App(
         IUiStateStore uiStateStore,
         IApiTokenStore apiTokenStore,
         IPollinationsTokenStore pollinationsTokenStore,
         IComfyUiAuthStore comfyUiAuthStore,
-        ICivitaiTokenStore civitaiTokenStore)
+        ICivitaiTokenStore civitaiTokenStore,
+        IOpenRouterTokenStore openRouterTokenStore)
     {
         InitializeComponent();
         _uiStateStore = uiStateStore;
@@ -34,6 +36,7 @@ public partial class App
         _pollinationsTokenStore = pollinationsTokenStore;
         _comfyUiAuthStore = comfyUiAuthStore;
         _civitaiTokenStore = civitaiTokenStore;
+        _openRouterTokenStore = openRouterTokenStore;
 
         // Apply the saved color theme before the first window paints, so a forced Light/Dark pick
         // takes effect immediately on launch rather than flashing the OS theme first. Default
@@ -99,6 +102,7 @@ public partial class App
             _pollinationsTokenStore.FlushPendingWrites();
             _comfyUiAuthStore.FlushPendingWrites();
             _civitaiTokenStore.FlushPendingWrites();
+            _openRouterTokenStore.FlushPendingWrites();
             CrashLogger.WriteShutdownLine();
         };
 

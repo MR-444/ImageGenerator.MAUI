@@ -7,6 +7,12 @@ using Microsoft.Extensions.Logging;
 
 namespace ImageGenerator.MAUI.Presentation.ViewModels;
 
+public enum IdeaSourceMode
+{
+    Text,
+    Image
+}
+
 /// <summary>
 /// Drives the "Describe an idea…" front door as a two-pass flow. Pass 1 (always) turns the idea into a
 /// normal <em>prose</em> prompt via <see cref="IPromptBuilderService.BuildProseAsync"/> — usable on its
@@ -24,6 +30,7 @@ public partial class IdeaToPromptViewModel : ObservableObject
     private readonly GeneratorViewModel? _generator;
     private readonly IOllamaModelCatalog? _ollamaCatalog;
     private readonly IGpuGate? _gpuGate;
+    private readonly IVisionObservationService? _visionObserver;
     private readonly ILogger<IdeaToPromptViewModel> _logger;
 
     private V4JsonPrompt? _builtJson;
@@ -39,7 +46,8 @@ public partial class IdeaToPromptViewModel : ObservableObject
         ILogger<IdeaToPromptViewModel> logger,
         GeneratorViewModel? generator = null,
         IOllamaModelCatalog? ollamaCatalog = null,
-        IGpuGate? gpuGate = null)
+        IGpuGate? gpuGate = null,
+        IVisionObservationService? visionObserver = null)
     {
         _builder = builder ?? throw new ArgumentNullException(nameof(builder));
         _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
@@ -47,6 +55,7 @@ public partial class IdeaToPromptViewModel : ObservableObject
         _generator = generator;
         _ollamaCatalog = ollamaCatalog;
         _gpuGate = gpuGate;
+        _visionObserver = visionObserver;
 
         // Default the JSON pass on for structured-JSON models (Ideogram V4 / ComfyUI), off otherwise.
         BuildJson = generator?.SupportsJsonPromptEditor ?? false;
@@ -55,6 +64,51 @@ public partial class IdeaToPromptViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
     private string _idea = string.Empty;
+
+    public IReadOnlyList<IdeaSourceMode> SourceModeOptions { get; } = [IdeaSourceMode.Text, IdeaSourceMode.Image];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsTextSource))]
+    [NotifyPropertyChangedFor(nameof(IsImageSource))]
+    [NotifyPropertyChangedFor(nameof(ShowObservation))]
+    [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
+    private IdeaSourceMode _sourceMode = IdeaSourceMode.Text;
+
+    public bool IsTextSource => SourceMode == IdeaSourceMode.Text;
+    public bool IsImageSource => SourceMode == IdeaSourceMode.Image;
+
+    public IReadOnlyList<VisionObservationProvider> VisionProviderOptions { get; } =
+        [VisionObservationProvider.LocalOllama, VisionObservationProvider.OpenRouter];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLocalVisionProvider))]
+    [NotifyPropertyChangedFor(nameof(IsOpenRouterVisionProvider))]
+    private VisionObservationProvider _selectedVisionProvider = VisionObservationProvider.LocalOllama;
+
+    public bool IsLocalVisionProvider => SelectedVisionProvider == VisionObservationProvider.LocalOllama;
+    public bool IsOpenRouterVisionProvider => SelectedVisionProvider == VisionObservationProvider.OpenRouter;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasReferenceImage))]
+    [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
+    private string _referenceImageBase64 = string.Empty;
+
+    [ObservableProperty]
+    private ImageSource? _referenceImagePreview;
+
+    [ObservableProperty]
+    private string _referenceImageFileName = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasObservation))]
+    [NotifyPropertyChangedFor(nameof(ShowObservation))]
+    private string _observedImageDescription = string.Empty;
+
+    public bool HasReferenceImage => !string.IsNullOrWhiteSpace(ReferenceImageBase64);
+
+    public bool HasObservation => !string.IsNullOrWhiteSpace(ObservedImageDescription);
+
+    public bool ShowObservation => IsImageSource && HasObservation;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
@@ -108,7 +162,57 @@ public partial class IdeaToPromptViewModel : ObservableObject
     /// <summary>Drives the result card's visibility — prose exists once a build has succeeded.</summary>
     public bool HasProse => !string.IsNullOrEmpty(Prose);
 
-    private bool CanBuild() => !IsBusy && !string.IsNullOrWhiteSpace(Idea);
+    private bool CanBuild() =>
+        !IsBusy
+        && (IsTextSource
+            ? !string.IsNullOrWhiteSpace(Idea)
+            : HasReferenceImage);
+
+    [RelayCommand]
+    private async Task PickReferenceImageAsync()
+    {
+        if (IsBusy) return;
+
+        var result = await FilePicker.PickAsync(new PickOptions
+        {
+            PickerTitle = "Pick a reference image",
+            FileTypes = FilePickerFileType.Images
+        });
+
+        if (result is null)
+            return;
+
+        await using var stream = await result.OpenReadAsync();
+        using var memoryStream = new MemoryStream();
+        await stream.CopyToAsync(memoryStream);
+        SetReferenceImage(result.FileName, memoryStream.ToArray(), result.FullPath, createPreview: true);
+        SetStatus($"Reference image ready: {result.FileName}", StatusKind.Info);
+    }
+
+    [RelayCommand]
+    private void ClearReferenceImage()
+    {
+        ReferenceImageBase64 = string.Empty;
+        ReferenceImagePreview = null;
+        ReferenceImageFileName = string.Empty;
+        ObservedImageDescription = string.Empty;
+        SetStatus("Reference image cleared.", StatusKind.Info);
+    }
+
+    internal void SetReferenceImageForTest(string fileName, byte[] bytes)
+    {
+        SetReferenceImage(fileName, bytes, sourcePath: null, createPreview: false);
+    }
+
+    private void SetReferenceImage(string fileName, byte[] bytes, string? sourcePath, bool createPreview)
+    {
+        ReferenceImageBase64 = Convert.ToBase64String(bytes);
+        ReferenceImagePreview = createPreview ? ImageSource.FromStream(() => new MemoryStream(bytes)) : null;
+        ReferenceImageFileName = string.IsNullOrWhiteSpace(fileName)
+            ? sourcePath is { Length: > 0 } path ? Path.GetFileName(path) : "reference image"
+            : fileName;
+        ObservedImageDescription = string.Empty;
+    }
 
     [RelayCommand(CanExecute = nameof(CanBuild))]
     private async Task BuildAsync()
@@ -123,7 +227,8 @@ public partial class IdeaToPromptViewModel : ObservableObject
         HasJson = false;
         _builtJson = null;
         var tier = SelectedModelTier;
-        var gpuGated = tier == ModelTier.Local
+        var usesLocalVision = IsImageSource && SelectedVisionProvider == VisionObservationProvider.LocalOllama;
+        var gpuGated = (tier == ModelTier.Local || usesLocalVision)
             && _gpuGate is not null
             && GpuColocation.SameHost(_generator?.ComfyUiBaseUrl, ResolveOllamaBaseUrl());
         IDisposable? gpuLease = null;
@@ -136,10 +241,38 @@ public partial class IdeaToPromptViewModel : ObservableObject
                 if (_generator is not null) _generator.IsGpuBusy = true;
             }
 
+            var ideaForPrompt = Idea.Trim();
+            if (IsImageSource)
+            {
+                if (_visionObserver is null)
+                {
+                    SetStatus("Image observation is not available in this build.", StatusKind.Error);
+                    return;
+                }
+
+                SetStatus($"Asking {VisionProviderDisplay(SelectedVisionProvider)} to observe the reference image…", StatusKind.Info);
+                var observationResult = await _visionObserver.ObserveAsync(
+                    new VisionObservationRequest(
+                        SelectedVisionProvider,
+                        ReferenceImageBase64,
+                        ReferenceImageFileName,
+                        ResolveVisionModel(SelectedVisionProvider)),
+                    token);
+
+                if (!observationResult.Success || observationResult.Observation is null)
+                {
+                    SetStatus(observationResult.Error ?? "Couldn't observe the reference image.", StatusKind.Error);
+                    return;
+                }
+
+                ObservedImageDescription = observationResult.Observation;
+                ideaForPrompt = BuildIdeaFromObservation(ObservedImageDescription, Idea);
+            }
+
             SetStatus($"Asking {ModelDisplay(tier)} to write a prompt…", StatusKind.Info);
 
             // Pass 1 (always): idea → prose.
-            var proseResult = await _builder.BuildProseAsync(Idea, token, tier);
+            var proseResult = await _builder.BuildProseAsync(ideaForPrompt, token, tier);
             if (!proseResult.Success || proseResult.Prose is null)
             {
                 SetStatus(proseResult.Error ?? "Couldn't build a prompt.", StatusKind.Error);
@@ -181,8 +314,13 @@ public partial class IdeaToPromptViewModel : ObservableObject
         }
         finally
         {
-            if (tier == ModelTier.Local && _ollamaCatalog is not null)
-                await _ollamaCatalog.UnloadAsync(ResolveOllamaBaseUrl(), ResolveOllamaModel());
+            if (_ollamaCatalog is not null)
+            {
+                if (tier == ModelTier.Local)
+                    await _ollamaCatalog.UnloadAsync(ResolveOllamaBaseUrl(), ResolveOllamaModel());
+                if (usesLocalVision)
+                    await _ollamaCatalog.UnloadAsync(ResolveOllamaBaseUrl(), ResolveOllamaVisionModel());
+            }
 
             gpuLease?.Dispose();
             if (gpuGated && _generator is not null) _generator.IsGpuBusy = false;
@@ -299,4 +437,33 @@ public partial class IdeaToPromptViewModel : ObservableObject
 
     private string ResolveOllamaModel() =>
         _generator?.OllamaModel is { Length: > 0 } m ? m : ModelConstants.Ollama.DefaultModel;
+
+    private string ResolveOllamaVisionModel() =>
+        _generator?.OllamaVisionModel is { Length: > 0 } m
+            ? m
+            : ResolveOllamaModel();
+
+    private string ResolveVisionModel(VisionObservationProvider provider) =>
+        provider == VisionObservationProvider.OpenRouter
+            ? _generator?.OpenRouterVisionModel is { Length: > 0 } m
+                ? m
+                : ModelConstants.OpenRouter.DefaultVisionModel
+            : ResolveOllamaVisionModel();
+
+    private static string VisionProviderDisplay(VisionObservationProvider provider) => provider switch
+    {
+        VisionObservationProvider.OpenRouter => "OpenRouter",
+        _ => "local Ollama"
+    };
+
+    private static string BuildIdeaFromObservation(string observation, string userNotes)
+    {
+        var trimmedNotes = userNotes.Trim();
+        return string.IsNullOrWhiteSpace(trimmedNotes)
+            ? "Use this observed reference-image description as the idea source:\n\n" + observation.Trim()
+            : "Use this observed reference-image description as the idea source:\n\n"
+              + observation.Trim()
+              + "\n\nUser notes to honor without inventing unrelated changes:\n"
+              + trimmedNotes;
+    }
 }
