@@ -6,7 +6,7 @@
              x:Class="ImageGenerator.MAUI.Presentation.Views.SettingsPage"
              x:DataType="vm:GeneratorViewModel"
              Title="Settings"
-             Shell.NavBarIsVisible="True"
+             Shell.NavBarIsVisible="False"
              Padding="0">
     <ContentPage.Resources>
         <ResourceDictionary>
@@ -47,6 +47,8 @@
                     <Label Text="Choose the color theme. System follows your Windows setting."
                            Style="{StaticResource HelperText}" />
                     <Picker SelectedIndex="{Binding AppThemeIndex, Mode=TwoWay}"
+                            MaximumWidthRequest="180"
+                            HorizontalOptions="Start"
                             SemanticProperties.Description="Color theme"
                             AutomationId="AppThemePicker">
                         <Picker.ItemsSource>
@@ -70,6 +72,8 @@
 
                     <Picker ItemsSource="{Binding TokenProviders}"
                             SelectedItem="{Binding SelectedTokenProvider}"
+                            MaximumWidthRequest="260"
+                            HorizontalOptions="Start"
                             AutomationId="TokenProviderPicker">
                         <Picker.ItemDisplayBinding>
                             <Binding Path="DisplayName" x:DataType="vm:TokenProviderViewModel" />
@@ -148,6 +152,8 @@
                                 ItemsSource="{Binding OllamaModels}"
                                 SelectedItem="{Binding OllamaModel, Mode=TwoWay}"
                                 Title="Refresh, then pick a model…"
+                                MaximumWidthRequest="360"
+                                HorizontalOptions="Start"
                                 SemanticProperties.Description="Pick an installed Ollama model"
                                 AutomationId="OllamaModelPicker" />
                         <Button Grid.Column="1"
@@ -161,6 +167,8 @@
                     <Picker ItemsSource="{Binding OllamaVisionModels}"
                             SelectedItem="{Binding OllamaVisionModel, Mode=TwoWay}"
                             Title="Refresh, then pick a vision model…"
+                            MaximumWidthRequest="360"
+                            HorizontalOptions="Start"
                             SemanticProperties.Description="Pick an installed Ollama vision model"
                             AutomationId="OllamaVisionModelPicker" />
                     <Label Text="A large model cold-loads into VRAM on the first call — expect the first local response to take a few minutes."
@@ -180,6 +188,8 @@
                                 ItemsSource="{Binding OpenRouterVisionModels}"
                                 SelectedItem="{Binding OpenRouterVisionModel, Mode=TwoWay}"
                                 Title="Refresh, then pick a model…"
+                                MaximumWidthRequest="360"
+                                HorizontalOptions="Start"
                                 SemanticProperties.Description="OpenRouter vision model id"
                                 AutomationId="OpenRouterVisionModelPicker" />
                         <Button Grid.Column="1"

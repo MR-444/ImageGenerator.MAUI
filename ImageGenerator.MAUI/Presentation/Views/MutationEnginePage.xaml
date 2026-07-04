@@ -8,7 +8,7 @@
              x:Class="ImageGenerator.MAUI.Presentation.Views.MutationEnginePage"
              x:DataType="vm:MutationEngineViewModel"
              Title="Mutation engine"
-             Shell.NavBarIsVisible="True"
+             Shell.NavBarIsVisible="False"
              Padding="0">
     <ContentPage.Resources>
         <ResourceDictionary>
@@ -20,7 +20,7 @@
     <!-- Fixed header (row 0) and action bar (row 2); the two panes in row 1 scroll
          independently, so Generate/Mutate and the status line never scroll out of view. -->
     <Grid RowDefinitions="Auto,*,Auto"
-          Padding="16"
+          Padding="24,16,24,12"
           RowSpacing="12">
 
         <!-- Header -->
@@ -83,6 +83,8 @@
                                     ItemsSource="{Binding AnchorPresets}"
                                     ItemDisplayBinding="{Binding Name, x:DataType=lib:AnchorPreset}"
                                     SelectedItem="{Binding SelectedAnchorPreset}"
+                                    MaximumWidthRequest="360"
+                                    HorizontalOptions="Start"
                                     AutomationId="MutationAnchorPresetPicker" />
                             <Label Text="Presets prefill the steer with a starting direction — pick one, then edit." Style="{StaticResource HelperText}" />
                         </VerticalStackLayout>
@@ -94,6 +96,8 @@
                             <Label Text="Axis to vary" Style="{StaticResource FieldLabel}" />
                             <Picker ItemsSource="{Binding AxisOptions}"
                                     SelectedItem="{Binding SelectedAxis}"
+                                    MaximumWidthRequest="180"
+                                    HorizontalOptions="Start"
                                     AutomationId="MutationAxisPicker" />
                             <Label Text="LOOK varies style/ornament; SCENE varies background/placement/elements. One axis per run."
                                    Style="{StaticResource HelperText}" />
@@ -115,6 +119,8 @@
                             <Label Text="Saved style (creative direction)" Style="{StaticResource FieldLabel}" />
                             <Picker ItemsSource="{Binding StyleNames}"
                                     SelectedItem="{Binding SelectedStyleName}"
+                                    MaximumWidthRequest="320"
+                                    HorizontalOptions="Start"
                                     AutomationId="MutationStylePinPicker" />
                             <Label Text="Locks variants to a saved look (palette, medium, rendering). “Any style (random)” varies it per variant."
                                    Style="{StaticResource HelperText}" />
@@ -132,7 +138,11 @@
                     <Border Style="{StaticResource Card}" VerticalOptions="Start">
                         <VerticalStackLayout Spacing="12">
                             <Label Text="Number of variants (1–100)" Style="{StaticResource FieldLabel}" />
-                            <Entry Text="{Binding Count}" Keyboard="Numeric" AutomationId="MutationCountEntry">
+                            <Entry Text="{Binding Count}"
+                                   Keyboard="Numeric"
+                                   MaximumWidthRequest="120"
+                                   HorizontalOptions="Start"
+                                   AutomationId="MutationCountEntry">
                                 <Entry.Behaviors><behaviors:NumericOnlyBehavior /></Entry.Behaviors>
                             </Entry>
 
@@ -140,6 +150,8 @@
                                 <Label Text="Placement strength" Style="{StaticResource FieldLabel}" />
                                 <Picker ItemsSource="{Binding StrengthOptions}"
                                         SelectedItem="{Binding SelectedStrength}"
+                                        MaximumWidthRequest="180"
+                                        HorizontalOptions="Start"
                                         AutomationId="MutationStrengthPicker" />
                                 <Label Text="How far placement operators move boxes (subtle / moderate / bold = 2 / 5 / 10% of the grid)."
                                        Style="{StaticResource HelperText}" />
@@ -152,7 +164,7 @@
                             </HorizontalStackLayout>
 
                             <Label Text="Seed" Style="{StaticResource FieldLabel}" />
-                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                            <Grid ColumnDefinitions="180,Auto,Auto" ColumnSpacing="8">
                                 <Entry Grid.Column="0" Text="{Binding Seed}" Keyboard="Numeric" AutomationId="MutationSeedEntry">
                                     <Entry.Behaviors><behaviors:NumericOnlyBehavior /></Entry.Behaviors>
                                 </Entry>
@@ -198,6 +210,8 @@
                             <Label Text="Model &amp; cost" Style="{StaticResource FieldLabel}" />
                             <Picker ItemsSource="{Binding ModelTierOptions}"
                                     SelectedItem="{Binding SelectedModelTier}"
+                                    MaximumWidthRequest="220"
+                                    HorizontalOptions="Start"
                                     AutomationId="MutationModelTierPicker" />
                             <Label Text="Sonnet = affordable default · Opus = stronger/pricier · Local = free Ollama (round-trip only)."
                                    Style="{StaticResource HelperText}" />

@@ -100,6 +100,21 @@ public partial class GalleryPage
         }
     }
 
+    private void OnGallerySizeChanged(object? sender, EventArgs e)
+    {
+        if (sender is not CollectionView { Width: > 0, ItemsLayout: GridItemsLayout layout } view) return;
+
+        var span = view.Width switch
+        {
+            < 520 => 2,
+            < 760 => 3,
+            < 1280 => 4,
+            _ => 5
+        };
+        if (layout.Span != span)
+            layout.Span = span;
+    }
+
     private async void OnShowMetadataClicked(object? sender, EventArgs e)
     {
         try

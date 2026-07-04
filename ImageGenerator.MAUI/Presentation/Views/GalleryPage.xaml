@@ -8,7 +8,7 @@
              x:Class="ImageGenerator.MAUI.Presentation.Views.GalleryPage"
              x:DataType="vm:GalleryViewModel"
              Title="Gallery"
-             Shell.NavBarIsVisible="True"
+             Shell.NavBarIsVisible="False"
              Padding="0">
     <ContentPage.Resources>
         <ResourceDictionary>
@@ -19,7 +19,7 @@
     </ContentPage.Resources>
 
     <Grid RowDefinitions="Auto,Auto,Auto,*"
-          Padding="24"
+          Padding="24,16,24,12"
           RowSpacing="12">
 
         <!-- Header -->
@@ -38,7 +38,8 @@
                     <Label Text="Sort by:" Style="{StaticResource FieldLabel}" VerticalOptions="Center" />
                     <Picker ItemsSource="{Binding SortModes}"
                             SelectedItem="{Binding SelectedSortMode}"
-                            MinimumWidthRequest="180"
+                            MaximumWidthRequest="180"
+                            HorizontalOptions="Start"
                             AutomationId="GallerySortPicker" />
                 </HorizontalStackLayout>
             </VerticalStackLayout>
@@ -78,26 +79,30 @@
             <VerticalStackLayout Spacing="8">
                 <Label Text="Post selected images to CivitAI (as one draft post)"
                        Style="{StaticResource FieldLabel}" />
-                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
-                    <Entry Grid.Column="0"
+                <VerticalStackLayout Spacing="8">
+                    <Entry
                            Text="{Binding CivitaiModelRef}"
                            Placeholder="CivitAI model URL or version id — optional (blank posts to your profile)"
+                           MaximumWidthRequest="520"
+                           HorizontalOptions="Start"
                            VerticalOptions="Center"
                            AutomationId="GalleryCivitaiModelRefEntry" />
-                    <HorizontalStackLayout Grid.Column="1" Spacing="6" VerticalOptions="Center">
-                        <Switch IsToggled="{Binding CivitaiIncludeMeta}"
-                                AutomationId="GalleryCivitaiIncludeMetaSwitch" />
-                        <Label Text="Include generation data"
-                               Style="{StaticResource HelperText}"
-                               VerticalOptions="Center" />
-                    </HorizontalStackLayout>
-                    <Button Grid.Column="2"
-                            Text="Post to CivitAI"
-                            Clicked="OnPostToCivitaiClicked"
-                            Style="{StaticResource PrimaryButton}"
-                            IsEnabled="{Binding IsPosting, Converter={StaticResource InverseBool}}"
-                            AutomationId="GalleryPostCivitaiButton" />
-                </Grid>
+                    <FlexLayout Direction="Row" Wrap="Wrap" AlignItems="Center">
+                        <HorizontalStackLayout Spacing="6" VerticalOptions="Center" Margin="0,0,12,8">
+                            <Switch IsToggled="{Binding CivitaiIncludeMeta}"
+                                    AutomationId="GalleryCivitaiIncludeMetaSwitch" />
+                            <Label Text="Include generation data"
+                                   Style="{StaticResource HelperText}"
+                                   VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                        <Button Text="Post to CivitAI"
+                                Clicked="OnPostToCivitaiClicked"
+                                Style="{StaticResource PrimaryButton}"
+                                IsEnabled="{Binding IsPosting, Converter={StaticResource InverseBool}}"
+                                Margin="0,0,0,8"
+                                AutomationId="GalleryPostCivitaiButton" />
+                    </FlexLayout>
+                </VerticalStackLayout>
                 <HorizontalStackLayout Spacing="8">
                     <ActivityIndicator IsRunning="{Binding IsPosting}"
                                        IsVisible="{Binding IsPosting}"
@@ -144,6 +149,7 @@
                         ItemsSource="{Binding Items}"
                         SelectionMode="Multiple"
                         SelectedItems="{Binding SelectedItems}"
+                        SizeChanged="OnGallerySizeChanged"
                         AutomationId="GalleryCollection">
             <CollectionView.ItemsLayout>
                 <GridItemsLayout Orientation="Vertical"

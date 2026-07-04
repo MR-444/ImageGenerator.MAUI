@@ -6,7 +6,7 @@
              x:Class="ImageGenerator.MAUI.Presentation.Views.IdeaToPromptPage"
              x:DataType="vm:IdeaToPromptViewModel"
              Title="Describe an idea"
-             Shell.NavBarIsVisible="True"
+             Shell.NavBarIsVisible="False"
              Padding="0">
     <ContentPage.Resources>
         <ResourceDictionary>
@@ -36,12 +36,16 @@
             </VerticalStackLayout>
         </Grid>
 
-        <Grid Grid.Row="1"
+        <Grid x:Name="WorkspaceGrid"
+              Grid.Row="1"
               ColumnDefinitions="5*,4*"
-              ColumnSpacing="16">
+              RowDefinitions="*"
+              ColumnSpacing="16"
+              RowSpacing="16"
+              SizeChanged="OnWorkspaceSizeChanged">
 
             <!-- LEFT PANE: source, idea, writer options. -->
-            <ScrollView Grid.Column="0">
+            <ScrollView x:Name="SourcePane" Grid.Column="0">
                 <VerticalStackLayout Spacing="12" Padding="0,0,12,8">
 
                     <Border Style="{StaticResource Card}" VerticalOptions="Start">
@@ -118,6 +122,8 @@
                                         SelectedItem="{Binding Generator.OllamaVisionModel, Mode=TwoWay}"
                                         Title="Refresh, then pick a vision model…"
                                         IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                        MaximumWidthRequest="360"
+                                        HorizontalOptions="Start"
                                         AutomationId="IdeaPromptOllamaVisionModelPicker" />
                                 <Button Grid.Column="1"
                                         Text="Refresh"
@@ -138,6 +144,8 @@
                                         SelectedItem="{Binding Generator.OpenRouterVisionModel, Mode=TwoWay}"
                                         Title="Refresh, then pick a model…"
                                         IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                        MaximumWidthRequest="360"
+                                        HorizontalOptions="Start"
                                         AutomationId="IdeaPromptOpenRouterVisionModelPicker" />
                                 <Button Grid.Column="1"
                                         Text="Refresh"
@@ -204,6 +212,8 @@
                                             SelectedItem="{Binding Generator.OllamaModel, Mode=TwoWay}"
                                             Title="Refresh, then pick a model…"
                                             IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                            MaximumWidthRequest="360"
+                                            HorizontalOptions="Start"
                                             AutomationId="IdeaPromptOllamaModelPicker" />
                                     <Button Grid.Column="1"
                                             Text="Refresh"
@@ -222,7 +232,7 @@
             </ScrollView>
 
             <!-- RIGHT PANE: observation and outputs. -->
-            <ScrollView Grid.Column="1">
+            <ScrollView x:Name="ResultPane" Grid.Column="1">
                 <VerticalStackLayout Spacing="12" Padding="0,0,0,8">
 
                     <Border Style="{StaticResource Card}"

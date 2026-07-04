@@ -8,7 +8,7 @@
              x:Class="ImageGenerator.MAUI.Presentation.Views.IdeogramStructureEditorPage"
              x:DataType="vm:IdeogramStructureEditorViewModel"
              Title="Ideogram structure editor"
-             Shell.NavBarIsVisible="True"
+             Shell.NavBarIsVisible="False"
              Padding="0">
     <ContentPage.Resources>
         <ResourceDictionary>
@@ -18,10 +18,10 @@
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <!-- Three-pane workspace: inspector, canvas stage, JSON/output. -->
-    <Grid RowDefinitions="Auto,*"
+    <!-- Fixed header and action bar with a responsive three-pane workspace between them. -->
+    <Grid RowDefinitions="Auto,*,Auto"
           Padding="24,16,24,12"
-          RowSpacing="16">
+          RowSpacing="12">
 
         <!-- Header: back + title -->
         <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="12">
@@ -343,57 +343,16 @@
                         <VerticalStackLayout Spacing="12">
                             <Label Text="JSON output" Style="{StaticResource CardTitle}" />
 
-                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="8">
-                                <Button Grid.Row="0" Grid.Column="0"
-                                        Text="Apply"
-                                        Command="{Binding ApplyCommand}"
-                                        Style="{StaticResource PrimaryButton}"
-                                        SemanticProperties.Description="Validate and write the compact JSON into the generator's prompt box"
-                                        AutomationId="EditorApplyButton" />
-                                <Button Grid.Row="0" Grid.Column="1"
-                                        Text="Mutate…"
-                                        Command="{Binding MutateCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        SemanticProperties.Description="Hand this prompt to the mutation engine to generate variants"
-                                        AutomationId="EditorMutateButton" />
-
-                                <Button Grid.Row="1" Grid.Column="0"
-                                        Text="Enrich"
-                                        Command="{Binding EnrichFromLayoutCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
-                                        SemanticProperties.Description="Rewrite each element's description to reflect its spatial relationship to the others"
-                                        AutomationId="EditorEnrichButton" />
-                                <Picker Grid.Row="1" Grid.Column="1"
-                                        Title="Model"
+                            <VerticalStackLayout Spacing="8">
+                                <Label Text="Enrichment model" Style="{StaticResource FieldLabel}" />
+                                <Picker Title="Model"
                                         ItemsSource="{Binding EnrichTierOptions}"
                                         SelectedItem="{Binding EnrichTier, Mode=TwoWay}"
                                         IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
+                                        MaximumWidthRequest="220"
+                                        HorizontalOptions="Start"
                                         AutomationId="EditorEnrichTierPicker" />
-
-                                <Button Grid.Row="2" Grid.Column="0"
-                                        Text="Save JSON"
-                                        Command="{Binding SaveToFileCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        SemanticProperties.Description="Validate and export the pretty-printed JSON to the json-prompts folder"
-                                        AutomationId="EditorSaveJsonButton" />
-                                <Button Grid.Row="2" Grid.Column="1"
-                                        Text="Show folder"
-                                        Command="{Binding ShowExportInFolderCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        IsVisible="{Binding HasExportedPath}"
-                                        AutomationId="EditorShowExportButton" />
-                            </Grid>
-
-                            <HorizontalStackLayout Spacing="8" IsVisible="{Binding IsEnriching}">
-                                <ActivityIndicator IsRunning="{Binding IsEnriching}"
-                                                   WidthRequest="20" HeightRequest="20" VerticalOptions="Center" />
-                                <Label Text="Enriching…" VerticalOptions="Center" Style="{StaticResource HelperText}" />
-                                <Button Text="Cancel"
-                                        Command="{Binding CancelEnrichCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        AutomationId="EditorEnrichCancelButton" />
-                            </HorizontalStackLayout>
+                            </VerticalStackLayout>
 
                             <VerticalStackLayout Spacing="8" IsVisible="{Binding ShowEnrichLocalModel}">
                                 <Label Text="Local model (Ollama)" Style="{StaticResource FieldLabel}" />
@@ -414,27 +373,6 @@
                                 <Label Text="The Ollama server URL is shared with AI mutation and configured in Settings."
                                        Style="{StaticResource HelperText}" />
                             </VerticalStackLayout>
-
-                            <Label Text="{Binding StatusMessage}"
-                                   Style="{StaticResource StatusLabel}"
-                                   IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
-                                   LineBreakMode="WordWrap"
-                                   AutomationId="EditorStatusLabel">
-                                <Label.Triggers>
-                                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
-                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
-                                    </DataTrigger>
-                                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
-                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
-                                    </DataTrigger>
-                                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Warning}">
-                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
-                                    </DataTrigger>
-                                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Info}">
-                                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusInfoLight}, Dark={StaticResource StatusInfoDark}}" />
-                                    </DataTrigger>
-                                </Label.Triggers>
-                            </Label>
 
                             <Editor Text="{Binding JsonPreview, Mode=OneWay}"
                                     IsReadOnly="True"
@@ -537,6 +475,90 @@
                 </VerticalStackLayout>
             </ScrollView>
         </Grid>
+
+        <!-- ActionBar (fixed): validation/export/mutation actions stay reachable while editing. -->
+        <Border Grid.Row="2" Style="{StaticResource ActionBar}">
+            <Grid RowDefinitions="Auto,Auto"
+                  RowSpacing="4">
+                <FlexLayout Grid.Row="0"
+                            Direction="Row"
+                            Wrap="Wrap"
+                            AlignItems="Center">
+                <Button Text="Apply"
+                        Command="{Binding ApplyCommand}"
+                        Style="{StaticResource ActionPrimary}"
+                        MinimumWidthRequest="120"
+                        Margin="0,0,8,6"
+                        SemanticProperties.Description="Validate and write the compact JSON into the generator's prompt box"
+                        AutomationId="EditorApplyButton" />
+                <Button Text="Mutate..."
+                        Command="{Binding MutateCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        Margin="0,0,8,6"
+                        SemanticProperties.Description="Hand this prompt to the mutation engine to generate variants"
+                        AutomationId="EditorMutateButton" />
+                <Button Text="Enrich"
+                        Command="{Binding EnrichFromLayoutCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
+                        Margin="0,0,8,6"
+                        SemanticProperties.Description="Rewrite each element's description to reflect its spatial relationship to the others"
+                        AutomationId="EditorEnrichButton" />
+                <Button Text="Cancel enrich"
+                        Command="{Binding CancelEnrichCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        IsVisible="{Binding IsEnriching}"
+                        Margin="0,0,8,6"
+                        AutomationId="EditorEnrichCancelButton" />
+                <Button Text="Save JSON"
+                        Command="{Binding SaveToFileCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        Margin="0,0,8,6"
+                        SemanticProperties.Description="Validate and export the pretty-printed JSON to the json-prompts folder"
+                        AutomationId="EditorSaveJsonButton" />
+                <Button Text="Show folder"
+                        Command="{Binding ShowExportInFolderCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        IsVisible="{Binding HasExportedPath}"
+                        Margin="0,0,0,6"
+                        AutomationId="EditorShowExportButton" />
+                </FlexLayout>
+                <VerticalStackLayout Grid.Row="1"
+                                     Spacing="2"
+                                     VerticalOptions="Center">
+                    <HorizontalStackLayout Spacing="8" IsVisible="{Binding IsEnriching}">
+                        <ActivityIndicator IsRunning="{Binding IsEnriching}"
+                                           WidthRequest="20"
+                                           HeightRequest="20"
+                                           VerticalOptions="Center" />
+                        <Label Text="Enriching..."
+                               VerticalOptions="Center"
+                               Style="{StaticResource HelperText}" />
+                    </HorizontalStackLayout>
+                    <Label Text="{Binding StatusMessage}"
+                           Style="{StaticResource StatusLabel}"
+                           IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
+                           LineBreakMode="WordWrap"
+                           MaxLines="2"
+                           AutomationId="EditorStatusLabel">
+                        <Label.Triggers>
+                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Warning}">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
+                            </DataTrigger>
+                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Info}">
+                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusInfoLight}, Dark={StaticResource StatusInfoDark}}" />
+                            </DataTrigger>
+                        </Label.Triggers>
+                    </Label>
+                </VerticalStackLayout>
+            </Grid>
+        </Border>
 
     </Grid>
 </ContentPage>
