@@ -27,4 +27,16 @@ public partial class SettingsPage
         if (_viewModel.SelectedTokenProvider is { } provider)
             provider.Value = e.NewTextValue ?? string.Empty;
     }
+
+    private async void OnBackClicked(object? sender, EventArgs e)
+    {
+        try
+        {
+            await Shell.Current.GoToAsync("..");
+        }
+        catch
+        {
+            // Back is best-effort; a failed pop just leaves the user on the page.
+        }
+    }
 }

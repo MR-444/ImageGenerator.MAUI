@@ -10,6 +10,13 @@ public partial class IdeaToPromptPage
         BindingContext = viewModel;
     }
 
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        if (BindingContext is IdeaToPromptViewModel viewModel)
+            viewModel.PrepareForNavigation();
+    }
+
     private async void OnBackClicked(object sender, EventArgs e)
     {
         try

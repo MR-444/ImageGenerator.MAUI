@@ -15,192 +15,275 @@
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <ScrollView>
-        <VerticalStackLayout Padding="24" Spacing="16">
+    <!-- Same page rhythm as the generator and mutation pages: fixed header, scrolling
+         workspace, fixed action/status bar. -->
+    <Grid RowDefinitions="Auto,*,Auto"
+          Padding="24,16,24,12"
+          RowSpacing="12">
 
-            <!-- Header -->
-            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                <Button Grid.Column="0"
-                        Text="← Back"
-                        Clicked="OnBackClicked"
-                        Style="{StaticResource SecondaryButton}"
-                        VerticalOptions="Start"
-                        AutomationId="IdeaToPromptBackButton" />
-                <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
-                    <Label Text="Describe an idea → prompt" Style="{StaticResource CardTitle}" />
-                    <Label Text="Type a plain-English idea or pick a reference image. The builder writes a polished prose prompt you can use with any model, and can optionally build an Ideogram V4 JSON prompt."
-                           Style="{StaticResource HelperText}" />
-                </VerticalStackLayout>
-            </Grid>
-
-            <!-- Source mode -->
-            <VerticalStackLayout Spacing="8">
-                <Label Text="Idea source" Style="{StaticResource FieldLabel}" />
-                <Picker ItemsSource="{Binding SourceModeOptions}"
-                        SelectedItem="{Binding SourceMode}"
-                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                        AutomationId="IdeaSourceModePicker" />
+        <!-- Header -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="12">
+            <Button Grid.Column="0"
+                    Text="← Back"
+                    Clicked="OnBackClicked"
+                    Style="{StaticResource SecondaryButton}"
+                    VerticalOptions="Start"
+                    AutomationId="IdeaToPromptBackButton" />
+            <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                <Label Text="Describe an idea → prompt" Style="{StaticResource CardTitle}" />
+                <Label Text="Type a plain-English idea or pick a reference image. The builder writes prose for any provider, with optional Ideogram V4 JSON."
+                       Style="{StaticResource HelperText}" />
             </VerticalStackLayout>
+        </Grid>
 
-            <!-- CARD: Reference image -->
-            <Border Style="{StaticResource Card}"
-                    IsVisible="{Binding IsImageSource}"
-                    AutomationId="ReferenceImageCard">
-                <VerticalStackLayout Spacing="10">
-                    <Label Text="Reference image" Style="{StaticResource FieldLabel}" />
-                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                        <Label Grid.Column="0"
-                               Text="{Binding ReferenceImageFileName}"
-                               Style="{StaticResource HelperText}"
-                               VerticalOptions="Center" />
-                        <Button Grid.Column="1"
-                                Text="Pick image"
-                                Command="{Binding PickReferenceImageCommand}"
-                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                Style="{StaticResource SecondaryButton}"
-                                AutomationId="PickReferenceImageButton" />
-                        <Button Grid.Column="2"
-                                Text="Clear"
-                                Command="{Binding ClearReferenceImageCommand}"
-                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                Style="{StaticResource SecondaryButton}"
-                                AutomationId="ClearReferenceImageButton" />
-                    </Grid>
-                    <Image Source="{Binding ReferenceImagePreview}"
-                           IsVisible="{Binding HasReferenceImage}"
-                           HeightRequest="220"
-                           Aspect="AspectFit"
-                           BackgroundColor="{AppThemeBinding Light=#F3F4F6, Dark=#1F2937}"
-                           AutomationId="ReferenceImagePreview" />
-                    <Label Text="The image is observed first, then that observation goes through the normal VPE prompt pass."
-                           Style="{StaticResource HelperText}" />
+        <Grid Grid.Row="1"
+              ColumnDefinitions="5*,4*"
+              ColumnSpacing="16">
 
-                    <Label Text="Vision observer" Style="{StaticResource FieldLabel}" />
-                    <Picker ItemsSource="{Binding VisionProviderOptions}"
-                            SelectedItem="{Binding SelectedVisionProvider}"
-                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                            AutomationId="VisionProviderPicker" />
-                    <Grid ColumnDefinitions="*,Auto"
-                          ColumnSpacing="8"
-                          IsVisible="{Binding IsLocalVisionProvider}">
-                        <Picker Grid.Column="0"
-                                ItemsSource="{Binding Generator.OllamaVisionModels}"
-                                SelectedItem="{Binding Generator.OllamaVisionModel, Mode=TwoWay}"
-                                Title="Refresh, then pick a vision model…"
-                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                AutomationId="IdeaPromptOllamaVisionModelPicker" />
-                        <Button Grid.Column="1"
-                                Text="Refresh"
-                                Command="{Binding Generator.RefreshOllamaModelsCommand}"
-                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                Style="{StaticResource SecondaryButton}"
-                                AutomationId="IdeaPromptOllamaVisionRefreshButton" />
-                    </Grid>
-                    <Label Text="Only installed Ollama models advertising vision + completion appear after refresh."
-                           IsVisible="{Binding IsLocalVisionProvider}"
-                           Style="{StaticResource HelperText}" />
-                    <Grid ColumnDefinitions="*,Auto"
-                          ColumnSpacing="8"
-                          IsVisible="{Binding IsOpenRouterVisionProvider}">
-                        <Picker Grid.Column="0"
-                                ItemsSource="{Binding Generator.OpenRouterVisionModels}"
-                                SelectedItem="{Binding Generator.OpenRouterVisionModel, Mode=TwoWay}"
-                                Title="Refresh, then pick a model…"
-                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                AutomationId="IdeaPromptOpenRouterVisionModelPicker" />
-                        <Button Grid.Column="1"
-                                Text="Refresh"
-                                Command="{Binding Generator.RefreshOpenRouterVisionModelsCommand}"
-                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                Style="{StaticResource SecondaryButton}"
-                                AutomationId="IdeaPromptOpenRouterVisionRefreshButton" />
-                    </Grid>
-                    <Grid ColumnDefinitions="*,Auto"
-                          ColumnSpacing="12"
-                          IsVisible="{Binding IsOpenRouterVisionProvider}">
-                        <VerticalStackLayout Grid.Column="0" Spacing="2">
-                            <Label Text="Free models only" Style="{StaticResource FieldLabel}" />
-                            <Label Text="Filters to OpenRouter models with zero prompt and completion pricing."
+            <!-- LEFT PANE: source, idea, writer options. -->
+            <ScrollView Grid.Column="0">
+                <VerticalStackLayout Spacing="12" Padding="0,0,12,8">
+
+                    <Border Style="{StaticResource Card}" VerticalOptions="Start">
+                        <VerticalStackLayout Spacing="12">
+                            <Label Text="Idea source" Style="{StaticResource CardTitle}" />
+                            <Picker ItemsSource="{Binding SourceModeOptions}"
+                                    SelectedItem="{Binding SourceMode}"
+                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                    MaximumWidthRequest="260"
+                                    HorizontalOptions="Start"
+                                    AutomationId="IdeaSourceModePicker" />
+
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                <CheckBox Grid.Column="0"
+                                          IsChecked="{Binding BuildJson}"
+                                          VerticalOptions="Start"
+                                          AutomationId="BuildJsonCheckBox" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                    <Label Text="Also build an Ideogram V4 JSON prompt" Style="{StaticResource FieldLabel}" />
+                                    <Label Text="Leave off for ordinary prompt models; turn on for structured-caption workflows."
+                                           Style="{StaticResource HelperText}" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- CARD: Reference image -->
+                    <Border Style="{StaticResource Card}"
+                            IsVisible="{Binding IsImageSource}"
+                            AutomationId="ReferenceImageCard">
+                        <VerticalStackLayout Spacing="10">
+                            <Label Text="Reference image" Style="{StaticResource CardTitle}" />
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                <Label Grid.Column="0"
+                                       Text="{Binding ReferenceImageFileName}"
+                                       Style="{StaticResource HelperText}"
+                                       VerticalOptions="Center"
+                                       LineBreakMode="MiddleTruncation" />
+                                <Button Grid.Column="1"
+                                        Text="Pick image"
+                                        Command="{Binding PickReferenceImageCommand}"
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        AutomationId="PickReferenceImageButton" />
+                                <Button Grid.Column="2"
+                                        Text="Clear"
+                                        Command="{Binding ClearReferenceImageCommand}"
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        AutomationId="ClearReferenceImageButton" />
+                            </Grid>
+                            <Image Source="{Binding ReferenceImagePreview}"
+                                   IsVisible="{Binding HasReferenceImage}"
+                                   HeightRequest="220"
+                                   Aspect="AspectFit"
+                                   BackgroundColor="{AppThemeBinding Light=#F3F4F6, Dark=#1F2937}"
+                                   AutomationId="ReferenceImagePreview" />
+                            <Label Text="The image is observed first, then that observation goes through the normal VPE prompt pass."
+                                   Style="{StaticResource HelperText}" />
+
+                            <Label Text="Vision observer" Style="{StaticResource FieldLabel}" />
+                            <Picker ItemsSource="{Binding VisionProviderOptions}"
+                                    SelectedItem="{Binding SelectedVisionProvider}"
+                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                    MaximumWidthRequest="260"
+                                    HorizontalOptions="Start"
+                                    AutomationId="VisionProviderPicker" />
+
+                            <Grid ColumnDefinitions="*,Auto"
+                                  ColumnSpacing="8"
+                                  IsVisible="{Binding IsLocalVisionProvider}">
+                                <Picker Grid.Column="0"
+                                        ItemsSource="{Binding Generator.OllamaVisionModels}"
+                                        SelectedItem="{Binding Generator.OllamaVisionModel, Mode=TwoWay}"
+                                        Title="Refresh, then pick a vision model…"
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                        AutomationId="IdeaPromptOllamaVisionModelPicker" />
+                                <Button Grid.Column="1"
+                                        Text="Refresh"
+                                        Command="{Binding Generator.RefreshOllamaModelsCommand}"
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        AutomationId="IdeaPromptOllamaVisionRefreshButton" />
+                            </Grid>
+                            <Label Text="Only installed Ollama models advertising vision + completion appear after refresh."
+                                   IsVisible="{Binding IsLocalVisionProvider}"
+                                   Style="{StaticResource HelperText}" />
+
+                            <Grid ColumnDefinitions="*,Auto"
+                                  ColumnSpacing="8"
+                                  IsVisible="{Binding IsOpenRouterVisionProvider}">
+                                <Picker Grid.Column="0"
+                                        ItemsSource="{Binding Generator.OpenRouterVisionModels}"
+                                        SelectedItem="{Binding Generator.OpenRouterVisionModel, Mode=TwoWay}"
+                                        Title="Refresh, then pick a model…"
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                        AutomationId="IdeaPromptOpenRouterVisionModelPicker" />
+                                <Button Grid.Column="1"
+                                        Text="Refresh"
+                                        Command="{Binding Generator.RefreshOpenRouterVisionModelsCommand}"
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        AutomationId="IdeaPromptOpenRouterVisionRefreshButton" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto"
+                                  ColumnSpacing="12"
+                                  IsVisible="{Binding IsOpenRouterVisionProvider}">
+                                <VerticalStackLayout Grid.Column="0" Spacing="2">
+                                    <Label Text="Free models only" Style="{StaticResource FieldLabel}" />
+                                    <Label Text="Filters to OpenRouter models with zero prompt and completion pricing."
+                                           Style="{StaticResource HelperText}" />
+                                </VerticalStackLayout>
+                                <Switch Grid.Column="1"
+                                        IsToggled="{Binding Generator.OpenRouterVisionFreeOnly, Mode=TwoWay}"
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                        VerticalOptions="Center"
+                                        AutomationId="IdeaPromptOpenRouterVisionFreeOnlySwitch" />
+                            </Grid>
+                            <Label Text="Set the OpenRouter API key in Settings. The image is sent to the selected remote provider."
+                                   IsVisible="{Binding IsOpenRouterVisionProvider}"
                                    Style="{StaticResource HelperText}" />
                         </VerticalStackLayout>
-                        <Switch Grid.Column="1"
-                                IsToggled="{Binding Generator.OpenRouterVisionFreeOnly, Mode=TwoWay}"
-                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                VerticalOptions="Center"
-                                AutomationId="IdeaPromptOpenRouterVisionFreeOnlySwitch" />
-                    </Grid>
-                    <Label Text="Set the OpenRouter API key in Settings. The image is sent to the selected remote provider."
-                           IsVisible="{Binding IsOpenRouterVisionProvider}"
-                           Style="{StaticResource HelperText}" />
+                    </Border>
+
+                    <!-- CARD: Idea -->
+                    <Border Style="{StaticResource Card}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Your idea / notes" Style="{StaticResource CardTitle}" />
+                            <Editor Text="{Binding Idea}"
+                                    AutoSize="TextChanges"
+                                    MinimumHeightRequest="150"
+                                    MaximumHeightRequest="260"
+                                    Placeholder="e.g. A cozy bookshop on a rainy evening, warm lamplight, a cat asleep in the window"
+                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                    AutomationId="IdeaEditor" />
+                            <Label Text="In text mode this is the idea. In image mode it is optional guidance for the prompt pass."
+                                   Style="{StaticResource HelperText}" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- CARD: Prompt writer -->
+                    <Border Style="{StaticResource Card}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Prompt writer" Style="{StaticResource CardTitle}" />
+                            <Picker ItemsSource="{Binding ModelTierOptions}"
+                                    SelectedItem="{Binding SelectedModelTier}"
+                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                    MaximumWidthRequest="260"
+                                    HorizontalOptions="Start"
+                                    AutomationId="IdeaPromptModelTierPicker" />
+                            <Label Text="{Binding ModelSummary}"
+                                   Style="{StaticResource HelperText}"
+                                   AutomationId="IdeaPromptModelSummaryLabel" />
+
+                            <VerticalStackLayout Spacing="8" IsVisible="{Binding IsLocalTier}">
+                                <Label Text="Local model (Ollama)" Style="{StaticResource FieldLabel}" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <Picker Grid.Column="0"
+                                            ItemsSource="{Binding Generator.OllamaModels}"
+                                            SelectedItem="{Binding Generator.OllamaModel, Mode=TwoWay}"
+                                            Title="Refresh, then pick a model…"
+                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                            AutomationId="IdeaPromptOllamaModelPicker" />
+                                    <Button Grid.Column="1"
+                                            Text="Refresh"
+                                            Command="{Binding Generator.RefreshOllamaModelsCommand}"
+                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            AutomationId="IdeaPromptOllamaRefreshButton" />
+                                </Grid>
+                                <Label Text="The Ollama server URL is shared with AI mutation and configured in Settings."
+                                       Style="{StaticResource HelperText}" />
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
                 </VerticalStackLayout>
-            </Border>
+            </ScrollView>
 
-            <!-- CARD: Idea -->
-            <Border Style="{StaticResource Card}">
-                <VerticalStackLayout Spacing="8">
-                    <Label Text="Your idea / notes" Style="{StaticResource FieldLabel}" />
-                    <Editor Text="{Binding Idea}"
-                            AutoSize="TextChanges"
-                            MinimumHeightRequest="140"
-                            Placeholder="e.g. A cozy bookshop on a rainy evening, warm lamplight, a cat asleep in the window"
-                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                            AutomationId="IdeaEditor" />
-                    <Label Text="In text mode this is the idea. In image mode it is optional guidance for the prompt pass."
-                           Style="{StaticResource HelperText}" />
+            <!-- RIGHT PANE: observation and outputs. -->
+            <ScrollView Grid.Column="1">
+                <VerticalStackLayout Spacing="12" Padding="0,0,0,8">
+
+                    <Border Style="{StaticResource Card}"
+                            IsVisible="{Binding ShowObservation}"
+                            AutomationId="ImageObservationCard">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Image observation" Style="{StaticResource CardTitle}" />
+                            <Editor Text="{Binding ObservedImageDescription}"
+                                    IsReadOnly="True"
+                                    AutoSize="TextChanges"
+                                    MinimumHeightRequest="110"
+                                    AutomationId="ImageObservationEditor" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}"
+                            IsVisible="{Binding HasProse}"
+                            AutomationId="ProseResultCard">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Prose prompt" Style="{StaticResource CardTitle}" />
+                            <Editor Text="{Binding Prose}"
+                                    IsReadOnly="True"
+                                    AutoSize="TextChanges"
+                                    MinimumHeightRequest="180"
+                                    MaximumHeightRequest="360"
+                                    AutomationId="ProseResultEditor" />
+                            <Label Text="A normal prompt that works with any model. Copy it, or use it as your prompt."
+                                   Style="{StaticResource HelperText}" />
+                            <FlexLayout Wrap="Wrap" Direction="Row" AlignItems="Center" Margin="0,4,0,0">
+                                <Button Text="Copy prose"
+                                        Command="{Binding CopyProseCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Margin="0,0,8,8"
+                                        AutomationId="CopyProseButton" />
+                                <Button Text="Use prose as prompt"
+                                        Command="{Binding UseProseCommand}"
+                                        Style="{StaticResource PrimaryButton}"
+                                        Margin="0,0,8,8"
+                                        AutomationId="UseProseButton" />
+                                <Button Text="Use JSON prompt"
+                                        Command="{Binding UseJsonCommand}"
+                                        IsVisible="{Binding HasJson}"
+                                        Style="{StaticResource PrimaryButton}"
+                                        Margin="0,0,8,8"
+                                        AutomationId="UseJsonButton" />
+                            </FlexLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
                 </VerticalStackLayout>
-            </Border>
+            </ScrollView>
+        </Grid>
 
-            <!-- JSON-pass toggle -->
-            <HorizontalStackLayout Spacing="10">
-                <CheckBox IsChecked="{Binding BuildJson}"
-                          VerticalOptions="Start"
-                          AutomationId="BuildJsonCheckBox" />
-                <VerticalStackLayout Spacing="2" VerticalOptions="Center">
-                    <Label Text="Also build an Ideogram V4 JSON prompt" Style="{StaticResource FieldLabel}" />
-                    <Label Text="For Ideogram V4 / ComfyUI structured models. Plain-prompt models use the prose directly."
-                           Style="{StaticResource HelperText}" />
-                </VerticalStackLayout>
-            </HorizontalStackLayout>
-
-            <!-- Model tier -->
-            <VerticalStackLayout Spacing="8">
-                <Label Text="Prompt writer" Style="{StaticResource FieldLabel}" />
-                <Picker ItemsSource="{Binding ModelTierOptions}"
-                        SelectedItem="{Binding SelectedModelTier}"
-                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                        AutomationId="IdeaPromptModelTierPicker" />
-                <Label Text="{Binding ModelSummary}"
-                       Style="{StaticResource HelperText}"
-                       AutomationId="IdeaPromptModelSummaryLabel" />
-
-                <VerticalStackLayout Spacing="8" IsVisible="{Binding IsLocalTier}">
-                    <Label Text="Local model (Ollama)" Style="{StaticResource FieldLabel}" />
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                        <Picker Grid.Column="0"
-                                ItemsSource="{Binding Generator.OllamaModels}"
-                                SelectedItem="{Binding Generator.OllamaModel, Mode=TwoWay}"
-                                Title="Refresh, then pick a model…"
-                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                AutomationId="IdeaPromptOllamaModelPicker" />
-                        <Button Grid.Column="1"
-                                Text="Refresh"
-                                Command="{Binding Generator.RefreshOllamaModelsCommand}"
-                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                Style="{StaticResource SecondaryButton}"
-                                AutomationId="IdeaPromptOllamaRefreshButton" />
-                    </Grid>
-                    <Label Text="The Ollama server URL is shared with AI mutation and configured in Settings."
-                           Style="{StaticResource HelperText}" />
-                </VerticalStackLayout>
-            </VerticalStackLayout>
-
-            <!-- Build / Cancel (Cancel replaces nothing — it appears beside Build only while a build runs) -->
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <!-- ActionBar (fixed): build/cancel and status remain reachable while scrolling. -->
+        <Border Grid.Row="2" Style="{StaticResource ActionBar}">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="12">
                 <Button Grid.Column="0"
                         Text="Build prompt"
                         Command="{Binding BuildCommand}"
-                        Style="{StaticResource PrimaryButton}"
-                        HorizontalOptions="Fill"
+                        Style="{StaticResource ActionPrimary}"
+                        MinimumWidthRequest="160"
                         AutomationId="BuildPromptButton" />
                 <Button Grid.Column="1"
                         Text="Cancel"
@@ -208,79 +291,34 @@
                         IsVisible="{Binding IsBusy}"
                         Style="{StaticResource SecondaryButton}"
                         AutomationId="CancelBuildButton" />
+                <ActivityIndicator Grid.Column="2"
+                                   IsRunning="{Binding IsBusy}"
+                                   IsVisible="{Binding IsBusy}"
+                                   WidthRequest="22"
+                                   HeightRequest="22"
+                                   VerticalOptions="Center"
+                                   AutomationId="IdeaToPromptBusyIndicator" />
+                <Label Grid.Column="3"
+                       Text="{Binding StatusMessage}"
+                       Style="{StaticResource StatusLabel}"
+                       IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
+                       LineBreakMode="WordWrap"
+                       VerticalOptions="Center"
+                       AutomationId="IdeaToPromptStatusLabel">
+                    <Label.Triggers>
+                        <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
+                        </DataTrigger>
+                        <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Warning}">
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
+                        </DataTrigger>
+                    </Label.Triggers>
+                </Label>
             </Grid>
+        </Border>
 
-            <ActivityIndicator IsRunning="{Binding IsBusy}"
-                               IsVisible="{Binding IsBusy}"
-                               HorizontalOptions="Center"
-                               AutomationId="IdeaToPromptBusyIndicator" />
-
-            <Label Text="{Binding StatusMessage}"
-                   Style="{StaticResource StatusLabel}"
-                   IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
-                   LineBreakMode="WordWrap"
-                   AutomationId="IdeaToPromptStatusLabel">
-                <Label.Triggers>
-                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
-                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
-                    </DataTrigger>
-                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
-                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
-                    </DataTrigger>
-                    <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Warning}">
-                        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
-                    </DataTrigger>
-                </Label.Triggers>
-            </Label>
-
-            <!-- CARD: Observation -->
-            <Border Style="{StaticResource Card}"
-                    IsVisible="{Binding ShowObservation}"
-                    AutomationId="ImageObservationCard">
-                <VerticalStackLayout Spacing="8">
-                    <Label Text="Image observation" Style="{StaticResource FieldLabel}" />
-                    <Editor Text="{Binding ObservedImageDescription}"
-                            IsReadOnly="True"
-                            AutoSize="TextChanges"
-                            MinimumHeightRequest="100"
-                            AutomationId="ImageObservationEditor" />
-                </VerticalStackLayout>
-            </Border>
-
-            <!-- CARD: Result (prose, copyable + applyable; JSON button appears when built) -->
-            <Border Style="{StaticResource Card}"
-                    IsVisible="{Binding HasProse}"
-                    AutomationId="ProseResultCard">
-                <VerticalStackLayout Spacing="8">
-                    <Label Text="Prose prompt" Style="{StaticResource FieldLabel}" />
-                    <Editor Text="{Binding Prose}"
-                            IsReadOnly="True"
-                            AutoSize="TextChanges"
-                            MinimumHeightRequest="120"
-                            AutomationId="ProseResultEditor" />
-                    <Label Text="A normal prompt that works with any model. Copy it, or use it as your prompt."
-                           Style="{StaticResource HelperText}" />
-                    <FlexLayout Wrap="Wrap" Direction="Row" AlignItems="Center" Margin="0,4,0,0">
-                        <Button Text="Copy prose"
-                                Command="{Binding CopyProseCommand}"
-                                Style="{StaticResource SecondaryButton}"
-                                Margin="0,0,8,8"
-                                AutomationId="CopyProseButton" />
-                        <Button Text="Use prose as prompt"
-                                Command="{Binding UseProseCommand}"
-                                Style="{StaticResource PrimaryButton}"
-                                Margin="0,0,8,8"
-                                AutomationId="UseProseButton" />
-                        <Button Text="Use JSON prompt"
-                                Command="{Binding UseJsonCommand}"
-                                IsVisible="{Binding HasJson}"
-                                Style="{StaticResource PrimaryButton}"
-                                Margin="0,0,8,8"
-                                AutomationId="UseJsonButton" />
-                    </FlexLayout>
-                </VerticalStackLayout>
-            </Border>
-
-        </VerticalStackLayout>
-    </ScrollView>
+    </Grid>
 </ContentPage>

@@ -22,9 +22,16 @@
           Padding="24"
           RowSpacing="12">
 
-        <!-- Header — Shell's navbar already shows the page Title="Gallery", so no in-page title duplicate. -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
-            <VerticalStackLayout Grid.Column="0" Spacing="4" VerticalOptions="Center">
+        <!-- Header -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
+            <Button Grid.Column="0"
+                    Text="← Back"
+                    Clicked="OnBackClicked"
+                    Style="{StaticResource SecondaryButton}"
+                    VerticalOptions="Start"
+                    AutomationId="GalleryBackButton" />
+            <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                <Label Text="Gallery" Style="{StaticResource CardTitle}" />
                 <Label Text="Browse generated images. Tap a tile to select; use Open to view, or select several and post them to CivitAI."
                        Style="{StaticResource HelperText}" />
                 <HorizontalStackLayout Spacing="8" VerticalOptions="Center">

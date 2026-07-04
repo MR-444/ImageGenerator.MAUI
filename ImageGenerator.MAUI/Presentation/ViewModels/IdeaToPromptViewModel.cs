@@ -141,6 +141,12 @@ public partial class IdeaToPromptViewModel : ObservableObject
     /// <summary>Expose the host generator so the page can reuse the shared Ollama model picker.</summary>
     public GeneratorViewModel? Generator => _generator;
 
+    public void PrepareForNavigation()
+    {
+        if (IsBusy) return;
+        BuildJson = _generator?.SupportsJsonPromptEditor ?? false;
+    }
+
     /// <summary>The pass-1 prose prompt. Shown on the page, copyable, and applyable on its own.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasProse))]

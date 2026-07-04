@@ -20,6 +20,21 @@
                              MaximumWidthRequest="560"
                              HorizontalOptions="Start">
 
+            <!-- Header -->
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <Button Grid.Column="0"
+                        Text="← Back"
+                        Clicked="OnBackClicked"
+                        Style="{StaticResource SecondaryButton}"
+                        VerticalOptions="Start"
+                        AutomationId="SettingsBackButton" />
+                <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                    <Label Text="Settings" Style="{StaticResource CardTitle}" />
+                    <Label Text="Tokens, local services, provider settings, and output folders."
+                           Style="{StaticResource HelperText}" />
+                </VerticalStackLayout>
+            </Grid>
+
             <!-- CARD: Appearance -->
             <Border Style="{StaticResource Card}"
                     VerticalOptions="Start">
