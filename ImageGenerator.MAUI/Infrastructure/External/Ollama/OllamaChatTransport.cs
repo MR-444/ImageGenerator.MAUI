@@ -73,6 +73,13 @@ internal static class OllamaChatTransport
         };
 
         var endpoint = $"{baseUrl.TrimEnd('/')}/api/chat";
+        logger.LogInformation(
+            "Ollama chat start Url={Url} Model={Model} Schema={Schema} Think={Think}",
+            endpoint,
+            modelId,
+            schema.HasValue ? "json_schema" : "none",
+            "false");
+
         using var client = httpClientFactory.CreateClient(HttpClientName);
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
@@ -93,17 +100,52 @@ internal static class OllamaChatTransport
                 statusCode: response.StatusCode);
         }
 
-        return ExtractContent(responseBody);
+        return ExtractContent(responseBody, logger, modelId);
     }
 
     /// <summary>Pull <c>message.content</c> out of a native <c>/api/chat</c> response.</summary>
-    private static string ExtractContent(string responseBody)
+    private static string ExtractContent(string responseBody, ILogger logger, string modelId)
     {
         using var doc = JsonDocument.Parse(responseBody);
         if (doc.RootElement.TryGetProperty("message", out var message)
             && message.TryGetProperty("content", out var content))
         {
-            return StripJsonFences(content.GetString() ?? string.Empty);
+            var text = StripJsonFences(content.GetString() ?? string.Empty);
+            var thinkingLength = message.TryGetProperty("thinking", out var thinking)
+                ? thinking.GetString()?.Length
+                : null;
+            var doneReason = doc.RootElement.TryGetProperty("done_reason", out var reason)
+                ? reason.GetString()
+                : null;
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                logger.LogWarning(
+                    "Ollama chat returned empty content Model={Model} DoneReason={DoneReason} Think={Think} ThinkingLength={ThinkingLength} RawLength={RawLength}",
+                    modelId,
+                    string.IsNullOrWhiteSpace(doneReason) ? "-" : doneReason,
+                    "false",
+                    thinkingLength,
+                    responseBody.Length);
+
+                if (thinkingLength > 0)
+                {
+                    throw new InvalidOperationException(
+                        "Ollama returned reasoning/thinking but no final content. Use a non-thinking/instruct model tag for local prompt building.");
+                }
+            }
+            else
+            {
+                logger.LogInformation(
+                    "Ollama chat end Model={Model} DoneReason={DoneReason} Think={Think} ContentLength={ContentLength} ThinkingLength={ThinkingLength}",
+                    modelId,
+                    string.IsNullOrWhiteSpace(doneReason) ? "-" : doneReason,
+                    "false",
+                    text.Length,
+                    thinkingLength);
+            }
+
+            return text;
         }
 
         throw new InvalidOperationException("Ollama response carried no message content.");
