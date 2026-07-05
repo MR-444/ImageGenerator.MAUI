@@ -3,6 +3,7 @@ using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
+using ImageGenerator.MAUI.Presentation.Views;
 using ImageGenerator.MAUI.Presentation.ViewModels;
 using ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -27,12 +28,25 @@ public class IdeaToPromptViewModelTests
     public void BuildCommand_DisabledUntilAnIdeaIsTyped()
     {
         var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+        vm.SelectedModelTier = ModelTier.Local;
 
         vm.BuildCommand.CanExecute(null).Should().BeFalse("no idea entered yet");
 
         vm.Idea = "a red fox in snow";
 
         vm.BuildCommand.CanExecute(null).Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildCommand_RequiresExplicitPromptWriter()
+    {
+        var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+
+        vm.Idea = "a red fox in snow";
+
+        vm.SelectedModelTier.Should().BeNull();
+        vm.BuildCommand.CanExecute(null).Should().BeFalse("paid prompt writers must not be selected silently");
+        vm.ModelSummary.Should().Contain("Pick a prompt writer");
     }
 
     // ---- Pass 1 only (checkbox off) -----------------------------------------------------
@@ -43,6 +57,7 @@ public class IdeaToPromptViewModelTests
         var generator = BuildGenerator();
         var originalPrompt = generator.Parameters.Prompt;
         var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()), generator);
+        vm.SelectedModelTier = ModelTier.Local;
         vm.BuildJson = false;
         vm.Idea = "a red fox in snow";
 
@@ -64,6 +79,7 @@ public class IdeaToPromptViewModelTests
         var generator = BuildGenerator();
         generator.Parameters.UseJsonPrompt = true;   // prove the command flips it back off
         var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()), generator);
+        vm.SelectedModelTier = ModelTier.Local;
         vm.BuildJson = false;
         vm.Idea = "a red fox in snow";
         await vm.BuildCommand.ExecuteAsync(null);
@@ -82,6 +98,7 @@ public class IdeaToPromptViewModelTests
         var prompt = MutationTestData.BaseCaption();
         var generator = BuildGenerator();
         var vm = NewVm(ProseOk(), JsonOk(prompt), generator);
+        vm.SelectedModelTier = ModelTier.Local;
         vm.BuildJson = true;
         vm.Idea = "a red fox in snow";
 
@@ -117,6 +134,7 @@ public class IdeaToPromptViewModelTests
     public void BuildCommand_ImageMode_RequiresReferenceImage()
     {
         var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+        vm.SelectedModelTier = ModelTier.Local;
 
         vm.SourceMode = IdeaSourceMode.Image;
 
@@ -128,12 +146,42 @@ public class IdeaToPromptViewModelTests
     }
 
     [Fact]
+    public async Task SetReferenceImageFromPath_LoadsVisionReferenceImage()
+    {
+        var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+        var filePath = Path.Combine(Path.GetTempPath(), $"idea-reference-{Guid.NewGuid():N}.png");
+        vm.SelectedModelTier = ModelTier.Local;
+        vm.SourceMode = IdeaSourceMode.Image;
+        vm.ObservedImageDescription = "old observation";
+
+        try
+        {
+            await File.WriteAllBytesAsync(filePath, [1, 2, 3, 4]);
+
+            await vm.SetReferenceImageFromPathAsync(filePath);
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+        }
+
+        vm.ReferenceImageBase64.Should().Be(Convert.ToBase64String([1, 2, 3, 4]));
+        vm.ReferenceImageFileName.Should().Be(Path.GetFileName(filePath));
+        vm.ObservedImageDescription.Should().BeEmpty();
+        vm.HasReferenceImage.Should().BeTrue();
+        vm.BuildCommand.CanExecute(null).Should().BeTrue();
+        vm.StatusKind.Should().Be(StatusKind.Info);
+    }
+
+    [Fact]
     public async Task Build_ImageMode_ObservesImageBeforeVpe_AndKeepsObservationVisible()
     {
         var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
         var observer = new FakeVisionObserver(VisionObservationResult.Ok("A boy on a playground swing in warm sun."));
         var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
             NullLogger<IdeaToPromptViewModel>.Instance, generator: null, visionObserver: observer);
+        vm.SelectedModelTier = ModelTier.Local;
         vm.SourceMode = IdeaSourceMode.Image;
         vm.Idea = "make it uplifting";
         vm.BuildJson = false;
@@ -160,6 +208,7 @@ public class IdeaToPromptViewModelTests
         var observer = new FakeVisionObserver(VisionObservationResult.Fail("not a vision model"));
         var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
             NullLogger<IdeaToPromptViewModel>.Instance, generator: null, visionObserver: observer);
+        vm.SelectedModelTier = ModelTier.Local;
         vm.SourceMode = IdeaSourceMode.Image;
         vm.SetReferenceImageForTest("ref.png", [1, 2, 3, 4]);
 
@@ -178,6 +227,7 @@ public class IdeaToPromptViewModelTests
         var generator = BuildGenerator();
         var originalPrompt = generator.Parameters.Prompt;
         var vm = NewVm(ProseOk(), PromptBuilderResult.Fail("Claude's prompt didn't satisfy the schema"), generator);
+        vm.SelectedModelTier = ModelTier.Local;
         vm.BuildJson = true;
         vm.Idea = "a red fox in snow";
 
@@ -201,6 +251,7 @@ public class IdeaToPromptViewModelTests
         var originalPrompt = generator.Parameters.Prompt;
         var vm = NewVm(ProseResult.Fail("No Anthropic API key — add it on the Settings page."),
             JsonOk(MutationTestData.BaseCaption()), generator);
+        vm.SelectedModelTier = ModelTier.Local;
         vm.Idea = "a red fox in snow";
 
         await vm.BuildCommand.ExecuteAsync(null);
@@ -220,6 +271,7 @@ public class IdeaToPromptViewModelTests
         var builder = new CancellableProseBuilder();
         var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
             NullLogger<IdeaToPromptViewModel>.Instance, generator: null);
+        vm.SelectedModelTier = ModelTier.Local;
         vm.Idea = "a red fox in snow";
 
         // Start the build; it parks at the (infinite) prose call until the token fires.
@@ -241,6 +293,7 @@ public class IdeaToPromptViewModelTests
     public async Task CopyProse_PutsTheProseOnTheClipboard()
     {
         var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+        vm.SelectedModelTier = ModelTier.Local;
         vm.BuildJson = false;
         vm.Idea = "a red fox in snow";
         await vm.BuildCommand.ExecuteAsync(null);
@@ -248,6 +301,96 @@ public class IdeaToPromptViewModelTests
         await vm.CopyProseCommand.ExecuteAsync(null);
 
         _clipboard.Verify(c => c.SetTextAsync(Prose), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(ModelTier.Opus)]
+    [InlineData(ModelTier.Sonnet)]
+    public async Task Build_ExplicitPaidTier_IsPassedToPromptBuilder(ModelTier tier)
+    {
+        var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+        var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance, generator: null);
+        vm.SelectedModelTier = tier;
+        vm.BuildJson = false;
+        vm.Idea = "a red fox in snow";
+
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        builder.ProseTiers.Should().Equal(tier);
+    }
+
+    [Fact]
+    public async Task Build_OpenRouterImageMode_WithBlankModel_FailsBeforeObservation()
+    {
+        var generator = BuildGenerator();
+        generator.OpenRouterVisionModel = string.Empty;
+        var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+        var observer = new FakeVisionObserver(VisionObservationResult.Ok("not reached"));
+        var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance, generator, visionObserver: observer);
+        vm.SelectedModelTier = ModelTier.Local;
+        vm.SourceMode = IdeaSourceMode.Image;
+        vm.SelectedVisionProvider = VisionObservationProvider.OpenRouter;
+        vm.SetReferenceImageForTest("ref.png", [1, 2, 3, 4]);
+
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        observer.Requests.Should().BeEmpty();
+        builder.ProseInputs.Should().BeEmpty();
+        vm.StatusKind.Should().Be(StatusKind.Error);
+        vm.StatusMessage.Should().Contain("OpenRouter vision model");
+    }
+
+    [Fact]
+    public async Task SetReferenceImageFromUrl_DownloadsVisionReferenceImage()
+    {
+        var downloader = new FakeReferenceImageDownloader(ReferenceImageDownloadResult.Ok("browser.png", [1, 2, 3, 4]));
+        var vm = new IdeaToPromptViewModel(new FakePromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())),
+            _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance,
+            referenceImageDownloader: downloader);
+
+        await vm.SetReferenceImageFromUrlAsync("https://example.test/image.png?token=secret");
+
+        downloader.Requests.Should().ContainSingle().Which.Should().Be("https://example.test/image.png?token=secret");
+        vm.ReferenceImageBase64.Should().Be(Convert.ToBase64String([1, 2, 3, 4]));
+        vm.ReferenceImageFileName.Should().Be("browser.png");
+        vm.StatusKind.Should().Be(StatusKind.Info);
+    }
+
+    [Fact]
+    public void SetReferenceImageFromBytes_LoadsBrowserBitmapReferenceImage()
+    {
+        var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+
+        var loaded = vm.SetReferenceImageFromBytes("browser-reference.png", [1, 2, 3, 4], "browser bitmap");
+
+        loaded.Should().BeTrue();
+        vm.ReferenceImageBase64.Should().Be(Convert.ToBase64String([1, 2, 3, 4]));
+        vm.ReferenceImageFileName.Should().Be("browser-reference.png");
+        vm.StatusKind.Should().Be(StatusKind.Info);
+    }
+
+    [Fact]
+    public void DropHelpers_ExtractHttpUrlFromBrowserHtml()
+    {
+        var ok = IdeaToPromptPage.TryExtractImageSrc(
+            """<div><img alt="x" src="https://cdn.example.test/image.webp?size=large"></div>""",
+            out var url);
+
+        ok.Should().BeTrue();
+        url.Should().Be("https://cdn.example.test/image.webp?size=large");
+    }
+
+    [Fact]
+    public void DropHelpers_RejectBlobUrl()
+    {
+        var ok = IdeaToPromptPage.TryExtractImageSrc(
+            """<img src="blob:https://example.test/123">""",
+            out _);
+
+        ok.Should().BeFalse();
     }
 
     // ---- Helpers / fakes ----------------------------------------------------------------
@@ -343,6 +486,18 @@ public class IdeaToPromptViewModelTests
             CancellationToken ct = default)
         {
             Requests.Add(request);
+            return Task.FromResult(result);
+        }
+    }
+
+    private sealed class FakeReferenceImageDownloader(ReferenceImageDownloadResult result) : IReferenceImageDownloadService
+    {
+        public List<string> Requests { get; } = [];
+
+        public Task<ReferenceImageDownloadResult> DownloadAsync(Uri uri, long maxBytes, CancellationToken ct = default)
+        {
+            maxBytes.Should().Be(20L * 1024 * 1024);
+            Requests.Add(uri.ToString());
             return Task.FromResult(result);
         }
     }

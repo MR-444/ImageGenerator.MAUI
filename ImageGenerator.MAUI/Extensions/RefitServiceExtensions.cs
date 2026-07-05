@@ -1,8 +1,10 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ImageGenerator.MAUI.Infrastructure.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
+using Microsoft.Extensions.Logging;
 using Polly;
 using Refit;
 
@@ -73,8 +75,17 @@ public static class RefitServiceExtensions
         return services
             .AddRefitClient<T>(SharedRefitSettings)
             .ConfigureHttpClient(client => client.BaseAddress = new Uri(baseAddress))
-            .ConfigureStandardResilience(RefitPerAttemptTimeout, RefitTotalRequestTimeout, retryDelay);
+            .ConfigureStandardResilience(RefitPerAttemptTimeout, RefitTotalRequestTimeout, retryDelay)
+            .AddRemoteHttpLogging(typeof(T).Name);
     }
+
+    public static IHttpClientBuilder AddRemoteHttpLogging(
+        this IHttpClientBuilder builder,
+        string clientName) =>
+        builder.AddHttpMessageHandler(sp =>
+            new RemoteHttpLoggingHandler(
+                sp.GetRequiredService<ILogger<RemoteHttpLoggingHandler>>(),
+                clientName));
 
     /// <summary>
     /// Apply the project's standard outbound-HTTP pipeline to a named or typed client:

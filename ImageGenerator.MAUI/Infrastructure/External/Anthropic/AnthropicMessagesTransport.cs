@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ImageGenerator.MAUI.Infrastructure.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace ImageGenerator.MAUI.Infrastructure.External.Anthropic;
@@ -76,6 +77,8 @@ internal static class AnthropicMessagesTransport
         };
         request.Headers.TryAddWithoutValidation("x-api-key", apiKey);
         request.Headers.TryAddWithoutValidation("anthropic-version", AnthropicVersion);
+        request.Options.Set(RemoteHttpLoggingHandler.PurposeKey, schema is null ? "prompt prose" : "structured prompt");
+        request.Options.Set(RemoteHttpLoggingHandler.ModelKey, modelId);
 
         using var response = await client.SendAsync(request, ct);
         var responseBody = await response.Content.ReadAsStringAsync(ct);

@@ -78,13 +78,15 @@ public static class MauiProgram
         builder.Services.AddHttpClient(ReplicateImageGenerationService.HttpClientName)
             .ConfigureStandardResilience(
                 perAttemptTimeout: TimeSpan.FromSeconds(60),
-                totalTimeout: TimeSpan.FromMinutes(3));
+                totalTimeout: TimeSpan.FromMinutes(3))
+            .AddRemoteHttpLogging(ReplicateImageGenerationService.HttpClientName);
 
         builder.Services.AddHttpClient(PollinationsImageGenerationService.HttpClientName, client =>
                 client.BaseAddress = new Uri("https://gen.pollinations.ai"))
             .ConfigureStandardResilience(
                 perAttemptTimeout: TimeSpan.FromSeconds(60),
-                totalTimeout: TimeSpan.FromMinutes(3));
+                totalTimeout: TimeSpan.FromMinutes(3))
+            .AddRemoteHttpLogging(PollinationsImageGenerationService.HttpClientName);
 
         // No BaseAddress: the ComfyUI server URL is a runtime setting (UiStateStore), so the
         // service composes absolute URIs per request. Timeouts bound each HTTP call only —
@@ -103,7 +105,8 @@ public static class MauiProgram
         builder.Services.AddHttpClient(CivitaiPostingService.HttpClientName)
             .ConfigureStandardResilience(
                 perAttemptTimeout: TimeSpan.FromSeconds(120),
-                totalTimeout: TimeSpan.FromMinutes(5));
+                totalTimeout: TimeSpan.FromMinutes(5))
+            .AddRemoteHttpLogging(CivitaiPostingService.HttpClientName);
 
         // Claude tiers for the prompt builder and AI caption tools talk to api.anthropic.com. Adaptive
         // thinking at high effort can run well past the default 60 s, so the per-attempt timeout is
@@ -111,14 +114,22 @@ public static class MauiProgram
         builder.Services.AddHttpClient(AnthropicMessagesTransport.HttpClientName)
             .ConfigureStandardResilience(
                 perAttemptTimeout: TimeSpan.FromSeconds(120),
-                totalTimeout: TimeSpan.FromMinutes(5));
+                totalTimeout: TimeSpan.FromMinutes(5))
+            .AddRemoteHttpLogging(AnthropicMessagesTransport.HttpClientName);
 
         // OpenRouter is used for optional remote vision observation in "Describe an idea". Calls carry
         // base64 image data, so give them the same generous budget as the other LLM transports.
         builder.Services.AddHttpClient(VisionObservationService.OpenRouterHttpClientName)
             .ConfigureStandardResilience(
                 perAttemptTimeout: TimeSpan.FromSeconds(120),
-                totalTimeout: TimeSpan.FromMinutes(5));
+                totalTimeout: TimeSpan.FromMinutes(5))
+            .AddRemoteHttpLogging(VisionObservationService.OpenRouterHttpClientName);
+
+        builder.Services.AddHttpClient(ReferenceImageDownloadService.HttpClientName)
+            .ConfigureStandardResilience(
+                perAttemptTimeout: TimeSpan.FromSeconds(60),
+                totalTimeout: TimeSpan.FromMinutes(2))
+            .AddRemoteHttpLogging(ReferenceImageDownloadService.HttpClientName);
 
         // Fast Ollama catalog lookups for Settings / Describe model pickers. If the server is down,
         // Refresh should return control quickly; cold-load generation still uses the long client below.
@@ -179,6 +190,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IFileLauncher, FileLauncher>();
         builder.Services.AddSingleton<IFolderPicker, FolderPickerService>();
         builder.Services.AddSingleton<IClipboardService, ClipboardService>();
+        builder.Services.AddSingleton<IReferenceImageDownloadService, ReferenceImageDownloadService>();
         builder.Services.AddSingleton<IJsonPromptFileService, JsonPromptFileService>();
         builder.Services.AddSingleton<IMutationLibraryService, MutationLibraryService>();
         // Stateless mutation engine over the full built-in operator set; one instance is fine.

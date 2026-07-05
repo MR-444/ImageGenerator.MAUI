@@ -102,6 +102,30 @@ public sealed class VisionObservationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ObserveAsync_OpenRouter_NoModel_FailsWithoutCallingTransport()
+    {
+        var tokenStore = new Mock<IOpenRouterTokenStore>();
+        tokenStore.Setup(s => s.LoadAsync()).ReturnsAsync("sk-or");
+        var called = false;
+        var sut = CreateSut(new Mock<IUiStateStore>(),
+            (_, _, _, _, _, _) =>
+            {
+                called = true;
+                return Task.FromResult("not reached");
+            },
+            tokenStore);
+
+        var result = await sut.ObserveAsync(new VisionObservationRequest(
+            VisionObservationProvider.OpenRouter,
+            "abcd",
+            "ref.png"));
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("OpenRouter vision model");
+        called.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task ObserveAsync_OpenRouter_UsesTokenAsBackendCredential()
     {
         var tokenStore = new Mock<IOpenRouterTokenStore>();

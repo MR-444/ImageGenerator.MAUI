@@ -34,6 +34,7 @@ public class GeneratorViewModelTests
     private readonly Mock<IComfyUiCheckpointService> _mockCheckpointService;
     private readonly Mock<IGalleryService> _mockGalleryService;
     private readonly Mock<IFolderPicker> _mockFolderPicker;
+    private readonly Mock<IOpenRouterModelCatalog> _mockOpenRouterModelCatalog;
 
     public GeneratorViewModelTests()
     {
@@ -50,6 +51,7 @@ public class GeneratorViewModelTests
         _mockCheckpointService = new Mock<IComfyUiCheckpointService>();
         _mockGalleryService = new Mock<IGalleryService>();
         _mockFolderPicker = new Mock<IFolderPicker>();
+        _mockOpenRouterModelCatalog = new Mock<IOpenRouterModelCatalog>();
 
         _viewModel = new GeneratorViewModel(
             _mockJobRunner.Object,
@@ -66,7 +68,8 @@ public class GeneratorViewModelTests
             _mockCheckpointService.Object,
             _mockGalleryService.Object,
             _mockFolderPicker.Object,
-            NullLogger<GeneratorViewModel>.Instance);
+            NullLogger<GeneratorViewModel>.Instance,
+            openRouterModelCatalog: _mockOpenRouterModelCatalog.Object);
     }
 
     [Fact]
@@ -78,6 +81,46 @@ public class GeneratorViewModelTests
         values.Should().Contain(ModelConstants.Flux.Pro11Ultra);
         values.Should().Contain(ModelConstants.Flux.Klein4b);
         values.Should().Contain(ModelConstants.Google.NanoBanana2);
+    }
+
+    [Fact]
+    public async Task RefreshOpenRouterVisionModels_FreeOnly_ClearsPaidSelection()
+    {
+        _viewModel.OpenRouterVisionFreeOnly = true;
+        _viewModel.OpenRouterVisionModel = "paid/vision";
+        _mockOpenRouterModelCatalog
+            .Setup(c => c.ListVisionModelsAsync(true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new OpenRouterModelInfo("free/vision:free", "Free Vision", true)]);
+
+        await _viewModel.RefreshOpenRouterVisionModelsCommand.ExecuteAsync(null);
+
+        _viewModel.OpenRouterVisionModels.Should().Equal("free/vision:free");
+        _viewModel.OpenRouterVisionModel.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadSavedUiState_FreeOnly_DoesNotRestoreSavedOpenRouterModel()
+    {
+        _mockUiStateStore.Setup(s => s.LoadOpenRouterVisionFreeOnly()).Returns(true);
+        _mockUiStateStore.Setup(s => s.LoadOpenRouterVisionModel()).Returns("paid/vision");
+
+        _viewModel.LoadSavedUiState();
+
+        _viewModel.OpenRouterVisionFreeOnly.Should().BeTrue();
+        _viewModel.OpenRouterVisionModel.Should().BeEmpty();
+        _viewModel.OpenRouterVisionModels.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadSavedUiState_FreeOnly_RestoresSavedFreeOpenRouterModel()
+    {
+        _mockUiStateStore.Setup(s => s.LoadOpenRouterVisionFreeOnly()).Returns(true);
+        _mockUiStateStore.Setup(s => s.LoadOpenRouterVisionModel()).Returns("free/vision:free");
+
+        _viewModel.LoadSavedUiState();
+
+        _viewModel.OpenRouterVisionModel.Should().Be("free/vision:free");
+        _viewModel.OpenRouterVisionModels.Should().ContainSingle().Which.Should().Be("free/vision:free");
     }
 
     // --- Configurable output folder ---

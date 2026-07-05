@@ -31,6 +31,7 @@ public partial class IdeaToPromptViewModel : ObservableObject
     private readonly IOllamaModelCatalog? _ollamaCatalog;
     private readonly IGpuGate? _gpuGate;
     private readonly IVisionObservationService? _visionObserver;
+    private readonly IReferenceImageDownloadService? _referenceImageDownloader;
     private readonly ILogger<IdeaToPromptViewModel> _logger;
 
     private V4JsonPrompt? _builtJson;
@@ -47,7 +48,8 @@ public partial class IdeaToPromptViewModel : ObservableObject
         GeneratorViewModel? generator = null,
         IOllamaModelCatalog? ollamaCatalog = null,
         IGpuGate? gpuGate = null,
-        IVisionObservationService? visionObserver = null)
+        IVisionObservationService? visionObserver = null,
+        IReferenceImageDownloadService? referenceImageDownloader = null)
     {
         _builder = builder ?? throw new ArgumentNullException(nameof(builder));
         _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
@@ -56,6 +58,7 @@ public partial class IdeaToPromptViewModel : ObservableObject
         _ollamaCatalog = ollamaCatalog;
         _gpuGate = gpuGate;
         _visionObserver = visionObserver;
+        _referenceImageDownloader = referenceImageDownloader;
 
         // Default the JSON pass on for structured-JSON models (Ideogram V4 / ComfyUI), off otherwise.
         BuildJson = generator?.SupportsJsonPromptEditor ?? false;
@@ -122,12 +125,13 @@ public partial class IdeaToPromptViewModel : ObservableObject
     [ObservableProperty]
     private bool _buildJson;
 
-    public IReadOnlyList<ModelTier> ModelTierOptions { get; } = [ModelTier.Opus, ModelTier.Sonnet, ModelTier.Local];
+    public IReadOnlyList<ModelTier> ModelTierOptions { get; } = [ModelTier.Local, ModelTier.Sonnet, ModelTier.Opus];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLocalTier))]
     [NotifyPropertyChangedFor(nameof(ModelSummary))]
-    private ModelTier _selectedModelTier = ModelTier.Opus;
+    [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
+    private ModelTier? _selectedModelTier;
 
     public bool IsLocalTier => SelectedModelTier == ModelTier.Local;
 
@@ -135,6 +139,7 @@ public partial class IdeaToPromptViewModel : ObservableObject
     {
         ModelTier.Sonnet => "Claude Sonnet: paid Anthropic call, faster and cheaper than Opus.",
         ModelTier.Local => "Local Ollama: free, uses the configured Ollama server/model from Settings.",
+        null => "Pick a prompt writer before building. Local is free; Claude tiers are paid.",
         _ => "Claude Opus: paid Anthropic call, strongest prompt-builder default."
     };
 
@@ -170,6 +175,7 @@ public partial class IdeaToPromptViewModel : ObservableObject
 
     private bool CanBuild() =>
         !IsBusy
+        && SelectedModelTier is not null
         && (IsTextSource
             ? !string.IsNullOrWhiteSpace(Idea)
             : HasReferenceImage);
@@ -195,6 +201,77 @@ public partial class IdeaToPromptViewModel : ObservableObject
         SetStatus($"Reference image ready: {result.FileName}", StatusKind.Info);
     }
 
+    public async Task SetReferenceImageFromPathAsync(string filePath)
+    {
+        if (!File.Exists(filePath))
+        {
+            SetStatus("File not found.", StatusKind.Error);
+            return;
+        }
+
+        try
+        {
+            var imageBytes = await File.ReadAllBytesAsync(filePath);
+            SetReferenceImage(Path.GetFileName(filePath), imageBytes, filePath, createPreview: true);
+            SetStatus($"Reference image ready: {Path.GetFileName(filePath)}", StatusKind.Info);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Error using reference image: {ex.Message}", StatusKind.Error);
+        }
+    }
+
+    public bool SetReferenceImageFromBytes(string fileName, byte[] bytes, string? sourcePath = null)
+    {
+        if (bytes.Length == 0)
+        {
+            SetStatus("The dropped image was empty.", StatusKind.Error);
+            return false;
+        }
+
+        SetReferenceImage(fileName, bytes, sourcePath, createPreview: true);
+        SetStatus($"Reference image ready: {ReferenceImageFileName}", StatusKind.Info);
+        return true;
+    }
+
+    public async Task<bool> SetReferenceImageFromUrlAsync(string url)
+    {
+        if (!Uri.TryCreate(url?.Trim(), UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            SetStatus("Only http and https image URLs can be imported.", StatusKind.Error);
+            return false;
+        }
+
+        if (_referenceImageDownloader is null)
+        {
+            SetStatus("Browser image import is not available in this build.", StatusKind.Error);
+            return false;
+        }
+
+        try
+        {
+            var result = await _referenceImageDownloader.DownloadAsync(
+                uri,
+                maxBytes: 20L * 1024 * 1024);
+            if (!result.Success || result.Bytes is null)
+            {
+                SetStatus(result.Error ?? "Couldn't import that image URL.", StatusKind.Error);
+                return false;
+            }
+
+            SetReferenceImage(result.FileName ?? "browser-reference", result.Bytes, uri.ToString(), createPreview: true);
+            SetStatus($"Reference image ready: {ReferenceImageFileName}", StatusKind.Info);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "IdeaToPrompt: browser reference image import failed Url={Url}", uri.GetLeftPart(UriPartial.Path));
+            SetStatus($"Error importing reference image: {ex.Message}", StatusKind.Error);
+            return false;
+        }
+    }
+
     [RelayCommand]
     private void ClearReferenceImage()
     {
@@ -213,16 +290,37 @@ public partial class IdeaToPromptViewModel : ObservableObject
     private void SetReferenceImage(string fileName, byte[] bytes, string? sourcePath, bool createPreview)
     {
         ReferenceImageBase64 = Convert.ToBase64String(bytes);
-        ReferenceImagePreview = createPreview ? ImageSource.FromStream(() => new MemoryStream(bytes)) : null;
         ReferenceImageFileName = string.IsNullOrWhiteSpace(fileName)
             ? sourcePath is { Length: > 0 } path ? Path.GetFileName(path) : "reference image"
             : fileName;
         ObservedImageDescription = string.Empty;
+
+        if (!createPreview)
+        {
+            ReferenceImagePreview = null;
+            return;
+        }
+
+        try
+        {
+            ReferenceImagePreview = ImageSource.FromStream(() => new MemoryStream(bytes));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "IdeaToPrompt: reference image preview failed");
+            ReferenceImagePreview = null;
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanBuild))]
     private async Task BuildAsync()
     {
+        if (SelectedModelTier is not { } tier)
+        {
+            SetStatus("Pick a prompt writer first. Local is free; Claude tiers are paid.", StatusKind.Error);
+            return;
+        }
+
         // Fresh token source per build; the previous one (if any) is disposed in this method's finally.
         var cts = new CancellationTokenSource();
         _cts = cts;
@@ -232,7 +330,7 @@ public partial class IdeaToPromptViewModel : ObservableObject
         // A fresh build invalidates any JSON from a previous run; keep the prose until it's replaced.
         HasJson = false;
         _builtJson = null;
-        var tier = SelectedModelTier;
+
         var usesLocalVision = IsImageSource && SelectedVisionProvider == VisionObservationProvider.LocalOllama;
         var gpuGated = (tier == ModelTier.Local || usesLocalVision)
             && _gpuGate is not null
@@ -256,13 +354,21 @@ public partial class IdeaToPromptViewModel : ObservableObject
                     return;
                 }
 
+                var visionModel = ResolveVisionModel(SelectedVisionProvider);
+                if (SelectedVisionProvider == VisionObservationProvider.OpenRouter
+                    && string.IsNullOrWhiteSpace(visionModel))
+                {
+                    SetStatus("Pick an OpenRouter vision model first. Refresh the list, then choose a model.", StatusKind.Error);
+                    return;
+                }
+
                 SetStatus($"Asking {VisionProviderDisplay(SelectedVisionProvider)} to observe the reference image…", StatusKind.Info);
                 var observationResult = await _visionObserver.ObserveAsync(
                     new VisionObservationRequest(
                         SelectedVisionProvider,
                         ReferenceImageBase64,
                         ReferenceImageFileName,
-                        ResolveVisionModel(SelectedVisionProvider)),
+                        visionModel),
                     token);
 
                 if (!observationResult.Success || observationResult.Observation is null)
@@ -453,7 +559,7 @@ public partial class IdeaToPromptViewModel : ObservableObject
         provider == VisionObservationProvider.OpenRouter
             ? _generator?.OpenRouterVisionModel is { Length: > 0 } m
                 ? m
-                : ModelConstants.OpenRouter.DefaultVisionModel
+                : string.Empty
             : ResolveOllamaVisionModel();
 
     private static string VisionProviderDisplay(VisionObservationProvider provider) => provider switch

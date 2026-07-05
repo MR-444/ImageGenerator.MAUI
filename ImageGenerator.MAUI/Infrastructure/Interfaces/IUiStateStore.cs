@@ -54,8 +54,8 @@ public interface IUiStateStore
     /// </summary>
     string? LoadOllamaVisionModel();
     /// <summary>
-    /// The OpenRouter model id used by image-to-prompt observation. Null when never set — callers fall
-    /// back to <c>ModelConstants.OpenRouter.DefaultVisionModel</c>.
+    /// The OpenRouter model id used by image-to-prompt observation. Null when never set; callers must
+    /// ask the user to pick a model before sending a remote vision request.
     /// </summary>
     string? LoadOpenRouterVisionModel();
     /// <summary>Whether the OpenRouter vision model picker should show free models only. Default true.</summary>

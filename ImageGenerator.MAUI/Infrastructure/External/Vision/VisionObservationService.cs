@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ImageGenerator.MAUI.Core.Domain.Services;
+using ImageGenerator.MAUI.Infrastructure.Diagnostics;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
@@ -131,13 +132,9 @@ public sealed class VisionObservationService : IVisionObservationService
     {
         if (provider == VisionObservationProvider.OpenRouter)
         {
-            var model = requestedModel is { Length: > 0 } rm
-                ? rm
-                : _uiStateStore.LoadOpenRouterVisionModel() is { Length: > 0 } sm
-                    ? sm
-                    : ModelConstants.OpenRouter.DefaultVisionModel;
+            var model = requestedModel?.Trim();
             if (string.IsNullOrWhiteSpace(model))
-                return (string.Empty, string.Empty, "No OpenRouter vision model is set.");
+                return (string.Empty, string.Empty, "Pick an OpenRouter vision model first.");
 
             if (_openRouterTokenStore is null)
                 return (model, string.Empty, "OpenRouter support is not registered in this build.");
@@ -243,6 +240,8 @@ public sealed class VisionObservationService : IVisionObservationService
         {
             Content = new StringContent(JsonSerializer.Serialize(body, BodyJson), Encoding.UTF8, "application/json")
         };
+        request.Options.Set(RemoteHttpLoggingHandler.PurposeKey, "local image observation");
+        request.Options.Set(RemoteHttpLoggingHandler.ModelKey, modelId);
 
         using var response = await client.SendAsync(request, ct);
         var responseBody = await response.Content.ReadAsStringAsync(ct);
@@ -310,6 +309,8 @@ public sealed class VisionObservationService : IVisionObservationService
         request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {apiKey}");
         request.Headers.TryAddWithoutValidation("HTTP-Referer", "https://github.com/mr444/ImageGenerator.MAUI");
         request.Headers.TryAddWithoutValidation("X-Title", "Emberforge");
+        request.Options.Set(RemoteHttpLoggingHandler.PurposeKey, "remote image observation");
+        request.Options.Set(RemoteHttpLoggingHandler.ModelKey, modelId);
 
         using var response = await client.SendAsync(request, ct);
         var responseBody = await response.Content.ReadAsStringAsync(ct);

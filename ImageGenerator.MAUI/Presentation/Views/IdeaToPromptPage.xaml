@@ -76,6 +76,11 @@
                     <Border Style="{StaticResource Card}"
                             IsVisible="{Binding IsImageSource}"
                             AutomationId="ReferenceImageCard">
+                        <Border.GestureRecognizers>
+                            <DropGestureRecognizer AllowDrop="True"
+                                                   DragOver="OnReferenceImageDragOver"
+                                                   Drop="OnReferenceImageDropped" />
+                        </Border.GestureRecognizers>
                         <VerticalStackLayout Spacing="10">
                             <Label Text="Reference image" Style="{StaticResource CardTitle}" />
                             <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
@@ -106,7 +111,7 @@
                             <Label Text="The image is observed first, then that observation goes through the normal VPE prompt pass."
                                    Style="{StaticResource HelperText}" />
 
-                            <Label Text="Vision observer" Style="{StaticResource FieldLabel}" />
+                            <Label Text="Vision observer (image → observation)" Style="{StaticResource FieldLabel}" />
                             <Picker ItemsSource="{Binding VisionProviderOptions}"
                                     SelectedItem="{Binding SelectedVisionProvider}"
                                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
@@ -142,7 +147,7 @@
                                 <Picker Grid.Column="0"
                                         ItemsSource="{Binding Generator.OpenRouterVisionModels}"
                                         SelectedItem="{Binding Generator.OpenRouterVisionModel, Mode=TwoWay}"
-                                        Title="Refresh, then pick a model…"
+                                        Title="Refresh, then pick a vision model…"
                                         IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                                         MaximumWidthRequest="360"
                                         HorizontalOptions="Start"
@@ -193,9 +198,10 @@
                     <!-- CARD: Prompt writer -->
                     <Border Style="{StaticResource Card}">
                         <VerticalStackLayout Spacing="8">
-                            <Label Text="Prompt writer" Style="{StaticResource CardTitle}" />
+                            <Label Text="Prompt writer (observation/idea → prompt)" Style="{StaticResource CardTitle}" />
                             <Picker ItemsSource="{Binding ModelTierOptions}"
                                     SelectedItem="{Binding SelectedModelTier}"
+                                    Title="Pick a prompt writer…"
                                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                                     MaximumWidthRequest="260"
                                     HorizontalOptions="Start"

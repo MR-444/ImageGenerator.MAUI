@@ -230,7 +230,7 @@ public partial class GeneratorViewModel : ObservableObject
         _uiStateStore.PersistOllamaVisionModel(value ?? string.Empty);
 
     [ObservableProperty]
-    private string _openRouterVisionModel = ModelConstants.OpenRouter.DefaultVisionModel;
+    private string _openRouterVisionModel = string.Empty;
 
     partial void OnOpenRouterVisionModelChanged(string value) =>
         _uiStateStore.PersistOpenRouterVisionModel(value ?? string.Empty);
@@ -238,8 +238,12 @@ public partial class GeneratorViewModel : ObservableObject
     [ObservableProperty]
     private bool _openRouterVisionFreeOnly = true;
 
-    partial void OnOpenRouterVisionFreeOnlyChanged(bool value) =>
+    partial void OnOpenRouterVisionFreeOnlyChanged(bool value)
+    {
         _uiStateStore.PersistOpenRouterVisionFreeOnly(value);
+        OpenRouterVisionModels.Clear();
+        OpenRouterVisionModel = string.Empty;
+    }
 
     public ObservableCollection<string> OpenRouterVisionModels { get; } = [];
 
@@ -256,10 +260,8 @@ public partial class GeneratorViewModel : ObservableObject
             foreach (var model in models)
                 OpenRouterVisionModels.Add(model.Id);
 
-            if (!OpenRouterVisionFreeOnly
-                && !string.IsNullOrWhiteSpace(current)
-                && !OpenRouterVisionModels.Contains(current))
-                OpenRouterVisionModels.Add(current);
+            if (!string.IsNullOrWhiteSpace(current) && !OpenRouterVisionModels.Contains(current))
+                OpenRouterVisionModel = string.Empty;
 
             SetStatus(models.Count > 0
                 ? $"Found {models.Count} OpenRouter vision model(s){(OpenRouterVisionFreeOnly ? " with free pricing." : ".")}"
@@ -1681,16 +1683,14 @@ public partial class GeneratorViewModel : ObservableObject
         if (!string.IsNullOrWhiteSpace(OllamaVisionModel) && !OllamaVisionModels.Contains(OllamaVisionModel))
             OllamaVisionModels.Add(OllamaVisionModel);
 
-        var savedOpenRouterVisionModel = _uiStateStore.LoadOpenRouterVisionModel();
-        if (!string.IsNullOrEmpty(savedOpenRouterVisionModel))
-        {
-            OpenRouterVisionModel = savedOpenRouterVisionModel;
-        }
         OpenRouterVisionFreeOnly = _uiStateStore.LoadOpenRouterVisionFreeOnly();
-        if (!OpenRouterVisionFreeOnly
-            && !string.IsNullOrWhiteSpace(OpenRouterVisionModel)
-            && !OpenRouterVisionModels.Contains(OpenRouterVisionModel))
-            OpenRouterVisionModels.Add(OpenRouterVisionModel);
+        var savedOpenRouterVisionModel = _uiStateStore.LoadOpenRouterVisionModel();
+        if (savedOpenRouterVisionModel is { Length: > 0 } savedOpenRouterModel
+            && (!OpenRouterVisionFreeOnly || savedOpenRouterModel.EndsWith(":free", StringComparison.OrdinalIgnoreCase)))
+        {
+            OpenRouterVisionModel = savedOpenRouterModel;
+            OpenRouterVisionModels.Add(savedOpenRouterModel);
+        }
 
         // Default-on; only flips the field when the user previously turned it off (OnChanged re-persist is
         // a harmless echo — nothing else writes this field).
