@@ -21,7 +21,7 @@ using ImageGenerationParameters = ImageGenerator.MAUI.Core.Domain.Entities.Image
 
 namespace ImageGenerator.MAUI.Presentation.ViewModels;
 
-public partial class GeneratorViewModel : ObservableObject
+public partial class GeneratorViewModel : ObservableObject, IStatusOwner
 {
     private readonly IJobRunner _jobRunner;
     private readonly IApiTokenStore _tokenStore;

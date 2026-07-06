@@ -193,9 +193,13 @@
                                         <Grid Padding="4" WidthRequest="140" HeightRequest="140">
                                             <Image Source="{Binding Preview}" Aspect="AspectFill"
                                                    SemanticProperties.Description="{Binding FileName}" />
+                                            <!-- Explicit DangerButton so this remove affordance
+                                                 reads as destructive (red) and stops silently
+                                                 inheriting the implicit primary-purple Button style. -->
                                             <Button Text="×" FontSize="14" Padding="0"
                                                     WidthRequest="28" HeightRequest="28"
                                                     HorizontalOptions="End" VerticalOptions="Start"
+                                                    Style="{StaticResource DangerButton}"
                                                     CommandParameter="{Binding .}"
                                                     Clicked="OnRemoveImageClicked"
                                                     AutomationId="RemoveImageButton" />
@@ -672,25 +676,7 @@
                            LineBreakMode="TailTruncation"
                            MaxLines="2"
                            ToolTipProperties.Text="{Binding StatusMessage}"
-                           AutomationId="StatusLabel">
-                        <Label.Triggers>
-                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
-                            </DataTrigger>
-                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
-                            </DataTrigger>
-                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Warning}">
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
-                            </DataTrigger>
-                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Canceled}">
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusCanceledLight}, Dark={StaticResource StatusCanceledDark}}" />
-                            </DataTrigger>
-                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Info}">
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusInfoLight}, Dark={StaticResource StatusInfoDark}}" />
-                            </DataTrigger>
-                        </Label.Triggers>
-                    </Label>
+                           AutomationId="StatusLabel" />
                 </VerticalStackLayout>
 
                 <VerticalStackLayout Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5" Spacing="2">

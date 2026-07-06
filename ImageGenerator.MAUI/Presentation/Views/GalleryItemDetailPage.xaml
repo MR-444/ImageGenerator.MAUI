@@ -15,7 +15,7 @@
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <Grid RowDefinitions="Auto,*,Auto"
+    <Grid RowDefinitions="Auto,*,Auto,Auto"
           Padding="24,16,24,12"
           RowSpacing="12">
 
@@ -39,36 +39,37 @@
             </VerticalStackLayout>
         </Grid>
 
-        <ScrollView Grid.Row="1">
-            <VerticalStackLayout Spacing="16" Padding="0,0,0,8">
+        <!-- Preview via the OS shell at SingleItem mode (~1024 px, aspect preserved).
+             Direct file-path binding worked but occasionally hard-failed natively when
+             MAUI's WIC pipeline hit a particular file mid-decode; the OS-rendered
+             preview is sharper than the 256 px tile thumbnail and avoids that path.
+             The image lives in its own star row (not inside a ScrollView) so AspectFit
+             is measured against a bounded height and can't overflow past the metadata —
+             a MaximumHeightRequest inside a ScrollView is ignored (infinite measure). -->
+        <Image Grid.Row="1"
+               Source="{Binding FilePath, Converter={StaticResource ShellPreview}}"
+               Aspect="AspectFit"
+               VerticalOptions="Fill"
+               HorizontalOptions="Center"
+               SemanticProperties.Description="{Binding FileName}" />
 
-                <!-- Preview via the OS shell at SingleItem mode (~1024 px, aspect preserved).
-                     Direct file-path binding worked but occasionally hard-failed natively when
-                     MAUI's WIC pipeline hit a particular file mid-decode; the OS-rendered
-                     preview is sharper than the 256 px tile thumbnail and avoids that path. -->
-                <Image Source="{Binding FilePath, Converter={StaticResource ShellPreview}}"
-                       Aspect="AspectFit"
-                       MaximumHeightRequest="560"
-                       HorizontalOptions="Center"
-                       SemanticProperties.Description="{Binding FileName}" />
-
-                <!-- Read-only but selectable; the Editor lets the user copy partial text by hand. -->
-                <Border Style="{StaticResource Card}">
-                    <VerticalStackLayout Spacing="8">
-                        <Label Text="Embedded metadata" Style="{StaticResource CardTitle}" />
-                        <Editor Text="{Binding MetadataText}"
-                                IsReadOnly="True"
-                                AutoSize="TextChanges"
-                                FontFamily="OpenSansRegular"
-                                MinimumHeightRequest="160"
-                                AutomationId="DetailMetadataEditor" />
-                    </VerticalStackLayout>
-                </Border>
-
+        <!-- Read-only but selectable; the Editor lets the user copy partial text by hand.
+             Capped height so long captions scroll inside the editor instead of growing
+             the row and pushing the action bar off-screen. -->
+        <Border Grid.Row="2" Style="{StaticResource Card}">
+            <VerticalStackLayout Spacing="8">
+                <Label Text="Embedded metadata" Style="{StaticResource CardTitle}" />
+                <Editor Text="{Binding MetadataText}"
+                        IsReadOnly="True"
+                        AutoSize="TextChanges"
+                        FontFamily="OpenSansRegular"
+                        MinimumHeightRequest="160"
+                        MaximumHeightRequest="220"
+                        AutomationId="DetailMetadataEditor" />
             </VerticalStackLayout>
-        </ScrollView>
+        </Border>
 
-        <Border Grid.Row="2" Style="{StaticResource ActionBar}">
+        <Border Grid.Row="3" Style="{StaticResource ActionBar}">
             <Grid RowDefinitions="Auto,Auto" RowSpacing="2">
                 <FlexLayout Grid.Row="0"
                             Direction="Row"

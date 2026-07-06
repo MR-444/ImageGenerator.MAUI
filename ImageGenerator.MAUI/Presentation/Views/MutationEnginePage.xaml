@@ -279,19 +279,7 @@
                        VerticalOptions="Center"
                        IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
                        LineBreakMode="WordWrap"
-                       AutomationId="MutationStatusLabel">
-                    <Label.Triggers>
-                        <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
-                        </DataTrigger>
-                        <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
-                        </DataTrigger>
-                        <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Warning}">
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
-                        </DataTrigger>
-                    </Label.Triggers>
-                </Label>
+                       AutomationId="MutationStatusLabel" />
             </Grid>
         </Border>
 

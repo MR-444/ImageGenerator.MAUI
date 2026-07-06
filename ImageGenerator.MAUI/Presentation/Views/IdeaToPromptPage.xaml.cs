@@ -47,6 +47,21 @@ public partial class IdeaToPromptPage
         }
     }
 
+    // Segmented Text | Image source toggle. The VM's SourceMode is a settable observable
+    // property, so the buttons just assign it; the active-segment look is driven by
+    // IsTextSource/IsImageSource DataTriggers in XAML.
+    private void OnSelectTextSource(object? sender, EventArgs e)
+    {
+        if (BindingContext is IdeaToPromptViewModel { IsBusy: false } vm)
+            vm.SourceMode = IdeaSourceMode.Text;
+    }
+
+    private void OnSelectImageSource(object? sender, EventArgs e)
+    {
+        if (BindingContext is IdeaToPromptViewModel { IsBusy: false } vm)
+            vm.SourceMode = IdeaSourceMode.Image;
+    }
+
     private void OnWorkspaceSizeChanged(object? sender, EventArgs e)
     {
         if (WorkspaceGrid.Width <= 0) return;

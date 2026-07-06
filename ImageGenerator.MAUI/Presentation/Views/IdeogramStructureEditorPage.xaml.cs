@@ -120,6 +120,16 @@ public partial class IdeogramStructureEditorPage
         picker.SelectedIndex = -1;
     }
 
+    // Accordion sections in the inspector pane. The header's TapGestureRecognizer passes its
+    // section body (via CommandParameter/x:Reference) and we flip its visibility; the header
+    // chevron follows the body's IsVisible through BoolToChevronConverter, so no VM state is
+    // involved.
+    private void OnSectionHeaderTapped(object? sender, TappedEventArgs e)
+    {
+        if (e.Parameter is View body)
+            body.IsVisible = !body.IsVisible;
+    }
+
     private void OnCanvasStageSizeChanged(object? sender, EventArgs e)
     {
         if (sender is not VisualElement stage || stage.Width <= 0 || stage.Height <= 0) return;
@@ -158,7 +168,11 @@ public partial class IdeogramStructureEditorPage
 
     private void ApplyWideWorkspace()
     {
-        SetColumns(new GridLength(360), new GridLength(1, GridUnitType.Star), new GridLength(380));
+        // Proportional columns so the inspector/output panes widen with the window instead
+        // of staying pinned to a narrow fixed width; the canvas is centred in its pane so a
+        // star centre column is fine. MinimumWidthRequest on the panes (XAML) stops them
+        // collapsing before the Narrow breakpoint takes over.
+        SetColumns(new GridLength(1.3, GridUnitType.Star), new GridLength(1.6, GridUnitType.Star), new GridLength(1.3, GridUnitType.Star));
         SetRows(new GridLength(1, GridUnitType.Star));
         WorkspaceGrid.ColumnSpacing = 16;
         WorkspaceGrid.RowSpacing = 16;
@@ -170,7 +184,7 @@ public partial class IdeogramStructureEditorPage
 
     private void ApplyMediumWorkspace()
     {
-        SetColumns(new GridLength(320), new GridLength(1, GridUnitType.Star));
+        SetColumns(new GridLength(1, GridUnitType.Star), new GridLength(1.4, GridUnitType.Star));
         SetRows(new GridLength(1, GridUnitType.Star), new GridLength(300));
         WorkspaceGrid.ColumnSpacing = 16;
         WorkspaceGrid.RowSpacing = 16;

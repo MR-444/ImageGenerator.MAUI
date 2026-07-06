@@ -1,8 +1,9 @@
 ﻿<?xml version="1.0" encoding="UTF-8" ?>
 <?xaml-comp compile="true" ?>
-<ResourceDictionary 
+<ResourceDictionary
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels">
 
     <Style TargetType="ActivityIndicator">
         <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
@@ -171,12 +172,32 @@
         </Setter>
     </Style>
 
-    <!-- Status label — reacts to StatusKind via DataTriggers in the View. -->
+    <!-- Status label — recolors itself from the bound StatusKind. The DataTriggers used to
+         be copy-pasted into every page's status Label; they live here once now. Any Label
+         using this style just needs a StatusKind in its BindingContext; the default
+         (Info-colored) TextColor applies when no trigger matches. -->
     <Style x:Key="StatusLabel" TargetType="Label">
         <Setter Property="FontFamily" Value="OpenSansRegular" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="LineBreakMode" Value="WordWrap" />
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusInfoLight}, Dark={StaticResource StatusInfoDark}}" />
+        <Style.Triggers>
+            <DataTrigger TargetType="Label" Binding="{Binding StatusKind, x:DataType=vm:IStatusOwner}" Value="{x:Static vm:StatusKind.Success}">
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
+            </DataTrigger>
+            <DataTrigger TargetType="Label" Binding="{Binding StatusKind, x:DataType=vm:IStatusOwner}" Value="{x:Static vm:StatusKind.Error}">
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
+            </DataTrigger>
+            <DataTrigger TargetType="Label" Binding="{Binding StatusKind, x:DataType=vm:IStatusOwner}" Value="{x:Static vm:StatusKind.Warning}">
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
+            </DataTrigger>
+            <DataTrigger TargetType="Label" Binding="{Binding StatusKind, x:DataType=vm:IStatusOwner}" Value="{x:Static vm:StatusKind.Info}">
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusInfoLight}, Dark={StaticResource StatusInfoDark}}" />
+            </DataTrigger>
+            <DataTrigger TargetType="Label" Binding="{Binding StatusKind, x:DataType=vm:IStatusOwner}" Value="{x:Static vm:StatusKind.Canceled}">
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusCanceledLight}, Dark={StaticResource StatusCanceledDark}}" />
+            </DataTrigger>
+        </Style.Triggers>
     </Style>
 
     <!-- ActionBar: fixed bottom strip hosting Generate + global actions; visually a

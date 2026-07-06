@@ -23,7 +23,7 @@ public enum IdeaSourceMode
 /// (<c>Parameters.Prompt</c> + <c>UseJsonPrompt</c>). Singleton so an in-progress idea + results survive
 /// a navigation round-trip; the optional <see cref="GeneratorViewModel"/> lets tests build it stand-alone.
 /// </summary>
-public partial class IdeaToPromptViewModel : ObservableObject
+public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
 {
     private readonly IPromptBuilderService _builder;
     private readonly IClipboardService _clipboard;

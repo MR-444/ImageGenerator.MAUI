@@ -12,6 +12,18 @@
         <ResourceDictionary>
             <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
             <converters:InverseBoolConverter x:Key="InverseBool" />
+
+            <!-- Base look for a segmented-toggle button; the active segment is filled via a
+                 per-button DataTrigger keyed on the VM's IsTextSource / IsImageSource. -->
+            <Style x:Key="SegmentButton" TargetType="Button">
+                <Setter Property="BackgroundColor" Value="Transparent" />
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray200}}" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="FontFamily" Value="OpenSansSemibold" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="Padding" Value="16,8" />
+                <Setter Property="MinimumHeightRequest" Value="40" />
+            </Style>
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -51,24 +63,47 @@
                     <Border Style="{StaticResource Card}" VerticalOptions="Start">
                         <VerticalStackLayout Spacing="12">
                             <Label Text="Idea source" Style="{StaticResource CardTitle}" />
-                            <Picker ItemsSource="{Binding SourceModeOptions}"
-                                    SelectedItem="{Binding SourceMode}"
-                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                    MaximumWidthRequest="260"
-                                    HorizontalOptions="Start"
-                                    AutomationId="IdeaSourceModePicker" />
 
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                                <CheckBox Grid.Column="0"
-                                          IsChecked="{Binding BuildJson}"
-                                          VerticalOptions="Start"
-                                          AutomationId="BuildJsonCheckBox" />
-                                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                                    <Label Text="Also build an Ideogram V4 JSON prompt" Style="{StaticResource FieldLabel}" />
-                                    <Label Text="Leave off for ordinary prompt models; turn on for structured-caption workflows."
-                                           Style="{StaticResource HelperText}" />
-                                </VerticalStackLayout>
-                            </Grid>
+                            <!-- Segmented Text | Image toggle (replaces the old 2-item dropdown). -->
+                            <Border Padding="3"
+                                    HorizontalOptions="Start"
+                                    Stroke="{AppThemeBinding Light={StaticResource SurfaceBorderLight}, Dark={StaticResource SurfaceBorderDark}}"
+                                    StrokeThickness="1"
+                                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="10" />
+                                </Border.StrokeShape>
+                                <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="3">
+                                    <Button Grid.Column="0"
+                                            Text="Text"
+                                            Style="{StaticResource SegmentButton}"
+                                            MinimumWidthRequest="96"
+                                            Clicked="OnSelectTextSource"
+                                            AutomationId="IdeaSourceTextButton">
+                                        <Button.Triggers>
+                                            <DataTrigger TargetType="Button" Binding="{Binding IsTextSource}" Value="True">
+                                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+                                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PrimaryDarkText}}" />
+                                            </DataTrigger>
+                                        </Button.Triggers>
+                                    </Button>
+                                    <Button Grid.Column="1"
+                                            Text="Image"
+                                            Style="{StaticResource SegmentButton}"
+                                            MinimumWidthRequest="96"
+                                            Clicked="OnSelectImageSource"
+                                            AutomationId="IdeaSourceImageButton">
+                                        <Button.Triggers>
+                                            <DataTrigger TargetType="Button" Binding="{Binding IsImageSource}" Value="True">
+                                                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+                                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PrimaryDarkText}}" />
+                                            </DataTrigger>
+                                        </Button.Triggers>
+                                    </Button>
+                                </Grid>
+                            </Border>
+                            <Label Text="Start from a plain-English idea, or observe a reference image first."
+                                   Style="{StaticResource HelperText}" />
                         </VerticalStackLayout>
                     </Border>
 
@@ -106,7 +141,7 @@
                                    IsVisible="{Binding HasReferenceImage}"
                                    HeightRequest="220"
                                    Aspect="AspectFit"
-                                   BackgroundColor="{AppThemeBinding Light=#F3F4F6, Dark=#1F2937}"
+                                   BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}"
                                    AutomationId="ReferenceImagePreview" />
                             <Label Text="The image is observed first, then that observation goes through the normal VPE prompt pass."
                                    Style="{StaticResource HelperText}" />
@@ -210,6 +245,19 @@
                                    Style="{StaticResource HelperText}"
                                    AutomationId="IdeaPromptModelSummaryLabel" />
 
+                            <!-- Output-format toggle lives with the writer (moved out of the source card). -->
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Margin="0,4,0,0">
+                                <CheckBox Grid.Column="0"
+                                          IsChecked="{Binding BuildJson}"
+                                          VerticalOptions="Start"
+                                          AutomationId="BuildJsonCheckBox" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                    <Label Text="Also build an Ideogram V4 JSON prompt" Style="{StaticResource FieldLabel}" />
+                                    <Label Text="Leave off for ordinary prompt models; turn on for structured-caption workflows."
+                                           Style="{StaticResource HelperText}" />
+                                </VerticalStackLayout>
+                            </Grid>
+
                             <VerticalStackLayout Spacing="8" IsVisible="{Binding IsLocalTier}">
                                 <Label Text="Local model (Ollama)" Style="{StaticResource FieldLabel}" />
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
@@ -240,6 +288,21 @@
             <!-- RIGHT PANE: observation and outputs. -->
             <ScrollView x:Name="ResultPane" Grid.Column="1">
                 <VerticalStackLayout Spacing="12" Padding="0,0,0,8">
+
+                    <!-- Empty state so the results pane isn't blank before the first build. -->
+                    <Border Style="{StaticResource Card}"
+                            IsVisible="{Binding HasProse, Converter={StaticResource InverseBool}}"
+                            AutomationId="IdeaToPromptEmptyState">
+                        <VerticalStackLayout Spacing="8" Padding="8,24" HorizontalOptions="Center">
+                            <Label Text="Your prompt will appear here"
+                                   Style="{StaticResource CardTitle}"
+                                   HorizontalOptions="Center" />
+                            <Label Text="Describe an idea (or pick a reference image) on the left, then press Build prompt."
+                                   Style="{StaticResource HelperText}"
+                                   HorizontalTextAlignment="Center"
+                                   HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                    </Border>
 
                     <Border Style="{StaticResource Card}"
                             IsVisible="{Binding ShowObservation}"
@@ -320,19 +383,7 @@
                        IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
                        LineBreakMode="WordWrap"
                        VerticalOptions="Center"
-                       AutomationId="IdeaToPromptStatusLabel">
-                    <Label.Triggers>
-                        <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
-                        </DataTrigger>
-                        <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
-                        </DataTrigger>
-                        <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Warning}">
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
-                        </DataTrigger>
-                    </Label.Triggers>
-                </Label>
+                       AutomationId="IdeaToPromptStatusLabel" />
             </Grid>
         </Border>
 

@@ -22,7 +22,7 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 /// pretty-printed to disk for use outside this app. Transient like GalleryItemDetailViewModel;
 /// MainPage's singleton VM state survives the round-trip.
 /// </summary>
-public partial class IdeogramStructureEditorViewModel : ObservableObject
+public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatusOwner
 {
     private readonly IJsonPromptFileService _fileService;
     private readonly IFileLauncher _fileLauncher;

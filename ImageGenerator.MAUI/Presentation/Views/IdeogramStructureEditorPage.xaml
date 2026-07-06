@@ -15,6 +15,7 @@
             <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
             <converters:InverseBoolConverter x:Key="InverseBool" />
             <converters:ResolutionAspectRatioConverter x:Key="ResolutionAspectRatio" />
+            <converters:BoolToChevronConverter x:Key="BoolToChevron" />
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -47,32 +48,49 @@
               SizeChanged="OnWorkspaceSizeChanged">
 
             <!-- LEFT PANE: inspector -->
-            <ScrollView x:Name="InspectorPane" Grid.Row="0" Grid.Column="0">
+            <ScrollView x:Name="InspectorPane" Grid.Row="0" Grid.Column="0" MinimumWidthRequest="320">
                 <VerticalStackLayout Spacing="16" Padding="0,0,0,8">
 
-                    <!-- CARD: Description -->
+                    <!-- CARD: Description (collapsible) -->
                     <Border Style="{StaticResource Card}" VerticalOptions="Start">
                         <VerticalStackLayout Spacing="8">
-                            <Label Text="Description" Style="{StaticResource CardTitle}" />
+                            <Grid ColumnDefinitions="*,Auto" BackgroundColor="Transparent">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnSectionHeaderTapped" CommandParameter="{x:Reference DescriptionBody}" />
+                                </Grid.GestureRecognizers>
+                                <Label Grid.Column="0" Text="Description" Style="{StaticResource CardTitle}" Margin="0" VerticalOptions="Center" />
+                                <Label Grid.Column="1" VerticalOptions="Center" Style="{StaticResource CardTitle}" Margin="0"
+                                       Text="{Binding IsVisible, Source={x:Reference DescriptionBody}, Converter={StaticResource BoolToChevron}, x:DataType=View}" />
+                            </Grid>
+                            <VerticalStackLayout x:Name="DescriptionBody" Spacing="8">
                             <Label Text="High-level description (required, 1–2 sentences)" Style="{StaticResource FieldLabel}" />
                             <Editor Text="{Binding HighLevelDescription}"
                                     Placeholder="What the whole image shows…"
-                                    AutoSize="TextChanges"
-                                    MinimumHeightRequest="60"
+                                    AutoSize="Disabled"
+                                    HeightRequest="110"
                                     AutomationId="EditorHighLevelEntry" />
                             <Label Text="Background (required)" Style="{StaticResource FieldLabel}" />
                             <Editor Text="{Binding Background}"
                                     Placeholder="What fills the scene behind the elements…"
-                                    AutoSize="TextChanges"
-                                    MinimumHeightRequest="60"
+                                    AutoSize="Disabled"
+                                    HeightRequest="110"
                                     AutomationId="EditorBackgroundEntry" />
+                            </VerticalStackLayout>
                         </VerticalStackLayout>
                     </Border>
 
-                    <!-- CARD: Style (optional) -->
+                    <!-- CARD: Style (optional, collapsible — collapsed by default since it's optional) -->
                     <Border Style="{StaticResource Card}" VerticalOptions="Start">
                         <VerticalStackLayout Spacing="8">
-                            <Label Text="Style" Style="{StaticResource CardTitle}" />
+                            <Grid ColumnDefinitions="*,Auto" BackgroundColor="Transparent">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnSectionHeaderTapped" CommandParameter="{x:Reference StyleBody}" />
+                                </Grid.GestureRecognizers>
+                                <Label Grid.Column="0" Text="Style" Style="{StaticResource CardTitle}" Margin="0" VerticalOptions="Center" />
+                                <Label Grid.Column="1" VerticalOptions="Center" Style="{StaticResource CardTitle}" Margin="0"
+                                       Text="{Binding IsVisible, Source={x:Reference StyleBody}, Converter={StaticResource BoolToChevron}, x:DataType=View}" />
+                            </Grid>
+                            <VerticalStackLayout x:Name="StyleBody" Spacing="8" IsVisible="False">
                             <HorizontalStackLayout Spacing="8">
                                 <CheckBox IsChecked="{Binding IncludeStyle}" VerticalOptions="Center"
                                           AutomationId="EditorIncludeStyleCheckBox" />
@@ -167,13 +185,22 @@
                                     </BindableLayout.ItemTemplate>
                                 </FlexLayout>
                             </VerticalStackLayout>
+                            </VerticalStackLayout>
                         </VerticalStackLayout>
                     </Border>
 
-                    <!-- CARD: Elements -->
+                    <!-- CARD: Elements (collapsible) -->
                     <Border Style="{StaticResource Card}" VerticalOptions="Start">
                         <VerticalStackLayout Spacing="8">
-                            <Label Text="Elements" Style="{StaticResource CardTitle}" />
+                            <Grid ColumnDefinitions="*,Auto" BackgroundColor="Transparent">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnSectionHeaderTapped" CommandParameter="{x:Reference ElementsBody}" />
+                                </Grid.GestureRecognizers>
+                                <Label Grid.Column="0" Text="Elements" Style="{StaticResource CardTitle}" Margin="0" VerticalOptions="Center" />
+                                <Label Grid.Column="1" VerticalOptions="Center" Style="{StaticResource CardTitle}" Margin="0"
+                                       Text="{Binding IsVisible, Source={x:Reference ElementsBody}, Converter={StaticResource BoolToChevron}, x:DataType=View}" />
+                            </Grid>
+                            <VerticalStackLayout x:Name="ElementsBody" Spacing="8">
                             <FlexLayout Direction="Row" Wrap="Wrap" AlignItems="Start">
                                 <Button Text="Add object"
                                         Command="{Binding AddObjElementCommand}"
@@ -211,13 +238,22 @@
                                 <Label Text="{Binding SelectedElement.Type, StringFormat='[{0}] element'}" Style="{StaticResource FieldLabel}" />
 
                                 <Label Text="Description" Style="{StaticResource FieldLabel}" />
-                                <Entry Text="{Binding SelectedElement.Desc}" Placeholder="What this element is…"
-                                       AutomationId="EditorElementDescEntry" />
+                                <!-- Fixed generous height with internal scroll rather than AutoSize:
+                                     MAUI's Editor AutoSize="TextChanges" is unreliable on Windows for
+                                     programmatically-bound text (stays at min height), which is why long
+                                     descriptions looked clipped. A tall scrollable box shows the whole
+                                     content predictably. -->
+                                <Editor Text="{Binding SelectedElement.Desc}" Placeholder="What this element is…"
+                                        AutoSize="Disabled"
+                                        HeightRequest="160"
+                                        AutomationId="EditorElementDescEntry" />
 
                                 <VerticalStackLayout Spacing="4" IsVisible="{Binding SelectedElement.IsText}">
                                     <Label Text="Text to render" Style="{StaticResource FieldLabel}" />
-                                    <Entry Text="{Binding SelectedElement.Text}" Placeholder="The literal text in the image…"
-                                           AutomationId="EditorElementTextEntry" />
+                                    <Editor Text="{Binding SelectedElement.Text}" Placeholder="The literal text in the image…"
+                                            AutoSize="Disabled"
+                                            HeightRequest="90"
+                                            AutomationId="EditorElementTextEntry" />
                                 </VerticalStackLayout>
 
                                 <Label Text="Palette (up to 5 × #RRGGBB, comma-separated)" Style="{StaticResource FieldLabel}" />
@@ -286,6 +322,7 @@
                                     </Grid>
                                 </VerticalStackLayout>
                             </VerticalStackLayout>
+                            </VerticalStackLayout>
                         </VerticalStackLayout>
                     </Border>
 
@@ -337,7 +374,7 @@
             </Border>
 
             <!-- RIGHT PANE: JSON/output -->
-            <ScrollView x:Name="OutputPane" Grid.Row="0" Grid.Column="2">
+            <ScrollView x:Name="OutputPane" Grid.Row="0" Grid.Column="2" MinimumWidthRequest="340">
                 <VerticalStackLayout Spacing="16" Padding="0,0,0,8">
                     <Border Style="{StaticResource Card}" VerticalOptions="Start">
                         <VerticalStackLayout Spacing="12">
@@ -540,22 +577,7 @@
                            IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
                            LineBreakMode="WordWrap"
                            MaxLines="2"
-                           AutomationId="EditorStatusLabel">
-                        <Label.Triggers>
-                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Success}">
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}" />
-                            </DataTrigger>
-                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Error}">
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
-                            </DataTrigger>
-                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Warning}">
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}" />
-                            </DataTrigger>
-                            <DataTrigger TargetType="Label" Binding="{Binding StatusKind}" Value="{x:Static vm:StatusKind.Info}">
-                                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusInfoLight}, Dark={StaticResource StatusInfoDark}}" />
-                            </DataTrigger>
-                        </Label.Triggers>
-                    </Label>
+                           AutomationId="EditorStatusLabel" />
                 </VerticalStackLayout>
             </Grid>
         </Border>

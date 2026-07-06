@@ -21,7 +21,7 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 /// renders, scores, or selects; the human is the fitness function. Transient (fresh per navigation);
 /// the singleton <see cref="GeneratorViewModel"/> holds the base hand-off and the batch coordinator.
 /// </summary>
-public partial class MutationEngineViewModel : ObservableObject
+public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
 {
     /// <summary>Slot-review sentinel (friendly): leave <see cref="Element.SlotTag"/> null so the engine
     /// infers it. Aliases <see cref="SlotTagDisplay.Auto"/> so the picker and the sentinel agree.</summary>
