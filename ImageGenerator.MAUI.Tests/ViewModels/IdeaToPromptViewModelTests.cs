@@ -49,6 +49,54 @@ public class IdeaToPromptViewModelTests
         vm.ModelSummary.Should().Contain("Pick a prompt writer");
     }
 
+    // ---- Prompt-writer tier persistence -------------------------------------------------
+
+    [Fact]
+    public void Construct_WithSavedTier_RestoresTheSelection()
+    {
+        var store = new Mock<IUiStateStore>();
+        store.Setup(s => s.LoadPromptWriterTier()).Returns(ModelTier.Opus);
+
+        var vm = new IdeaToPromptViewModel(
+            new FakePromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())),
+            _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance,
+            uiStateStore: store.Object);
+
+        vm.SelectedModelTier.Should().Be(ModelTier.Opus, "the last-used tier survives an app restart");
+    }
+
+    [Fact]
+    public void Construct_WithNoSavedTier_LeavesPickerEmpty()
+    {
+        var store = new Mock<IUiStateStore>();
+        store.Setup(s => s.LoadPromptWriterTier()).Returns((ModelTier?)null);
+
+        var vm = new IdeaToPromptViewModel(
+            new FakePromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())),
+            _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance,
+            uiStateStore: store.Object);
+
+        vm.SelectedModelTier.Should().BeNull("first launch keeps the 'Pick a prompt writer…' placeholder");
+    }
+
+    [Fact]
+    public void ChangingTier_PersistsTheSelection()
+    {
+        var store = new Mock<IUiStateStore>();
+        store.Setup(s => s.LoadPromptWriterTier()).Returns((ModelTier?)null);
+        var vm = new IdeaToPromptViewModel(
+            new FakePromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())),
+            _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance,
+            uiStateStore: store.Object);
+
+        vm.SelectedModelTier = ModelTier.Sonnet;
+
+        store.Verify(s => s.PersistPromptWriterTier(ModelTier.Sonnet), Times.Once);
+    }
+
     // ---- Pass 1 only (checkbox off) -----------------------------------------------------
 
     [Fact]

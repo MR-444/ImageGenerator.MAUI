@@ -32,6 +32,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
     private readonly IGpuGate? _gpuGate;
     private readonly IVisionObservationService? _visionObserver;
     private readonly IReferenceImageDownloadService? _referenceImageDownloader;
+    private readonly IUiStateStore? _uiStateStore;
     private readonly ILogger<IdeaToPromptViewModel> _logger;
 
     private V4JsonPrompt? _builtJson;
@@ -49,7 +50,8 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         IOllamaModelCatalog? ollamaCatalog = null,
         IGpuGate? gpuGate = null,
         IVisionObservationService? visionObserver = null,
-        IReferenceImageDownloadService? referenceImageDownloader = null)
+        IReferenceImageDownloadService? referenceImageDownloader = null,
+        IUiStateStore? uiStateStore = null)
     {
         _builder = builder ?? throw new ArgumentNullException(nameof(builder));
         _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
@@ -59,9 +61,16 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         _gpuGate = gpuGate;
         _visionObserver = visionObserver;
         _referenceImageDownloader = referenceImageDownloader;
+        _uiStateStore = uiStateStore;
 
         // Default the JSON pass on for structured-JSON models (Ideogram V4 / ComfyUI), off otherwise.
         BuildJson = generator?.SupportsJsonPromptEditor ?? false;
+
+        // Restore the last-used prompt writer so the picker survives an app restart (null = never
+        // picked → the "Pick a prompt writer…" placeholder stays). The assignment echoes back through
+        // OnSelectedModelTierChanged as a harmless skip-identical persist.
+        if (_uiStateStore?.LoadPromptWriterTier() is { } savedTier)
+            SelectedModelTier = savedTier;
     }
 
     [ObservableProperty]
@@ -142,6 +151,14 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         null => "Pick a prompt writer before building. Local is free; Claude tiers are paid.",
         _ => "Claude Opus: paid Anthropic call, strongest prompt-builder default."
     };
+
+    // Persist the picked tier so it survives an app restart, mirroring GeneratorViewModel's vision-model
+    // hook. Only persist a real selection — a Picker can't return to null, so we never overwrite a saved
+    // tier with the placeholder.
+    partial void OnSelectedModelTierChanged(ModelTier? value)
+    {
+        if (value is { } tier) _uiStateStore?.PersistPromptWriterTier(tier);
+    }
 
     /// <summary>Expose the host generator so the page can reuse the shared Ollama model picker.</summary>
     public GeneratorViewModel? Generator => _generator;
@@ -327,7 +344,11 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         var token = cts.Token;
 
         IsBusy = true;
-        // A fresh build invalidates any JSON from a previous run; keep the prose until it's replaced.
+        // A fresh build starts from a clean slate: drop the previous run's prose, observation,
+        // and JSON so stale results never linger (including when this build errors or is cancelled
+        // before producing new output). They repopulate below as each pass succeeds.
+        Prose = string.Empty;
+        ObservedImageDescription = string.Empty;
         HasJson = false;
         _builtJson = null;
 

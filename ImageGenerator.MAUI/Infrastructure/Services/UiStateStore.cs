@@ -13,6 +13,7 @@ public sealed class UiStateStore : IUiStateStore
     private const string UseJsonPromptKey = "imggen.use_json_prompt";
     private const string FreeVramAfterRenderingKey = "imggen.free_vram_after_rendering";
     private const string AppThemeKey = "imggen.app_theme";
+    private const string PromptWriterTierKey = "imggen.prompt_writer_tier";
     private const string ResolutionKey = "imggen.last_resolution";
     private const string ComfyUiResolutionKey = "imggen.last_resolution.comfyui";
     private const string AspectRatioKey = "imggen.last_aspect_ratio";
@@ -414,6 +415,40 @@ public sealed class UiStateStore : IUiStateStore
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Preferences.Set({Key}) failed", AppThemeKey);
+        }
+    }
+
+    public ModelTier? LoadPromptWriterTier()
+    {
+        try
+        {
+            // Stored as the ModelTier enum int. Sentinel -1 = never picked, so the picker keeps its
+            // "Pick a prompt writer…" placeholder on first launch. A corrupt/foreign value (not a
+            // defined ModelTier) also degrades to null rather than feeding an undefined enum forward.
+            var stored = _preferences.Get(PromptWriterTierKey, -1);
+            var tier = stored >= 0 && Enum.IsDefined(typeof(ModelTier), stored) ? (ModelTier?)stored : null;
+            _logger.LogDebug("UiStateStore.LoadPromptWriterTier -> {Value}", tier);
+            return tier;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Preferences.Get({Key}) failed", PromptWriterTierKey);
+            return null;
+        }
+    }
+
+    public void PersistPromptWriterTier(ModelTier value)
+    {
+        try
+        {
+            if (_preferences.ContainsKey(PromptWriterTierKey)
+                && _preferences.Get(PromptWriterTierKey, -1) == (int)value) return;
+            _preferences.Set(PromptWriterTierKey, (int)value);
+            _logger.LogDebug("UiStateStore.PersistPromptWriterTier({Value})", value);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Preferences.Set({Key}) failed", PromptWriterTierKey);
         }
     }
 

@@ -70,7 +70,64 @@ public sealed class OllamaModelCatalog : IOllamaModelCatalog
         }
 
         infos.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
-        return infos;
+        return await ConfirmVisionAsync(baseUrl, infos, ct);
+    }
+
+    // How many /api/show probes to run at once. Refresh is a manual action and /api/show is a cheap
+    // metadata read, but we cap concurrency so a long model list doesn't open a burst of sockets.
+    private const int VisionProbeConcurrency = 5;
+
+    /// <summary>
+    /// Ollama's <c>/api/tags</c> under-reports the <c>vision</c> capability for some model families
+    /// (notably gemma3/gemma4), while <c>/api/show</c> reports it authoritatively. For every model
+    /// <c>/api/tags</c> did NOT already flag as vision, confirm via a <c>/api/show</c> metadata read
+    /// (which does not load the model into VRAM) and graft the <c>vision</c> capability on when present.
+    /// Models already flagged skip the probe, so this self-heals to zero extra calls if Ollama ever
+    /// fixes <c>/api/tags</c>. Per-model failures fall back to the <c>/api/tags</c> capabilities.
+    /// </summary>
+    private async Task<IReadOnlyList<OllamaModelInfo>> ConfirmVisionAsync(
+        string baseUrl, IReadOnlyList<OllamaModelInfo> infos, CancellationToken ct)
+    {
+        var endpoint = $"{baseUrl.TrimEnd('/')}/api/show";
+        using var client = _httpClientFactory.CreateClient(HttpClientName);
+        using var gate = new SemaphoreSlim(VisionProbeConcurrency);
+
+        var probes = infos.Select(async info =>
+        {
+            if (info.SupportsVision) return info; // /api/tags already reported it — trust it.
+
+            await gate.WaitAsync(ct);
+            try
+            {
+                var body = new JsonObject { ["model"] = info.Name };
+                using var content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+                using var response = await client.PostAsync(endpoint, content, ct);
+                if (!response.IsSuccessStatusCode) return info;
+
+                var json = await response.Content.ReadAsStringAsync(ct);
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("capabilities", out var caps)
+                    && caps.ValueKind == JsonValueKind.Array
+                    && caps.EnumerateArray().Any(c =>
+                        string.Equals(c.GetString(), "vision", StringComparison.OrdinalIgnoreCase)))
+                {
+                    return info with { Capabilities = [.. info.Capabilities, "vision"] };
+                }
+
+                return info;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Ollama /api/show vision-probe failed Model={Model}", info.Name);
+                return info;
+            }
+            finally
+            {
+                gate.Release();
+            }
+        });
+
+        return await Task.WhenAll(probes);
     }
 
     // Short budget: a dead/slow host must not stall the mutation→render handoff. The unload is a

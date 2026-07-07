@@ -36,6 +36,12 @@ public interface IUiStateStore
     /// degrades to <see cref="AppTheme.Unspecified"/> rather than throwing.
     /// </summary>
     AppTheme LoadAppTheme();
+    /// <summary>
+    /// The "Describe an idea" prompt-writer tier (Local/Sonnet/Opus). Null when never picked — the
+    /// picker then keeps its "Pick a prompt writer…" placeholder. A stored value that isn't a defined
+    /// <see cref="ModelTier"/> also degrades to null rather than being surfaced.
+    /// </summary>
+    ModelTier? LoadPromptWriterTier();
     /// <summary>Null when never persisted — callers fall back to ModelConstants.ComfyUi.DefaultBaseUrl.</summary>
     string? LoadComfyUiBaseUrl();
     /// <summary>
@@ -94,6 +100,8 @@ public interface IUiStateStore
     void PersistFreeVramAfterRendering(bool value);
     /// <inheritdoc cref="LoadAppTheme"/>
     void PersistAppTheme(AppTheme value);
+    /// <inheritdoc cref="LoadPromptWriterTier"/>
+    void PersistPromptWriterTier(ModelTier value);
     void PersistComfyUiBaseUrl(string value);
     /// <inheritdoc cref="LoadOllamaBaseUrl"/>
     void PersistOllamaBaseUrl(string value);

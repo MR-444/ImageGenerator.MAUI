@@ -338,24 +338,6 @@
                                     AutomationId="ProseResultEditor" />
                             <Label Text="A normal prompt that works with any model. Copy it, or use it as your prompt."
                                    Style="{StaticResource HelperText}" />
-                            <FlexLayout Wrap="Wrap" Direction="Row" AlignItems="Center" Margin="0,4,0,0">
-                                <Button Text="Copy prose"
-                                        Command="{Binding CopyProseCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        Margin="0,0,8,8"
-                                        AutomationId="CopyProseButton" />
-                                <Button Text="Use prose as prompt"
-                                        Command="{Binding UseProseCommand}"
-                                        Style="{StaticResource PrimaryButton}"
-                                        Margin="0,0,8,8"
-                                        AutomationId="UseProseButton" />
-                                <Button Text="Use JSON prompt"
-                                        Command="{Binding UseJsonCommand}"
-                                        IsVisible="{Binding HasJson}"
-                                        Style="{StaticResource PrimaryButton}"
-                                        Margin="0,0,8,8"
-                                        AutomationId="UseJsonButton" />
-                            </FlexLayout>
                         </VerticalStackLayout>
                     </Border>
 
@@ -365,7 +347,7 @@
 
         <!-- ActionBar (fixed): build/cancel and status remain reachable while scrolling. -->
         <Border Grid.Row="2" Style="{StaticResource ActionBar}">
-            <Grid ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="12">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*" ColumnSpacing="12">
                 <Button Grid.Column="0"
                         Text="Build prompt"
                         Command="{Binding BuildCommand}"
@@ -385,7 +367,25 @@
                                    HeightRequest="22"
                                    VerticalOptions="Center"
                                    AutomationId="IdeaToPromptBusyIndicator" />
-                <Label Grid.Column="3"
+                <Button Grid.Column="3"
+                        Text="Copy prose"
+                        Command="{Binding CopyProseCommand}"
+                        IsVisible="{Binding HasProse}"
+                        Style="{StaticResource SecondaryButton}"
+                        AutomationId="CopyProseButton" />
+                <Button Grid.Column="4"
+                        Text="Use prose as prompt"
+                        Command="{Binding UseProseCommand}"
+                        IsVisible="{Binding HasProse}"
+                        Style="{StaticResource PrimaryButton}"
+                        AutomationId="UseProseButton" />
+                <Button Grid.Column="5"
+                        Text="Use JSON prompt"
+                        Command="{Binding UseJsonCommand}"
+                        IsVisible="{Binding HasJson}"
+                        Style="{StaticResource PrimaryButton}"
+                        AutomationId="UseJsonButton" />
+                <Label Grid.Column="6"
                        Text="{Binding StatusMessage}"
                        Style="{StaticResource StatusLabel}"
                        IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"

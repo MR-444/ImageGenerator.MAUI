@@ -1,4 +1,5 @@
 using FluentAssertions;
+using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.Services;
 using ImageGenerator.MAUI.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -514,6 +515,63 @@ public class UiStateStoreTests
         _preferences.ThrowOnSet = new InvalidOperationException("backend down");
 
         var act = () => _sut.PersistAppTheme(AppTheme.Dark);
+
+        act.Should().NotThrow();
+    }
+
+    // Prompt-writer tier: stored as the ModelTier enum int. Missing/foreign values degrade to null
+    // so the "Describe an idea" picker keeps its placeholder rather than surfacing a bad selection.
+    private const string PromptWriterTierKey = "imggen.prompt_writer_tier";
+
+    [Fact]
+    public void LoadPromptWriterTier_KeyMissing_ReturnsNull()
+    {
+        _sut.LoadPromptWriterTier().Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(ModelTier.Local)]
+    [InlineData(ModelTier.Sonnet)]
+    [InlineData(ModelTier.Opus)]
+    public void PromptWriterTier_RoundTripsThroughPreferences(ModelTier tier)
+    {
+        _sut.PersistPromptWriterTier(tier);
+
+        _sut.LoadPromptWriterTier().Should().Be(tier);
+    }
+
+    [Fact]
+    public void PersistPromptWriterTier_WritesTheEnumIntUnderTheTierKey()
+    {
+        _sut.PersistPromptWriterTier(ModelTier.Local);
+
+        _preferences.Get(PromptWriterTierKey, -1).Should().Be((int)ModelTier.Local,
+            "the key shape and int encoding are pinned like the theme setting above");
+    }
+
+    [Fact]
+    public void LoadPromptWriterTier_OutOfRangeStoredValue_DegradesToNull()
+    {
+        _preferences.Seed(PromptWriterTierKey, 99);
+
+        _sut.LoadPromptWriterTier().Should().BeNull();
+    }
+
+    [Fact]
+    public void LoadPromptWriterTier_GetThrows_SwallowedAndReturnsNull()
+    {
+        _preferences.Seed(PromptWriterTierKey, (int)ModelTier.Opus);
+        _preferences.ThrowOnGet = new InvalidOperationException("backend down");
+
+        _sut.LoadPromptWriterTier().Should().BeNull();
+    }
+
+    [Fact]
+    public void PersistPromptWriterTier_SetThrows_IsSwallowed()
+    {
+        _preferences.ThrowOnSet = new InvalidOperationException("backend down");
+
+        var act = () => _sut.PersistPromptWriterTier(ModelTier.Sonnet);
 
         act.Should().NotThrow();
     }
