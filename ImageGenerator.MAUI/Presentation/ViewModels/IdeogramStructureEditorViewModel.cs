@@ -662,15 +662,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         if (!ReportValidation(model)) return;
 
         ApplyToGenerator(V4JsonPromptSerializer.Serialize(model));
-        try
-        {
-            await Shell.Current.GoToAsync("..");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "IdeogramStructureEditorVM.{Op}", "Apply");
-            SetStatus($"Couldn't return to the generator: {ex.Message}", StatusKind.Error);
-        }
+        await NavigateAsync("..", "Apply", "Couldn't return to the generator");
     }
 
     /// <summary>
@@ -704,27 +696,28 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         if (!ReportValidation(model)) return;
 
         _generator.PendingMutationBase = model;
-        try
-        {
-            await Shell.Current.GoToAsync("mutation-engine");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "IdeogramStructureEditorVM.{Op}", "Mutate");
-            SetStatus($"Couldn't open the mutation engine: {ex.Message}", StatusKind.Error);
-        }
+        await NavigateAsync("mutation-engine", "Mutate", "Couldn't open the mutation engine");
     }
 
     [RelayCommand]
-    private async Task CancelAsync()
+    private Task CancelAsync() => NavigateAsync("..", "Cancel");
+
+    /// <summary>
+    /// Shared navigate-and-report for the editor's shell hops. Logs any failure under the given
+    /// <paramref name="op"/>; when <paramref name="failureStatus"/> is non-null it also surfaces
+    /// "&lt;failureStatus&gt;: &lt;message&gt;" in the status area. Cancel logs only, so it passes null.
+    /// </summary>
+    private async Task NavigateAsync(string route, string op, string? failureStatus = null)
     {
         try
         {
-            await Shell.Current.GoToAsync("..");
+            await Shell.Current.GoToAsync(route);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "IdeogramStructureEditorVM.{Op}", "Cancel");
+            _logger.LogError(ex, "IdeogramStructureEditorVM.{Op}", op);
+            if (failureStatus is not null)
+                SetStatus($"{failureStatus}: {ex.Message}", StatusKind.Error);
         }
     }
 
