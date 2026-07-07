@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.IO.Hashing;
 using System.Text;
 
 namespace ImageGenerator.MAUI.Infrastructure.Imaging;
@@ -57,14 +58,15 @@ public static class PngTextChunkWriter
             if (offset + chunkTotal > pngBytes.Length)
                 throw new ArgumentException("Truncated PNG chunk.", nameof(pngBytes));
 
-            if (IsType(type, "IEND"))
+            if (type.SequenceEqual("IEND"u8))
             {
                 // Our chunk must precede IEND, which is always the final chunk.
                 output.Write(newChunk);
                 inserted = true;
                 output.Write(pngBytes.AsSpan(offset, chunkTotal));
             }
-            else if (IsType(type, "tEXt") || IsType(type, "zTXt") || IsType(type, "iTXt") || IsType(type, "eXIf"))
+            else if (type.SequenceEqual("tEXt"u8) || type.SequenceEqual("zTXt"u8) ||
+                     type.SequenceEqual("iTXt"u8) || type.SequenceEqual("eXIf"u8))
             {
                 // Drop — superseded by the chunk we are inserting (dedup).
             }
@@ -82,9 +84,6 @@ public static class PngTextChunkWriter
         return output.ToArray();
     }
 
-    private static bool IsType(ReadOnlySpan<byte> type, string name) =>
-        type[0] == name[0] && type[1] == name[1] && type[2] == name[2] && type[3] == name[3];
-
     /// <summary>
     /// Builds a complete, uncompressed iTXt chunk: length + "iTXt" + data + CRC.
     /// Data layout per the PNG spec: keyword(Latin-1)\0, compression-flag(0),
@@ -92,12 +91,12 @@ public static class PngTextChunkWriter
     /// </summary>
     private static byte[] BuildITxtChunk(string keyword, string text)
     {
-        var keywordBytes = Encoding.Latin1.GetBytes(keyword);
-        var languageBytes = Encoding.Latin1.GetBytes("en");
-        var textBytes = Encoding.UTF8.GetBytes(text);
+        var keywordLength = Encoding.Latin1.GetByteCount(keyword);
+        var language = "en"u8;
+        var textLength = Encoding.UTF8.GetByteCount(text);
 
         // type(4) + keyword + \0 + flag + method + language + \0 + \0 + text
-        var dataLength = keywordBytes.Length + 1 + 1 + 1 + languageBytes.Length + 1 + 1 + textBytes.Length;
+        var dataLength = keywordLength + 1 + 1 + 1 + language.Length + 1 + 1 + textLength;
         var chunk = new byte[4 + 4 + dataLength + 4];
         var pos = 0;
 
@@ -108,45 +107,20 @@ public static class PngTextChunkWriter
         "iTXt"u8.CopyTo(chunk.AsSpan(pos, 4));
         pos += 4;
 
-        keywordBytes.CopyTo(chunk, pos);
-        pos += keywordBytes.Length;
+        pos += Encoding.Latin1.GetBytes(keyword, chunk.AsSpan(pos));
         chunk[pos++] = 0;            // keyword null separator
         chunk[pos++] = 0;            // compression flag (uncompressed)
         chunk[pos++] = 0;            // compression method
-        languageBytes.CopyTo(chunk, pos);
-        pos += languageBytes.Length;
+        language.CopyTo(chunk.AsSpan(pos));
+        pos += language.Length;
         chunk[pos++] = 0;            // language-tag null separator
         chunk[pos++] = 0;            // translated-keyword (empty) null separator
-        textBytes.CopyTo(chunk, pos);
-        pos += textBytes.Length;
+        pos += Encoding.UTF8.GetBytes(text, chunk.AsSpan(pos));
 
-        var crc = Crc32(chunk.AsSpan(crcStart, 4 + dataLength));
+        // CRC-32/ISO-HDLC over chunk type + data, as PNG requires.
+        var crc = Crc32.HashToUInt32(chunk.AsSpan(crcStart, 4 + dataLength));
         BinaryPrimitives.WriteUInt32BigEndian(chunk.AsSpan(pos, 4), crc);
 
         return chunk;
-    }
-
-    private static readonly uint[] CrcTable = BuildCrcTable();
-
-    private static uint[] BuildCrcTable()
-    {
-        var table = new uint[256];
-        for (uint n = 0; n < 256; n++)
-        {
-            var c = n;
-            for (var k = 0; k < 8; k++)
-                c = (c & 1) != 0 ? 0xEDB88320u ^ (c >> 1) : c >> 1;
-            table[n] = c;
-        }
-        return table;
-    }
-
-    /// <summary>CRC-32/ISO-HDLC over the span, as PNG requires (over chunk type + data).</summary>
-    private static uint Crc32(ReadOnlySpan<byte> bytes)
-    {
-        var crc = 0xFFFFFFFFu;
-        foreach (var b in bytes)
-            crc = CrcTable[(crc ^ b) & 0xFF] ^ (crc >> 8);
-        return crc ^ 0xFFFFFFFFu;
     }
 }

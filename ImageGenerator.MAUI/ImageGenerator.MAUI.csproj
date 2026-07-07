@@ -77,6 +77,8 @@
 		<PackageReference Include="Refit.HttpClientFactory" Version="10.2.0" />
 		<!-- Pinned below 4.x because newer ImageSharp licensing is not acceptable for this project. -->
 		<PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+		<!-- Hardware-accelerated CRC-32/ISO-HDLC for PngTextChunkWriter (Microsoft, MIT, no transitive deps). -->
+		<PackageReference Include="System.IO.Hashing" Version="10.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>
