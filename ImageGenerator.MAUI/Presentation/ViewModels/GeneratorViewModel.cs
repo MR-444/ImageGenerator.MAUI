@@ -1053,12 +1053,13 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
                     var resolutionPersistable = !_suppressResolutionPersist
                         && !string.IsNullOrEmpty(_parameters.Resolution)
                         && ResolutionOptions.Contains(_parameters.Resolution);
-                    _logger.LogDebug(
-                        "Resolution changed -> \"{Value}\" (suppressed={Suppressed}, inOptions={InOptions}, persisting={Persisting})",
-                        _parameters.Resolution,
-                        _suppressResolutionPersist,
-                        ResolutionOptions.Contains(_parameters.Resolution ?? string.Empty),
-                        resolutionPersistable);
+                    if (_logger.IsEnabled(LogLevel.Debug))
+                        _logger.LogDebug(
+                            "Resolution changed -> \"{Value}\" (suppressed={Suppressed}, inOptions={InOptions}, persisting={Persisting})",
+                            _parameters.Resolution,
+                            _suppressResolutionPersist,
+                            ResolutionOptions.Contains(_parameters.Resolution ?? string.Empty),
+                            resolutionPersistable);
                     if (resolutionPersistable)
                     {
                         _uiStateStore.PersistResolution(_parameters.Resolution!, _parameters.Model);
@@ -1433,32 +1434,26 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     }
 
     [RelayCommand]
-    private async Task OpenGalleryAsync()
-    {
-        // Shell.Current is null in the unit-test harness; the catch keeps tests green if a
-        // future test ever invokes this command, while production paths surface the error
-        // through the existing status surface.
-        try
-        {
-            await Shell.Current.GoToAsync("gallery");
-        }
-        catch (Exception ex)
-        {
-            SetStatus($"Couldn't open Gallery: {ex.Message}", StatusKind.Error);
-        }
-    }
+    private Task OpenGalleryAsync() => NavigateAsync("gallery", "Gallery");
 
     [RelayCommand]
-    private async Task OpenSettingsAsync()
+    private Task OpenSettingsAsync() => NavigateAsync("settings", "Settings");
+
+    /// <summary>
+    /// Shared navigate-and-report body for the shell routes below. Shell.Current is null in the
+    /// unit-test harness; the catch keeps tests green if a command is ever invoked there, while
+    /// production surfaces the failure through the existing status area. <paramref name="target"/>
+    /// is the noun in the "Couldn't open …" message.
+    /// </summary>
+    private async Task NavigateAsync(string route, string target)
     {
-        // Same Shell.Current rationale as OpenGalleryAsync above.
         try
         {
-            await Shell.Current.GoToAsync("settings");
+            await Shell.Current.GoToAsync(route);
         }
         catch (Exception ex)
         {
-            SetStatus($"Couldn't open Settings: {ex.Message}", StatusKind.Error);
+            SetStatus($"Couldn't open {target}: {ex.Message}", StatusKind.Error);
         }
     }
 
@@ -1496,14 +1491,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
             PendingMutationBase = null;
         }
 
-        try
-        {
-            await Shell.Current.GoToAsync("mutation-engine");
-        }
-        catch (Exception ex)
-        {
-            SetStatus($"Couldn't open the mutation engine: {ex.Message}", StatusKind.Error);
-        }
+        await NavigateAsync("mutation-engine", "the mutation engine");
     }
 
     /// <summary>
@@ -1551,31 +1539,14 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     /// structure editor uses, so there's nothing to stash here — just navigate.
     /// </summary>
     [RelayCommand]
-    private async Task OpenIdeaToPromptAsync()
-    {
-        try
-        {
-            await Shell.Current.GoToAsync("idea-to-prompt");
-        }
-        catch (Exception ex)
-        {
-            SetStatus($"Couldn't open the prompt builder: {ex.Message}", StatusKind.Error);
-        }
-    }
+    private Task OpenIdeaToPromptAsync() => NavigateAsync("idea-to-prompt", "the prompt builder");
 
     [RelayCommand]
     private async Task OpenIdeogramEditorAsync()
     {
         // Hand the current prompt box content to the editor so an applied structured prompt
-        // round-trips (re-open → same boxes). Same Shell.Current guard as OpenGalleryAsync.
-        try
-        {
-            await Shell.Current.GoToAsync(BuildEditorRoute());
-        }
-        catch (Exception ex)
-        {
-            SetStatus($"Couldn't open the structure editor: {ex.Message}", StatusKind.Error);
-        }
+        // round-trips (re-open → same boxes).
+        await NavigateAsync(BuildEditorRoute(), "the structure editor");
     }
 
     /// <summary>
