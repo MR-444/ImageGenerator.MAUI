@@ -509,8 +509,7 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
 
     private static string FormatError(Exception ex)
     {
-        var deepest = ex;
-        while (deepest.InnerException != null) deepest = deepest.InnerException;
+        var deepest = ex.GetBaseException();
         return deepest.Message == ex.Message
             ? $"An error occurred: {ex.Message}"
             : $"An error occurred: {ex.Message} ({deepest.Message})";
