@@ -75,7 +75,7 @@ Needs the **.NET 10 SDK** + the MAUI workload (VS 2022 17.12+ or Rider), Windows
 git clone https://github.com/MR-444/ImageGenerator.MAUI.git
 ```
 
-Open `ImageGenerator.MAUI.sln`, restore, build, run. For the self-contained single-file release exe, run `pwsh ./publish.ps1` from the repo root. Tests: `dotnet test` (1265 tests — provider payloads, the ComfyUI patcher, catalog filtering/persistence, the V4 structured-prompt model + validator, the deterministic mutation operators and the RegionGraph geometry, the LLM seams via fakes, CivitAI posting, gallery + UI-state persistence).
+Open `ImageGenerator.MAUI.sln`, restore, build, run. For the self-contained single-file release exe, run `pwsh ./publish.ps1` from the repo root. Tests: `dotnet test` (1298 tests — provider payloads, the ComfyUI patcher, catalog filtering/persistence, the V4 structured-prompt model + validator, the deterministic mutation operators and the RegionGraph geometry, the LLM seams via fakes, CivitAI posting, gallery + UI-state persistence).
 
 ## 🛠️ Stack
 
