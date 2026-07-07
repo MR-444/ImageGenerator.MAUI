@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui;
@@ -50,7 +51,7 @@ public sealed class UiStateStore : IUiStateStore
             PromptKey, promptDebounceDelay ?? PromptDebounceDelay, _logger,
             (k, v) =>
             {
-                if (SafeSet(k, v))
+                if (SafeSet(k, v) && _logger.IsEnabled(LogLevel.Debug))
                     _logger.LogDebug("UiStateStore.PersistPrompt({Value})", Quote(v));
                 return Task.CompletedTask;
             });
@@ -59,16 +60,12 @@ public sealed class UiStateStore : IUiStateStore
     public string? LoadPrompt()
     {
         var v = SafeGet(PromptKey);
-        _logger.LogDebug("UiStateStore.LoadPrompt -> {Value}", Quote(v));
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("UiStateStore.LoadPrompt -> {Value}", Quote(v));
         return v;
     }
 
-    public string? LoadModel()
-    {
-        var v = SafeGet(ModelKey);
-        _logger.LogDebug("UiStateStore.LoadModel -> {Value}", Quote(v));
-        return v;
-    }
+    public string? LoadModel() => LoadString(ModelKey);
 
     public void PersistPrompt(string value)
     {
@@ -76,30 +73,27 @@ public sealed class UiStateStore : IUiStateStore
         // (the token stores' clear semantics) — but a cleared prompt must still persist,
         // and an empty can't storm the store, so write that one immediately.
         _promptWriter.Schedule(value);
-        if (string.IsNullOrEmpty(value) && SafeSet(PromptKey, value))
+        if (string.IsNullOrEmpty(value) && SafeSet(PromptKey, value) && _logger.IsEnabled(LogLevel.Debug))
             _logger.LogDebug("UiStateStore.PersistPrompt({Value})", Quote(value));
     }
 
     public void FlushPendingWrites() => _promptWriter.Flush();
 
-    public void PersistModel(string value)
-    {
-        if (SafeSet(ModelKey, value))
-            _logger.LogDebug("UiStateStore.PersistModel({Value})", Quote(value));
-    }
+    public void PersistModel(string value) => PersistString(ModelKey, value);
 
     public string? LoadResolution(string? modelId)
     {
         var key = ResolutionKeyFor(modelId);
         var v = SafeGet(key);
-        _logger.LogDebug("UiStateStore.LoadResolution[{Key}] -> {Value}", key, Quote(v));
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("UiStateStore.LoadResolution[{Key}] -> {Value}", key, Quote(v));
         return v;
     }
 
     public void PersistResolution(string value, string? modelId)
     {
         var key = ResolutionKeyFor(modelId);
-        if (SafeSet(key, value))
+        if (SafeSet(key, value) && _logger.IsEnabled(LogLevel.Debug))
             _logger.LogDebug("UiStateStore.PersistResolution[{Key}]({Value})", key, Quote(value));
     }
 
@@ -113,14 +107,15 @@ public sealed class UiStateStore : IUiStateStore
     {
         var key = AspectRatioKeyFor(modelId);
         var v = SafeGet(key);
-        _logger.LogDebug("UiStateStore.LoadAspectRatio[{Key}] -> {Value}", key, Quote(v));
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("UiStateStore.LoadAspectRatio[{Key}] -> {Value}", key, Quote(v));
         return v;
     }
 
     public void PersistAspectRatio(string value, string? modelId)
     {
         var key = AspectRatioKeyFor(modelId);
-        if (SafeSet(key, value))
+        if (SafeSet(key, value) && _logger.IsEnabled(LogLevel.Debug))
             _logger.LogDebug("UiStateStore.PersistAspectRatio[{Key}]({Value})", key, Quote(value));
     }
 
@@ -134,14 +129,15 @@ public sealed class UiStateStore : IUiStateStore
     {
         var key = ComfyUiCheckpointKeyFor(workflowName);
         var v = SafeGet(key);
-        _logger.LogDebug("UiStateStore.LoadComfyUiCheckpoint[{Key}] -> {Value}", key, Quote(v));
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("UiStateStore.LoadComfyUiCheckpoint[{Key}] -> {Value}", key, Quote(v));
         return v;
     }
 
     public void PersistComfyUiCheckpoint(string value, string workflowName)
     {
         var key = ComfyUiCheckpointKeyFor(workflowName);
-        if (SafeSet(key, value))
+        if (SafeSet(key, value) && _logger.IsEnabled(LogLevel.Debug))
             _logger.LogDebug("UiStateStore.PersistComfyUiCheckpoint[{Key}]({Value})", key, Quote(value));
     }
 
@@ -154,14 +150,15 @@ public sealed class UiStateStore : IUiStateStore
     {
         var key = ComfyUiPresetKeyFor(workflowName);
         var v = SafeGet(key);
-        _logger.LogDebug("UiStateStore.LoadComfyUiPreset[{Key}] -> {Value}", key, Quote(v));
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("UiStateStore.LoadComfyUiPreset[{Key}] -> {Value}", key, Quote(v));
         return v;
     }
 
     public void PersistComfyUiPreset(string value, string workflowName)
     {
         var key = ComfyUiPresetKeyFor(workflowName);
-        if (SafeSet(key, value))
+        if (SafeSet(key, value) && _logger.IsEnabled(LogLevel.Debug))
             _logger.LogDebug("UiStateStore.PersistComfyUiPreset[{Key}]({Value})", key, Quote(value));
     }
 
@@ -172,7 +169,8 @@ public sealed class UiStateStore : IUiStateStore
     public (double Width, double Height, double X, double Y)? LoadWindowBounds()
     {
         var raw = SafeGet(WindowBoundsKey);
-        _logger.LogDebug("UiStateStore.LoadWindowBounds -> {Value}", Quote(raw));
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("UiStateStore.LoadWindowBounds -> {Value}", Quote(raw));
         if (raw is null) return null;
 
         // "w;h;x;y" in invariant culture. Anything malformed (old format, manual edit,
@@ -192,192 +190,53 @@ public sealed class UiStateStore : IUiStateStore
     public void PersistWindowBounds(double width, double height, double x, double y)
     {
         var value = string.Create(CultureInfo.InvariantCulture, $"{width};{height};{x};{y}");
-        if (SafeSet(WindowBoundsKey, value))
+        if (SafeSet(WindowBoundsKey, value) && _logger.IsEnabled(LogLevel.Debug))
             _logger.LogDebug("UiStateStore.PersistWindowBounds({Value})", value);
     }
 
-    public string? LoadComfyUiBaseUrl()
-    {
-        var v = SafeGet(ComfyUiBaseUrlKey);
-        _logger.LogDebug("UiStateStore.LoadComfyUiBaseUrl -> {Value}", Quote(v));
-        return v;
-    }
+    public string? LoadComfyUiBaseUrl() => LoadString(ComfyUiBaseUrlKey);
 
-    public void PersistComfyUiBaseUrl(string value)
-    {
-        if (SafeSet(ComfyUiBaseUrlKey, value))
-            _logger.LogDebug("UiStateStore.PersistComfyUiBaseUrl({Value})", Quote(value));
-    }
+    public void PersistComfyUiBaseUrl(string value) => PersistString(ComfyUiBaseUrlKey, value);
 
-    public string? LoadOllamaBaseUrl()
-    {
-        var v = SafeGet(OllamaBaseUrlKey);
-        _logger.LogDebug("UiStateStore.LoadOllamaBaseUrl -> {Value}", Quote(v));
-        return v;
-    }
+    public string? LoadOllamaBaseUrl() => LoadString(OllamaBaseUrlKey);
 
-    public void PersistOllamaBaseUrl(string value)
-    {
-        if (SafeSet(OllamaBaseUrlKey, value))
-            _logger.LogDebug("UiStateStore.PersistOllamaBaseUrl({Value})", Quote(value));
-    }
+    public void PersistOllamaBaseUrl(string value) => PersistString(OllamaBaseUrlKey, value);
 
-    public string? LoadOllamaModel()
-    {
-        var v = SafeGet(OllamaModelKey);
-        _logger.LogDebug("UiStateStore.LoadOllamaModel -> {Value}", Quote(v));
-        return v;
-    }
+    public string? LoadOllamaModel() => LoadString(OllamaModelKey);
 
-    public void PersistOllamaModel(string value)
-    {
-        if (SafeSet(OllamaModelKey, value))
-            _logger.LogDebug("UiStateStore.PersistOllamaModel({Value})", Quote(value));
-    }
+    public void PersistOllamaModel(string value) => PersistString(OllamaModelKey, value);
 
-    public string? LoadOllamaVisionModel()
-    {
-        var v = SafeGet(OllamaVisionModelKey);
-        _logger.LogDebug("UiStateStore.LoadOllamaVisionModel -> {Value}", Quote(v));
-        return v;
-    }
+    public string? LoadOllamaVisionModel() => LoadString(OllamaVisionModelKey);
 
-    public void PersistOllamaVisionModel(string value)
-    {
-        if (SafeSet(OllamaVisionModelKey, value))
-            _logger.LogDebug("UiStateStore.PersistOllamaVisionModel({Value})", Quote(value));
-    }
+    public void PersistOllamaVisionModel(string value) => PersistString(OllamaVisionModelKey, value);
 
-    public string? LoadOpenRouterVisionModel()
-    {
-        var v = SafeGet(OpenRouterVisionModelKey);
-        _logger.LogDebug("UiStateStore.LoadOpenRouterVisionModel -> {Value}", Quote(v));
-        return v;
-    }
+    public string? LoadOpenRouterVisionModel() => LoadString(OpenRouterVisionModelKey);
 
-    public void PersistOpenRouterVisionModel(string value)
-    {
-        if (SafeSet(OpenRouterVisionModelKey, value))
-            _logger.LogDebug("UiStateStore.PersistOpenRouterVisionModel({Value})", Quote(value));
-    }
+    public void PersistOpenRouterVisionModel(string value) => PersistString(OpenRouterVisionModelKey, value);
 
-    public bool LoadOpenRouterVisionFreeOnly()
-    {
-        try
-        {
-            var value = _preferences.Get(OpenRouterVisionFreeOnlyKey, true);
-            _logger.LogDebug("UiStateStore.LoadOpenRouterVisionFreeOnly -> {Value}", value);
-            return value;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Preferences.Get({Key}) failed", OpenRouterVisionFreeOnlyKey);
-            return true;
-        }
-    }
+    // Default TRUE — show only free OpenRouter vision models unless the user opts in to paid ones.
+    public bool LoadOpenRouterVisionFreeOnly() => LoadBool(OpenRouterVisionFreeOnlyKey, true);
 
-    public void PersistOpenRouterVisionFreeOnly(bool value)
-    {
-        try
-        {
-            if (_preferences.ContainsKey(OpenRouterVisionFreeOnlyKey)
-                && _preferences.Get(OpenRouterVisionFreeOnlyKey, true) == value) return;
-            _preferences.Set(OpenRouterVisionFreeOnlyKey, value);
-            _logger.LogDebug("UiStateStore.PersistOpenRouterVisionFreeOnly({Value})", value);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Preferences.Set({Key}) failed", OpenRouterVisionFreeOnlyKey);
-        }
-    }
+    public void PersistOpenRouterVisionFreeOnly(bool value) =>
+        PersistBool(OpenRouterVisionFreeOnlyKey, value, true);
 
-    public string? LoadOutputFolder()
-    {
-        var v = SafeGet(OutputFolderKey);
-        _logger.LogDebug("UiStateStore.LoadOutputFolder -> {Value}", Quote(v));
-        return v;
-    }
+    public string? LoadOutputFolder() => LoadString(OutputFolderKey);
 
-    public void PersistOutputFolder(string value)
-    {
-        if (SafeSet(OutputFolderKey, value))
-            _logger.LogDebug("UiStateStore.PersistOutputFolder({Value})", Quote(value));
-    }
+    public void PersistOutputFolder(string value) => PersistString(OutputFolderKey, value);
 
-    public string? LoadCivitaiModelRef()
-    {
-        var v = SafeGet(CivitaiModelRefKey);
-        _logger.LogDebug("UiStateStore.LoadCivitaiModelRef -> {Value}", Quote(v));
-        return v;
-    }
+    public string? LoadCivitaiModelRef() => LoadString(CivitaiModelRefKey);
 
-    public void PersistCivitaiModelRef(string value)
-    {
-        if (SafeSet(CivitaiModelRefKey, value))
-            _logger.LogDebug("UiStateStore.PersistCivitaiModelRef({Value})", Quote(value));
-    }
+    public void PersistCivitaiModelRef(string value) => PersistString(CivitaiModelRefKey, value);
 
-    public bool LoadUseJsonPrompt()
-    {
-        try
-        {
-            var value = _preferences.Get(UseJsonPromptKey, false);
-            _logger.LogDebug("UiStateStore.LoadUseJsonPrompt -> {Value}", value);
-            return value;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Preferences.Get({Key}) failed", UseJsonPromptKey);
-            return false;
-        }
-    }
+    public bool LoadUseJsonPrompt() => LoadBool(UseJsonPromptKey, false);
 
-    public void PersistUseJsonPrompt(bool value)
-    {
-        try
-        {
-            // Same skip-identical rule as SafeSet (bool overload of Get).
-            if (_preferences.ContainsKey(UseJsonPromptKey)
-                && _preferences.Get(UseJsonPromptKey, false) == value) return;
-            _preferences.Set(UseJsonPromptKey, value);
-            _logger.LogDebug("UiStateStore.PersistUseJsonPrompt({Value})", value);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Preferences.Set({Key}) failed", UseJsonPromptKey);
-        }
-    }
+    public void PersistUseJsonPrompt(bool value) => PersistBool(UseJsonPromptKey, value, false);
 
-    public bool LoadFreeVramAfterRendering()
-    {
-        try
-        {
-            // Default TRUE — free GPU memory unless the user opted out.
-            var value = _preferences.Get(FreeVramAfterRenderingKey, true);
-            _logger.LogDebug("UiStateStore.LoadFreeVramAfterRendering -> {Value}", value);
-            return value;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Preferences.Get({Key}) failed", FreeVramAfterRenderingKey);
-            return true;
-        }
-    }
+    // Default TRUE — free GPU memory after each render unless the user opted out.
+    public bool LoadFreeVramAfterRendering() => LoadBool(FreeVramAfterRenderingKey, true);
 
-    public void PersistFreeVramAfterRendering(bool value)
-    {
-        try
-        {
-            if (_preferences.ContainsKey(FreeVramAfterRenderingKey)
-                && _preferences.Get(FreeVramAfterRenderingKey, true) == value) return;
-            _preferences.Set(FreeVramAfterRenderingKey, value);
-            _logger.LogDebug("UiStateStore.PersistFreeVramAfterRendering({Value})", value);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Preferences.Set({Key}) failed", FreeVramAfterRenderingKey);
-        }
-    }
+    public void PersistFreeVramAfterRendering(bool value) =>
+        PersistBool(FreeVramAfterRenderingKey, value, true);
 
     public AppTheme LoadAppTheme()
     {
@@ -393,7 +252,8 @@ public sealed class UiStateStore : IUiStateStore
                 (int)AppTheme.Dark => AppTheme.Dark,
                 _ => AppTheme.Unspecified
             };
-            _logger.LogDebug("UiStateStore.LoadAppTheme -> {Value}", theme);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug("UiStateStore.LoadAppTheme -> {Value}", theme);
             return theme;
         }
         catch (Exception ex)
@@ -410,7 +270,8 @@ public sealed class UiStateStore : IUiStateStore
             if (_preferences.ContainsKey(AppThemeKey)
                 && _preferences.Get(AppThemeKey, (int)AppTheme.Unspecified) == (int)value) return;
             _preferences.Set(AppThemeKey, (int)value);
-            _logger.LogDebug("UiStateStore.PersistAppTheme({Value})", value);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug("UiStateStore.PersistAppTheme({Value})", value);
         }
         catch (Exception ex)
         {
@@ -427,7 +288,8 @@ public sealed class UiStateStore : IUiStateStore
             // defined ModelTier) also degrades to null rather than feeding an undefined enum forward.
             var stored = _preferences.Get(PromptWriterTierKey, -1);
             var tier = stored >= 0 && Enum.IsDefined(typeof(ModelTier), stored) ? (ModelTier?)stored : null;
-            _logger.LogDebug("UiStateStore.LoadPromptWriterTier -> {Value}", tier);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug("UiStateStore.LoadPromptWriterTier -> {Value}", tier);
             return tier;
         }
         catch (Exception ex)
@@ -444,7 +306,8 @@ public sealed class UiStateStore : IUiStateStore
             if (_preferences.ContainsKey(PromptWriterTierKey)
                 && _preferences.Get(PromptWriterTierKey, -1) == (int)value) return;
             _preferences.Set(PromptWriterTierKey, (int)value);
-            _logger.LogDebug("UiStateStore.PersistPromptWriterTier({Value})", value);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug("UiStateStore.PersistPromptWriterTier({Value})", value);
         }
         catch (Exception ex)
         {
@@ -458,7 +321,9 @@ public sealed class UiStateStore : IUiStateStore
     private static string Quote(string? v) =>
         v is null ? "<null>"
         : v.Length <= 100 ? $"\"{v}\""
-        : $"\"{v[..100]}…\" ({v.Length} chars)";
+        // AsSpan, not v[..100]: the interpolation handler appends the ReadOnlySpan<char>
+        // directly, so the truncated head never allocates a throwaway substring.
+        : $"\"{v.AsSpan(0, 100)}…\" ({v.Length} chars)";
 
     private string? SafeGet(string key)
     {
@@ -497,6 +362,57 @@ public sealed class UiStateStore : IUiStateStore
         {
             _logger.LogWarning(ex, "Preferences.Set({Key}) failed", key);
             return false;
+        }
+    }
+
+    // Per-accessor Load/Persist for the plain single-key settings all share one shape: read
+    // (or skip-identical write) through SafeGet/SafeSet, then a debug line naming the accessor.
+    // [CallerMemberName] supplies that name so the log reads "UiStateStore.LoadModel -> …" as
+    // before, without each method spelling it out. (Debounced Prompt, the per-family keyed
+    // settings, and the validated enum settings keep their own bodies — they don't fit this shape.)
+    private string? LoadString(string key, [CallerMemberName] string caller = "")
+    {
+        var v = SafeGet(key);
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("UiStateStore.{Caller} -> {Value}", caller, Quote(v));
+        return v;
+    }
+
+    private void PersistString(string key, string value, [CallerMemberName] string caller = "")
+    {
+        if (SafeSet(key, value) && _logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("UiStateStore.{Caller}({Value})", caller, Quote(value));
+    }
+
+    private bool LoadBool(string key, bool defaultValue, [CallerMemberName] string caller = "")
+    {
+        try
+        {
+            var value = _preferences.Get(key, defaultValue);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug("UiStateStore.{Caller} -> {Value}", caller, value);
+            return value;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Preferences.Get({Key}) failed", key);
+            return defaultValue;
+        }
+    }
+
+    private void PersistBool(string key, bool value, bool defaultValue, [CallerMemberName] string caller = "")
+    {
+        try
+        {
+            // Skip identical rewrites like SafeSet (bool overload of Get).
+            if (_preferences.ContainsKey(key) && _preferences.Get(key, defaultValue) == value) return;
+            _preferences.Set(key, value);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug("UiStateStore.{Caller}({Value})", caller, value);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Preferences.Set({Key}) failed", key);
         }
     }
 }
