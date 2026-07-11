@@ -17,6 +17,17 @@ public partial class GalleryItemDetailPage
         BindingContext = viewModel;
     }
 
+    private void OnPromptTabClicked(object? sender, EventArgs e) => ShowMetadataTab(prompt: true, details: false);
+    private void OnDetailsTabClicked(object? sender, EventArgs e) => ShowMetadataTab(prompt: false, details: true);
+    private void OnRawTabClicked(object? sender, EventArgs e) => ShowMetadataTab(prompt: false, details: false);
+
+    private void ShowMetadataTab(bool prompt, bool details)
+    {
+        PromptEditor.IsVisible = prompt;
+        DetailsEditor.IsVisible = details;
+        RawMetadataEditor.IsVisible = !prompt && !details;
+    }
+
     /// <summary>
     /// Receives the file path from the Shell route parameter (`detail?path=…`).
     /// Naming: avoid "Path" or "FilePath" to dodge collision with System.IO.Path

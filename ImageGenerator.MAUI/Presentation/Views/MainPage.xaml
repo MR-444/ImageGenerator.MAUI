@@ -28,7 +28,7 @@
         <!-- Page header: compact single-row title + a live status strip (job counts, selected
              model, image total, GPU busy) replacing the old title/static-subtitle stack. All
              four segments are computed on GeneratorViewModel. -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="16">
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
             <Label Grid.Column="0"
                    Text="Emberforge"
                    Style="{StaticResource PageTitleCompact}"
@@ -47,13 +47,6 @@
                        IsVisible="{Binding IsGpuBusy}" />
             </HorizontalStackLayout>
             <Button Grid.Column="2"
-                    Text="Settings"
-                    Style="{StaticResource SecondaryButton}"
-                    Command="{Binding OpenSettingsCommand}"
-                    VerticalOptions="Center"
-                    SemanticProperties.Description="API tokens and ComfyUI server configuration"
-                    AutomationId="SettingsButton" />
-            <Button Grid.Column="3"
                     Text="About"
                     Style="{StaticResource SecondaryButton}"
                     Clicked="OnAboutClicked"
@@ -62,13 +55,16 @@
         </Grid>
 
         <!-- Two independently scrolling panes: settings left, queue/results right. -->
-        <Grid Grid.Row="1"
+        <Grid x:Name="MainWorkspaceGrid" Grid.Row="1"
               ColumnDefinitions="3*,2*"
-              ColumnSpacing="16">
+              RowDefinitions="*"
+              ColumnSpacing="16"
+              RowSpacing="16"
+              SizeChanged="OnMainWorkspaceSizeChanged">
 
             <!-- SETTINGS PANE: two columns of cards stacking independently,
                  so a tall Prompt card in col 0 doesn't leave a gap below API Token in col 1. -->
-            <ScrollView Grid.Column="0">
+            <ScrollView x:Name="MainSettingsPane" Grid.Column="0">
                 <Grid ColumnDefinitions="*,*"
                       ColumnSpacing="16"
                       Padding="0,0,12,16">
@@ -381,13 +377,14 @@
                                 </HorizontalStackLayout>
                                 <Label Text="Publishes the saved image on CivitAI right after generation — one step, no manual publish. Needs a CivitAI API key (Settings)."
                                        Style="{StaticResource HelperText}" />
-                                <HorizontalStackLayout Spacing="8" Margin="36,0,0,0">
-                                    <CheckBox IsChecked="{Binding Parameters.CivitaiIncludeMeta}"
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="36,0,0,0">
+                                    <CheckBox Grid.Column="0" IsChecked="{Binding Parameters.CivitaiIncludeMeta}"
                                               IsEnabled="{Binding Parameters.PostToCivitai}"
                                               VerticalOptions="Center"
                                               AutomationId="CivitaiIncludeMetaCheckBox" />
-                                    <Label Text="Include generation data (prompt, seed, model)" VerticalOptions="Center" />
-                                </HorizontalStackLayout>
+                                    <Label Grid.Column="1" Text="Include generation data (prompt, seed, model)"
+                                           VerticalOptions="Center" LineBreakMode="WordWrap" />
+                                </Grid>
                                 <Label Text="Sent as structured metadata with the post; the local file is never modified."
                                        Style="{StaticResource HelperText}"
                                        Margin="36,0,0,0" />
@@ -448,7 +445,7 @@
             </ScrollView>
 
             <!-- QUEUE / RESULTS PANE -->
-            <ScrollView Grid.Column="1">
+            <ScrollView x:Name="MainResultsPane" Grid.Column="1">
                 <VerticalStackLayout Spacing="12" Padding="0,0,12,16">
 
                     <!-- Queue header: title + a right-aligned "Clear finished" control. The whole
@@ -555,40 +552,40 @@
                                         </Border>
 
                                         <!-- Action buttons (when complete) -->
-                                        <HorizontalStackLayout Spacing="8"
-                                                               IsVisible="{Binding ResultPath, Converter={StaticResource NonEmptyStringToBool}}">
+                                        <FlexLayout Direction="Row" Wrap="Wrap" AlignItems="Center"
+                                                    IsVisible="{Binding ResultPath, Converter={StaticResource NonEmptyStringToBool}}">
                                             <Label Text="Tap thumbnail to open full size."
                                                    Style="{StaticResource HelperText}"
-                                                   VerticalOptions="Center" />
+                                                   VerticalOptions="Center" Margin="0,0,8,6" />
                                             <Button Text="Use as input"
                                                     Command="{Binding UseAsInputCommand}"
-                                                    Style="{StaticResource SecondaryButton}"
+                                                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,6"
                                                     AutomationId="JobUseAsInputButton" />
                                             <Button Text="Mutate from this"
                                                     Command="{Binding MutateFromImageCommand}"
-                                                    Style="{StaticResource SecondaryButton}"
+                                                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,6"
                                                     AutomationId="JobMutateFromImageButton" />
                                             <Button Text="Show in folder"
                                                     Command="{Binding ShowInFolderCommand}"
-                                                    Style="{StaticResource SecondaryButton}"
+                                                    Style="{StaticResource SecondaryButton}" Margin="0,0,0,6"
                                                     AutomationId="JobShowInFolderButton" />
-                                        </HorizontalStackLayout>
+                                        </FlexLayout>
 
                                         <!-- CivitAI posting status (post-save side effect; collapsed unless posting ran) -->
-                                        <HorizontalStackLayout Spacing="8"
-                                                               IsVisible="{Binding CivitaiStatusMessage, Converter={StaticResource NonEmptyStringToBool}}">
+                                        <FlexLayout Direction="Row" Wrap="Wrap" AlignItems="Center"
+                                                    IsVisible="{Binding CivitaiStatusMessage, Converter={StaticResource NonEmptyStringToBool}}">
                                             <Label Text="{Binding CivitaiStatusMessage}"
                                                    Style="{StaticResource HelperText}"
                                                    VerticalOptions="Center"
                                                    LineBreakMode="TailTruncation"
                                                    MaxLines="2"
-                                                   AutomationId="JobCivitaiStatusLabel" />
+                                                   Margin="0,0,8,6" AutomationId="JobCivitaiStatusLabel" />
                                             <Button Text="Open post"
                                                     Command="{Binding OpenCivitaiPostCommand}"
                                                     Style="{StaticResource SecondaryButton}"
                                                     IsVisible="{Binding CivitaiPostUrl, Converter={StaticResource NonEmptyStringToBool}}"
-                                                    AutomationId="JobOpenCivitaiPostButton" />
-                                        </HorizontalStackLayout>
+                                                    Margin="0,0,0,6" AutomationId="JobOpenCivitaiPostButton" />
+                                        </FlexLayout>
 
                                     </VerticalStackLayout>
                                 </Border>
@@ -604,7 +601,7 @@
         <Border Grid.Row="2" Style="{StaticResource ActionBar}">
             <Grid RowDefinitions="Auto,Auto"
                   RowSpacing="4"
-                  ColumnDefinitions="Auto,Auto,Auto,Auto,*"
+                  ColumnDefinitions="Auto,Auto,Auto,*"
                   ColumnSpacing="8">
 
                 <Button x:Name="GenerateButton"
@@ -647,15 +644,7 @@
                         SemanticProperties.Description="Open the generated-images folder in Explorer"
                         AutomationId="OpenFolderButton" />
 
-                <Button Grid.Row="0" Grid.Column="3"
-                        Text="Gallery"
-                        Command="{Binding OpenGalleryCommand}"
-                        Style="{StaticResource SecondaryButton}"
-                        VerticalOptions="Center"
-                        SemanticProperties.Description="Browse previously generated images"
-                        AutomationId="OpenGalleryButton" />
-
-                <VerticalStackLayout Grid.Row="0" Grid.Column="4"
+                <VerticalStackLayout Grid.Row="0" Grid.Column="3"
                                      VerticalOptions="Center"
                                      Spacing="2">
                     <!-- Transient toast — auto-clears after a couple of seconds. Distinct

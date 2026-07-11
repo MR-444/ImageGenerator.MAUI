@@ -187,6 +187,61 @@ public partial class IdeaToPromptPage
         }
     }
 
+    private async void OnPasteReferenceImageClicked(object? sender, EventArgs e)
+    {
+        if (BindingContext is not IdeaToPromptViewModel { IsBusy: false } viewModel)
+            return;
+
+        try
+        {
+            var clipboardData = Windows.ApplicationModel.DataTransfer.Clipboard.GetContent();
+            if (clipboardData is null || !ContainsReferenceImageDropData(clipboardData))
+            {
+                viewModel.StatusMessage = "The clipboard doesn't contain an image, image file, or image URL.";
+                viewModel.StatusKind = StatusKind.Warning;
+                return;
+            }
+
+            if (await TryImportReferenceImageAsync(viewModel, clipboardData, "pasted"))
+                return;
+
+            viewModel.StatusMessage = "Couldn't read the clipboard image. Try copying the image itself or save it and use Pick image.";
+            viewModel.StatusKind = StatusKind.Error;
+        }
+        catch (Exception ex)
+        {
+            viewModel.StatusMessage = $"Error pasting reference image: {ex.Message}";
+            viewModel.StatusKind = StatusKind.Error;
+        }
+    }
+
+    private static async Task<bool> TryImportReferenceImageAsync(
+        IdeaToPromptViewModel viewModel,
+        WinDataPackageView dataView,
+        string source)
+    {
+        if (dataView.Contains(StandardDataFormats.StorageItems))
+        {
+            var items = await dataView.GetStorageItemsAsync();
+            var imageFile = items.OfType<StorageFile>().FirstOrDefault(IsImageStorageFile);
+            if (imageFile is not null && await TryUseStorageFileAsync(viewModel, imageFile))
+                return true;
+        }
+
+        var url = await TryGetReferenceImageUrlAsync(dataView);
+        if (url is not null && await viewModel.SetReferenceImageFromUrlAsync(url))
+            return true;
+
+        if (dataView.Contains(StandardDataFormats.Bitmap))
+        {
+            var bitmapBytes = await TryReadBitmapAsync(dataView);
+            if (bitmapBytes is { Length: > 0 })
+                return viewModel.SetReferenceImageFromBytes($"{source}-reference.png", bitmapBytes, $"{source} bitmap");
+        }
+
+        return false;
+    }
+
     private static bool ContainsReferenceImageDropData(WinDataPackageView dataView) =>
         dataView.Contains(StandardDataFormats.StorageItems)
         || dataView.Contains(StandardDataFormats.WebLink)

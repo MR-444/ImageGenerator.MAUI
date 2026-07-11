@@ -23,6 +23,7 @@ public partial class MainPage
 {
     private readonly GeneratorViewModel _viewModel;
     private readonly ILogger<MainPage> _logger;
+    private bool _mainWorkspaceIsNarrow;
 
     /// <summary>
     /// Set by Shell when the user navigates back from the gallery detail page via the
@@ -91,6 +92,35 @@ public partial class MainPage
         _generatePointerPressedHandler = new Microsoft.UI.Xaml.Input.PointerEventHandler(OnGenerateButtonPointerPressed);
         GenerateButton.HandlerChanged += OnGenerateButtonHandlerChanged;
         HandlerChanged += OnPageHandlerChanged;
+    }
+
+    private void OnMainWorkspaceSizeChanged(object? sender, EventArgs e)
+    {
+        if (MainWorkspaceGrid.Width <= 0) return;
+        var narrow = MainWorkspaceGrid.Width < 1050;
+        if (narrow == _mainWorkspaceIsNarrow) return;
+        _mainWorkspaceIsNarrow = narrow;
+
+        MainWorkspaceGrid.ColumnDefinitions.Clear();
+        MainWorkspaceGrid.RowDefinitions.Clear();
+        if (narrow)
+        {
+            MainWorkspaceGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            MainWorkspaceGrid.RowDefinitions.Add(new RowDefinition(GridLength.Star));
+            MainWorkspaceGrid.RowDefinitions.Add(new RowDefinition(GridLength.Star));
+            MainWorkspaceGrid.ColumnSpacing = 0;
+            Grid.SetRow(MainSettingsPane, 0); Grid.SetColumn(MainSettingsPane, 0);
+            Grid.SetRow(MainResultsPane, 1); Grid.SetColumn(MainResultsPane, 0);
+        }
+        else
+        {
+            MainWorkspaceGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(3, GridUnitType.Star)));
+            MainWorkspaceGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(2, GridUnitType.Star)));
+            MainWorkspaceGrid.RowDefinitions.Add(new RowDefinition(GridLength.Star));
+            MainWorkspaceGrid.ColumnSpacing = 16;
+            Grid.SetRow(MainSettingsPane, 0); Grid.SetColumn(MainSettingsPane, 0);
+            Grid.SetRow(MainResultsPane, 0); Grid.SetColumn(MainResultsPane, 1);
+        }
     }
 
     // --- Ctrl+Enter = Generate (page-root tunnel handler) ---

@@ -36,6 +36,24 @@
       <Content Include="..\comfy-workflows\Ideogram4-Sample.json"
                Link="TestAssets\Ideogram4-Sample.json"
                CopyToOutputDirectory="PreserveNewest" />
+      <Content Include="..\ImageGenerator.MAUI\Presentation\Views\IdeaToPromptPage.xaml"
+               Link="TestAssets\IdeaToPromptPage.xaml"
+               CopyToOutputDirectory="PreserveNewest" />
+      <Content Include="..\ImageGenerator.MAUI\AppShell.xaml"
+               Link="TestAssets\AppShell.xaml"
+               CopyToOutputDirectory="PreserveNewest" />
+      <Content Include="..\ImageGenerator.MAUI\Presentation\Views\MainPage.xaml"
+               Link="TestAssets\MainPage.xaml" CopyToOutputDirectory="PreserveNewest" />
+      <Content Include="..\ImageGenerator.MAUI\Presentation\Views\MutationEnginePage.xaml"
+               Link="TestAssets\MutationEnginePage.xaml" CopyToOutputDirectory="PreserveNewest" />
+      <Content Include="..\ImageGenerator.MAUI\Presentation\Views\IdeogramStructureEditorPage.xaml"
+               Link="TestAssets\IdeogramStructureEditorPage.xaml" CopyToOutputDirectory="PreserveNewest" />
+      <Content Include="..\ImageGenerator.MAUI\Presentation\Views\GalleryPage.xaml"
+               Link="TestAssets\GalleryPage.xaml" CopyToOutputDirectory="PreserveNewest" />
+      <Content Include="..\ImageGenerator.MAUI\Presentation\Views\GalleryItemDetailPage.xaml"
+               Link="TestAssets\GalleryItemDetailPage.xaml" CopyToOutputDirectory="PreserveNewest" />
+      <Content Include="..\ImageGenerator.MAUI\Presentation\Views\SettingsPage.xaml"
+               Link="TestAssets\SettingsPage.xaml" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
 </Project>

@@ -62,6 +62,25 @@ public partial class App
             MinimumHeight = 600
         };
 
+        // Own the entire caption through MAUI instead of mixing Shell's extended drag region with
+        // AppWindow button colors. The mixed approach left a white center strip and recolored caption
+        // buttons whenever Shell activated a new route. AppTheme bindings update this one surface in
+        // place when Settings changes between System, Light, and Dark.
+        var studioTitleBar = new TitleBar
+        {
+            Title = "Emberforge",
+            HeightRequest = 40
+        };
+        studioTitleBar.SetAppThemeColor(
+            VisualElement.BackgroundColorProperty,
+            Color.FromArgb("#F7F8FB"),
+            Color.FromArgb("#17191E"));
+        studioTitleBar.SetAppThemeColor(
+            TitleBar.ForegroundColorProperty,
+            Color.FromArgb("#212121"),
+            Color.FromArgb("#FFFFFF"));
+        window.TitleBar = studioTitleBar;
+
         // Restore the last window bounds; first launch fills ~90% of the screen (the old
         // fixed 1500x1000 overflowed shorter screens, e.g. an ultrawide 1440p at 150%
         // scale, while wasting its width). All values are DIPs. DeviceDisplay reports the

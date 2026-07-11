@@ -51,13 +51,26 @@
                     <!-- CARD: Engine (Deterministic / AI) -->
                     <Border Style="{StaticResource Card}" VerticalOptions="Start">
                         <VerticalStackLayout Spacing="8">
-                            <Label Text="Mutation engine" Style="{StaticResource FieldLabel}" />
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                                <Switch Grid.Column="0" IsToggled="{Binding IsAiMode}" VerticalOptions="Center"
-                                        AutomationId="MutationAiModeSwitch" />
-                                <Label Grid.Column="1" VerticalOptions="Center"
-                                       Text="On = AI rewrites each variant from your free-text steer. Off = deterministic engine (free, reproducible)." />
-                            </Grid>
+                            <Label Text="Mutation method" Style="{StaticResource FieldLabel}" />
+                            <Border Padding="3"
+                                    HorizontalOptions="Start"
+                                    Stroke="{AppThemeBinding Light={StaticResource SurfaceBorderLight}, Dark={StaticResource SurfaceBorderDark}}"
+                                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceRaisedLight}, Dark={StaticResource SurfaceRaisedDark}}">
+                                <Border.StrokeShape><RoundRectangle CornerRadius="9" /></Border.StrokeShape>
+                                <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="3">
+                                    <Button x:Name="AiModeButton" Grid.Column="0" Text="AI rewrite" Clicked="OnSelectAiMode"
+                                            Style="{StaticResource SecondaryButton}" BorderWidth="0"
+                                            SemanticProperties.Description="Use AI to rewrite coherent prompt variants"
+                                            AutomationId="MutationAiModeButton" />
+                                    <Button x:Name="DeterministicModeButton" Grid.Column="1" Text="Deterministic" Clicked="OnSelectDeterministicMode"
+                                            Style="{StaticResource SecondaryButton}" BorderWidth="0"
+                                            IsEnabled="{Binding IsBreedMode, Converter={StaticResource InverseBool}}"
+                                            SemanticProperties.Description="Use the free reproducible mutation engine"
+                                            AutomationId="MutationDeterministicModeButton" />
+                                </Grid>
+                            </Border>
+                            <Label Text="AI rewrite is the recommended creative workflow. Deterministic mode is free and reproducible."
+                                   Style="{StaticResource HelperText}" />
                         </VerticalStackLayout>
                     </Border>
 
@@ -77,6 +90,7 @@
                                     Placeholder="e.g. make it winter · 1970s film look · explore a bold art movement"
                                     AutoSize="TextChanges"
                                     MinimumHeightRequest="72"
+                                    SemanticProperties.Description="Creative direction applied to each AI variant"
                                     AutomationId="MutationSteerEditor" />
                             <Label Text="Free-text instruction for how to vary each variant; rewrites the whole caption coherently." Style="{StaticResource HelperText}" />
                             <Picker Title="Start from a preset (optional)"

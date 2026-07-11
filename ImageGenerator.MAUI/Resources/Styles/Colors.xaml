@@ -5,19 +5,23 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
     <!-- Brand -->
-    <Color x:Key="Primary">#512BD4</Color>
-    <Color x:Key="PrimaryDark">#ac99ea</Color>
-    <Color x:Key="PrimaryDarkText">#242424</Color>
-    <Color x:Key="Secondary">#DFD8F7</Color>
-    <Color x:Key="SecondaryDarkText">#9880e5</Color>
-    <Color x:Key="Tertiary">#2B0B98</Color>
+    <Color x:Key="Primary">#4F6BED</Color>
+    <Color x:Key="PrimaryDark">#8EA6FF</Color>
+    <Color x:Key="PrimaryDarkText">#10131A</Color>
+    <Color x:Key="Secondary">#E5EAFF</Color>
+    <Color x:Key="SecondaryDarkText">#B8C5FF</Color>
+    <Color x:Key="Tertiary">#3448A5</Color>
+    <Color x:Key="AccentWarm">#F2B56B</Color>
+    <Color x:Key="SelectionLight">#E8EDFF</Color>
+    <Color x:Key="SelectionDark">#27345E</Color>
+    <Color x:Key="CanvasDark">#111318</Color>
 
     <!-- Neutrals -->
     <Color x:Key="White">White</Color>
     <Color x:Key="Black">Black</Color>
     <Color x:Key="Magenta">#D600AA</Color>
     <Color x:Key="MidnightBlue">#190649</Color>
-    <Color x:Key="OffBlack">#1f1f1f</Color>
+    <Color x:Key="OffBlack">#17191E</Color>
 
     <Color x:Key="Gray100">#E1E1E1</Color>
     <Color x:Key="Gray200">#C8C8C8</Color>
@@ -29,10 +33,12 @@
     <Color x:Key="Gray950">#141414</Color>
 
     <!-- Surfaces (cards, panels) -->
-    <Color x:Key="SurfaceLight">#FAFAFA</Color>
-    <Color x:Key="SurfaceDark">#262626</Color>
-    <Color x:Key="SurfaceBorderLight">#E1E1E1</Color>
-    <Color x:Key="SurfaceBorderDark">#404040</Color>
+    <Color x:Key="SurfaceLight">#FFFFFF</Color>
+    <Color x:Key="SurfaceDark">#23262D</Color>
+    <Color x:Key="SurfaceRaisedLight">#F7F8FB</Color>
+    <Color x:Key="SurfaceRaisedDark">#2A2E37</Color>
+    <Color x:Key="SurfaceBorderLight">#DDE1E8</Color>
+    <Color x:Key="SurfaceBorderDark">#383D48</Color>
 
     <!-- Status palette — WCAG-AA against light/dark backgrounds -->
     <Color x:Key="StatusSuccessLight">#1B5E20</Color>

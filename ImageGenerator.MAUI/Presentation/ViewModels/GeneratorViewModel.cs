@@ -1434,10 +1434,10 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     }
 
     [RelayCommand]
-    private Task OpenGalleryAsync() => NavigateAsync("gallery", "Gallery");
+    private Task OpenGalleryAsync() => NavigateAsync("//gallery-root/gallery", "Gallery");
 
     [RelayCommand]
-    private Task OpenSettingsAsync() => NavigateAsync("settings", "Settings");
+    private Task OpenSettingsAsync() => NavigateAsync("//settings-root/settings", "Settings");
 
     /// <summary>
     /// Shared navigate-and-report body for the shell routes below. Shell.Current is null in the

@@ -14,29 +14,34 @@
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <ScrollView>
-        <VerticalStackLayout Padding="24"
-                             Spacing="20"
-                             MaximumWidthRequest="560"
-                             HorizontalOptions="Start">
+    <Grid RowDefinitions="Auto,*" ColumnDefinitions="220,*" Padding="24,16,24,20" ColumnSpacing="20" RowSpacing="16">
 
             <!-- Header -->
-            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                <Button Grid.Column="0"
-                        Text="← Back"
-                        Clicked="OnBackClicked"
-                        Style="{StaticResource SecondaryButton}"
-                        VerticalOptions="Start"
-                        AutomationId="SettingsBackButton" />
-                <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+            <Grid Grid.Row="0" Grid.ColumnSpan="2" ColumnDefinitions="*" ColumnSpacing="12">
+                <VerticalStackLayout Grid.Column="0" Spacing="4" VerticalOptions="Center">
                     <Label Text="Settings" Style="{StaticResource CardTitle}" />
                     <Label Text="Tokens, local services, provider settings, and output folders."
                            Style="{StaticResource HelperText}" />
                 </VerticalStackLayout>
             </Grid>
 
+        <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource Card}" Padding="8" VerticalOptions="Start">
+            <VerticalStackLayout Spacing="4">
+                <Label Text="SETTINGS" Style="{StaticResource HelperText}" Margin="8,6" />
+                <Button Text="Appearance" Clicked="OnAppearanceCategoryClicked" Style="{StaticResource SecondaryButton}" BorderWidth="0" HorizontalOptions="Fill" AutomationId="SettingsAppearanceCategory" />
+                <Button Text="API keys" Clicked="OnApiKeysCategoryClicked" Style="{StaticResource SecondaryButton}" BorderWidth="0" HorizontalOptions="Fill" AutomationId="SettingsApiKeysCategory" />
+                <Button Text="Generation" Clicked="OnGenerationCategoryClicked" Style="{StaticResource SecondaryButton}" BorderWidth="0" HorizontalOptions="Fill" AutomationId="SettingsGenerationCategory" />
+                <Button Text="AI services" Clicked="OnAiServicesCategoryClicked" Style="{StaticResource SecondaryButton}" BorderWidth="0" HorizontalOptions="Fill" AutomationId="SettingsAiServicesCategory" />
+                <Button Text="Output" Clicked="OnOutputCategoryClicked" Style="{StaticResource SecondaryButton}" BorderWidth="0" HorizontalOptions="Fill" AutomationId="SettingsOutputCategory" />
+                <Button Text="Integrations" Clicked="OnIntegrationsCategoryClicked" Style="{StaticResource SecondaryButton}" BorderWidth="0" HorizontalOptions="Fill" AutomationId="SettingsIntegrationsCategory" />
+            </VerticalStackLayout>
+        </Border>
+
+        <ScrollView Grid.Row="1" Grid.Column="1">
+        <VerticalStackLayout Spacing="16" MaximumWidthRequest="760" HorizontalOptions="Start">
+
             <!-- CARD: Appearance -->
-            <Border Style="{StaticResource Card}"
+            <Border x:Name="AppearanceCard" Style="{StaticResource Card}"
                     VerticalOptions="Start">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="Appearance" Style="{StaticResource CardTitle}" />
@@ -63,7 +68,7 @@
             </Border>
 
             <!-- CARD: API Tokens (one row per provider, switch via the picker) -->
-            <Border Style="{StaticResource Card}"
+            <Border x:Name="ApiTokensCard" Style="{StaticResource Card}"
                     VerticalOptions="Start">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="API Tokens" Style="{StaticResource CardTitle}" />
@@ -103,7 +108,7 @@
             </Border>
 
             <!-- CARD: ComfyUI server -->
-            <Border Style="{StaticResource Card}"
+            <Border x:Name="GenerationCard" Style="{StaticResource Card}"
                     VerticalOptions="Start">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="ComfyUI server" Style="{StaticResource CardTitle}" />
@@ -132,7 +137,7 @@
             </Border>
 
             <!-- CARD: Local LLM (Ollama) -->
-            <Border Style="{StaticResource Card}"
+            <Border x:Name="OllamaCard" Style="{StaticResource Card}"
                     VerticalOptions="Start">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="Local LLM (Ollama)" Style="{StaticResource CardTitle}" />
@@ -177,7 +182,7 @@
             </Border>
 
             <!-- CARD: OpenRouter vision -->
-            <Border Style="{StaticResource Card}"
+            <Border x:Name="OpenRouterCard" Style="{StaticResource Card}"
                     VerticalOptions="Start">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="OpenRouter vision" Style="{StaticResource CardTitle}" />
@@ -215,7 +220,7 @@
             </Border>
 
             <!-- CARD: Output folder -->
-            <Border Style="{StaticResource Card}"
+            <Border x:Name="OutputCard" Style="{StaticResource Card}"
                     VerticalOptions="Start">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="Output folder" Style="{StaticResource CardTitle}" />
@@ -238,7 +243,7 @@
             </Border>
 
             <!-- CARD: CivitAI -->
-            <Border Style="{StaticResource Card}"
+            <Border x:Name="IntegrationsCard" Style="{StaticResource Card}"
                     VerticalOptions="Start">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="CivitAI" Style="{StaticResource CardTitle}" />
@@ -261,5 +266,6 @@
                    Style="{StaticResource HelperText}" />
 
         </VerticalStackLayout>
-    </ScrollView>
+        </ScrollView>
+    </Grid>
 </ContentPage>

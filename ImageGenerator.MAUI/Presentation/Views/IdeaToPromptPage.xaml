@@ -118,7 +118,7 @@
                         </Border.GestureRecognizers>
                         <VerticalStackLayout Spacing="10">
                             <Label Text="Reference image" Style="{StaticResource CardTitle}" />
-                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
                                 <Label Grid.Column="0"
                                        Text="{Binding ReferenceImageFileName}"
                                        Style="{StaticResource HelperText}"
@@ -131,18 +131,48 @@
                                         Style="{StaticResource SecondaryButton}"
                                         AutomationId="PickReferenceImageButton" />
                                 <Button Grid.Column="2"
+                                        Text="Paste image"
+                                        Clicked="OnPasteReferenceImageClicked"
+                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        AutomationId="PasteReferenceImageButton" />
+                                <Button Grid.Column="3"
                                         Text="Clear"
                                         Command="{Binding ClearReferenceImageCommand}"
+                                        IsVisible="{Binding HasReferenceImage}"
                                         IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                                         Style="{StaticResource SecondaryButton}"
                                         AutomationId="ClearReferenceImageButton" />
                             </Grid>
-                            <Image Source="{Binding ReferenceImagePreview}"
-                                   IsVisible="{Binding HasReferenceImage}"
-                                   HeightRequest="220"
-                                   Aspect="AspectFit"
-                                   BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}"
-                                   AutomationId="ReferenceImagePreview" />
+                            <Border Stroke="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"
+                                    StrokeThickness="2"
+                                    StrokeDashArray="6,4"
+                                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}"
+                                    Padding="12"
+                                    MinimumHeightRequest="220"
+                                    AutomationId="ReferenceImageDropZone">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="12" />
+                                </Border.StrokeShape>
+                                <Grid>
+                                    <VerticalStackLayout IsVisible="{Binding HasReferenceImage, Converter={StaticResource InverseBool}}"
+                                                         HorizontalOptions="Center"
+                                                         VerticalOptions="Center"
+                                                         Spacing="6">
+                                        <Label Text="Drop an image here"
+                                               Style="{StaticResource CardTitle}"
+                                               HorizontalTextAlignment="Center" />
+                                        <Label Text="or pick a file, paste an image, or drop an image URL"
+                                               Style="{StaticResource HelperText}"
+                                               HorizontalTextAlignment="Center" />
+                                    </VerticalStackLayout>
+                                    <Image Source="{Binding ReferenceImagePreview}"
+                                           IsVisible="{Binding HasReferenceImage}"
+                                           HeightRequest="220"
+                                           Aspect="AspectFit"
+                                           AutomationId="ReferenceImagePreview" />
+                                </Grid>
+                            </Border>
                             <Label Text="The image is observed first, then that observation goes through the normal VPE prompt pass."
                                    Style="{StaticResource HelperText}" />
 
@@ -224,6 +254,7 @@
                                     MaximumHeightRequest="260"
                                     Placeholder="e.g. A cozy bookshop on a rainy evening, warm lamplight, a cat asleep in the window"
                                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                    SemanticProperties.Description="Idea or optional guidance used to build the image prompt"
                                     AutomationId="IdeaEditor" />
                             <Label Text="In text mode this is the idea. In image mode it is optional guidance for the prompt pass."
                                    Style="{StaticResource HelperText}" />
@@ -240,6 +271,7 @@
                                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                                     MaximumWidthRequest="260"
                                     HorizontalOptions="Start"
+                                    SemanticProperties.Description="Prompt writer model and cost tier"
                                     AutomationId="IdeaPromptModelTierPicker" />
                             <Label Text="{Binding ModelSummary}"
                                    Style="{StaticResource HelperText}"
@@ -293,7 +325,7 @@
                     <Border Style="{StaticResource Card}"
                             IsVisible="{Binding HasProse, Converter={StaticResource InverseBool}}"
                             AutomationId="IdeaToPromptEmptyState">
-                        <VerticalStackLayout Spacing="8" Padding="8,24" HorizontalOptions="Center">
+                        <VerticalStackLayout Spacing="8" Padding="8,12" HorizontalOptions="Center">
                             <Label Text="Your prompt will appear here"
                                    Style="{StaticResource CardTitle}"
                                    HorizontalOptions="Center" />
@@ -316,7 +348,7 @@
                             <Editor Text="{Binding ObservedImageDescription}"
                                     IsReadOnly="True"
                                     AutoSize="Disabled"
-                                    HeightRequest="140"
+                                    HeightRequest="110"
                                     AutomationId="ImageObservationEditor" />
                         </VerticalStackLayout>
                     </Border>
@@ -334,7 +366,7 @@
                             <Editor Text="{Binding Prose}"
                                     IsReadOnly="True"
                                     AutoSize="Disabled"
-                                    HeightRequest="320"
+                                    HeightRequest="260"
                                     AutomationId="ProseResultEditor" />
                             <Label Text="A normal prompt that works with any model. Copy it, or use it as your prompt."
                                    Style="{StaticResource HelperText}" />
@@ -347,45 +379,48 @@
 
         <!-- ActionBar (fixed): build/cancel and status remain reachable while scrolling. -->
         <Border Grid.Row="2" Style="{StaticResource ActionBar}">
-            <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*" ColumnSpacing="12">
-                <Button Grid.Column="0"
+            <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
+              <FlexLayout Grid.Row="0" Direction="Row" Wrap="Wrap" AlignItems="Center">
+                <Button
                         Text="Build prompt"
                         Command="{Binding BuildCommand}"
                         Style="{StaticResource ActionPrimary}"
-                        MinimumWidthRequest="160"
+                        MinimumWidthRequest="140" Margin="0,0,8,4"
+                        SemanticProperties.Description="Build a polished prompt from the current idea or reference image"
                         AutomationId="BuildPromptButton" />
-                <Button Grid.Column="1"
+                <Button
                         Text="Cancel"
                         Command="{Binding CancelCommand}"
                         IsVisible="{Binding IsBusy}"
                         Style="{StaticResource SecondaryButton}"
-                        AutomationId="CancelBuildButton" />
-                <ActivityIndicator Grid.Column="2"
+                        Margin="0,0,8,4" AutomationId="CancelBuildButton" />
+                <ActivityIndicator
                                    IsRunning="{Binding IsBusy}"
                                    IsVisible="{Binding IsBusy}"
                                    WidthRequest="22"
                                    HeightRequest="22"
                                    VerticalOptions="Center"
-                                   AutomationId="IdeaToPromptBusyIndicator" />
-                <Button Grid.Column="3"
+                                   Margin="0,0,8,4" AutomationId="IdeaToPromptBusyIndicator" />
+                <Button
                         Text="Copy prose"
                         Command="{Binding CopyProseCommand}"
                         IsVisible="{Binding HasProse}"
                         Style="{StaticResource SecondaryButton}"
-                        AutomationId="CopyProseButton" />
-                <Button Grid.Column="4"
+                        Margin="0,0,8,4" AutomationId="CopyProseButton" />
+                <Button
                         Text="Use prose as prompt"
                         Command="{Binding UseProseCommand}"
                         IsVisible="{Binding HasProse}"
-                        Style="{StaticResource PrimaryButton}"
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,8,4"
                         AutomationId="UseProseButton" />
-                <Button Grid.Column="5"
+                <Button
                         Text="Use JSON prompt"
                         Command="{Binding UseJsonCommand}"
                         IsVisible="{Binding HasJson}"
-                        Style="{StaticResource PrimaryButton}"
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,8,4"
                         AutomationId="UseJsonButton" />
-                <Label Grid.Column="6"
+              </FlexLayout>
+                <Label Grid.Row="1"
                        Text="{Binding StatusMessage}"
                        Style="{StaticResource StatusLabel}"
                        IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"

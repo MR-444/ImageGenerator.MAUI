@@ -378,9 +378,17 @@
                 <VerticalStackLayout Spacing="16" Padding="0,0,0,8">
                     <Border Style="{StaticResource Card}" VerticalOptions="Start">
                         <VerticalStackLayout Spacing="12">
-                            <Label Text="JSON output" Style="{StaticResource CardTitle}" />
+                            <Label Text="JSON preview" Style="{StaticResource CardTitle}" />
 
-                            <VerticalStackLayout Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto" Padding="0,2">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnSectionHeaderTapped" CommandParameter="{x:Reference EnrichmentSettingsBody}" />
+                                </Grid.GestureRecognizers>
+                                <Label Text="Enrichment settings" Style="{StaticResource FieldLabel}" VerticalOptions="Center" />
+                                <Label Grid.Column="1" Text="Configure" Style="{StaticResource HelperText}" VerticalOptions="Center" />
+                            </Grid>
+
+                            <VerticalStackLayout x:Name="EnrichmentSettingsBody" Spacing="8" IsVisible="False">
                                 <Label Text="Enrichment model" Style="{StaticResource FieldLabel}" />
                                 <Picker Title="Model"
                                         ItemsSource="{Binding EnrichTierOptions}"
@@ -389,8 +397,6 @@
                                         MaximumWidthRequest="220"
                                         HorizontalOptions="Start"
                                         AutomationId="EditorEnrichTierPicker" />
-                            </VerticalStackLayout>
-
                             <VerticalStackLayout Spacing="8" IsVisible="{Binding ShowEnrichLocalModel}">
                                 <Label Text="Local model (Ollama)" Style="{StaticResource FieldLabel}" />
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
@@ -410,11 +416,12 @@
                                 <Label Text="The Ollama server URL is shared with AI mutation and configured in Settings."
                                        Style="{StaticResource HelperText}" />
                             </VerticalStackLayout>
+                            </VerticalStackLayout>
 
                             <Editor Text="{Binding JsonPreview, Mode=OneWay}"
                                     IsReadOnly="True"
                                     AutoSize="Disabled"
-                                    HeightRequest="340"
+                                    HeightRequest="240"
                                     FontSize="12"
                                     AutomationId="EditorJsonPreview" />
                         </VerticalStackLayout>

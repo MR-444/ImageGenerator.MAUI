@@ -58,8 +58,18 @@
              the row and pushing the action bar off-screen. -->
         <Border Grid.Row="2" Style="{StaticResource Card}">
             <VerticalStackLayout Spacing="8">
-                <Label Text="Embedded metadata" Style="{StaticResource CardTitle}" />
-                <Editor Text="{Binding MetadataText}"
+                <HorizontalStackLayout Spacing="6">
+                    <Button Text="Prompt" Clicked="OnPromptTabClicked" Style="{StaticResource SecondaryButton}" AutomationId="DetailPromptTab" />
+                    <Button Text="Details" Clicked="OnDetailsTabClicked" Style="{StaticResource SecondaryButton}" AutomationId="DetailDetailsTab" />
+                    <Button Text="Raw metadata" Clicked="OnRawTabClicked" Style="{StaticResource SecondaryButton}" AutomationId="DetailRawTab" />
+                </HorizontalStackLayout>
+                <Editor x:Name="PromptEditor" Text="{Binding PromptText}"
+                        IsReadOnly="True" AutoSize="TextChanges" MinimumHeightRequest="120" MaximumHeightRequest="180"
+                        AutomationId="DetailPromptEditor" />
+                <Editor x:Name="DetailsEditor" Text="{Binding DetailsText}" IsVisible="False"
+                        IsReadOnly="True" AutoSize="TextChanges" MinimumHeightRequest="120" MaximumHeightRequest="180"
+                        AutomationId="DetailDetailsEditor" />
+                <Editor x:Name="RawMetadataEditor" Text="{Binding MetadataText}" IsVisible="False"
                         IsReadOnly="True"
                         AutoSize="TextChanges"
                         FontFamily="OpenSansRegular"

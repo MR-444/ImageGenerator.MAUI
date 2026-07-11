@@ -8,6 +8,7 @@ using ImageGenerator.MAUI.Presentation.ViewModels;
 using ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using System.Xml.Linq;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
 
@@ -418,6 +419,34 @@ public class IdeaToPromptViewModelTests
         vm.ReferenceImageBase64.Should().Be(Convert.ToBase64String([1, 2, 3, 4]));
         vm.ReferenceImageFileName.Should().Be("browser-reference.png");
         vm.StatusKind.Should().Be(StatusKind.Info);
+    }
+
+    [Fact]
+    public void DescribeIdeaMarkup_ExposesSupportedPasteAndDropZoneControls()
+    {
+        var xamlPath = Path.Combine(AppContext.BaseDirectory, "TestAssets", "IdeaToPromptPage.xaml");
+        var document = XDocument.Load(xamlPath);
+        XNamespace x = "http://schemas.microsoft.com/winfx/2009/xaml";
+
+        var elements = document.Descendants().ToList();
+        elements.Should().Contain(e => (string?)e.Attribute(x + "Name") == "WorkspaceGrid");
+        elements.Should().Contain(e => (string?)e.Attribute("AutomationId") == "PasteReferenceImageButton"
+                                       && (string?)e.Attribute("Clicked") == "OnPasteReferenceImageClicked");
+        elements.Should().Contain(e => (string?)e.Attribute("AutomationId") == "ReferenceImageDropZone");
+        elements.Should().NotContain(e => e.Name.LocalName.Contains("KeyboardAccelerator", StringComparison.Ordinal),
+            "KeyboardAccelerators is not loadable on this MAUI page at runtime");
+    }
+
+    [Fact]
+    public void SetReferenceImageFromBytes_RejectsEmptyClipboardBitmap()
+    {
+        var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+
+        var loaded = vm.SetReferenceImageFromBytes("pasted-reference.png", []);
+
+        loaded.Should().BeFalse();
+        vm.HasReferenceImage.Should().BeFalse();
+        vm.StatusKind.Should().Be(StatusKind.Error);
     }
 
     [Fact]

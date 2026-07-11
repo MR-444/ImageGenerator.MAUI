@@ -32,6 +32,12 @@ public partial class GalleryItemDetailViewModel : ObservableObject
     private string? _metadataText;
 
     [ObservableProperty]
+    private string? _promptText;
+
+    [ObservableProperty]
+    private string? _detailsText;
+
+    [ObservableProperty]
     private bool _isBusy;
 
     // Transient feedback shown briefly under the action row (e.g. after Copy). Cleared by
@@ -69,6 +75,10 @@ public partial class GalleryItemDetailViewModel : ObservableObject
 
             var meta = await _galleryService.ReadMetadataAsync(FilePath, ct);
             MetadataText = FormatMetadata(meta);
+            PromptText = meta is not null && meta.TryGetValue("Prompt", out var prompt)
+                ? prompt
+                : "No embedded prompt found.";
+            DetailsText = FormatDetails(meta);
         }
         catch (Exception ex)
         {
@@ -298,6 +308,17 @@ public partial class GalleryItemDetailViewModel : ObservableObject
             .ThenBy(kv => kv.Key, StringComparer.Ordinal);
 
         return string.Join(Environment.NewLine, ordered.Select(kv => $"{kv.Key}: {kv.Value}"));
+    }
+
+    private static string FormatDetails(IReadOnlyDictionary<string, string>? meta)
+    {
+        if (meta is null || meta.Count == 0) return "No embedded details found.";
+        var preferred = new[] { "ModelName", "Seed", "AspectRatio", "Dimensions", "Format", "Quality" };
+        var rows = preferred
+            .Where(meta.ContainsKey)
+            .Select(key => $"{key}: {meta[key]}");
+        var text = string.Join(Environment.NewLine, rows);
+        return string.IsNullOrWhiteSpace(text) ? "No additional generation details found." : text;
     }
 
     private static string FormatBytes(long bytes)

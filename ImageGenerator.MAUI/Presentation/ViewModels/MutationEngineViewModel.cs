@@ -113,7 +113,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CostEstimate))]
-    private int _count = 8;
+    private int _count = 4;
 
     partial void OnCountChanged(int value)
     {
@@ -167,13 +167,13 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
     [NotifyPropertyChangedFor(nameof(IsDeterministicMode))]
     [NotifyPropertyChangedFor(nameof(ShowStrength))]
     [NotifyPropertyChangedFor(nameof(ShowStylePin))]
-    private bool _isAiMode;
+    private bool _isAiMode = true;
 
     /// <summary>The user's last deliberate AI-mode choice on an ordinary (non-breed) visit, remembered
     /// for the app session so re-opening the page keeps the toggle where the user left it. NOT persisted
     /// across launches and NOT updated by the breed-forced on-state, so a prior Breed run can't silently
     /// leave a fresh ordinary visit on the paid LLM path (audit F2).</summary>
-    private bool _userChoseAiMode;
+    private bool _userChoseAiMode = true;
 
     partial void OnIsAiModeChanged(bool value)
     {
@@ -295,7 +295,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         _breedSet = breed is { Count: > 0 } ? breed : null;
         IsBreedMode = _breedSet is not null;
         // Breeding is an AI-only path and forces the LLM engine on; an ordinary visit restores the user's
-        // last deliberate choice for this session (default off = free deterministic engine). The forced-on
+        // last deliberate choice for this session (default on = the primary AI workflow). The forced-on
         // breed state is never recorded as that choice (see OnIsAiModeChanged), so a prior Breed flow can't
         // silently leave the singleton VM on the paid LLM path the next time the user opens the page.
         IsAiMode = IsBreedMode || _userChoseAiMode;

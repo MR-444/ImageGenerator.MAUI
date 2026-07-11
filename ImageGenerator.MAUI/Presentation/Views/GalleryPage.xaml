@@ -23,14 +23,8 @@
           RowSpacing="12">
 
         <!-- Header -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
-            <Button Grid.Column="0"
-                    Text="← Back"
-                    Clicked="OnBackClicked"
-                    Style="{StaticResource SecondaryButton}"
-                    VerticalOptions="Start"
-                    AutomationId="GalleryBackButton" />
-            <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
+            <VerticalStackLayout Grid.Column="0" Spacing="4" VerticalOptions="Center">
                 <Label Text="Gallery" Style="{StaticResource CardTitle}" />
                 <Label Text="Browse generated images. Tap a tile to select; use Open to view, or select several and post them to CivitAI."
                        Style="{StaticResource HelperText}" />
@@ -43,13 +37,13 @@
                             AutomationId="GallerySortPicker" />
                 </HorizontalStackLayout>
             </VerticalStackLayout>
-            <Button Grid.Column="2"
+            <Button Grid.Column="1"
                     Text="Refresh"
                     Command="{Binding RefreshCommand}"
                     Style="{StaticResource SecondaryButton}"
                     VerticalOptions="Start"
                     AutomationId="GalleryRefreshButton" />
-            <Button Grid.Column="3"
+            <Button Grid.Column="2"
                     Text="Open folder"
                     Command="{Binding OpenOutputFolderCommand}"
                     Style="{StaticResource SecondaryButton}"
@@ -74,74 +68,33 @@
              images into ONE draft post; the warning dialog (code-behind) precedes the upload. -->
         <Border Grid.Row="2"
                 Style="{StaticResource Card}"
-                Padding="12"
+                Padding="10"
                 IsVisible="{Binding HasSelection}">
-            <VerticalStackLayout Spacing="8">
-                <Label Text="Post selected images to CivitAI (as one draft post)"
-                       Style="{StaticResource FieldLabel}" />
-                <VerticalStackLayout Spacing="8">
-                    <Entry
-                           Text="{Binding CivitaiModelRef}"
-                           Placeholder="CivitAI model URL or version id — optional (blank posts to your profile)"
-                           MaximumWidthRequest="520"
-                           HorizontalOptions="Start"
-                           VerticalOptions="Center"
-                           AutomationId="GalleryCivitaiModelRefEntry" />
-                    <FlexLayout Direction="Row" Wrap="Wrap" AlignItems="Center">
-                        <HorizontalStackLayout Spacing="6" VerticalOptions="Center" Margin="0,0,12,8">
-                            <Switch IsToggled="{Binding CivitaiIncludeMeta}"
-                                    AutomationId="GalleryCivitaiIncludeMetaSwitch" />
-                            <Label Text="Include generation data"
-                                   Style="{StaticResource HelperText}"
-                                   VerticalOptions="Center" />
-                        </HorizontalStackLayout>
-                        <Button Text="Post to CivitAI"
-                                Clicked="OnPostToCivitaiClicked"
-                                Style="{StaticResource PrimaryButton}"
-                                IsEnabled="{Binding IsPosting, Converter={StaticResource InverseBool}}"
-                                Margin="0,0,0,8"
-                                AutomationId="GalleryPostCivitaiButton" />
-                    </FlexLayout>
-                </VerticalStackLayout>
-                <HorizontalStackLayout Spacing="8">
-                    <ActivityIndicator IsRunning="{Binding IsPosting}"
-                                       IsVisible="{Binding IsPosting}"
-                                       HeightRequest="18" WidthRequest="18"
-                                       VerticalOptions="Center" />
-                    <Label Text="{Binding CivitaiStatusMessage}"
-                           IsVisible="{Binding CivitaiStatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
-                           Style="{StaticResource HelperText}"
-                           VerticalOptions="Center"
-                           LineBreakMode="WordWrap"
-                           AutomationId="GalleryCivitaiStatusLabel" />
-                    <Button Text="Open draft"
-                            Command="{Binding OpenLastPostCommand}"
-                            Style="{StaticResource SecondaryButton}"
-                            IsVisible="{Binding HasLastPost}"
-                            AutomationId="GalleryOpenDraftButton" />
+            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="6">
+                <Entry Grid.Row="0" Grid.Column="0" Text="{Binding CivitaiModelRef}"
+                       Placeholder="Optional CivitAI model URL or version id"
+                       VerticalOptions="Center" AutomationId="GalleryCivitaiModelRefEntry" />
+                <HorizontalStackLayout Grid.Row="0" Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                    <Switch IsToggled="{Binding CivitaiIncludeMeta}" AutomationId="GalleryCivitaiIncludeMetaSwitch" />
+                    <Label Text="Metadata" Style="{StaticResource HelperText}" VerticalOptions="Center" />
                 </HorizontalStackLayout>
-
-                <!-- Breed the selected winners into AI variants on the Mutation page. Reads each
-                     image's embedded V4 caption; steer + model are set on the Mutation page. -->
-                <BoxView HeightRequest="1" Color="{StaticResource Gray300}" Margin="0,4" />
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                    <Label Grid.Column="0"
-                           Text="Breed the selected images into AI variants (combines their captions)"
-                           Style="{StaticResource HelperText}"
-                           VerticalOptions="Center"
-                           LineBreakMode="WordWrap" />
-                    <Button Grid.Column="1"
-                            Text="Breed selected"
-                            Command="{Binding BreedSelectedCommand}"
-                            Style="{StaticResource SecondaryButton}"
-                            AutomationId="GalleryBreedSelectedButton" />
-                </Grid>
-                <Label Text="{Binding BreedStatusMessage}"
-                       IsVisible="{Binding BreedStatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
-                       Style="{StaticResource HelperText}"
-                       LineBreakMode="WordWrap"
-                       AutomationId="GalleryBreedStatusLabel" />
-            </VerticalStackLayout>
+                <Button Grid.Row="0" Grid.Column="2" Text="Breed variants"
+                        Command="{Binding BreedSelectedCommand}" Style="{StaticResource SecondaryButton}"
+                        AutomationId="GalleryBreedSelectedButton" />
+                <Button Grid.Row="0" Grid.Column="3" Text="Post to CivitAI"
+                        Clicked="OnPostToCivitaiClicked" Style="{StaticResource PrimaryButton}"
+                        IsEnabled="{Binding IsPosting, Converter={StaticResource InverseBool}}"
+                        AutomationId="GalleryPostCivitaiButton" />
+                <HorizontalStackLayout Grid.Row="1" Grid.ColumnSpan="4" Spacing="8">
+                    <ActivityIndicator IsRunning="{Binding IsPosting}" IsVisible="{Binding IsPosting}" HeightRequest="18" WidthRequest="18" />
+                    <Label Text="{Binding CivitaiStatusMessage}" IsVisible="{Binding CivitaiStatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
+                           Style="{StaticResource HelperText}" AutomationId="GalleryCivitaiStatusLabel" />
+                    <Label Text="{Binding BreedStatusMessage}" IsVisible="{Binding BreedStatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
+                           Style="{StaticResource HelperText}" AutomationId="GalleryBreedStatusLabel" />
+                    <Button Text="Open draft" Command="{Binding OpenLastPostCommand}" Style="{StaticResource SecondaryButton}"
+                            IsVisible="{Binding HasLastPost}" AutomationId="GalleryOpenDraftButton" />
+                </HorizontalStackLayout>
+            </Grid>
         </Border>
 
         <!-- Tile grid -->
@@ -185,16 +138,18 @@
                                    SemanticProperties.Description="{Binding FileName}" />
                             <Label Text="{Binding FileName}"
                                    Style="{StaticResource HelperText}"
-                                   LineBreakMode="MiddleTruncation"
+                                   LineBreakMode="TailTruncation"
                                    MaxLines="1"
-                                   HorizontalOptions="Center" />
+                                   HorizontalOptions="Fill"
+                                   HorizontalTextAlignment="Center"
+                                   ToolTipProperties.Text="{Binding FileName}" />
                             <HorizontalStackLayout Spacing="6" HorizontalOptions="Center">
-                                <Button Text="Open"
+                                <Button Text="View"
                                         Style="{StaticResource SecondaryButton}"
                                         CommandParameter="{Binding .}"
                                         Clicked="OnOpenTileClicked"
                                         AutomationId="GalleryOpenTileButton" />
-                                <Button Text="Show metadata"
+                                <Button Text="Details"
                                         Style="{StaticResource SecondaryButton}"
                                         CommandParameter="{Binding .}"
                                         Clicked="OnShowMetadataClicked"

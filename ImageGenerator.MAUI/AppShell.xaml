@@ -4,9 +4,20 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:views="using:ImageGenerator.MAUI.Presentation.Views"
-    FlyoutBehavior="Disabled">
+    FlyoutBehavior="Locked"
+    FlyoutWidth="184"
+    FlyoutBackgroundColor="{AppThemeBinding Light={StaticResource SurfaceRaisedLight}, Dark={StaticResource CanvasDark}}"
+    Shell.BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceRaisedLight}, Dark={StaticResource CanvasDark}}"
+    Shell.ForegroundColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}"
+    Shell.TabBarIsVisible="False">
 
-    <ShellContent
-        ContentTemplate="{DataTemplate views:MainPage}"
-        Route="MainPage" />
+    <FlyoutItem Title="CREATE" Icon="studio_create.svg" Route="create">
+        <ShellContent Title="Create" ContentTemplate="{DataTemplate views:MainPage}" Route="MainPage" />
+    </FlyoutItem>
+    <FlyoutItem Title="GALLERY" Icon="studio_gallery.svg" Route="gallery-root">
+        <ShellContent Title="Gallery" ContentTemplate="{DataTemplate views:GalleryPage}" Route="gallery" />
+    </FlyoutItem>
+    <FlyoutItem Title="SETTINGS" Icon="studio_settings.svg" Route="settings-root">
+        <ShellContent Title="Settings" ContentTemplate="{DataTemplate views:SettingsPage}" Route="settings" />
+    </FlyoutItem>
 </Shell>

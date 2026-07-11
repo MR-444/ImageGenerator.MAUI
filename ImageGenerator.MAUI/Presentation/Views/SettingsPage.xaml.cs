@@ -16,7 +16,28 @@ public partial class SettingsPage
         InitializeComponent();
         _viewModel = viewModel;
         BindingContext = viewModel;
+        ShowCategory(SettingsCategory.Appearance);
     }
+
+    private enum SettingsCategory { Appearance, ApiKeys, Generation, AiServices, Output, Integrations }
+
+    private void ShowCategory(SettingsCategory category)
+    {
+        AppearanceCard.IsVisible = category == SettingsCategory.Appearance;
+        ApiTokensCard.IsVisible = category == SettingsCategory.ApiKeys;
+        GenerationCard.IsVisible = category == SettingsCategory.Generation;
+        OllamaCard.IsVisible = category == SettingsCategory.AiServices;
+        OpenRouterCard.IsVisible = category == SettingsCategory.AiServices;
+        OutputCard.IsVisible = category == SettingsCategory.Output;
+        IntegrationsCard.IsVisible = category == SettingsCategory.Integrations;
+    }
+
+    private void OnAppearanceCategoryClicked(object? sender, EventArgs e) => ShowCategory(SettingsCategory.Appearance);
+    private void OnApiKeysCategoryClicked(object? sender, EventArgs e) => ShowCategory(SettingsCategory.ApiKeys);
+    private void OnGenerationCategoryClicked(object? sender, EventArgs e) => ShowCategory(SettingsCategory.Generation);
+    private void OnAiServicesCategoryClicked(object? sender, EventArgs e) => ShowCategory(SettingsCategory.AiServices);
+    private void OnOutputCategoryClicked(object? sender, EventArgs e) => ShowCategory(SettingsCategory.Output);
+    private void OnIntegrationsCategoryClicked(object? sender, EventArgs e) => ShowCategory(SettingsCategory.Integrations);
 
     // The view->VM half of the token Entry's split binding (see the XAML comment). Provider
     // switches are safe: the Picker swaps SelectedTokenProvider BEFORE the binding rewrites

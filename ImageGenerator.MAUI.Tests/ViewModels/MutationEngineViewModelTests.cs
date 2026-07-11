@@ -32,6 +32,15 @@ public class MutationEngineViewModelTests
     }
 
     [Fact]
+    public void DefaultsToFourAiVariants()
+    {
+        var sut = CreateSut();
+
+        sut.IsAiMode.Should().BeTrue();
+        sut.Count.Should().Be(4);
+    }
+
+    [Fact]
     public void InitializeFrom_PrefersTypedBaseOverPromptString()
     {
         // The typed hand-off carries slot tags a string would strip, so it must win.
@@ -198,6 +207,7 @@ public class MutationEngineViewModelTests
     public void IsAiMode_TogglesDeterministicOnlyVisibility()
     {
         var sut = CreateSut();
+        sut.IsAiMode = false;
         sut.SelectedAxis = MutationAxis.Scene;
 
         sut.IsDeterministicMode.Should().BeTrue();
@@ -318,18 +328,18 @@ public class MutationEngineViewModelTests
     }
 
     [Fact]
-    public void Initialize_OrdinaryVisitAfterBreed_ResetsToDeterministicEngine()
+    public void Initialize_OrdinaryVisitAfterBreed_RestoresPrimaryAiWorkflow()
     {
         var sut = CreateSutWithAi(new StubMutationLlm());
         sut.SetBreedSetForTest(new[] { MutationTestData.BaseCaption(), MutationTestData.BaseCaption() });
         sut.IsAiMode.Should().BeTrue("breeding forced the paid LLM path on");
 
-        // An ordinary re-entry (no breed hand-off) must drop back to the free deterministic engine,
-        // not silently leave the singleton VM on the paid AI path.
+        // An ordinary re-entry restores the user's ordinary-session preference. AI is the product
+        // default; breed's forced state still does not overwrite a later deliberate deterministic pick.
         sut.Initialize();
 
         sut.IsBreedMode.Should().BeFalse();
-        sut.IsAiMode.Should().BeFalse("an ordinary visit resets to the free deterministic engine");
+        sut.IsAiMode.Should().BeTrue("AI rewrite is the primary workflow for a fresh ordinary visit");
     }
 
     [Fact]
@@ -422,6 +432,7 @@ public class MutationEngineViewModelTests
     public void ShowStylePin_InDeterministicLookAndAi_ButNotSceneOrBreed()
     {
         var sut = CreateSutWithAi(new StubMutationLlm());
+        sut.IsAiMode = false;
         sut.SelectedAxis = MutationAxis.Look;
         sut.ShowStylePin.Should().BeTrue("deterministic LOOK swaps to a saved style");
 
