@@ -422,6 +422,37 @@ public class IdeaToPromptViewModelTests
     }
 
     [Fact]
+    public async Task SetReferenceImageFromBytes_ValidImage_ResetsPreviousResultsAndActions()
+    {
+        var observer = new FakeVisionObserver(VisionObservationResult.Ok("The old image observation."));
+        var vm = new IdeaToPromptViewModel(
+            new FakePromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())),
+            _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance,
+            visionObserver: observer);
+        vm.SelectedModelTier = ModelTier.Local;
+        vm.SourceMode = IdeaSourceMode.Image;
+        vm.BuildJson = true;
+        vm.SetReferenceImageForTest("old.png", [1, 2, 3, 4]);
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        vm.HasProse.Should().BeTrue();
+        vm.HasObservation.Should().BeTrue();
+        vm.HasJson.Should().BeTrue();
+
+        var loaded = vm.SetReferenceImageFromBytes("new.png", [5, 6, 7, 8]);
+
+        loaded.Should().BeTrue();
+        vm.Prose.Should().BeEmpty();
+        vm.ObservedImageDescription.Should().BeEmpty();
+        vm.HasJson.Should().BeFalse();
+        vm.CopyProseCommand.CanExecute(null).Should().BeFalse();
+        vm.UseProseCommand.CanExecute(null).Should().BeFalse();
+        vm.UseJsonCommand.CanExecute(null).Should().BeFalse();
+        vm.BuildCommand.CanExecute(null).Should().BeTrue();
+    }
+
+    [Fact]
     public void DescribeIdeaMarkup_ExposesSupportedPasteAndDropZoneControls()
     {
         var xamlPath = Path.Combine(AppContext.BaseDirectory, "TestAssets", "IdeaToPromptPage.xaml");
@@ -433,6 +464,8 @@ public class IdeaToPromptViewModelTests
         elements.Should().Contain(e => (string?)e.Attribute("AutomationId") == "PasteReferenceImageButton"
                                        && (string?)e.Attribute("Clicked") == "OnPasteReferenceImageClicked");
         elements.Should().Contain(e => (string?)e.Attribute("AutomationId") == "ReferenceImageDropZone");
+        elements.Should().Contain(e => (string?)e.Attribute("AutomationId") == "ImageObservationEditor"
+                                       && (string?)e.Attribute("HeightRequest") == "260");
         elements.Should().NotContain(e => e.Name.LocalName.Contains("KeyboardAccelerator", StringComparison.Ordinal),
             "KeyboardAccelerators is not loadable on this MAUI page at runtime");
     }
@@ -447,6 +480,25 @@ public class IdeaToPromptViewModelTests
         loaded.Should().BeFalse();
         vm.HasReferenceImage.Should().BeFalse();
         vm.StatusKind.Should().Be(StatusKind.Error);
+    }
+
+    [Fact]
+    public async Task SetReferenceImageFromBytes_EmptyImage_PreservesPreviousResults()
+    {
+        var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+        vm.SelectedModelTier = ModelTier.Local;
+        vm.BuildJson = true;
+        vm.Idea = "a red fox in snow";
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        var loaded = vm.SetReferenceImageFromBytes("empty.png", []);
+
+        loaded.Should().BeFalse();
+        vm.Prose.Should().Be(Prose);
+        vm.HasJson.Should().BeTrue();
+        vm.CopyProseCommand.CanExecute(null).Should().BeTrue();
+        vm.UseProseCommand.CanExecute(null).Should().BeTrue();
+        vm.UseJsonCommand.CanExecute(null).Should().BeTrue();
     }
 
     [Fact]

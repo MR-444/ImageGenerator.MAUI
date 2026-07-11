@@ -310,7 +310,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         ReferenceImageFileName = string.IsNullOrWhiteSpace(fileName)
             ? sourcePath is { Length: > 0 } path ? Path.GetFileName(path) : "reference image"
             : fileName;
-        ObservedImageDescription = string.Empty;
+        ResetBuiltResults();
 
         if (!createPreview)
         {
@@ -327,6 +327,14 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
             _logger.LogWarning(ex, "IdeaToPrompt: reference image preview failed");
             ReferenceImagePreview = null;
         }
+    }
+
+    private void ResetBuiltResults()
+    {
+        Prose = string.Empty;
+        ObservedImageDescription = string.Empty;
+        HasJson = false;
+        _builtJson = null;
     }
 
     [RelayCommand(CanExecute = nameof(CanBuild))]
@@ -347,10 +355,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         // A fresh build starts from a clean slate: drop the previous run's prose, observation,
         // and JSON so stale results never linger (including when this build errors or is cancelled
         // before producing new output). They repopulate below as each pass succeeds.
-        Prose = string.Empty;
-        ObservedImageDescription = string.Empty;
-        HasJson = false;
-        _builtJson = null;
+        ResetBuiltResults();
 
         var usesLocalVision = IsImageSource && SelectedVisionProvider == VisionObservationProvider.LocalOllama;
         var gpuGated = (tier == ModelTier.Local || usesLocalVision)

@@ -348,7 +348,7 @@
                             <Editor Text="{Binding ObservedImageDescription}"
                                     IsReadOnly="True"
                                     AutoSize="Disabled"
-                                    HeightRequest="110"
+                                    HeightRequest="260"
                                     AutomationId="ImageObservationEditor" />
                         </VerticalStackLayout>
                     </Border>
