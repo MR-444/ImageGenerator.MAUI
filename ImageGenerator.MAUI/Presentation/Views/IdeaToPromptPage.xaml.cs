@@ -228,16 +228,19 @@ public partial class IdeaToPromptPage
                 return true;
         }
 
-        var url = await TryGetReferenceImageUrlAsync(dataView);
-        if (url is not null && await viewModel.SetReferenceImageFromUrlAsync(url))
-            return true;
-
         if (dataView.Contains(StandardDataFormats.Bitmap))
         {
             var bitmapBytes = await TryReadBitmapAsync(dataView);
             if (bitmapBytes is { Length: > 0 })
                 return viewModel.SetReferenceImageFromBytes($"{source}-reference.png", bitmapBytes, $"{source} bitmap");
         }
+
+        // Browser clipboards commonly expose both a bitmap and the source URL. Prefer the bitmap
+        // already present on the clipboard so Paste stays local and does not wait on a network
+        // download. The URL remains a fallback for clipboards that do not provide usable pixels.
+        var url = await TryGetReferenceImageUrlAsync(dataView);
+        if (url is not null && await viewModel.SetReferenceImageFromUrlAsync(url))
+            return true;
 
         return false;
     }
