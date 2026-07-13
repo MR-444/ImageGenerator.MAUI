@@ -227,6 +227,23 @@ public class UiStateStoreTests
     }
 
     [Fact]
+    public void UseSageAttention_KeyMissing_DefaultsOff()
+    {
+        _sut.LoadUseSageAttention().Should().BeFalse();
+    }
+
+    [Fact]
+    public void UseSageAttention_RoundTripsThroughPreferences()
+    {
+        _sut.PersistUseSageAttention(true);
+        _sut.LoadUseSageAttention().Should().BeTrue();
+        _preferences.Get("imggen.use_sage_attention", false).Should().BeTrue();
+
+        _sut.PersistUseSageAttention(false);
+        _sut.LoadUseSageAttention().Should().BeFalse();
+    }
+
+    [Fact]
     public void LoadUseJsonPrompt_GetThrows_SwallowedAndReturnsFalse()
     {
         _preferences.Seed(UseJsonPromptKey, true);

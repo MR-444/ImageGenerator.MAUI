@@ -179,6 +179,15 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     partial void OnComfyUiBaseUrlChanged(string value) =>
         _uiStateStore.PersistComfyUiBaseUrl(value ?? string.Empty);
 
+    // Runtime-only ComfyUI optimization. Default off because the KJNodes patch node and the
+    // sageattention host library are optional; the generation service reads this persisted
+    // value immediately before each workflow submission.
+    [ObservableProperty]
+    private bool _useSageAttention;
+
+    partial void OnUseSageAttentionChanged(bool value) =>
+        _uiStateStore.PersistUseSageAttention(value);
+
     // When on, POST /free to ComfyUI once rendering is idle so local Ollama prompt/AI work (and the OS) get
     // the VRAM back. Default on; turn off to keep the checkpoint resident for faster single-image iteration.
     [ObservableProperty]
@@ -1666,6 +1675,10 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
         // Default-on; only flips the field when the user previously turned it off (OnChanged re-persist is
         // a harmless echo — nothing else writes this field).
         FreeVramAfterRendering = _uiStateStore.LoadFreeVramAfterRendering();
+
+        // Default-off host capability. Like the server URL, the generation service re-reads
+        // the persisted value per run, so this load merely echoes the switch into Settings.
+        UseSageAttention = _uiStateStore.LoadUseSageAttention();
 
         // Echo the saved theme into the picker (the theme itself is already applied at startup in
         // App.xaml.cs). OnChanged re-persists/re-applies harmlessly. Default 0 = System (follow OS).

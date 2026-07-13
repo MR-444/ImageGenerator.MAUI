@@ -123,6 +123,25 @@ public class GeneratorViewModelTests
         _viewModel.OpenRouterVisionModels.Should().ContainSingle().Which.Should().Be("free/vision:free");
     }
 
+    [Fact]
+    public void UseSageAttention_WhenChanged_PersistsHostSetting()
+    {
+        _viewModel.UseSageAttention = true;
+
+        _mockUiStateStore.Verify(s => s.PersistUseSageAttention(true), Times.Once);
+    }
+
+    [Fact]
+    public void LoadSavedUiState_RestoresUseSageAttention()
+    {
+        _mockUiStateStore.Setup(s => s.LoadUseSageAttention()).Returns(true);
+
+        _viewModel.LoadSavedUiState();
+
+        _viewModel.UseSageAttention.Should().BeTrue();
+        _mockUiStateStore.Verify(s => s.LoadUseSageAttention(), Times.Once);
+    }
+
     // --- Configurable output folder ---
 
     [Fact]

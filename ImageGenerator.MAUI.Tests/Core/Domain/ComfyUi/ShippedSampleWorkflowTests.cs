@@ -87,6 +87,20 @@ public class ShippedSampleWorkflowTests
     }
 
     [Fact]
+    public void SageAttention_CoversBothIdeogramModelLoadersAtRuntime()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(
+            SampleJson, Request(), FixedNow, useSageAttention: true);
+        var graph = JsonNode.Parse(result.GraphJson)!.AsObject();
+
+        result.SageAttentionLoaderIds.Should().BeEquivalentTo(["98:23", "98:154"]);
+        result.SageAttentionNodeIds.Should().HaveCount(2);
+        result.SageAttentionNodeIds.Should().OnlyContain(id =>
+            graph[id]!["class_type"]!.GetValue<string>() == "PathchSageAttentionKJ"
+            && graph[id]!["inputs"]!["sage_attention"]!.GetValue<string>() == "auto");
+    }
+
+    [Fact]
     public void Portability_UsesNoCustomNodePackClasses()
     {
         // Verified against a live /object_info (2026-06-11): every remaining class is core

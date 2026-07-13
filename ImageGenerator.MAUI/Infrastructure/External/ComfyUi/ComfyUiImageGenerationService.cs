@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -91,22 +92,28 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
                     + "Export it from ComfyUI via Workflow > Export (API).");
             }
             var template = await File.ReadAllTextAsync(templatePath, cancellationToken);
+            var useSageAttention = _uiStateStore.LoadUseSageAttention();
 
             ComfyUiPatchResult patched;
             try
             {
-                patched = ComfyUiWorkflowPatcher.Patch(template, request);
+                patched = ComfyUiWorkflowPatcher.Patch(
+                    template, request, useSageAttention: useSageAttention);
             }
             catch (Exception ex) when (ex is InvalidOperationException or JsonException)
             {
                 _logger.LogError(ex, "ComfyUI patch failed Workflow={Workflow}", request.WorkflowName);
+                LogBenchmark(
+                    request.WorkflowName, promptId: null, useSageAttention,
+                    coveredLoaderCount: 0, outcome: "patch_error", queueToCompleteMs: null);
                 return Fail(ex is JsonException
                     ? $"Workflow '{request.WorkflowName}.json' is not valid JSON: {ex.Message}"
                     : ex.Message);
             }
             _logger.LogInformation(
-                "ComfyUI patched Workflow={Workflow} Target={Target} SeedNodes={SeedNodes}",
-                request.WorkflowName, patched.PromptTargetDescription, string.Join(",", patched.SeedNodeIds));
+                "ComfyUI patched Workflow={Workflow} Target={Target} SeedNodes={SeedNodes} SageNodes={SageNodes}",
+                request.WorkflowName, patched.PromptTargetDescription, string.Join(",", patched.SeedNodeIds),
+                string.Join(",", patched.SageAttentionNodeIds));
 
             var baseUrl = _uiStateStore.LoadComfyUiBaseUrl() ?? ModelConstants.ComfyUi.DefaultBaseUrl;
             if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
@@ -126,8 +133,16 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
             var clientId = Guid.NewGuid().ToString("N");
             await using var socket = await TryConnectSocketAsync(baseUri, clientId, authHeader, cancellationToken);
 
+            var benchmark = Stopwatch.StartNew();
             var promptId = await QueuePromptAsync(httpClient, baseUri, patched.GraphJson, clientId, cancellationToken);
-            if (promptId.Error is not null) return Fail(promptId.Error);
+            if (promptId.Error is not null)
+            {
+                benchmark.Stop();
+                LogBenchmark(
+                    request.WorkflowName, promptId: null, useSageAttention,
+                    patched.SageAttentionLoaderIds.Count, "queue_error", benchmark.ElapsedMilliseconds);
+                return Fail(promptId.Error);
+            }
 
             // The HttpClient/Polly per-request logging is blackholed below Warning
             // (CrashLogger) — these two INFO lines carry the run timeline instead.
@@ -145,14 +160,22 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
                 // First iteration returns immediately when the ws saw completion; otherwise
                 // this is the unchanged 2 s polling fallback.
                 var entry = await PollHistoryAsync(httpClient, baseUri, promptId.Value!, cancellationToken);
+                benchmark.Stop();
 
                 if (entry.Status?.StatusStr == "error"
                     || entry.Status is { Completed: false, StatusStr: not null })
                 {
+                    LogBenchmark(
+                        request.WorkflowName, promptId.Value, useSageAttention,
+                        patched.SageAttentionLoaderIds.Count, "error", benchmark.ElapsedMilliseconds);
                     var detail = ExtractExecutionError(entry.Status);
                     _logger.LogError("ComfyUI execution failed PromptId={PromptId} Detail={Detail}", promptId.Value, detail);
                     return Fail($"ComfyUI workflow failed: {Truncate(detail)}");
                 }
+
+                LogBenchmark(
+                    request.WorkflowName, promptId.Value, useSageAttention,
+                    patched.SageAttentionLoaderIds.Count, "success", benchmark.ElapsedMilliseconds);
 
                 var image = (entry.Outputs?.Values ?? Enumerable.Empty<ComfyUiNodeOutput>())
                     .SelectMany(o => o.Images ?? [])
@@ -205,6 +228,28 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
             _logger.LogError(ex, "ComfyUiImageGenerationService.GenerateImageAsync threw Model={Model}", parameters.Model);
             return Fail(FormatError(ex));
         }
+    }
+
+    private void LogBenchmark(
+        string workflow,
+        string? promptId,
+        bool sageRequested,
+        int coveredLoaderCount,
+        string outcome,
+        long? queueToCompleteMs)
+    {
+        _logger.LogInformation(
+            "ComfyUI benchmark Workflow={Workflow} PromptId={PromptId} "
+            + "SageRequested={SageRequested} SageApplied={SageApplied} "
+            + "CoveredLoaderCount={CoveredLoaderCount} Outcome={Outcome} "
+            + "QueueToCompleteMs={QueueToCompleteMs}",
+            workflow,
+            promptId ?? "(not queued)",
+            sageRequested,
+            sageRequested && coveredLoaderCount > 0,
+            coveredLoaderCount,
+            outcome,
+            queueToCompleteMs);
     }
 
     private async Task<(string? Value, string? Error)> QueuePromptAsync(

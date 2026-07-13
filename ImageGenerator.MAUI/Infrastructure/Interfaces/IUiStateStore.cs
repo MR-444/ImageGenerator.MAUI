@@ -27,6 +27,11 @@ public interface IUiStateStore
     string? LoadAspectRatio(string? modelId);
     /// <summary>False when never persisted — the toggle is opt-in per session by default.</summary>
     bool LoadUseJsonPrompt();
+    /// <summary>
+    /// Whether compatible ComfyUI workflows receive runtime SageAttention nodes. False when
+    /// never persisted because hosts without KJNodes/sageattention cannot execute the node.
+    /// </summary>
+    bool LoadUseSageAttention();
     /// <summary>Whether to POST /free to ComfyUI when rendering goes idle, freeing GPU memory for the
     /// local Ollama prompt/AI tools. TRUE when never persisted (default-on; the user can disable it in Settings).</summary>
     bool LoadFreeVramAfterRendering();
@@ -96,6 +101,8 @@ public interface IUiStateStore
     /// <inheritdoc cref="LoadAspectRatio"/>
     void PersistAspectRatio(string value, string? modelId);
     void PersistUseJsonPrompt(bool value);
+    /// <inheritdoc cref="LoadUseSageAttention"/>
+    void PersistUseSageAttention(bool value);
     /// <inheritdoc cref="LoadFreeVramAfterRendering"/>
     void PersistFreeVramAfterRendering(bool value);
     /// <inheritdoc cref="LoadAppTheme"/>

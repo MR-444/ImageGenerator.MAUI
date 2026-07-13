@@ -7,6 +7,7 @@ using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Infrastructure.External.ComfyUi;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Tests.TestSupport;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Moq.Protected;
@@ -22,6 +23,7 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
         {
           "4":   { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "baked.safetensors" } },
           "6":   { "class_type": "CLIPTextEncode", "inputs": { "text": "old" } },
+          "10":  { "class_type": "ModelConsumer", "inputs": { "model": ["4", 0] } },
           "165": { "class_type": "RandomNoise", "inputs": { "noise_seed": 1 } },
           "179": { "class_type": "Ideogram4PromptBuilderKJ",
                    "inputs": { "import_json": "", "import_mode": "when empty" } }
@@ -33,6 +35,7 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
     private readonly Mock<IComfyUiAuthStore> _authStore = new();
     private readonly List<HttpRequestMessage> _requests = [];
     private readonly List<string> _requestBodies = [];
+    private readonly ListLogger<ComfyUiImageGenerationService> _logger = new();
     private readonly string _workflowDir;
     private readonly ComfyUiImageGenerationService _service;
 
@@ -78,7 +81,7 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
             ModelDescriptorRegistry.Default(),
             _uiState.Object,
             _authStore.Object,
-            NullLogger<ComfyUiImageGenerationService>.Instance,
+            _logger,
             workflowsDirectoryOverride: _workflowDir,
             pollInterval: TimeSpan.FromMilliseconds(1),
             maxPollDuration: TimeSpan.FromSeconds(5),
@@ -88,6 +91,28 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
     // Default = ws unavailable, so every non-ws test keeps exercising the polling path (and
     // never attempts a real TCP connect to test-host). Ws tests swap in a scripted fake.
     private FakeComfyUiSocket _socket = new() { FailConnect = true };
+
+    private sealed class ListLogger<T> : ILogger<T>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => NoopScope.Instance;
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            Messages.Add(formatter(state, exception));
+
+        private sealed class NoopScope : IDisposable
+        {
+            public static readonly NoopScope Instance = new();
+            public void Dispose() { }
+        }
+    }
 
     private sealed class FakeComfyUiSocket : IComfyUiSocket
     {
@@ -222,6 +247,71 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
             "the type=output image must win over the temp preview");
         viewRequest.RequestUri.Query.Should().Contain("type=output");
         viewRequest.RequestUri.Host.Should().Be("test-host", "base URL comes from the UI state store");
+        _logger.Messages.Should().Contain(message =>
+            message.Contains("ComfyUI benchmark")
+            && message.Contains("SageRequested=False")
+            && message.Contains("SageApplied=False")
+            && message.Contains("CoveredLoaderCount=0")
+            && message.Contains("Outcome=success")
+            && message.Contains("QueueToCompleteMs="));
+    }
+
+    [Fact]
+    public async Task SageAttention_Enabled_PostsRuntimePatchAndLogsCoveredLoader()
+    {
+        _uiState.Setup(s => s.LoadUseSageAttention()).Returns(true);
+
+        var result = await _service.GenerateImageAsync(Parameters());
+
+        result.ImageData.Should().NotBeNull();
+        var promptRequestIndex = _requests.FindIndex(r =>
+            r.Method == HttpMethod.Post && r.RequestUri!.AbsolutePath == "/prompt");
+        var graph = JsonNode.Parse(_requestBodies[promptRequestIndex])!["prompt"]!.AsObject();
+        var sage = graph.Single(node =>
+            node.Value?["class_type"]?.GetValue<string>() == "PathchSageAttentionKJ");
+
+        sage.Value!["inputs"]!["model"]![0]!.GetValue<string>().Should().Be("4");
+        sage.Value["inputs"]!["sage_attention"]!.GetValue<string>().Should().Be("auto");
+        graph["10"]!["inputs"]!["model"]![0]!.GetValue<string>().Should().Be(sage.Key);
+        _logger.Messages.Should().Contain(message =>
+            message.Contains("ComfyUI benchmark")
+            && message.Contains("SageRequested=True")
+            && message.Contains("SageApplied=True")
+            && message.Contains("CoveredLoaderCount=1")
+            && message.Contains("Outcome=success"));
+    }
+
+    [Fact]
+    public async Task SageAttention_ExecutionFailure_LogsTaggedErrorWithoutFallback()
+    {
+        _uiState.Setup(s => s.LoadUseSageAttention()).Returns(true);
+        _historyResponses.Enqueue(() => Json(
+            $$"""
+            {
+              "{{PromptId}}": {
+                "outputs": {},
+                "status": {
+                  "status_str": "error", "completed": false,
+                  "messages": [ ["execution_error", {
+                    "node_type": "PathchSageAttentionKJ",
+                    "exception_message": "No module named sageattention" } ] ]
+                }
+              }
+            }
+            """));
+
+        var result = await _service.GenerateImageAsync(Parameters());
+
+        result.ImageData.Should().BeNull();
+        result.Message.Should().Contain("sageattention");
+        _requests.Count(r => r.RequestUri!.AbsolutePath == "/prompt").Should().Be(1,
+            "a Sage runtime error must not trigger an unpatched retry");
+        _logger.Messages.Should().Contain(message =>
+            message.Contains("ComfyUI benchmark")
+            && message.Contains("SageRequested=True")
+            && message.Contains("SageApplied=True")
+            && message.Contains("CoveredLoaderCount=1")
+            && message.Contains("Outcome=error"));
     }
 
     [Fact]

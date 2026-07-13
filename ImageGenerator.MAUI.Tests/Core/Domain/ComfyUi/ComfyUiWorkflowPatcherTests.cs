@@ -446,6 +446,147 @@ public class ComfyUiWorkflowPatcherTests
         result.PromptTargetDescription.Should().Contain("no unambiguous model loader");
     }
 
+    // ---- SageAttention runtime injection ------------------------------------------------
+
+    private const string DualSageTemplate =
+        """
+        {
+          "emberforge:sage:1": { "class_type": "Note", "inputs": {} },
+          "98:23":  { "class_type": "UNETLoader", "inputs": { "unet_name": "base.safetensors" } },
+          "98:154": { "class_type": "UNETLoader", "inputs": { "unet_name": "negative.safetensors" } },
+          "98:157": { "class_type": "LoraLoaderModelOnly", "inputs": { "model": ["98:23", 0] } },
+          "98:300": { "class_type": "Epsilon Scaling", "inputs": { "model": ["98:23", 0] } },
+          "98:155": { "class_type": "DualModelGuider",
+                      "inputs": { "model": ["98:157", 0], "model_negative": ["98:154", 0] } },
+          "6": { "class_type": "CLIPTextEncode", "inputs": { "text": "old positive" } }
+        }
+        """;
+
+    [Fact]
+    public void SageAttention_Disabled_LeavesModelEdgesAndResultMetadataUntouched()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(DualSageTemplate, Request());
+        var graph = JsonNode.Parse(result.GraphJson)!;
+
+        graph["98:157"]!["inputs"]!["model"]![0]!.GetValue<string>().Should().Be("98:23");
+        graph.AsObject().Any(node =>
+            node.Value?["class_type"]?.GetValue<string>() == "PathchSageAttentionKJ")
+            .Should().BeFalse();
+        result.SageAttentionNodeIds.Should().BeEmpty();
+        result.SageAttentionLoaderIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SageAttention_DualUnet_NonnumericIds_PatchesEveryConsumerBeforeLoraAndGuider()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(
+            DualSageTemplate, Request(), useSageAttention: true);
+        var graph = JsonNode.Parse(result.GraphJson)!.AsObject();
+
+        result.SageAttentionLoaderIds.Should().BeEquivalentTo(["98:23", "98:154"]);
+        result.SageAttentionNodeIds.Should().Equal(
+            ["emberforge:sage:2", "emberforge:sage:3"],
+            "the existing emberforge:sage:1 key forces deterministic collision avoidance");
+
+        var baseSageEntry = graph.Single(node =>
+            node.Value?["class_type"]?.GetValue<string>() == "PathchSageAttentionKJ"
+            && node.Value["inputs"]!["model"]![0]!.GetValue<string>() == "98:23");
+        var baseSage = baseSageEntry.Value!;
+        baseSage["class_type"]!.GetValue<string>().Should().Be("PathchSageAttentionKJ");
+        baseSage["inputs"]!["model"]![0]!.GetValue<string>().Should().Be("98:23");
+        baseSage["inputs"]!["sage_attention"]!.GetValue<string>().Should().Be("auto");
+        graph["98:157"]!["inputs"]!["model"]![0]!.GetValue<string>()
+            .Should().Be(baseSageEntry.Key, "Sage must sit before the LoRA loader");
+        graph["98:300"]!["inputs"]!["model"]![0]!.GetValue<string>()
+            .Should().Be(baseSageEntry.Key, "all consumers share one patch per loader");
+
+        var negativeSageId = graph.Single(node =>
+            node.Value?["class_type"]?.GetValue<string>() == "PathchSageAttentionKJ"
+            && node.Value["inputs"]!["model"]![0]!.GetValue<string>() == "98:154").Key;
+        graph["98:155"]!["inputs"]!["model_negative"]![0]!.GetValue<string>()
+            .Should().Be(negativeSageId);
+        result.PromptTargetDescription.Should().Contain("SageAttention on 2 model loader(s)");
+    }
+
+    [Theory]
+    [InlineData("CheckpointLoaderSimple")]
+    [InlineData("UNETLoader")]
+    [InlineData("UnetLoaderGGUF")]
+    public void SageAttention_RecognizesEverySupportedLoaderClass(string loaderClass)
+    {
+        var template =
+            $$"""
+            {
+              "loader": { "class_type": "{{loaderClass}}", "inputs": {} },
+              "consumer": { "class_type": "ModelConsumer", "inputs": { "model": ["loader", 0] } },
+              "text": { "class_type": "CLIPTextEncode", "inputs": { "text": "old" } }
+            }
+            """;
+
+        var result = ComfyUiWorkflowPatcher.Patch(template, Request(), useSageAttention: true);
+
+        result.SageAttentionLoaderIds.Should().Equal("loader");
+        result.SageAttentionNodeIds.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void SageAttention_Checkpoint_RewiresOnlyModelSlot_LeavingClipAndVaeLinksUntouched()
+    {
+        const string template =
+            """
+            {
+              "4": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "model.safetensors" } },
+              "5": { "class_type": "ModelConsumer", "inputs": { "model": ["4", 0] } },
+              "6": { "class_type": "CLIPTextEncode", "inputs": { "clip": ["4", 1], "text": "old" } },
+              "7": { "class_type": "VAEConsumer", "inputs": { "vae": ["4", 2] } }
+            }
+            """;
+
+        var result = ComfyUiWorkflowPatcher.Patch(template, Request(), useSageAttention: true);
+        var graph = JsonNode.Parse(result.GraphJson)!;
+        var sageId = result.SageAttentionNodeIds.Single();
+
+        graph["5"]!["inputs"]!["model"]![0]!.GetValue<string>().Should().Be(sageId);
+        graph["6"]!["inputs"]!["clip"]![0]!.GetValue<string>().Should().Be("4");
+        graph["6"]!["inputs"]!["clip"]![1]!.GetValue<int>().Should().Be(1);
+        graph["7"]!["inputs"]!["vae"]![0]!.GetValue<string>().Should().Be("4");
+        graph["7"]!["inputs"]!["vae"]![1]!.GetValue<int>().Should().Be(2);
+    }
+
+    [Fact]
+    public void SageAttention_ExistingPatch_IsCoveredWithoutDoubleWrappingAndKeepsItsMode()
+    {
+        const string template =
+            """
+            {
+              "4": { "class_type": "UNETLoader", "inputs": { "unet_name": "model.safetensors" } },
+              "5": { "class_type": "PathchSageAttentionKJ",
+                     "inputs": { "model": ["4", 0], "sage_attention": "sageattn3" } },
+              "6": { "class_type": "ModelConsumer", "inputs": { "model": ["5", 0] } },
+              "7": { "class_type": "CLIPTextEncode", "inputs": { "text": "old" } }
+            }
+            """;
+
+        var result = ComfyUiWorkflowPatcher.Patch(template, Request(), useSageAttention: true);
+        var graph = JsonNode.Parse(result.GraphJson)!.AsObject();
+
+        result.SageAttentionNodeIds.Should().Equal("5");
+        result.SageAttentionLoaderIds.Should().Equal("4");
+        graph.Count(node => node.Value?["class_type"]?.GetValue<string>() == "PathchSageAttentionKJ")
+            .Should().Be(1);
+        graph["5"]!["inputs"]!["sage_attention"]!.GetValue<string>().Should().Be("sageattn3");
+    }
+
+    [Fact]
+    public void SageAttention_EnabledWithoutSupportedModelEdge_FailsClearly()
+    {
+        var act = () => ComfyUiWorkflowPatcher.Patch(
+            PlainTemplate, Request(), useSageAttention: true);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*no supported MODEL edge*turn off*Use SageAttention*");
+    }
+
     // ---- CustomCombo quality preset --------------------------------------------------------
     // Mirrors the Ideogram4 sample's node 98:156: choice + 0-based index over option1..option4
     // (empty = unused slot). The class is generic, so only an EXACTLY-ONE CustomCombo graph

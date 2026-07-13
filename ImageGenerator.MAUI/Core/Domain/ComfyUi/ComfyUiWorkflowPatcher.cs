@@ -8,7 +8,9 @@ namespace ImageGenerator.MAUI.Core.Domain.ComfyUi;
 public sealed record ComfyUiPatchResult(
     string GraphJson,
     string PromptTargetDescription,
-    IReadOnlyList<string> SeedNodeIds);
+    IReadOnlyList<string> SeedNodeIds,
+    IReadOnlyList<string> SageAttentionNodeIds,
+    IReadOnlyList<string> SageAttentionLoaderIds);
 
 /// <summary>
 /// Pure transform from an API-format ComfyUI workflow export to the graph actually submitted:
@@ -28,7 +30,11 @@ public static class ComfyUiWorkflowPatcher
     private const string ResolutionSelectorClass = "ResolutionSelector";
     private const string CheckpointLoaderClass = "CheckpointLoaderSimple";
     private const string UnetLoaderClass = "UNETLoader";
+    private const string UnetLoaderGgufClass = "UnetLoaderGGUF";
+    private const string SageAttentionClass = "PathchSageAttentionKJ";
     private const string CustomComboClass = "CustomCombo";
+    private static readonly string[] SageAttentionLoaderClasses =
+        [CheckpointLoaderClass, UnetLoaderClass, UnetLoaderGgufClass];
 
     // CustomCombo's input names. The option VALUES (e.g. "Quality"/"Default"/"Turbo" in the
     // Ideogram4 sample) are deliberately NOT an enum anywhere in the app: they are arbitrary
@@ -38,7 +44,11 @@ public static class ComfyUiWorkflowPatcher
     private const string ComboIndexKey = "index";
     private static readonly string[] ComboOptionKeys = ["option1", "option2", "option3", "option4"];
 
-    public static ComfyUiPatchResult Patch(string templateJson, ComfyUiRequest request, DateTimeOffset? now = null)
+    public static ComfyUiPatchResult Patch(
+        string templateJson,
+        ComfyUiRequest request,
+        DateTimeOffset? now = null,
+        bool useSageAttention = false)
     {
         if (JsonNode.Parse(templateJson) is not JsonObject root)
             throw new InvalidOperationException("The workflow file does not contain a JSON object.");
@@ -63,12 +73,102 @@ public static class ComfyUiWorkflowPatcher
         var modelNote = PatchModel(nodes, request.CheckpointName);
         var presetNote = PatchQualityPreset(nodes, request.PresetChoice);
         var dateNote = PatchFilenamePrefixDates(nodes, now ?? DateTimeOffset.Now);
+        var sage = useSageAttention
+            ? PatchSageAttention(root, nodes)
+            : (NodeIds: new List<string>(), LoaderIds: new List<string>());
+        var sageNote = useSageAttention
+            ? $"; SageAttention on {sage.LoaderIds.Count} model loader(s)"
+            : string.Empty;
 
         return new ComfyUiPatchResult(
             root.ToJsonString(),
-            promptTarget + resolutionNote + modelNote + presetNote + dateNote,
-            seedNodeIds);
+            promptTarget + resolutionNote + modelNote + presetNote + dateNote + sageNote,
+            seedNodeIds,
+            sage.NodeIds,
+            sage.LoaderIds);
     }
+
+    /// <summary>
+    /// Runtime-only SageAttention injection. Each supported loader's MODEL output (slot 0)
+    /// gets one shared patch node for all consumers that are not already Sage-wrapped. This
+    /// naturally puts the patch before LoRA / guider / scaling nodes without touching a
+    /// CheckpointLoaderSimple's CLIP or VAE outputs (slots 1 and 2).
+    /// </summary>
+    private static (List<string> NodeIds, List<string> LoaderIds) PatchSageAttention(
+        JsonObject root,
+        List<(string Id, string ClassType, JsonObject Inputs)> nodes)
+    {
+        var sageNodeIds = new List<string>();
+        var coveredLoaderIds = new List<string>();
+        var nextId = 1;
+
+        foreach (var loader in nodes.Where(n => SageAttentionLoaderClasses.Contains(n.ClassType)))
+        {
+            var edges = nodes
+                .Where(n => n.Id != loader.Id)
+                .SelectMany(n => n.Inputs
+                    .Where(input => IsLinkTo(input.Value, loader.Id, 0))
+                    .Select(input => (Node: n, InputKey: input.Key)))
+                .ToList();
+
+            // A loader with no MODEL consumer cannot accelerate anything and must not make an
+            // otherwise unsupported graph look successfully patched.
+            if (edges.Count == 0) continue;
+
+            coveredLoaderIds.Add(loader.Id);
+
+            var alreadyWrapped = edges
+                .Where(edge => edge.Node.ClassType == SageAttentionClass)
+                .Select(edge => edge.Node.Id)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            sageNodeIds.AddRange(alreadyWrapped);
+
+            var uncovered = edges
+                .Where(edge => edge.Node.ClassType != SageAttentionClass)
+                .ToList();
+            if (uncovered.Count == 0) continue;
+
+            string sageId;
+            do
+            {
+                sageId = $"emberforge:sage:{nextId++}";
+            } while (root.ContainsKey(sageId));
+
+            root[sageId] = new JsonObject
+            {
+                ["class_type"] = SageAttentionClass,
+                ["inputs"] = new JsonObject
+                {
+                    ["model"] = new JsonArray(loader.Id, 0),
+                    ["sage_attention"] = "auto"
+                }
+            };
+
+            foreach (var edge in uncovered)
+            {
+                edge.Node.Inputs[edge.InputKey] = new JsonArray(sageId, 0);
+            }
+            sageNodeIds.Add(sageId);
+        }
+
+        if (coveredLoaderIds.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "SageAttention is enabled, but this workflow has no supported MODEL edge. "
+                + "Use CheckpointLoaderSimple, UNETLoader, or UnetLoaderGGUF, or turn off "
+                + "'Use SageAttention' in Settings.");
+        }
+
+        return (sageNodeIds, coveredLoaderIds);
+    }
+
+    private static bool IsLinkTo(JsonNode? value, string nodeId, int outputSlot) =>
+        value is JsonArray { Count: 2 } link
+        && link[0]?.GetValueKind() == JsonValueKind.String
+        && link[0]!.GetValue<string>() == nodeId
+        && link[1]?.GetValueKind() == JsonValueKind.Number
+        && link[1]!.GetValue<int>() == outputSlot;
 
     /// <summary>
     /// The workflow's swappable model slot: the lowest-id <c>CheckpointLoaderSimple</c> with a

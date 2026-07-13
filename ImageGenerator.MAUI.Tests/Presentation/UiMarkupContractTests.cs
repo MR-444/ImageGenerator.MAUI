@@ -46,6 +46,16 @@ public class UiMarkupContractTests
         Markup("GalleryPage.xaml").Should().Contain("Breed variants");
     }
 
+    [Fact]
+    public void SettingsPage_SageAttentionSwitch_IsBoundAccessibleAndAutomatable()
+    {
+        var markup = Markup("SettingsPage.xaml");
+
+        markup.Should().Contain("IsToggled=\"{Binding UseSageAttention, Mode=TwoWay}\"")
+            .And.Contain("SemanticProperties.Description=\"Use SageAttention for compatible ComfyUI workflows\"")
+            .And.Contain("AutomationId=\"UseSageAttentionSwitch\"");
+    }
+
     private static string Markup(string asset) =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "TestAssets", asset));
 }

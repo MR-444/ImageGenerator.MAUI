@@ -12,6 +12,7 @@ public sealed class UiStateStore : IUiStateStore
     private const string PromptKey = "imggen.last_prompt";
     private const string ModelKey = "imggen.last_model";
     private const string UseJsonPromptKey = "imggen.use_json_prompt";
+    private const string UseSageAttentionKey = "imggen.use_sage_attention";
     private const string FreeVramAfterRenderingKey = "imggen.free_vram_after_rendering";
     private const string AppThemeKey = "imggen.app_theme";
     private const string PromptWriterTierKey = "imggen.prompt_writer_tier";
@@ -231,6 +232,10 @@ public sealed class UiStateStore : IUiStateStore
     public bool LoadUseJsonPrompt() => LoadBool(UseJsonPromptKey, false);
 
     public void PersistUseJsonPrompt(bool value) => PersistBool(UseJsonPromptKey, value, false);
+
+    public bool LoadUseSageAttention() => LoadBool(UseSageAttentionKey, false);
+
+    public void PersistUseSageAttention(bool value) => PersistBool(UseSageAttentionKey, value, false);
 
     // Default TRUE — free GPU memory after each render unless the user opted out.
     public bool LoadFreeVramAfterRendering() => LoadBool(FreeVramAfterRenderingKey, true);
