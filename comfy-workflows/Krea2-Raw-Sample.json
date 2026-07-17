@@ -43,12 +43,13 @@
     }
   },
   "6": {
-    "class_type": "ConditioningZeroOut",
+    "class_type": "CLIPTextEncode",
     "inputs": {
-      "conditioning": [
-        "5",
+      "clip": [
+        "2",
         0
-      ]
+      ],
+      "text": ""
     }
   },
   "7": {
@@ -79,10 +80,10 @@
       "eta": 0.0,
       "sampler_name": "linear/euler",
       "scheduler": "simple",
-      "steps": 28,
+      "steps": 52,
       "steps_to_run": -1,
       "denoise": 1.0,
-      "cfg": 1.0,
+      "cfg": 3.5,
       "seed": 991899628498522,
       "sampler_mode": "standard",
       "bongmath": true,

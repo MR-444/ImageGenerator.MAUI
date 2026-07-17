@@ -6,11 +6,13 @@ namespace ImageGenerator.MAUI.Tests.Core.Domain.ComfyUi;
 
 /// <summary>
 /// Pins the raw-variant contract of the Krea-2 sample (comfy-workflows/Krea2-Raw-Sample.json).
-/// The graph shape is identical to Krea2-Sample.json — those patcher behaviors are pinned by
-/// <see cref="Krea2SampleWorkflowTests"/> — so this class only pins what makes raw RAW. The
-/// values were A/B-verified on fireEngine (2026-07-17): eta 0.0 is the load-bearing one — 0.5
-/// etches a canvas-like pattern over the whole image — and cfg must STAY 1.0, because any real
-/// CFG against the zeroed-out negative dissolves the render into grit.
+/// The graph shape matches Krea2-Sample.json except the negative branch — those patcher
+/// behaviors are pinned by <see cref="Krea2SampleWorkflowTests"/> — so this class only pins
+/// what makes raw RAW: the model card's own recipe (huggingface.co/krea/Krea-2-Raw: 52 steps,
+/// cfg 3.5), user-verified on fireEngine 2026-07-17. Two hard-won pairings in that recipe:
+/// real CFG needs a REAL empty-prompt negative (cfg&gt;1 against a ConditioningZeroOut negative
+/// dissolves the render into grit), and eta must stay 0.0 (ancestral noise etches a canvas
+/// pattern over the whole image).
 /// </summary>
 public class Krea2RawSampleWorkflowTests
 {
@@ -33,25 +35,42 @@ public class Krea2RawSampleWorkflowTests
     }
 
     [Fact]
-    public void Sampler_RunsTheVerifiedRawRecipe()
+    public void Negative_IsARealEmptyPromptEncode_NotZeroOut()
     {
-        var sampler = Graph["9"]!["inputs"]!;
-        sampler["steps"]!.GetValue<int>().Should().Be(28, "raw is not step-distilled");
-        sampler["eta"]!.GetValue<double>().Should().Be(0.0,
-            "ancestral noise (eta 0.5) blurs the render under a canvas-like pattern");
-        sampler["cfg"]!.GetValue<double>().Should().Be(1.0,
-            "real CFG against the zeroed-out negative dissolves the render into grit");
+        // The one deliberate shape difference vs the turbo sample: real CFG guides against
+        // the empty-prompt unconditional, exactly like the model card's own pipeline. It must
+        // also stay HIGHER-id than the positive encode (node 5) — the app's plain-prompt
+        // patcher targets the lowest-id literal CLIPTextEncode.
+        var negative = Graph["6"]!;
+        negative["class_type"]!.GetValue<string>().Should().Be("CLIPTextEncode");
+        negative["inputs"]!["text"]!.GetValue<string>().Should().BeEmpty();
     }
 
     [Fact]
-    public void GraphShape_MatchesTheTurboSampleNodeForNode()
+    public void Sampler_RunsTheModelCardRecipe()
+    {
+        var sampler = Graph["9"]!["inputs"]!;
+        sampler["steps"]!.GetValue<int>().Should().Be(52, "the model card's recipe");
+        sampler["cfg"]!.GetValue<double>().Should().Be(3.5, "the model card's recipe");
+        sampler["eta"]!.GetValue<double>().Should().Be(0.0,
+            "ancestral noise blurs the render under a canvas-like pattern");
+        sampler["negative"]![0]!.GetValue<string>().Should().Be("6",
+            "cfg 3.5 is only valid against the real empty-prompt negative");
+    }
+
+    [Fact]
+    public void GraphShape_MatchesTheTurboSample_ExceptTheNegativeBranch()
     {
         var turbo = JsonNode.Parse(File.ReadAllText(
             Path.Combine(AppContext.BaseDirectory, "TestAssets", "Krea2-Sample.json")))!.AsObject();
 
-        Graph.Select(kv => (kv.Key, Class: kv.Value!["class_type"]!.GetValue<string>()))
-            .Should().BeEquivalentTo(
-                turbo.Select(kv => (kv.Key, Class: kv.Value!["class_type"]!.GetValue<string>())),
-                "raw must stay a settings-only variant of the turbo sample");
+        static IEnumerable<(string Key, string Class)> Shape(JsonObject graph) =>
+            graph.Where(kv => kv.Key != "6")
+                .Select(kv => (kv.Key, kv.Value!["class_type"]!.GetValue<string>()));
+
+        Shape(Graph).Should().BeEquivalentTo(Shape(turbo),
+            "raw must stay a settings-only variant of the turbo sample apart from the negative");
+        turbo["6"]!["class_type"]!.GetValue<string>().Should().Be("ConditioningZeroOut",
+            "turbo keeps the zero-out negative its distilled guidance expects");
     }
 }
