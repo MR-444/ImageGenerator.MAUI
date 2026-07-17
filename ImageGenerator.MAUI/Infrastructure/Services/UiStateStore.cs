@@ -85,7 +85,10 @@ public sealed class UiStateStore : IUiStateStore
     public string? LoadResolution(string? modelId)
     {
         var key = ResolutionKeyFor(modelId);
-        var v = SafeGet(key);
+        // ComfyUI reads fall back to the old family-wide key so a pre-existing pick carries
+        // over until the first per-workflow pick replaces it.
+        var v = SafeGet(key)
+                ?? (Shared.Constants.ModelConstants.ComfyUi.IsId(modelId) ? SafeGet(ComfyUiResolutionKey) : null);
         if (_logger.IsEnabled(LogLevel.Debug))
             _logger.LogDebug("UiStateStore.LoadResolution[{Key}] -> {Value}", key, Quote(v));
         return v;
@@ -100,9 +103,14 @@ public sealed class UiStateStore : IUiStateStore
 
     // ComfyUI's MP presets and the other models' "WxH"-style strings are different option
     // families — each gets its own key so model switches restore that family's last pick.
-    // The legacy key stays the default family, keeping previously saved data valid.
+    // ComfyUI is additionally keyed PER WORKFLOW: models differ in how much resolution they
+    // tolerate (Krea-2 turbo renders 4 MP, raw smears above 2 MP), so one workflow's pick
+    // must not leak into another. The legacy key stays the default family, keeping
+    // previously saved data valid.
     private static string ResolutionKeyFor(string? modelId) =>
-        Shared.Constants.ModelConstants.ComfyUi.IsId(modelId) ? ComfyUiResolutionKey : ResolutionKey;
+        Shared.Constants.ModelConstants.ComfyUi.IsId(modelId)
+            ? $"{ComfyUiResolutionKey}.{Shared.Constants.ModelConstants.ComfyUi.WorkflowName(modelId!)}"
+            : ResolutionKey;
 
     public string? LoadAspectRatio(string? modelId)
     {

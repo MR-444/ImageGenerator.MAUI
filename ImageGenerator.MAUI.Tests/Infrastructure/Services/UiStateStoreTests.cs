@@ -68,9 +68,11 @@ public class UiStateStoreTests
     }
 
     // Resolution is persisted per option-format family: ComfyUI models ("comfyui/*") get
-    // their own key; every other model shares the legacy key so old saved data stays valid.
+    // their own keys — one PER WORKFLOW, since models tolerate different resolutions —
+    // and every other model shares the legacy key so old saved data stays valid.
     private const string ResolutionKey = "imggen.last_resolution";
-    private const string ComfyResolutionKey = "imggen.last_resolution.comfyui";
+    private const string ComfyFamilyResolutionKey = "imggen.last_resolution.comfyui";
+    private const string ComfyResolutionKey = "imggen.last_resolution.comfyui.Ideogram workflow_MR";
     private const string IdeogramModel = "ideogram-ai/ideogram-v4-balanced";
     private const string ComfyModel = "comfyui/Ideogram workflow_MR";
 
@@ -118,6 +120,32 @@ public class UiStateStoreTests
 
         _sut.LoadResolution(ComfyModel).Should().BeNull(
             "an Ideogram 'WxH' string is never a valid ComfyUI MP preset");
+    }
+
+    [Fact]
+    public void Resolution_ComfyWorkflows_AreIsolated_OneWorkflowsPickNeverLeaksIntoAnother()
+    {
+        // The live trap this pins: Krea-2 turbo renders 4 MP fine, Krea-2 raw smears above
+        // 2 MP — a family-wide key silently carried the 4 MP pick over.
+        _sut.PersistResolution("4.0 MP", "comfyui/Krea-2");
+        _sut.PersistResolution("2.0 MP", "comfyui/Krea-2-Raw");
+
+        _sut.LoadResolution("comfyui/Krea-2").Should().Be("4.0 MP");
+        _sut.LoadResolution("comfyui/Krea-2-Raw").Should().Be("2.0 MP");
+    }
+
+    [Fact]
+    public void LoadResolution_ComfyWorkflowWithoutOwnPick_FallsBackToTheOldFamilyKey()
+    {
+        // Pre-per-workflow installs have a value under the family-wide key; it must keep
+        // working until the first per-workflow pick replaces it.
+        _preferences.Seed(ComfyFamilyResolutionKey, "4.0 MP");
+
+        _sut.LoadResolution(ComfyModel).Should().Be("4.0 MP");
+
+        _sut.PersistResolution("2.0 MP", ComfyModel);
+        _sut.LoadResolution(ComfyModel).Should().Be("2.0 MP",
+            "a per-workflow pick wins over the legacy family value");
     }
 
     [Fact]

@@ -14,9 +14,10 @@ public interface IUiStateStore
     string? LoadModel();
     /// <summary>
     /// Resolution is persisted per option-format FAMILY, derived from the model id: ComfyUI
-    /// models use megapixel presets ("2.0 MP") under their own key, everything else shares the
-    /// legacy key (Ideogram "WxH" strings etc.). Switching model families therefore restores
-    /// that family's last pick instead of slamming to the first option.
+    /// models use megapixel presets ("2.0 MP"), everything else shares the legacy key
+    /// (Ideogram "WxH" strings etc.). ComfyUI is additionally keyed PER WORKFLOW — models
+    /// tolerate different resolutions, so one workflow's pick must not leak into another;
+    /// reads fall back to the old family-wide key until a per-workflow pick exists.
     /// </summary>
     string? LoadResolution(string? modelId);
     /// <summary>
