@@ -8,6 +8,7 @@ using ImageGenerator.MAUI.Presentation.ViewModels;
 using ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using SixLabors.ImageSharp;
 using System.Xml.Linq;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
@@ -179,6 +180,20 @@ public class IdeaToPromptViewModelTests
         builder.JsonTiers.Should().Equal(ModelTier.Local);
     }
 
+    // Real decodable bytes: reference-image intake now normalizes via VisionImageNormalizer,
+    // so opaque dummies like [1,2,3,4] are rejected at import. PNGs pass through byte-identical,
+    // keeping the pass-through assertions below valid.
+    private static readonly byte[] TinyPng = CreatePng(1);
+    private static readonly byte[] OtherPng = CreatePng(2);
+
+    private static byte[] CreatePng(int size)
+    {
+        using var image = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(size, size);
+        using var ms = new MemoryStream();
+        image.SaveAsPng(ms);
+        return ms.ToArray();
+    }
+
     [Fact]
     public void BuildCommand_ImageMode_RequiresReferenceImage()
     {
@@ -189,7 +204,7 @@ public class IdeaToPromptViewModelTests
 
         vm.BuildCommand.CanExecute(null).Should().BeFalse("image mode needs an image, not typed text");
 
-        vm.SetReferenceImageForTest("ref.png", [1, 2, 3, 4]);
+        vm.SetReferenceImageForTest("ref.png", TinyPng);
 
         vm.BuildCommand.CanExecute(null).Should().BeTrue();
     }
@@ -205,7 +220,7 @@ public class IdeaToPromptViewModelTests
 
         try
         {
-            await File.WriteAllBytesAsync(filePath, [1, 2, 3, 4]);
+            await File.WriteAllBytesAsync(filePath, TinyPng);
 
             await vm.SetReferenceImageFromPathAsync(filePath);
         }
@@ -215,7 +230,7 @@ public class IdeaToPromptViewModelTests
                 File.Delete(filePath);
         }
 
-        vm.ReferenceImageBase64.Should().Be(Convert.ToBase64String([1, 2, 3, 4]));
+        vm.ReferenceImageBase64.Should().Be(Convert.ToBase64String(TinyPng));
         vm.ReferenceImageFileName.Should().Be(Path.GetFileName(filePath));
         vm.ObservedImageDescription.Should().BeEmpty();
         vm.HasReferenceImage.Should().BeTrue();
@@ -234,7 +249,7 @@ public class IdeaToPromptViewModelTests
         vm.SourceMode = IdeaSourceMode.Image;
         vm.Idea = "make it uplifting";
         vm.BuildJson = false;
-        vm.SetReferenceImageForTest("swing.png", [1, 2, 3, 4]);
+        vm.SetReferenceImageForTest("swing.png", TinyPng);
 
         await vm.BuildCommand.ExecuteAsync(null);
 
@@ -259,7 +274,7 @@ public class IdeaToPromptViewModelTests
             NullLogger<IdeaToPromptViewModel>.Instance, generator: null, visionObserver: observer);
         vm.SelectedModelTier = ModelTier.Local;
         vm.SourceMode = IdeaSourceMode.Image;
-        vm.SetReferenceImageForTest("ref.png", [1, 2, 3, 4]);
+        vm.SetReferenceImageForTest("ref.png", TinyPng);
 
         await vm.BuildCommand.ExecuteAsync(null);
 
@@ -381,7 +396,7 @@ public class IdeaToPromptViewModelTests
         vm.SelectedModelTier = ModelTier.Local;
         vm.SourceMode = IdeaSourceMode.Image;
         vm.SelectedVisionProvider = VisionObservationProvider.OpenRouter;
-        vm.SetReferenceImageForTest("ref.png", [1, 2, 3, 4]);
+        vm.SetReferenceImageForTest("ref.png", TinyPng);
 
         await vm.BuildCommand.ExecuteAsync(null);
 
@@ -394,7 +409,7 @@ public class IdeaToPromptViewModelTests
     [Fact]
     public async Task SetReferenceImageFromUrl_DownloadsVisionReferenceImage()
     {
-        var downloader = new FakeReferenceImageDownloader(ReferenceImageDownloadResult.Ok("browser.png", [1, 2, 3, 4]));
+        var downloader = new FakeReferenceImageDownloader(ReferenceImageDownloadResult.Ok("browser.png", TinyPng));
         var vm = new IdeaToPromptViewModel(new FakePromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())),
             _clipboard.Object,
             NullLogger<IdeaToPromptViewModel>.Instance,
@@ -403,7 +418,7 @@ public class IdeaToPromptViewModelTests
         await vm.SetReferenceImageFromUrlAsync("https://example.test/image.png?token=secret");
 
         downloader.Requests.Should().ContainSingle().Which.Should().Be("https://example.test/image.png?token=secret");
-        vm.ReferenceImageBase64.Should().Be(Convert.ToBase64String([1, 2, 3, 4]));
+        vm.ReferenceImageBase64.Should().Be(Convert.ToBase64String(TinyPng));
         vm.ReferenceImageFileName.Should().Be("browser.png");
         vm.StatusKind.Should().Be(StatusKind.Info);
     }
@@ -413,10 +428,10 @@ public class IdeaToPromptViewModelTests
     {
         var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
 
-        var loaded = vm.SetReferenceImageFromBytes("browser-reference.png", [1, 2, 3, 4], "browser bitmap");
+        var loaded = vm.SetReferenceImageFromBytes("browser-reference.png", TinyPng, "browser bitmap");
 
         loaded.Should().BeTrue();
-        vm.ReferenceImageBase64.Should().Be(Convert.ToBase64String([1, 2, 3, 4]));
+        vm.ReferenceImageBase64.Should().Be(Convert.ToBase64String(TinyPng));
         vm.ReferenceImageFileName.Should().Be("browser-reference.png");
         vm.StatusKind.Should().Be(StatusKind.Info);
     }
@@ -433,14 +448,14 @@ public class IdeaToPromptViewModelTests
         vm.SelectedModelTier = ModelTier.Local;
         vm.SourceMode = IdeaSourceMode.Image;
         vm.BuildJson = true;
-        vm.SetReferenceImageForTest("old.png", [1, 2, 3, 4]);
+        vm.SetReferenceImageForTest("old.png", TinyPng);
         await vm.BuildCommand.ExecuteAsync(null);
 
         vm.HasProse.Should().BeTrue();
         vm.HasObservation.Should().BeTrue();
         vm.HasJson.Should().BeTrue();
 
-        var loaded = vm.SetReferenceImageFromBytes("new.png", [5, 6, 7, 8]);
+        var loaded = vm.SetReferenceImageFromBytes("new.png", OtherPng);
 
         loaded.Should().BeTrue();
         vm.Prose.Should().BeEmpty();
@@ -480,6 +495,37 @@ public class IdeaToPromptViewModelTests
         loaded.Should().BeFalse();
         vm.HasReferenceImage.Should().BeFalse();
         vm.StatusKind.Should().Be(StatusKind.Error);
+    }
+
+    [Fact]
+    public void SetReferenceImageFromBytes_TranscodesWebpToPng()
+    {
+        // The live-bug shape: a browser image (WebP, often with a lying .png/.jfif name) used
+        // to pass through untouched and die at generate time as Ollama's opaque HTTP 400
+        // ("Failed to load image or audio file"). Intake must hand every backend PNG/JPEG.
+        using var image = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(2, 2);
+        using var ms = new MemoryStream();
+        image.SaveAsWebp(ms);
+        var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+
+        var loaded = vm.SetReferenceImageFromBytes("browser-image.png", ms.ToArray());
+
+        loaded.Should().BeTrue();
+        var stored = Convert.FromBase64String(vm.ReferenceImageBase64);
+        stored.Take(4).Should().Equal((byte)0x89, (byte)'P', (byte)'N', (byte)'G');
+    }
+
+    [Fact]
+    public void SetReferenceImageFromBytes_RejectsUndecodableBytes()
+    {
+        var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+
+        var loaded = vm.SetReferenceImageFromBytes("mystery.avif", [1, 2, 3, 4]);
+
+        loaded.Should().BeFalse();
+        vm.HasReferenceImage.Should().BeFalse();
+        vm.StatusKind.Should().Be(StatusKind.Error);
+        vm.StatusMessage.Should().Contain("Unsupported image format");
     }
 
     [Fact]

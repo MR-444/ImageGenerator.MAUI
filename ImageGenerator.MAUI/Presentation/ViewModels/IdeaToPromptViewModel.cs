@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
+using ImageGenerator.MAUI.Infrastructure.Imaging;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
@@ -214,8 +215,10 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         await using var stream = await result.OpenReadAsync();
         using var memoryStream = new MemoryStream();
         await stream.CopyToAsync(memoryStream);
-        SetReferenceImage(result.FileName, memoryStream.ToArray(), result.FullPath, createPreview: true);
-        SetStatus($"Reference image ready: {result.FileName}", StatusKind.Info);
+        if (SetReferenceImage(result.FileName, memoryStream.ToArray(), result.FullPath, createPreview: true))
+        {
+            SetStatus($"Reference image ready: {result.FileName}", StatusKind.Info);
+        }
     }
 
     public async Task SetReferenceImageFromPathAsync(string filePath)
@@ -229,8 +232,10 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         try
         {
             var imageBytes = await File.ReadAllBytesAsync(filePath);
-            SetReferenceImage(Path.GetFileName(filePath), imageBytes, filePath, createPreview: true);
-            SetStatus($"Reference image ready: {Path.GetFileName(filePath)}", StatusKind.Info);
+            if (SetReferenceImage(Path.GetFileName(filePath), imageBytes, filePath, createPreview: true))
+            {
+                SetStatus($"Reference image ready: {Path.GetFileName(filePath)}", StatusKind.Info);
+            }
         }
         catch (Exception ex)
         {
@@ -246,7 +251,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
             return false;
         }
 
-        SetReferenceImage(fileName, bytes, sourcePath, createPreview: true);
+        if (!SetReferenceImage(fileName, bytes, sourcePath, createPreview: true)) return false;
         SetStatus($"Reference image ready: {ReferenceImageFileName}", StatusKind.Info);
         return true;
     }
@@ -277,7 +282,10 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
                 return false;
             }
 
-            SetReferenceImage(result.FileName ?? "browser-reference", result.Bytes, uri.ToString(), createPreview: true);
+            if (!SetReferenceImage(result.FileName ?? "browser-reference", result.Bytes, uri.ToString(), createPreview: true))
+            {
+                return false;
+            }
             SetStatus($"Reference image ready: {ReferenceImageFileName}", StatusKind.Info);
             return true;
         }
@@ -304,9 +312,20 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         SetReferenceImage(fileName, bytes, sourcePath: null, createPreview: false);
     }
 
-    private void SetReferenceImage(string fileName, byte[] bytes, string? sourcePath, bool createPreview)
+    private bool SetReferenceImage(string fileName, byte[] bytes, string? sourcePath, bool createPreview)
     {
-        ReferenceImageBase64 = Convert.ToBase64String(bytes);
+        // Normalize BEFORE accepting: Ollama only decodes JPEG/PNG, so a browser WebP (often
+        // saved with a lying ".png"/".jfif" name) used to sail through here and die at
+        // generate time as an opaque HTTP 400. Decodable formats are transcoded to PNG; the
+        // rest are rejected right now with a message the user can act on.
+        var (normalized, error) = VisionImageNormalizer.Normalize(bytes);
+        if (normalized is null)
+        {
+            SetStatus(error!, StatusKind.Error);
+            return false;
+        }
+
+        ReferenceImageBase64 = Convert.ToBase64String(normalized);
         ReferenceImageFileName = string.IsNullOrWhiteSpace(fileName)
             ? sourcePath is { Length: > 0 } path ? Path.GetFileName(path) : "reference image"
             : fileName;
@@ -315,18 +334,19 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         if (!createPreview)
         {
             ReferenceImagePreview = null;
-            return;
+            return true;
         }
 
         try
         {
-            ReferenceImagePreview = ImageSource.FromStream(() => new MemoryStream(bytes));
+            ReferenceImagePreview = ImageSource.FromStream(() => new MemoryStream(normalized));
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "IdeaToPrompt: reference image preview failed");
             ReferenceImagePreview = null;
         }
+        return true;
     }
 
     private void ResetBuiltResults()
