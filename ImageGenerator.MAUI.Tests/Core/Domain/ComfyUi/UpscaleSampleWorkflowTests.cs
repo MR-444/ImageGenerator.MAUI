@@ -21,8 +21,10 @@ public class UpscaleSampleWorkflowTests
     private static readonly DateTimeOffset FixedNow =
         new(2026, 6, 9, 7, 5, 4, TimeSpan.Zero);
 
-    private static ComfyUiRequest Request(string prompt = "p", long seed = 123) =>
-        new("comfyui/Upscale-Sample", prompt, UseJsonPrompt: false, seed, null, null);
+    private static ComfyUiRequest Request(
+        string prompt = "p", long seed = 123, double? upscaleFactor = null) =>
+        new("comfyui/Upscale-Sample", prompt, UseJsonPrompt: false, seed, null, null,
+            UpscaleFactor: upscaleFactor);
 
     [Fact]
     public void IsDetectedAsALoadImageWorkflow()
@@ -44,6 +46,19 @@ public class UpscaleSampleWorkflowTests
         // Positive (node 3) gets the source prompt; the baked negative (node 4) must survive.
         graph["3"]!["inputs"]!["text"]!.GetValue<string>().Should().Be("the render's prompt");
         graph["4"]!["inputs"]!["text"]!.GetValue<string>().Should().Contain("blurry");
+    }
+
+    [Fact]
+    public void UpscaleFactor_SlotIsFoundAndPatchable()
+    {
+        ComfyUiWorkflowPatcher.FindUpscaleFactorSlot(SampleJson).Should().Be(2.0,
+            "the sample's baked factor feeds the UI picker's default");
+
+        var result = ComfyUiWorkflowPatcher.Patch(
+            SampleJson, Request(upscaleFactor: 3.0), FixedNow, inputImageName: "x.png");
+
+        JsonNode.Parse(result.GraphJson)!["8"]!["inputs"]!["upscale_by"]!
+            .GetValue<double>().Should().Be(3.0);
     }
 
     [Fact]

@@ -70,8 +70,9 @@ public class ComfyUiWorkflowPatcherTests
 
     private static ComfyUiRequest Request(
         string prompt = "p", bool json = false, long seed = 123,
-        string? ar = null, double? mp = null, string? preset = null) =>
-        new("wf", prompt, json, seed, ar, mp, preset);
+        string? ar = null, double? mp = null, string? preset = null,
+        double? upscaleFactor = null) =>
+        new("wf", prompt, json, seed, ar, mp, preset, UpscaleFactor: upscaleFactor);
 
     [Fact]
     public void JsonMode_PatchesImportJsonAndMode_OverwritingTheWiredLink()
@@ -190,6 +191,63 @@ public class ComfyUiWorkflowPatcherTests
             PlainTemplate, Request(), inputImageName: "emberforge_abc.png");
 
         result.PromptTargetDescription.Should().NotContain("LoadImage");
+    }
+
+    [Fact]
+    public void UpscaleFactorSlot_ExactlyOneLiteralUltimateSDUpscale_ReturnsItsBakedValue()
+    {
+        ComfyUiWorkflowPatcher.FindUpscaleFactorSlot(UpscaleTemplate).Should().BeNull(
+            "the minimal template has no literal upscale_by");
+        const string withFactor =
+            """
+            {
+              "8": { "class_type": "UltimateSDUpscale", "inputs": { "upscale_by": 2.0, "seed": 0 } }
+            }
+            """;
+        ComfyUiWorkflowPatcher.FindUpscaleFactorSlot(withFactor).Should().Be(2.0);
+
+        const string ambiguous =
+            """
+            {
+              "8": { "class_type": "UltimateSDUpscale", "inputs": { "upscale_by": 2.0 } },
+              "9": { "class_type": "UltimateSDUpscale", "inputs": { "upscale_by": 3.0 } }
+            }
+            """;
+        ComfyUiWorkflowPatcher.FindUpscaleFactorSlot(ambiguous).Should().BeNull(
+            "two literal nodes make the target ambiguous — same rule as CustomCombo");
+        ComfyUiWorkflowPatcher.FindUpscaleFactorSlot(PlainTemplate).Should().BeNull();
+        ComfyUiWorkflowPatcher.FindUpscaleFactorSlot("not json").Should().BeNull();
+    }
+
+    [Fact]
+    public void UpscaleFactor_PatchesTheLiteralAndNullKeepsTheBakedValue()
+    {
+        const string template =
+            """
+            {
+              "1": { "class_type": "LoadImage", "inputs": { "image": "input.png" } },
+              "3": { "class_type": "CLIPTextEncode", "inputs": { "text": "old" } },
+              "8": { "class_type": "UltimateSDUpscale", "inputs": { "upscale_by": 2.0, "seed": 0 } }
+            }
+            """;
+
+        var patched = ComfyUiWorkflowPatcher.Patch(
+            template, Request(upscaleFactor: 3.0), inputImageName: "x.png");
+        JsonNode.Parse(patched.GraphJson)!["8"]!["inputs"]!["upscale_by"]!
+            .GetValue<double>().Should().Be(3.0);
+        patched.PromptTargetDescription.Should().Contain("upscale_by on 1 UltimateSDUpscale");
+
+        var kept = ComfyUiWorkflowPatcher.Patch(template, Request(), inputImageName: "x.png");
+        JsonNode.Parse(kept.GraphJson)!["8"]!["inputs"]!["upscale_by"]!
+            .GetValue<double>().Should().Be(2.0);
+    }
+
+    [Fact]
+    public void UpscaleFactor_OnAWorkflowWithoutTheNode_IsANoOpWithANote()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(PlainTemplate, Request(upscaleFactor: 3.0));
+
+        result.PromptTargetDescription.Should().Contain("workflow keeps its own upscale factor");
     }
 
     [Fact]

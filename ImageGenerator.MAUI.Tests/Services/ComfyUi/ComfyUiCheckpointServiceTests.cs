@@ -147,4 +147,14 @@ public sealed class ComfyUiCheckpointServiceTests : IDisposable
 
         (await _service.FindUpscaleWorkflowNameAsync()).Should().BeNull();
     }
+
+    [Fact]
+    public async Task UpscaleFactor_ReturnsTheBakedValueOnlyForSingleSlotWorkflows()
+    {
+        File.WriteAllText(Path.Combine(_workflowDir, "Upscaler.json"),
+            """{ "8": { "class_type": "UltimateSDUpscale", "inputs": { "upscale_by": 2.0 } } }""");
+
+        (await _service.GetWorkflowUpscaleFactorAsync("Upscaler")).Should().Be(2.0);
+        (await _service.GetWorkflowUpscaleFactorAsync("does-not-exist")).Should().BeNull();
+    }
 }

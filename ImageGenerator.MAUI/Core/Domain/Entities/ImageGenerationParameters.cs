@@ -123,6 +123,13 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private string _comfyUiPresetDisplay = string.Empty;
 
+    // ComfyUI only: override for the upscale workflow's UltimateSDUpscale upscale_by factor.
+    // Null = keep the workflow's baked-in value (no patch) — same sentinel convention as
+    // ComfyUiPreset. Applies to the workflow being generated AND rides the Clone() into a
+    // chained upscale pass.
+    [ObservableProperty]
+    private double? _comfyUiUpscaleFactor;
+
     // ComfyUI only: run the designated upscale workflow on the rendered image after saving
     // (JobRunner chain step). Persisted per workflow via UiStateStore; always false on the
     // chained pass itself so an upscale can never chain another upscale.
@@ -183,6 +190,7 @@ public partial class ImageGenerationParameters : ObservableObject
             ComfyUiPreset    = ComfyUiPreset,
             ComfyUiModelDisplay = ComfyUiModelDisplay,
             ComfyUiPresetDisplay = ComfyUiPresetDisplay,
+            ComfyUiUpscaleFactor = ComfyUiUpscaleFactor,
             UpscaleAfterRender = UpscaleAfterRender,
             UpscaleWorkflow  = UpscaleWorkflow,
             PostToCivitai    = PostToCivitai,

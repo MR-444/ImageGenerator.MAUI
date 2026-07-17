@@ -238,6 +238,19 @@ public class UiStateStoreTests
     }
 
     [Fact]
+    public void ComfyUiUpscaleFactor_RoundTripsPerWorkflowKeys()
+    {
+        _sut.LoadComfyUiUpscaleFactor("Never Picked").Should().BeNull();
+
+        _sut.PersistComfyUiUpscaleFactor("2.5", "Flux1-Upscale");
+
+        _sut.LoadComfyUiUpscaleFactor("Flux1-Upscale").Should().Be("2.5");
+        _sut.LoadComfyUiUpscaleFactor("Upscale-Sample").Should().BeNull();
+        _preferences.Get("imggen.comfyui_upscale_factor.Flux1-Upscale", string.Empty)
+            .Should().Be("2.5", "the key shape is pinned like the others above");
+    }
+
+    [Fact]
     public void LoadUseJsonPrompt_KeyMissing_ReturnsFalse()
     {
         _sut.LoadUseJsonPrompt().Should().BeFalse();

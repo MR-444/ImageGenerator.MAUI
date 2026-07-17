@@ -272,6 +272,18 @@
                                        AutomationId="UpscaleWorkflowLabel" />
                             </VerticalStackLayout>
 
+                            <!-- ComfyUI only: upscale_by override for the UltimateSDUpscale in
+                                 play (the selected workflow itself, or the chain target). First
+                                 option = the workflow's baked value = no patch. -->
+                            <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsUpscaleFactor}">
+                                <Label Text="Upscale factor" Style="{StaticResource FieldLabel}" />
+                                <Picker ItemsSource="{Binding UpscaleFactorOptions}"
+                                        SelectedItem="{Binding SelectedUpscaleFactor}"
+                                        MaximumWidthRequest="140"
+                                        HorizontalOptions="Start"
+                                        AutomationId="UpscaleFactorPicker" />
+                            </VerticalStackLayout>
+
                             <!-- Ideogram V4: copyright detection -->
                             <HorizontalStackLayout Spacing="8" IsVisible="{Binding SupportsIdeogramOptions}">
                                 <CheckBox IsChecked="{Binding Parameters.EnableCopyrightDetection}" VerticalOptions="Center"

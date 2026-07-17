@@ -34,6 +34,7 @@ public static class ComfyUiWorkflowPatcher
     private const string UnetLoaderGgufClass = "UnetLoaderGGUF";
     private const string SageAttentionClass = "PathchSageAttentionKJ";
     private const string CustomComboClass = "CustomCombo";
+    private const string UltimateUpscaleClass = "UltimateSDUpscale";
     private static readonly string[] SageAttentionLoaderClasses =
         [CheckpointLoaderClass, UnetLoaderClass, UnetLoaderGgufClass];
 
@@ -71,6 +72,7 @@ public static class ComfyUiWorkflowPatcher
             : PatchPlainPrompt(nodes, request.Prompt);
 
         var inputImageNote = PatchInputImage(nodes, inputImageName);
+        var upscaleFactorNote = PatchUpscaleFactor(nodes, request.UpscaleFactor);
         var seedNodeIds = PatchSeeds(nodes, request.Seed);
         var resolutionNote = PatchResolution(nodes, request.AspectRatio, request.Megapixels);
         var presetNote = PatchQualityPreset(nodes, request.PresetChoice);
@@ -84,7 +86,7 @@ public static class ComfyUiWorkflowPatcher
 
         return new ComfyUiPatchResult(
             root.ToJsonString(),
-            promptTarget + inputImageNote + resolutionNote + presetNote + dateNote + sageNote,
+            promptTarget + inputImageNote + upscaleFactorNote + resolutionNote + presetNote + dateNote + sageNote,
             seedNodeIds,
             sage.NodeIds,
             sage.LoaderIds);
@@ -107,6 +109,53 @@ public static class ComfyUiWorkflowPatcher
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// The workflow's upscale-factor slot: EXACTLY ONE <c>UltimateSDUpscale</c> node with a
+    /// literal numeric <c>upscale_by</c> (two would make the target ambiguous — same rule as
+    /// the CustomCombo preset). Null otherwise — the UI hides the factor picker then. A probe,
+    /// so it never throws.
+    /// </summary>
+    public static double? FindUpscaleFactorSlot(string templateJson)
+    {
+        try
+        {
+            if (JsonNode.Parse(templateJson) is not JsonObject root || root["nodes"] is JsonArray)
+                return null;
+
+            var candidates = LiteralUpscaleNodes(CollectNodes(root));
+            return candidates.Count == 1
+                ? candidates[0].Inputs["upscale_by"]!.GetValue<double>()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static List<(string Id, string ClassType, JsonObject Inputs)> LiteralUpscaleNodes(
+        List<(string Id, string ClassType, JsonObject Inputs)> nodes) =>
+        nodes
+            .Where(n => n.ClassType == UltimateUpscaleClass
+                        && n.Inputs["upscale_by"]?.GetValueKind() == JsonValueKind.Number)
+            .ToList();
+
+    private static string PatchUpscaleFactor(
+        List<(string Id, string ClassType, JsonObject Inputs)> nodes, double? factor)
+    {
+        if (factor is null) return string.Empty;
+
+        var targets = LiteralUpscaleNodes(nodes);
+        if (targets.Count == 0)
+            return "; no UltimateSDUpscale node — workflow keeps its own upscale factor";
+
+        foreach (var (_, _, inputs) in targets)
+        {
+            inputs["upscale_by"] = factor;
+        }
+        return $"; upscale_by on {targets.Count} {UltimateUpscaleClass} node(s)";
     }
 
     private static string PatchInputImage(

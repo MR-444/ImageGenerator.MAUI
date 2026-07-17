@@ -102,6 +102,21 @@ public class FallbackComfyUiDescriptorTests
     }
 
     [Fact]
+    public void Build_UpscaleFactorFlowsIntoTheRequest_AndLinesStayInvariant()
+    {
+        var defaulted = Parameters();
+        var overridden = Parameters();
+        overridden.ComfyUiUpscaleFactor = 2.5;
+
+        ((ComfyUiRequest)_sut.Build(defaulted)).UpscaleFactor.Should().BeNull();
+        ((ComfyUiRequest)_sut.Build(overridden)).UpscaleFactor.Should().Be(2.5);
+
+        _sut.Lines(defaulted).Should().NotContain(l => l.StartsWith("UpscaleBy:"));
+        // Invariant "2.5", never a culture-formatted "2,5" (de-DE machine).
+        _sut.Lines(overridden).Should().Contain("UpscaleBy: 2.5");
+    }
+
+    [Fact]
     public void Build_FirstImagePromptFlowsIntoTheRequest()
     {
         var without = Parameters();

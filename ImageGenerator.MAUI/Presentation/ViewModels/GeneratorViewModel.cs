@@ -447,6 +447,57 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     private int _upscaleRefreshVersion;
     private int _inputImageRefreshVersion;
 
+    // Upscale-factor picker: patches the UltimateSDUpscale upscale_by of whichever workflow
+    // is in play — the selected workflow itself (standalone upscaling) or the chain target.
+    // Options come from the workflow's baked value (first, = no patch) plus common factors.
+    [ObservableProperty]
+    private List<string> _upscaleFactorOptions = [];
+
+    [ObservableProperty]
+    private string? _selectedUpscaleFactor;
+
+    [ObservableProperty]
+    private bool _supportsUpscaleFactor;
+
+    private double? _workflowDefaultUpscaleFactor;
+    // The workflow whose upscale_by the picker patches; doubles as the persistence key.
+    private string? _upscaleFactorWorkflow;
+    private bool _suppressUpscaleFactorPersist;
+
+    private static readonly double[] CommonUpscaleFactors = [1.5, 2.0, 3.0, 4.0];
+
+    // Invariant on both sides — a de-DE "1,5×" label would round-trip as garbage.
+    private static string FormatUpscaleFactor(double factor) =>
+        factor.ToString("0.##", CultureInfo.InvariantCulture) + "×";
+
+    private static double? ParseUpscaleFactor(string? label) =>
+        double.TryParse(
+            label?.TrimEnd('×'), NumberStyles.Float, CultureInfo.InvariantCulture, out var factor)
+            ? factor
+            : null;
+
+    partial void OnSelectedUpscaleFactorChanged(string? value)
+    {
+        // The WinUI ComboBox pushes SelectedItem=null on ItemsSource swaps; ignore it like
+        // OnSelectedQualityPresetChanged does.
+        if (value is null) return;
+
+        var factor = ParseUpscaleFactor(value);
+        if (factor is null) return;
+
+        // Same sentinel convention as ComfyUiPreset: picking the baked default means no patch.
+        Parameters.ComfyUiUpscaleFactor =
+            _workflowDefaultUpscaleFactor is { } baked && factor.Value == baked ? null : factor;
+
+        if (!_suppressUpscaleFactorPersist
+            && _upscaleFactorWorkflow is { } workflow
+            && UpscaleFactorOptions.Contains(value))
+        {
+            _uiStateStore.PersistComfyUiUpscaleFactor(
+                factor.Value.ToString(CultureInfo.InvariantCulture), workflow);
+        }
+    }
+
     partial void OnSelectedQualityPresetChanged(string? value)
     {
         // The WinUI ComboBox pushes SelectedItem=null on ItemsSource swaps; ignore it like
@@ -648,30 +699,76 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
             if (!ModelConstants.ComfyUi.IsId(modelValue))
             {
                 HideUpscaleOption();
+                HideUpscaleFactorPicker();
                 return;
             }
 
             var workflowName = ModelConstants.ComfyUi.WorkflowName(modelValue!);
             var upscaleWorkflow = await _checkpointService.FindUpscaleWorkflowNameAsync();
+            var chainVisible = upscaleWorkflow is not null
+                && !string.Equals(upscaleWorkflow, workflowName, StringComparison.OrdinalIgnoreCase);
+
+            // Factor target: the selected workflow's own UltimateSDUpscale (standalone
+            // upscaling) wins; otherwise the chain target's. Its name is also the persist key.
+            var ownFactor = await _checkpointService.GetWorkflowUpscaleFactorAsync(workflowName);
+            var factorWorkflow = ownFactor is not null ? workflowName
+                : chainVisible ? upscaleWorkflow
+                : null;
+            var bakedFactor = ownFactor
+                ?? (chainVisible
+                    ? await _checkpointService.GetWorkflowUpscaleFactorAsync(upscaleWorkflow!)
+                    : null);
+
             if (version != _upscaleRefreshVersion) return;
-            if (upscaleWorkflow is null
-                || string.Equals(upscaleWorkflow, workflowName, StringComparison.OrdinalIgnoreCase))
+
+            if (!chainVisible)
             {
                 HideUpscaleOption();
+            }
+            else
+            {
+                DispatchToUi(() =>
+                {
+                    _suppressUpscalePersist = true;
+                    try
+                    {
+                        Parameters.UpscaleWorkflow = upscaleWorkflow!;
+                        Parameters.UpscaleAfterRender = _uiStateStore.LoadComfyUiUpscaleAfter(workflowName);
+                        UpscaleWorkflowDisplay = $"via {upscaleWorkflow}";
+                        SupportsUpscaleAfter = true;
+                    }
+                    finally { _suppressUpscalePersist = false; }
+                });
+            }
+
+            if (bakedFactor is null || factorWorkflow is null)
+            {
+                HideUpscaleFactorPicker();
                 return;
             }
 
             DispatchToUi(() =>
             {
-                _suppressUpscalePersist = true;
+                _suppressUpscaleFactorPersist = true;
                 try
                 {
-                    Parameters.UpscaleWorkflow = upscaleWorkflow;
-                    Parameters.UpscaleAfterRender = _uiStateStore.LoadComfyUiUpscaleAfter(workflowName);
-                    UpscaleWorkflowDisplay = $"via {upscaleWorkflow}";
-                    SupportsUpscaleAfter = true;
+                    _workflowDefaultUpscaleFactor = bakedFactor.Value;
+                    _upscaleFactorWorkflow = factorWorkflow;
+                    var factors = new List<double> { bakedFactor.Value };
+                    factors.AddRange(CommonUpscaleFactors.Where(f => !factors.Contains(f)));
+                    UpscaleFactorOptions = factors.Select(FormatUpscaleFactor).ToList();
+                    // Restore a previous explicit pick for THIS workflow — but only when it's
+                    // still on offer; never invent a selection.
+                    var saved = ParseUpscaleFactor(_uiStateStore.LoadComfyUiUpscaleFactor(factorWorkflow));
+                    var target = saved is { } s && factors.Contains(s) ? s : bakedFactor.Value;
+                    SelectedUpscaleFactor = FormatUpscaleFactor(target);
+                    // Explicit, not only via the changed-handler: an unchanged label across a
+                    // workflow switch fires no event, but the baked default (= null sentinel)
+                    // may differ between the two workflows.
+                    Parameters.ComfyUiUpscaleFactor = target == bakedFactor.Value ? null : target;
+                    SupportsUpscaleFactor = true;
                 }
-                finally { _suppressUpscalePersist = false; }
+                finally { _suppressUpscaleFactorPersist = false; }
             });
         }
         catch (Exception ex)
@@ -680,6 +777,22 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
             _logger.LogWarning(ex, "Upscale option refresh failed Model={Model}", modelValue);
         }
     }
+
+    private void HideUpscaleFactorPicker() => DispatchToUi(() =>
+    {
+        _suppressUpscaleFactorPersist = true;
+        try
+        {
+            SupportsUpscaleFactor = false;
+            UpscaleFactorOptions = [];
+            _workflowDefaultUpscaleFactor = null;
+            _upscaleFactorWorkflow = null;
+            SelectedUpscaleFactor = null;
+            // A stale factor must not linger in Clone() snapshots of other models.
+            Parameters.ComfyUiUpscaleFactor = null;
+        }
+        finally { _suppressUpscaleFactorPersist = false; }
+    });
 
     private void HideUpscaleOption() => DispatchToUi(() =>
     {

@@ -58,6 +58,7 @@ public class ImageGenerationParametersCloneTests
             _ when type == typeof(int)    => PickIntSentinel(prop),
             _ when type == typeof(long)   => 123_456_789L,
             _ when type == typeof(double) => 0.73,
+            _ when type == typeof(double?) => 2.5,
             _ when type == typeof(ImageOutputFormat) => ImageOutputFormat.Webp,
             _ => throw new InvalidOperationException($"No sentinel defined for {prop.Name}: {type}")
         };

@@ -130,6 +130,13 @@ public interface IUiStateStore
     /// <inheritdoc cref="LoadComfyUiUpscaleAfter"/>
     void PersistComfyUiUpscaleAfter(bool value, string workflowName);
     /// <summary>
+    /// Per-workflow upscale factor override as an invariant numeric string ("2", "1.5");
+    /// null when never picked. Keyed by the workflow whose UltimateSDUpscale gets patched.
+    /// </summary>
+    string? LoadComfyUiUpscaleFactor(string workflowName);
+    /// <inheritdoc cref="LoadComfyUiUpscaleFactor"/>
+    void PersistComfyUiUpscaleFactor(string value, string workflowName);
+    /// <summary>
     /// Last window size/position in DIPs. Null when never persisted or unparseable —
     /// callers fall back to a screen-relative first-launch size. Values may describe a
     /// monitor that no longer exists; callers must clamp to the current screen.

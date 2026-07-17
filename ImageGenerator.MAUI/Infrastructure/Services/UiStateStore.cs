@@ -162,6 +162,14 @@ public sealed class UiStateStore : IUiStateStore
     public void PersistComfyUiUpscaleAfter(bool value, string workflowName) =>
         PersistBool($"imggen.comfyui_upscale_after.{workflowName}", value, false);
 
+    // Keyed by the workflow whose UltimateSDUpscale gets patched. Stored as the invariant
+    // numeric string ("2", "1.5") — never a culture-formatted label.
+    public string? LoadComfyUiUpscaleFactor(string workflowName) =>
+        LoadString($"imggen.comfyui_upscale_factor.{workflowName}");
+
+    public void PersistComfyUiUpscaleFactor(string value, string workflowName) =>
+        PersistString($"imggen.comfyui_upscale_factor.{workflowName}", value);
+
     public (double Width, double Height, double X, double Y)? LoadWindowBounds()
     {
         var raw = SafeGet(WindowBoundsKey);

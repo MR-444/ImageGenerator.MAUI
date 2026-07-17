@@ -21,4 +21,5 @@ public sealed record ComfyUiRequest(
     string? AspectRatio,
     double? Megapixels,
     string? PresetChoice = null,
-    string? InputImageBase64 = null);
+    string? InputImageBase64 = null,
+    double? UpscaleFactor = null);

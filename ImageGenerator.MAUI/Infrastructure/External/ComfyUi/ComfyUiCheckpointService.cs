@@ -87,6 +87,27 @@ public sealed class ComfyUiCheckpointService : IComfyUiCheckpointService
         }
     }
 
+    public async Task<double?> GetWorkflowUpscaleFactorAsync(string workflowName, CancellationToken ct = default)
+    {
+        try
+        {
+            var path = Path.Combine(_workflowsDirectory, workflowName + ".json");
+            if (!File.Exists(path)) return null;
+
+            var template = await File.ReadAllTextAsync(path, ct);
+            return ComfyUiWorkflowPatcher.FindUpscaleFactorSlot(template);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ComfyUI workflow upscale-factor probe failed Workflow={Workflow}", workflowName);
+            return null;
+        }
+    }
+
     public async Task<string?> FindUpscaleWorkflowNameAsync(CancellationToken ct = default)
     {
         try

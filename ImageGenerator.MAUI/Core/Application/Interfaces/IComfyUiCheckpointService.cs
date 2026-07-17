@@ -36,4 +36,11 @@ public interface IComfyUiCheckpointService
     /// Null when none exists — the checkbox is hidden then.
     /// </summary>
     Task<string?> FindUpscaleWorkflowNameAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// The workflow's baked UltimateSDUpscale <c>upscale_by</c> factor, or null when it has
+    /// no single literal one — the UI hides the factor picker then. See the
+    /// exactly-one-node rule on <c>ComfyUiWorkflowPatcher.FindUpscaleFactorSlot</c>.
+    /// </summary>
+    Task<double?> GetWorkflowUpscaleFactorAsync(string workflowName, CancellationToken ct = default);
 }

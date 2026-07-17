@@ -51,7 +51,8 @@ public sealed class FallbackComfyUiDescriptor : IPayloadBuilder, ICapabilityProv
             : null,
         Megapixels: ParseMegapixels(p.Resolution),
         PresetChoice: string.IsNullOrWhiteSpace(p.ComfyUiPreset) ? null : p.ComfyUiPreset,
-        InputImageBase64: p.ImagePrompts.Count > 0 ? p.ImagePrompts[0] : null);
+        InputImageBase64: p.ImagePrompts.Count > 0 ? p.ImagePrompts[0] : null,
+        UpscaleFactor: p.ComfyUiUpscaleFactor);
 
     public IEnumerable<string> Lines(ImageGenerationParameters p)
     {
@@ -65,6 +66,10 @@ public sealed class FallbackComfyUiDescriptor : IPayloadBuilder, ICapabilityProv
             yield return $"Model: {p.ComfyUiModelDisplay}";
         if (!string.IsNullOrWhiteSpace(p.ComfyUiPresetDisplay))
             yield return $"Preset: {p.ComfyUiPresetDisplay}";
+        // Only when the user overrode the workflow's baked factor (null = no patch applied);
+        // invariant culture — a de-DE "2,5" broke the Remix metadata reader once already.
+        if (p.ComfyUiUpscaleFactor is { } factor)
+            yield return $"UpscaleBy: {factor.ToString(CultureInfo.InvariantCulture)}";
     }
 
     // Remix: restore the recipe a ComfyUI render carries that we CAN re-apply — the workflow
