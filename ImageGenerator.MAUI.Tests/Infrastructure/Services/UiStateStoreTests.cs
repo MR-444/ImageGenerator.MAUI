@@ -632,4 +632,32 @@ public class UiStateStoreTests
 
         act.Should().NotThrow();
     }
+
+    // "Describe an idea" BuildJson checkbox: tri-state — null means "never toggled" so the page
+    // can default from the active model exactly once, then the stored choice wins.
+
+    [Fact]
+    public void LoadIdeaBuildJson_KeyMissing_ReturnsNull()
+    {
+        _sut.LoadIdeaBuildJson().Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void IdeaBuildJson_RoundTripsThroughPreferences(bool value)
+    {
+        _sut.PersistIdeaBuildJson(value);
+
+        _sut.LoadIdeaBuildJson().Should().Be(value);
+    }
+
+    [Fact]
+    public void LoadIdeaBuildJson_GetThrows_SwallowedAndReturnsNull()
+    {
+        _sut.PersistIdeaBuildJson(true);
+        _preferences.ThrowOnGet = new InvalidOperationException("backend down");
+
+        _sut.LoadIdeaBuildJson().Should().BeNull();
+    }
 }

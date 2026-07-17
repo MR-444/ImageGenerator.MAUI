@@ -73,6 +73,12 @@ public interface IUiStateStore
     /// <summary>Whether the OpenRouter vision model picker should show free models only. Default true.</summary>
     bool LoadOpenRouterVisionFreeOnly();
     /// <summary>
+    /// The "Describe an idea" page's BuildJson checkbox. Null when never toggled — the page then
+    /// defaults it from the active model's JSON-prompt support. Once stored, the user's choice wins
+    /// over the model default on every later visit.
+    /// </summary>
+    bool? LoadIdeaBuildJson();
+    /// <summary>
     /// The user's configured ROOT data folder. Null when never set — callers fall back to
     /// <c>OutputPaths.DefaultRootDirectory</c>. Every data folder (images under <c>pictures\</c>,
     /// json-prompts, comfy-workflows, mutation-library, prompt-builder) follows this root; only
@@ -116,6 +122,8 @@ public interface IUiStateStore
     void PersistOpenRouterVisionModel(string value);
     /// <inheritdoc cref="LoadOpenRouterVisionFreeOnly"/>
     void PersistOpenRouterVisionFreeOnly(bool value);
+    /// <inheritdoc cref="LoadIdeaBuildJson"/>
+    void PersistIdeaBuildJson(bool value);
     /// <inheritdoc cref="LoadOutputFolder"/>
     void PersistOutputFolder(string value);
     /// <inheritdoc cref="LoadCivitaiModelRef"/>

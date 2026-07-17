@@ -99,6 +99,57 @@ public class IdeaToPromptViewModelTests
         store.Verify(s => s.PersistPromptWriterTier(ModelTier.Sonnet), Times.Once);
     }
 
+    // ---- BuildJson checkbox persistence -------------------------------------------------
+
+    [Fact]
+    public void Construct_WithSavedBuildJson_RestoresTheCheckboxOverAnyDefault()
+    {
+        var store = new Mock<IUiStateStore>();
+        store.Setup(s => s.LoadIdeaBuildJson()).Returns(true);
+
+        var vm = new IdeaToPromptViewModel(
+            new FakePromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())),
+            _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance,
+            uiStateStore: store.Object);
+
+        vm.BuildJson.Should().BeTrue("the stored checkbox choice wins over the model-based default");
+    }
+
+    [Fact]
+    public void ToggleBuildJson_PersistsTheChoice()
+    {
+        var store = new Mock<IUiStateStore>();
+        store.Setup(s => s.LoadIdeaBuildJson()).Returns((bool?)null);
+        var vm = new IdeaToPromptViewModel(
+            new FakePromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())),
+            _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance,
+            uiStateStore: store.Object);
+
+        vm.BuildJson = true;
+
+        store.Verify(s => s.PersistIdeaBuildJson(true), Times.Once);
+    }
+
+    // ---- Idea box hygiene on source switch ----------------------------------------------
+
+    [Fact]
+    public void SwitchingSourceMode_ClearsTheIdeaBox()
+    {
+        var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+        vm.Idea = "a red fox in snow";
+
+        vm.SourceMode = IdeaSourceMode.Image;
+
+        vm.Idea.Should().BeEmpty("a text-mode idea left behind silently steers the image build as stale notes");
+
+        vm.Idea = "make it uplifting";
+        vm.SourceMode = IdeaSourceMode.Text;
+
+        vm.Idea.Should().BeEmpty("image-mode notes must not become the next text idea");
+    }
+
     // ---- Pass 1 only (checkbox off) -----------------------------------------------------
 
     [Fact]

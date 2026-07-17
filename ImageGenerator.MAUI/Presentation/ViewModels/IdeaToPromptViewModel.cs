@@ -64,8 +64,10 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         _referenceImageDownloader = referenceImageDownloader;
         _uiStateStore = uiStateStore;
 
-        // Default the JSON pass on for structured-JSON models (Ideogram V4 / ComfyUI), off otherwise.
-        BuildJson = generator?.SupportsJsonPromptEditor ?? false;
+        // The BuildJson checkbox: the user's stored choice wins; only a first-ever launch defaults
+        // it from the active model (on for structured-JSON models, off otherwise). It must not be
+        // re-defaulted per page visit — that silently undid the user's uncheck every time.
+        BuildJson = _uiStateStore?.LoadIdeaBuildJson() ?? generator?.SupportsJsonPromptEditor ?? false;
 
         // Restore the last-used prompt writer so the picker survives an app restart (null = never
         // picked → the "Pick a prompt writer…" placeholder stays). The assignment echoes back through
@@ -89,6 +91,13 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
 
     public bool IsTextSource => SourceMode == IdeaSourceMode.Text;
     public bool IsImageSource => SourceMode == IdeaSourceMode.Image;
+
+    // Switching the source clears the idea box: in image mode the text rides along as "notes to
+    // honor", so a text-mode idea left behind silently steers every image build back to the old
+    // prompt (and a stale note would do the same to the next text build).
+    partial void OnSourceModeChanged(IdeaSourceMode value) => Idea = string.Empty;
+
+    partial void OnBuildJsonChanged(bool value) => _uiStateStore?.PersistIdeaBuildJson(value);
 
     public IReadOnlyList<VisionObservationProvider> VisionProviderOptions { get; } =
         [VisionObservationProvider.LocalOllama, VisionObservationProvider.OpenRouter];
@@ -163,12 +172,6 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
 
     /// <summary>Expose the host generator so the page can reuse the shared Ollama model picker.</summary>
     public GeneratorViewModel? Generator => _generator;
-
-    public void PrepareForNavigation()
-    {
-        if (IsBusy) return;
-        BuildJson = _generator?.SupportsJsonPromptEditor ?? false;
-    }
 
     /// <summary>The pass-1 prose prompt. Shown on the page, copyable, and applyable on its own.</summary>
     [ObservableProperty]

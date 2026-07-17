@@ -26,6 +26,7 @@ public sealed class UiStateStore : IUiStateStore
     private const string OllamaVisionModelKey = "imggen.ollama_vision_model";
     private const string OpenRouterVisionModelKey = "imggen.openrouter_vision_model";
     private const string OpenRouterVisionFreeOnlyKey = "imggen.openrouter_vision_free_only";
+    private const string IdeaBuildJsonKey = "imggen.idea_build_json";
     private const string CivitaiModelRefKey = "imggen.civitai_model_ref";
     private const string OutputFolderKey = "imggen.output_folder";
     private const string WindowBoundsKey = "imggen.window_bounds";
@@ -223,6 +224,28 @@ public sealed class UiStateStore : IUiStateStore
 
     public void PersistOpenRouterVisionFreeOnly(bool value) =>
         PersistBool(OpenRouterVisionFreeOnlyKey, value, true);
+
+    public bool? LoadIdeaBuildJson()
+    {
+        try
+        {
+            // Tri-state: "never toggled" must stay distinguishable so the page can default the
+            // checkbox from the active model exactly once, then honor the stored choice forever.
+            var value = _preferences.ContainsKey(IdeaBuildJsonKey)
+                ? _preferences.Get(IdeaBuildJsonKey, false)
+                : (bool?)null;
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug("UiStateStore.LoadIdeaBuildJson -> {Value}", value);
+            return value;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Preferences.Get({Key}) failed", IdeaBuildJsonKey);
+            return null;
+        }
+    }
+
+    public void PersistIdeaBuildJson(bool value) => PersistBool(IdeaBuildJsonKey, value, false);
 
     public string? LoadOutputFolder() => LoadString(OutputFolderKey);
 
