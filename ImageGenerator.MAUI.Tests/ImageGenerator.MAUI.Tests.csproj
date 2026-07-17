@@ -39,6 +39,9 @@
       <Content Include="..\comfy-workflows\Krea2-Sample.json"
                Link="TestAssets\Krea2-Sample.json"
                CopyToOutputDirectory="PreserveNewest" />
+      <Content Include="..\comfy-workflows\Krea2-Raw-Sample.json"
+               Link="TestAssets\Krea2-Raw-Sample.json"
+               CopyToOutputDirectory="PreserveNewest" />
       <Content Include="..\ImageGenerator.MAUI\Presentation\Views\IdeaToPromptPage.xaml"
                Link="TestAssets\IdeaToPromptPage.xaml"
                CopyToOutputDirectory="PreserveNewest" />
