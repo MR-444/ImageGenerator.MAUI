@@ -51,14 +51,6 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
         _workflowDir = Path.Combine(Path.GetTempPath(), "imggen-comfy-tests-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_workflowDir);
         File.WriteAllText(Path.Combine(_workflowDir, "My Workflow.json"), Template);
-        File.WriteAllText(Path.Combine(_workflowDir, "Unet Workflow.json"),
-            """
-            {
-              "10": { "class_type": "UNETLoader", "inputs": { "unet_name": "flux-dev.safetensors" } },
-              "6":  { "class_type": "CLIPTextEncode", "inputs": { "text": "old" } },
-              "3":  { "class_type": "KSampler", "inputs": { "seed": 1 } }
-            }
-            """);
 
         _uiState.Setup(s => s.LoadComfyUiBaseUrl()).Returns("http://test-host:8188");
         _authStore.Setup(s => s.LoadAsync()).ReturnsAsync((string?)null);
@@ -240,7 +232,7 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
         graph["179"]!["inputs"]!["import_mode"]!.GetValue<string>().Should().Be("always");
         graph["165"]!["inputs"]!["noise_seed"]!.GetValue<long>().Should().Be(777);
         graph["4"]!["inputs"]!["ckpt_name"]!.GetValue<string>().Should().Be("baked.safetensors",
-            "an empty ComfyUiCheckpoint parameter must never patch the loader");
+            "the workflow's baked-in model is never patched");
 
         var viewRequest = _requests.Single(r => r.RequestUri!.AbsolutePath == "/view");
         viewRequest.RequestUri!.Query.Should().Contain("filename=Ideogram4_001.png",
@@ -312,32 +304,6 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
             && message.Contains("SageApplied=True")
             && message.Contains("CoveredLoaderCount=1")
             && message.Contains("Outcome=error"));
-    }
-
-    [Fact]
-    public async Task Generate_WithCheckpointParameter_PostsGraphWithPatchedCkptName()
-    {
-        var parameters = Parameters();
-        parameters.ComfyUiCheckpoint = "server.safetensors";
-
-        await _service.GenerateImageAsync(parameters);
-
-        var postBody = JsonNode.Parse(_requestBodies[_requests.FindIndex(r => r.Method == HttpMethod.Post)])!;
-        postBody["prompt"]!["4"]!["inputs"]!["ckpt_name"]!.GetValue<string>()
-            .Should().Be("server.safetensors");
-    }
-
-    [Fact]
-    public async Task Generate_SingleUnetWorkflowWithModelPick_PostsGraphWithPatchedUnetName()
-    {
-        var parameters = Parameters(json: false, model: "comfyui/Unet Workflow");
-        parameters.ComfyUiCheckpoint = "other-model.safetensors";
-
-        await _service.GenerateImageAsync(parameters);
-
-        var postBody = JsonNode.Parse(_requestBodies[_requests.FindIndex(r => r.Method == HttpMethod.Post)])!;
-        postBody["prompt"]!["10"]!["inputs"]!["unet_name"]!.GetValue<string>()
-            .Should().Be("other-model.safetensors");
     }
 
     [Fact]

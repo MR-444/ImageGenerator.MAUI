@@ -232,18 +232,17 @@
                                         AutomationId="ResolutionPicker" />
                             </VerticalStackLayout>
 
-                            <!-- ComfyUI only: server models from /object_info (cache fallback) —
-                                 checkpoints OR the single swappable UNETLoader diffusion model
-                                 (label switches by kind). First entry is the workflow's own
-                                 baked-in file = no patch. Binds the VM-level SelectedCheckpoint,
-                                 never Parameters directly — see the livelock warning above. -->
+                            <!-- ComfyUI only: the workflow's baked-in model, read-only — the
+                                 workflow file IS the model choice (one provider entry per file),
+                                 so there is nothing to pick here; label switches by loader kind
+                                 (checkpoint vs UNETLoader diffusion model). -->
                             <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsCheckpoint}">
                                 <Label Text="{Binding CheckpointLabel}" Style="{StaticResource FieldLabel}" />
-                                <Picker ItemsSource="{Binding CheckpointOptions}"
-                                        SelectedItem="{Binding SelectedCheckpoint}"
-                                        MaximumWidthRequest="320"
-                                        HorizontalOptions="Start"
-                                        AutomationId="CheckpointPicker" />
+                                <Label Text="{Binding BakedModelName}"
+                                       LineBreakMode="TailTruncation"
+                                       MaximumWidthRequest="320"
+                                       HorizontalOptions="Start"
+                                       AutomationId="BakedModelLabel" />
                             </VerticalStackLayout>
 
                             <!-- ComfyUI only: quality preset from the workflow's single CustomCombo

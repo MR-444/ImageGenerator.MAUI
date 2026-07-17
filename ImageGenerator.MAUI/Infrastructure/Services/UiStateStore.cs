@@ -126,27 +126,6 @@ public sealed class UiStateStore : IUiStateStore
     private static string AspectRatioKeyFor(string? modelId) =>
         Shared.Constants.ModelConstants.ComfyUi.IsId(modelId) ? ComfyUiAspectRatioKey : AspectRatioKey;
 
-    public string? LoadComfyUiCheckpoint(string workflowName)
-    {
-        var key = ComfyUiCheckpointKeyFor(workflowName);
-        var v = SafeGet(key);
-        if (_logger.IsEnabled(LogLevel.Debug))
-            _logger.LogDebug("UiStateStore.LoadComfyUiCheckpoint[{Key}] -> {Value}", key, Quote(v));
-        return v;
-    }
-
-    public void PersistComfyUiCheckpoint(string value, string workflowName)
-    {
-        var key = ComfyUiCheckpointKeyFor(workflowName);
-        if (SafeSet(key, value) && _logger.IsEnabled(LogLevel.Debug))
-            _logger.LogDebug("UiStateStore.PersistComfyUiCheckpoint[{Key}]({Value})", key, Quote(value));
-    }
-
-    // Per-workflow: checkpoints are architecture-bound (an SDXL checkpoint hard-fails in a
-    // Flux workflow), so one workflow's pick must never leak into another.
-    private static string ComfyUiCheckpointKeyFor(string workflowName) =>
-        $"imggen.comfyui_checkpoint.{workflowName}";
-
     public string? LoadComfyUiPreset(string workflowName)
     {
         var key = ComfyUiPresetKeyFor(workflowName);

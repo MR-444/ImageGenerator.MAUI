@@ -397,14 +397,12 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     // persistence across the swap so a binding artifact never overwrites the saved choice.
     private bool _suppressAspectRatioPersist;
 
-    // ComfyUI checkpoint picker. Options[0] is always the workflow's own baked-in checkpoint
-    // (= no patch); server checkpoints follow after the async fetch lands. Hidden whenever the
-    // selected workflow has no literal CheckpointLoaderSimple ckpt_name.
+    // ComfyUI baked-model display. The workflow file IS the model choice (one provider entry
+    // per file), so the loader's model is shown read-only — swapping it inside a tuned
+    // workflow would break the settings baked around it. Hidden whenever the workflow has no
+    // unambiguous literal loader.
     [ObservableProperty]
-    private List<string> _checkpointOptions = [];
-
-    [ObservableProperty]
-    private string? _selectedCheckpoint;
+    private string _bakedModelName = string.Empty;
 
     [ObservableProperty]
     private bool _supportsCheckpoint;
@@ -414,33 +412,9 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     [ObservableProperty]
     private string _checkpointLabel = "Checkpoint";
 
-    private string? _workflowDefaultCheckpoint;
-    private bool _suppressCheckpointPersist;
-    // Monotonic token: a slower fetch for a previously selected model must not clobber the
-    // options of the model selected after it.
+    // Monotonic token: a slower file probe for a previously selected model must not clobber
+    // the display of the model selected after it.
     private int _checkpointRefreshVersion;
-
-    partial void OnSelectedCheckpointChanged(string? value)
-    {
-        // The WinUI ComboBox pushes SelectedItem=null on ItemsSource swaps; ignore it like
-        // OnSelectedModelChanged does — the real selection lands on a later tick.
-        if (value is null) return;
-
-        Parameters.ComfyUiCheckpoint =
-            value == _workflowDefaultCheckpoint ? string.Empty : value;
-
-        // Display-only: record the resolved model name (default OR picked) so the job card
-        // can show which ComfyUI model produced the image, not just the workflow filename.
-        Parameters.ComfyUiModelDisplay = value;
-
-        // Membership guard, same as resolution: only a value the picker actually offers can
-        // be a user pick.
-        if (!_suppressCheckpointPersist && CheckpointOptions.Contains(value))
-        {
-            _uiStateStore.PersistComfyUiCheckpoint(
-                value, ModelConstants.ComfyUi.WorkflowName(Parameters.Model));
-        }
-    }
 
     // ComfyUI quality-preset picker (the workflow's single CustomCombo node). Options come
     // from the file itself — option1..option4 — with the baked-in choice first (= no patch);
@@ -461,7 +435,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
 
     partial void OnSelectedQualityPresetChanged(string? value)
     {
-        // Same WinUI null-push tolerance as OnSelectedCheckpointChanged.
+        // The WinUI ComboBox pushes SelectedItem=null on ItemsSource swaps; ignore it like
+        // OnSelectedModelChanged does — the real selection lands on a later tick.
         if (value is null) return;
 
         Parameters.ComfyUiPreset =
@@ -599,22 +574,22 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
         // Capabilities now reflect the new model, so the JSON-prompt validation gate is accurate.
         ValidateParameters();
 
-        // Fire-and-forget: the checkpoint picker hydrates asynchronously (file probe + server
-        // fetch) while the synchronous capability swap above stays instant. The method owns
-        // its try/catch and guards against stale completions via _checkpointRefreshVersion.
-        _ = RefreshCheckpointOptionsAsync(modelValue);
-        // Same shape for the quality-preset picker — file probe only, no server fetch.
+        // Fire-and-forget: the baked-model display hydrates asynchronously (file probe) while
+        // the synchronous capability swap above stays instant. The method owns its try/catch
+        // and guards against stale completions via _checkpointRefreshVersion.
+        _ = RefreshBakedModelAsync(modelValue);
+        // Same shape for the quality-preset picker.
         _ = RefreshQualityPresetOptionsAsync(modelValue);
     }
 
-    internal async Task RefreshCheckpointOptionsAsync(string? modelValue)
+    internal async Task RefreshBakedModelAsync(string? modelValue)
     {
         var version = ++_checkpointRefreshVersion;
         try
         {
             if (!ModelConstants.ComfyUi.IsId(modelValue))
             {
-                HideCheckpointPicker();
+                HideBakedModel();
                 return;
             }
 
@@ -623,77 +598,40 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
             if (version != _checkpointRefreshVersion) return;
             if (slot is null)
             {
-                // Not an error: link-driven loaders, or a multi-UNET pairing that must never
-                // be half-swapped — but say so, or a hidden picker looks like a bug.
+                // Not an error: link-driven loaders, or a multi-UNET pairing with no single
+                // model to name — but say so, or a missing model line looks like a bug.
                 _logger.LogInformation(
-                    "Checkpoint picker hidden: workflow {Workflow} has no swappable model loader "
+                    "Baked-model display hidden: workflow {Workflow} has no unambiguous model loader "
                     + "(needs CheckpointLoaderSimple or exactly one UNETLoader with a literal name)",
                     workflowName);
-                HideCheckpointPicker();
+                HideBakedModel();
                 return;
             }
-            var baked = slot.BakedName;
-
-            // Show the default-only picker immediately — the server fetch below may take
-            // seconds (offline host) and the workflow default is always a valid choice.
-            DispatchToUi(() =>
-            {
-                _suppressCheckpointPersist = true;
-                try
-                {
-                    _workflowDefaultCheckpoint = baked;
-                    CheckpointOptions = [baked];
-                    SelectedCheckpoint = baked;
-                    CheckpointLabel = slot.Kind == ComfyUiLoaderKind.Unet ? "Diffusion model" : "Checkpoint";
-                    SupportsCheckpoint = true;
-                }
-                finally { _suppressCheckpointPersist = false; }
-            });
-
-            var server = await _checkpointService.GetModelNamesAsync(slot.Kind);
-            if (version != _checkpointRefreshVersion) return;
-            if (server is null || server.Count == 0) return;
 
             DispatchToUi(() =>
             {
-                _suppressCheckpointPersist = true;
-                try
-                {
-                    CheckpointOptions =
-                        [baked, .. server.Where(n => !string.Equals(n, baked, StringComparison.Ordinal))];
-                    // Restore a previous explicit pick for THIS workflow — but only when the
-                    // server still offers it; never invent a selection.
-                    var saved = _uiStateStore.LoadComfyUiCheckpoint(workflowName);
-                    SelectedCheckpoint =
-                        saved is not null && CheckpointOptions.Contains(saved) ? saved : baked;
-                }
-                finally { _suppressCheckpointPersist = false; }
+                BakedModelName = slot.BakedName;
+                CheckpointLabel = slot.Kind == ComfyUiLoaderKind.Unet ? "Diffusion model" : "Checkpoint";
+                SupportsCheckpoint = true;
+                // Display-only: the job card and metadata show which ComfyUI model produced
+                // the image, not just the workflow filename.
+                Parameters.ComfyUiModelDisplay = slot.BakedName;
             });
         }
         catch (Exception ex)
         {
             // Fire-and-forget caller — an unobserved throw here would be silent at best.
-            _logger.LogWarning(ex, "Checkpoint options refresh failed Model={Model}", modelValue);
+            _logger.LogWarning(ex, "Baked-model refresh failed Model={Model}", modelValue);
         }
     }
 
-    private void HideCheckpointPicker() => DispatchToUi(() =>
+    private void HideBakedModel() => DispatchToUi(() =>
     {
-        _suppressCheckpointPersist = true;
-        try
-        {
-            SupportsCheckpoint = false;
-            CheckpointOptions = [];
-            _workflowDefaultCheckpoint = null;
-            SelectedCheckpoint = null;
-            CheckpointLabel = "Checkpoint";
-            // A stale checkpoint must not linger in Clone() snapshots of other models.
-            // (SelectedCheckpoint=null returns early in OnSelectedCheckpointChanged, so the
-            // display field is cleared here too, not there.)
-            Parameters.ComfyUiCheckpoint = string.Empty;
-            Parameters.ComfyUiModelDisplay = string.Empty;
-        }
-        finally { _suppressCheckpointPersist = false; }
+        SupportsCheckpoint = false;
+        BakedModelName = string.Empty;
+        CheckpointLabel = "Checkpoint";
+        // A stale model name must not linger in Clone() snapshots of other models.
+        Parameters.ComfyUiModelDisplay = string.Empty;
     });
 
     internal async Task RefreshQualityPresetOptionsAsync(string? modelValue)

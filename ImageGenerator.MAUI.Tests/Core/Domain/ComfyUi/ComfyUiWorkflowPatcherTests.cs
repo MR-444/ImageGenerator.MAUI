@@ -70,8 +70,8 @@ public class ComfyUiWorkflowPatcherTests
 
     private static ComfyUiRequest Request(
         string prompt = "p", bool json = false, long seed = 123,
-        string? ar = null, double? mp = null, string? ckpt = null, string? preset = null) =>
-        new("wf", prompt, json, seed, ar, mp, ckpt, preset);
+        string? ar = null, double? mp = null, string? preset = null) =>
+        new("wf", prompt, json, seed, ar, mp, preset);
 
     [Fact]
     public void JsonMode_PatchesImportJsonAndMode_OverwritingTheWiredLink()
@@ -287,10 +287,10 @@ public class ComfyUiWorkflowPatcherTests
         graph["200"]!["inputs"]!["images"]!.GetValueKind().Should().Be(JsonValueKind.Array);
     }
 
-    // ---- checkpoint patching -------------------------------------------------------------
+    // ---- baked-model slot probe (read-only display) ---------------------------------------
 
     [Fact]
-    public void Checkpoint_Null_LeavesCkptNameUntouched()
+    public void Patch_NeverTouchesLoaderNames()
     {
         var result = ComfyUiWorkflowPatcher.Patch(CheckpointTemplate, Request());
 
@@ -298,37 +298,6 @@ public class ComfyUiWorkflowPatcherTests
         graph["4"]!["inputs"]!["ckpt_name"]!.GetValue<string>().Should().Be("baked.safetensors");
         graph["12"]!["inputs"]!["ckpt_name"]!.GetValue<string>().Should().Be("refiner.safetensors");
         result.PromptTargetDescription.Should().NotContain("ckpt_name").And.NotContain("checkpoint");
-    }
-
-    [Fact]
-    public void Checkpoint_PatchesAllLiteralCkptNameLoaders()
-    {
-        var result = ComfyUiWorkflowPatcher.Patch(
-            CheckpointTemplate, Request(ckpt: "server.safetensors"));
-
-        var graph = JsonNode.Parse(result.GraphJson)!;
-        graph["4"]!["inputs"]!["ckpt_name"]!.GetValue<string>().Should().Be("server.safetensors");
-        graph["12"]!["inputs"]!["ckpt_name"]!.GetValue<string>().Should().Be("server.safetensors");
-        result.PromptTargetDescription.Should().Contain("ckpt_name on 2 CheckpointLoaderSimple node(s)");
-    }
-
-    [Fact]
-    public void Checkpoint_LeavesLinkDrivenCkptNameUntouched()
-    {
-        var result = ComfyUiWorkflowPatcher.Patch(
-            CheckpointTemplate, Request(ckpt: "server.safetensors"));
-
-        JsonNode.Parse(result.GraphJson)!["9"]!["inputs"]!["ckpt_name"]!
-            .GetValueKind().Should().Be(JsonValueKind.Array);
-    }
-
-    [Fact]
-    public void Checkpoint_WithoutLoaderNode_SkipsSilentlyAndNotesIt()
-    {
-        var result = ComfyUiWorkflowPatcher.Patch(
-            PlainTemplate, Request(ckpt: "server.safetensors"));
-
-        result.PromptTargetDescription.Should().Contain("no unambiguous model loader");
     }
 
     [Fact]
@@ -362,9 +331,9 @@ public class ComfyUiWorkflowPatcherTests
 
     // ---- UNETLoader (split-loader workflows) ----------------------------------------------
     // Mirrors the user's real Ideogram graph: when TWO UNETLoaders hold DIFFERENT models
-    // (conditional + unconditional feeding a DualModelGuider), the pair is deliberate and
-    // must never be half-swapped — no slot, no patch. Only an exactly-one literal UNETLoader
-    // qualifies as the workflow's swappable model.
+    // (conditional + unconditional feeding a DualModelGuider), there is no single model to
+    // name — no slot. Only an exactly-one literal UNETLoader qualifies as the workflow's
+    // baked model for the read-only display.
 
     // One literal UNETLoader; the link-driven second one must not count toward the
     // exactly-one rule.
@@ -419,31 +388,6 @@ public class ComfyUiWorkflowPatcherTests
 
         ComfyUiWorkflowPatcher.FindBakedModelSlot(bothKinds)
             .Should().Be(new ComfyUiModelSlot(ComfyUiLoaderKind.Checkpoint, "baked.safetensors"));
-    }
-
-    [Fact]
-    public void Unet_SingleLiteralLoader_PatchesUnetName()
-    {
-        var result = ComfyUiWorkflowPatcher.Patch(
-            SingleUnetTemplate, Request(ckpt: "other-model.safetensors"));
-
-        var graph = JsonNode.Parse(result.GraphJson)!;
-        graph["10"]!["inputs"]!["unet_name"]!.GetValue<string>().Should().Be("other-model.safetensors");
-        graph["11"]!["inputs"]!["unet_name"]!.GetValueKind().Should().Be(JsonValueKind.Array,
-            "link-driven loaders are never touched");
-        result.PromptTargetDescription.Should().Contain("unet_name on UNETLoader node 10");
-    }
-
-    [Fact]
-    public void Unet_TwoLiteralLoaders_LeavesBothUntouchedAndNotesIt()
-    {
-        var result = ComfyUiWorkflowPatcher.Patch(
-            DualUnetTemplate, Request(ckpt: "other-model.safetensors"));
-
-        var graph = JsonNode.Parse(result.GraphJson)!;
-        graph["10"]!["inputs"]!["unet_name"]!.GetValue<string>().Should().Be("ideogram4_fp8_scaled.safetensors");
-        graph["12"]!["inputs"]!["unet_name"]!.GetValue<string>().Should().Be("ideogram4_unconditional_fp8_scaled.safetensors");
-        result.PromptTargetDescription.Should().Contain("no unambiguous model loader");
     }
 
     // ---- SageAttention runtime injection ------------------------------------------------

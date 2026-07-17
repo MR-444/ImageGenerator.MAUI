@@ -50,7 +50,6 @@ public sealed class FallbackComfyUiDescriptor : IPayloadBuilder, ICapabilityProv
             ? p.AspectRatio
             : null,
         Megapixels: ParseMegapixels(p.Resolution),
-        CheckpointName: string.IsNullOrWhiteSpace(p.ComfyUiCheckpoint) ? null : p.ComfyUiCheckpoint,
         PresetChoice: string.IsNullOrWhiteSpace(p.ComfyUiPreset) ? null : p.ComfyUiPreset);
 
     public IEnumerable<string> Lines(ImageGenerationParameters p)
@@ -59,19 +58,18 @@ public sealed class FallbackComfyUiDescriptor : IPayloadBuilder, ICapabilityProv
         yield return $"JsonPrompt: {p.UseJsonPrompt}";
         if (ParseMegapixels(p.Resolution) is { } mp)
             yield return $"Megapixels: {mp.ToString(CultureInfo.InvariantCulture)}";
-        if (!string.IsNullOrWhiteSpace(p.ComfyUiCheckpoint))
-            yield return $"Checkpoint: {p.ComfyUiCheckpoint}";
-        // Use the display field, not ComfyUiPreset: the latter is blanked when the pick equals
-        // the workflow's baked default (no-patch sentinel), which would drop the Preset line.
+        // Display-only provenance: the workflow's baked-in model — the workflow file alone
+        // doesn't say which checkpoint/diffusion model rendered the image.
+        if (!string.IsNullOrWhiteSpace(p.ComfyUiModelDisplay))
+            yield return $"Model: {p.ComfyUiModelDisplay}";
         if (!string.IsNullOrWhiteSpace(p.ComfyUiPresetDisplay))
             yield return $"Preset: {p.ComfyUiPresetDisplay}";
     }
 
-    // Remix: restore the recipe a ComfyUI render carries that we CAN re-apply without the async
-    // checkpoint/preset pickers — the workflow itself comes back via the model id (comfyui/<name>).
-    // Checkpoint/Preset lines are intentionally NOT re-applied: the user picks a workflow and lets
-    // it define its models, and re-applying an explicit pick would mean threading a value through
-    // the async, Preferences-backed picker refresh.
+    // Remix: restore the recipe a ComfyUI render carries that we CAN re-apply — the workflow
+    // itself comes back via the model id (comfyui/<name>). Model/Preset lines are display-only
+    // provenance: the workflow defines its own model, and re-applying a preset pick would mean
+    // threading a value through the async, Preferences-backed picker refresh.
     public void Apply(ImageGenerationParameters p, IReadOnlyDictionary<string, string> meta)
     {
         meta.ApplyBool("JsonPrompt", v => p.UseJsonPrompt = v);

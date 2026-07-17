@@ -85,11 +85,6 @@ public interface IUiStateStore
     /// </summary>
     string? LoadCivitaiModelRef();
     /// <summary>
-    /// Per-workflow: checkpoints are architecture-bound, so one workflow's pick must never
-    /// leak into another. Null when the user never explicitly picked one for this workflow.
-    /// </summary>
-    string? LoadComfyUiCheckpoint(string workflowName);
-    /// <summary>
     /// Per-workflow: preset labels are the workflow's own CustomCombo options, so one
     /// workflow's pick must never leak into another. Null when never explicitly picked.
     /// </summary>
@@ -124,8 +119,6 @@ public interface IUiStateStore
     void PersistOutputFolder(string value);
     /// <inheritdoc cref="LoadCivitaiModelRef"/>
     void PersistCivitaiModelRef(string value);
-    /// <inheritdoc cref="LoadComfyUiCheckpoint"/>
-    void PersistComfyUiCheckpoint(string value, string workflowName);
     /// <inheritdoc cref="LoadComfyUiPreset"/>
     void PersistComfyUiPreset(string value, string workflowName);
     /// <summary>

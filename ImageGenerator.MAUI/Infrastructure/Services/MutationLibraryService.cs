@@ -128,7 +128,7 @@ public sealed class MutationLibraryService : IMutationLibraryService
             await JsonSerializer.SerializeAsync(stream, items, LibraryJson, ct);
         }
 
-        // File.Move(overwrite: true) is atomic on NTFS — same convention as ComfyUiCheckpointService.
+        // File.Move(overwrite: true) is atomic on NTFS — same convention as ModelCatalogService.
         File.Move(tempPath, path, overwrite: true);
     }
 }

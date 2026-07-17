@@ -66,39 +66,15 @@ public class FallbackComfyUiDescriptorTests
         request.Megapixels.Should().BeNull();
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Build_EmptyComfyUiCheckpoint_MapsToNullCheckpointName(string checkpoint)
-    {
-        var parameters = Parameters();
-        parameters.ComfyUiCheckpoint = checkpoint;
-
-        var request = (ComfyUiRequest)_sut.Build(parameters);
-
-        request.CheckpointName.Should().BeNull("empty means the workflow's own checkpoint, no patch");
-    }
-
     [Fact]
-    public void Build_ComfyUiCheckpoint_FlowsIntoTheRequest()
+    public void Lines_IncludeTheBakedModelOnlyWhenKnown()
     {
-        var parameters = Parameters();
-        parameters.ComfyUiCheckpoint = "server.safetensors";
+        var unknown = Parameters();
+        var known = Parameters();
+        known.ComfyUiModelDisplay = "krea2_raw_bf16.safetensors";
 
-        var request = (ComfyUiRequest)_sut.Build(parameters);
-
-        request.CheckpointName.Should().Be("server.safetensors");
-    }
-
-    [Fact]
-    public void Lines_IncludeTheCheckpointOnlyWhenSet()
-    {
-        var defaulted = Parameters();
-        var picked = Parameters();
-        picked.ComfyUiCheckpoint = "server.safetensors";
-
-        _sut.Lines(defaulted).Should().NotContain(l => l.StartsWith("Checkpoint:"));
-        _sut.Lines(picked).Should().Contain("Checkpoint: server.safetensors");
+        _sut.Lines(unknown).Should().NotContain(l => l.StartsWith("Model:"));
+        _sut.Lines(known).Should().Contain("Model: krea2_raw_bf16.safetensors");
     }
 
     [Theory]
@@ -197,19 +173,19 @@ public class FallbackComfyUiDescriptorTests
     }
 
     [Fact]
-    public void Apply_LeavesCheckpointAndPresetUntouched()
+    public void Apply_LeavesModelAndPresetUntouched()
     {
-        // ComfyUI checkpoint/preset are picker-mediated (async, Preferences-backed), so Remix
-        // deliberately does NOT re-apply them — the workflow itself comes back via the model id.
+        // Model/Preset lines are display-only provenance, so Remix deliberately does NOT
+        // re-apply them — the workflow itself comes back via the model id.
         var p = new ImageGenerationParameters();
 
         _sut.Apply(p, new Dictionary<string, string>
         {
-            ["Checkpoint"] = "server.safetensors",
+            ["Model"] = "server.safetensors",
             ["Preset"] = "Turbo"
         });
 
-        p.ComfyUiCheckpoint.Should().BeEmpty();
+        p.ComfyUiModelDisplay.Should().BeEmpty();
         p.ComfyUiPreset.Should().BeEmpty();
     }
 

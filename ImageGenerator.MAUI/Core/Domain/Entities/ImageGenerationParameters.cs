@@ -104,20 +104,14 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private bool _enableCopyrightDetection;
 
-    // ComfyUI only: server checkpoint to patch into CheckpointLoaderSimple. Empty means the
-    // workflow's own baked-in checkpoint (no patch applied).
-    [ObservableProperty]
-    private string _comfyUiCheckpoint = string.Empty;
-
     // ComfyUI only: quality preset to patch into the workflow's single CustomCombo node.
     // Empty means the workflow's own baked-in choice (no patch applied).
     [ObservableProperty]
     private string _comfyUiPreset = string.Empty;
 
-    // ComfyUI only, DISPLAY-ONLY: human-readable name of the model actually in use — the
-    // selected checkpoint/diffusion model INCLUDING the workflow's baked-in default. Unlike
-    // ComfyUiCheckpoint (empty = no patch) this is set even for the default, so the job card
-    // can show "what model produced this". Empty for non-ComfyUI providers. Never patched.
+    // ComfyUI only, DISPLAY-ONLY: the workflow's baked-in checkpoint/diffusion model, so the
+    // job card and metadata can show "what model produced this" — the workflow filename alone
+    // doesn't say. Empty for non-ComfyUI providers. Never patched.
     [ObservableProperty]
     private string _comfyUiModelDisplay = string.Empty;
 
@@ -174,7 +168,6 @@ public partial class ImageGenerationParameters : ObservableObject
             Safe             = Safe,
             UseJsonPrompt    = UseJsonPrompt,
             EnableCopyrightDetection = EnableCopyrightDetection,
-            ComfyUiCheckpoint = ComfyUiCheckpoint,
             ComfyUiPreset    = ComfyUiPreset,
             ComfyUiModelDisplay = ComfyUiModelDisplay,
             ComfyUiPresetDisplay = ComfyUiPresetDisplay,

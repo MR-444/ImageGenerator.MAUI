@@ -70,7 +70,6 @@ public static class ComfyUiWorkflowPatcher
 
         var seedNodeIds = PatchSeeds(nodes, request.Seed);
         var resolutionNote = PatchResolution(nodes, request.AspectRatio, request.Megapixels);
-        var modelNote = PatchModel(nodes, request.CheckpointName);
         var presetNote = PatchQualityPreset(nodes, request.PresetChoice);
         var dateNote = PatchFilenamePrefixDates(nodes, now ?? DateTimeOffset.Now);
         var sage = useSageAttention
@@ -82,7 +81,7 @@ public static class ComfyUiWorkflowPatcher
 
         return new ComfyUiPatchResult(
             root.ToJsonString(),
-            promptTarget + resolutionNote + modelNote + presetNote + dateNote + sageNote,
+            promptTarget + resolutionNote + presetNote + dateNote + sageNote,
             seedNodeIds,
             sage.NodeIds,
             sage.LoaderIds);
@@ -417,36 +416,6 @@ public static class ComfyUiWorkflowPatcher
             if (megapixels is not null) inputs["megapixels"] = megapixels;
         }
         return $"; resolution on {selectors.Count} ResolutionSelector node(s)";
-    }
-
-    private static string PatchModel(
-        List<(string Id, string ClassType, JsonObject Inputs)> nodes, string? checkpointName)
-    {
-        if (checkpointName is null) return string.Empty;
-
-        // Target selection mirrors FindBakedModelSlot so the picker's offer and the patch
-        // always agree on which node the name lands in.
-        var checkpoints = LiteralLoaders(nodes, CheckpointLoaderClass, "ckpt_name");
-        if (checkpoints.Count > 0)
-        {
-            foreach (var (_, _, inputs) in checkpoints)
-            {
-                inputs["ckpt_name"] = checkpointName;
-            }
-            return $"; ckpt_name on {checkpoints.Count} {CheckpointLoaderClass} node(s)";
-        }
-
-        var unets = LiteralLoaders(nodes, UnetLoaderClass, "unet_name");
-        if (unets.Count == 1)
-        {
-            unets[0].Inputs["unet_name"] = checkpointName;
-            return $"; unet_name on {UnetLoaderClass} node {unets[0].Id}";
-        }
-
-        // Zero loaders, or a multi-UNET pairing that must never be half-swapped. The picker
-        // is hidden in both cases — this is belt-and-braces for a template edited after
-        // selection.
-        return "; no unambiguous model loader — workflow keeps its own model(s)";
     }
 
     private static string PatchFilenamePrefixDates(

@@ -2250,175 +2250,76 @@ public class GeneratorViewModelTests
         job.HasProgress.Should().BeFalse();
     }
 
-    // --- ComfyUI checkpoint picker ---------------------------------------------------------
-    // Options[0] is always the workflow's baked-in checkpoint (= empty Parameters value = no
-    // patch); server names follow. Hidden when the workflow has no literal loader. The picker
-    // binds the VM-level SelectedCheckpoint, so the null-push tolerance lives in the VM.
+    // --- ComfyUI baked-model display ---------------------------------------------------------
+    // The workflow file IS the model choice, so the loader's model is a read-only line: name
+    // from the file probe, label by loader kind. Hidden when the workflow has no literal loader.
 
     private const string ComfyWorkflowName = "Ideogram workflow_MR";
 
-    private void SetupCheckpointService(
-        string? baked, params string[] server) =>
-        SetupModelSlotService(
-            baked is null ? null : new ComfyUiModelSlot(ComfyUiLoaderKind.Checkpoint, baked), server);
-
-    private void SetupModelSlotService(ComfyUiModelSlot? slot, params string[] server)
-    {
+    private void SetupModelSlotService(ComfyUiModelSlot? slot) =>
         _mockCheckpointService
             .Setup(s => s.GetWorkflowModelSlotAsync(ComfyWorkflowName, It.IsAny<CancellationToken>()))
             .ReturnsAsync(slot);
-        _mockCheckpointService
-            .Setup(s => s.GetModelNamesAsync(It.IsAny<ComfyUiLoaderKind>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(server.Length == 0 ? null : server.ToList());
-    }
 
     [Fact]
-    public async Task ComfyModel_WithBakedCheckpoint_ShowsPickerWithDefaultFirst()
+    public async Task ComfyModel_WithBakedCheckpoint_ShowsReadOnlyModelName()
     {
-        SetupCheckpointService("baked.safetensors", "a.safetensors", "baked.safetensors", "b.safetensors");
+        SetupModelSlotService(new ComfyUiModelSlot(ComfyUiLoaderKind.Checkpoint, "baked.safetensors"));
 
         SelectComfyWorkflow();
-        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
+        await _viewModel.RefreshBakedModelAsync(ComfyModelId);
 
         _viewModel.SupportsCheckpoint.Should().BeTrue();
-        // The workflow default leads and the server's copy of it is deduplicated.
-        _viewModel.CheckpointOptions.Should().Equal("baked.safetensors", "a.safetensors", "b.safetensors");
-        _viewModel.SelectedCheckpoint.Should().Be("baked.safetensors");
+        _viewModel.BakedModelName.Should().Be("baked.safetensors");
         _viewModel.CheckpointLabel.Should().Be("Checkpoint");
-        _viewModel.Parameters.ComfyUiCheckpoint.Should().BeEmpty("the default selection means no patch");
+        _viewModel.Parameters.ComfyUiModelDisplay.Should().Be("baked.safetensors",
+            "the job card and metadata report which model produced the image");
     }
 
     [Fact]
-    public async Task ComfyModel_SingleUnetWorkflow_ShowsPickerLabeledDiffusionModel()
-    {
-        SetupModelSlotService(
-            new ComfyUiModelSlot(ComfyUiLoaderKind.Unet, "ideogram4_fp8_scaled.safetensors"),
-            "flux-dev.safetensors", "ideogram4_fp8_scaled.safetensors");
-
-        SelectComfyWorkflow();
-        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
-
-        _viewModel.SupportsCheckpoint.Should().BeTrue();
-        _viewModel.CheckpointLabel.Should().Be("Diffusion model");
-        _viewModel.CheckpointOptions.Should().Equal("ideogram4_fp8_scaled.safetensors", "flux-dev.safetensors");
-        _mockCheckpointService.Verify(
-            s => s.GetModelNamesAsync(ComfyUiLoaderKind.Unet, It.IsAny<CancellationToken>()),
-            Times.AtLeastOnce, "the server list must come from the workflow's own loader kind");
-    }
-
-    [Fact]
-    public async Task NonComfyModel_ResetsCheckpointLabel()
+    public async Task ComfyModel_SingleUnetWorkflow_LabelsTheModelLineDiffusionModel()
     {
         SetupModelSlotService(new ComfyUiModelSlot(ComfyUiLoaderKind.Unet, "ideogram4_fp8_scaled.safetensors"));
+
         SelectComfyWorkflow();
-        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
+        await _viewModel.RefreshBakedModelAsync(ComfyModelId);
+
+        _viewModel.SupportsCheckpoint.Should().BeTrue();
         _viewModel.CheckpointLabel.Should().Be("Diffusion model");
-
-        SelectIdeogramTurbo();
-        await _viewModel.RefreshCheckpointOptionsAsync(ModelConstants.Ideogram.V4Turbo);
-
-        _viewModel.CheckpointLabel.Should().Be("Checkpoint");
+        _viewModel.BakedModelName.Should().Be("ideogram4_fp8_scaled.safetensors");
     }
 
     [Fact]
-    public async Task ComfyModel_WithoutSwappableLoader_HidesPicker()
+    public async Task ComfyModel_WithoutUnambiguousLoader_HidesTheModelLine()
     {
         // Covers no-loader, link-only, AND multi-UNET pairings — the slot probe returns null
         // for all of them.
-        SetupCheckpointService(baked: null, "a.safetensors");
+        SetupModelSlotService(null);
 
         SelectComfyWorkflow();
-        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
+        await _viewModel.RefreshBakedModelAsync(ComfyModelId);
 
         _viewModel.SupportsCheckpoint.Should().BeFalse();
-        _viewModel.CheckpointOptions.Should().BeEmpty();
-        _viewModel.Parameters.ComfyUiCheckpoint.Should().BeEmpty();
+        _viewModel.BakedModelName.Should().BeEmpty();
+        _viewModel.Parameters.ComfyUiModelDisplay.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task ComfyModel_ServerUnreachable_ShowsOnlyTheWorkflowDefault()
+    public async Task NonComfyModel_ClearsTheModelLine()
     {
-        SetupCheckpointService("baked.safetensors" /* no server list */);
-
+        SetupModelSlotService(new ComfyUiModelSlot(ComfyUiLoaderKind.Unet, "ideogram4_fp8_scaled.safetensors"));
         SelectComfyWorkflow();
-        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
-
-        _viewModel.SupportsCheckpoint.Should().BeTrue();
-        _viewModel.CheckpointOptions.Should().Equal("baked.safetensors");
-        _viewModel.SelectedCheckpoint.Should().Be("baked.safetensors");
-    }
-
-    [Fact]
-    public async Task ExplicitCheckpointPick_WritesParametersAndPersists_DefaultPickWritesEmpty()
-    {
-        SetupCheckpointService("baked.safetensors", "a.safetensors");
-        SelectComfyWorkflow();
-        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
-
-        _viewModel.SelectedCheckpoint = "a.safetensors";
-
-        _viewModel.Parameters.ComfyUiCheckpoint.Should().Be("a.safetensors");
-        _mockUiStateStore.Verify(s => s.PersistComfyUiCheckpoint("a.safetensors", ComfyWorkflowName), Times.Once);
-
-        _viewModel.SelectedCheckpoint = "baked.safetensors";
-
-        _viewModel.Parameters.ComfyUiCheckpoint.Should().BeEmpty("re-picking the default means no patch again");
-    }
-
-    [Fact]
-    public async Task SavedCheckpoint_RestoredWhenStillOffered_ElseDefault()
-    {
-        SetupCheckpointService("baked.safetensors", "a.safetensors");
-        _mockUiStateStore.Setup(s => s.LoadComfyUiCheckpoint(ComfyWorkflowName)).Returns("a.safetensors");
-
-        SelectComfyWorkflow();
-        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
-
-        _viewModel.SelectedCheckpoint.Should().Be("a.safetensors");
-        _viewModel.Parameters.ComfyUiCheckpoint.Should().Be("a.safetensors");
-        // The restore is programmatic, not a user pick — it must not re-persist.
-        _mockUiStateStore.Verify(s => s.PersistComfyUiCheckpoint(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
-
-        // A saved name the server no longer offers must never be invented into the selection.
-        _mockUiStateStore.Setup(s => s.LoadComfyUiCheckpoint(ComfyWorkflowName)).Returns("vanished.safetensors");
-        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
-
-        _viewModel.SelectedCheckpoint.Should().Be("baked.safetensors");
-        _viewModel.Parameters.ComfyUiCheckpoint.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task NonComfyModel_ClearsCheckpointState()
-    {
-        SetupCheckpointService("baked.safetensors", "a.safetensors");
-        SelectComfyWorkflow();
-        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
-        _viewModel.SelectedCheckpoint = "a.safetensors";
+        await _viewModel.RefreshBakedModelAsync(ComfyModelId);
+        _viewModel.CheckpointLabel.Should().Be("Diffusion model");
 
         SelectIdeogramTurbo();
-        await _viewModel.RefreshCheckpointOptionsAsync(ModelConstants.Ideogram.V4Turbo);
+        await _viewModel.RefreshBakedModelAsync(ModelConstants.Ideogram.V4Turbo);
 
         _viewModel.SupportsCheckpoint.Should().BeFalse();
-        _viewModel.CheckpointOptions.Should().BeEmpty();
-        _viewModel.Parameters.ComfyUiCheckpoint.Should().BeEmpty(
-            "a stale checkpoint must not linger in Clone() snapshots of other models");
-    }
-
-    [Fact]
-    public async Task CheckpointNullSelectionPush_IsIgnored()
-    {
-        SetupCheckpointService("baked.safetensors", "a.safetensors");
-        SelectComfyWorkflow();
-        await _viewModel.RefreshCheckpointOptionsAsync(ComfyModelId);
-        _viewModel.SelectedCheckpoint = "a.safetensors";
-
-        // The WinUI ComboBox pushes SelectedItem=null on ItemsSource swaps.
-        _viewModel.SelectedCheckpoint = null;
-
-        _viewModel.Parameters.ComfyUiCheckpoint.Should().Be("a.safetensors",
-            "a platform null push is a binding artifact, never a user pick");
-        _mockUiStateStore.Verify(s => s.PersistComfyUiCheckpoint("a.safetensors", ComfyWorkflowName), Times.Once,
-            "only the explicit pick persists");
+        _viewModel.CheckpointLabel.Should().Be("Checkpoint");
+        _viewModel.BakedModelName.Should().BeEmpty();
+        _viewModel.Parameters.ComfyUiModelDisplay.Should().BeEmpty(
+            "a stale model name must not linger in Clone() snapshots of other models");
     }
 
     // --- ComfyUI quality-preset picker (workflow's single CustomCombo node) -----------------
