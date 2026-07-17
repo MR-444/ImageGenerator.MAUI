@@ -33,23 +33,24 @@ Run ten pairs sequentially. Alternate order to reduce heat and order bias:
 
 | Pair | Seed | Order | A ms | B ms | Reduction % | Visual pass |
 |---:|---:|:---:|---:|---:|---:|:---:|
-| 1 | 41001 | AB | 52569 | 36425 | 30.7 | |
-| 2 | 41002 | BA | 52559 | 36341 | 30.9 | |
-| 3 | 41003 | AB | 52487 | 36403 | 30.6 | |
-| 4 | 41004 | BA | 52502 | 36438 | 30.6 | |
-| 5 | 41005 | AB | 52449 | 36298 | 30.8 | |
-| 6 | 41006 | BA | 52499 | 36348 | 30.8 | |
-| 7 | 41007 | AB | 52478 | 36381 | 30.8 | |
-| 8 | 41008 | BA | 52490 | 36371 | 30.7 | |
-| 9 | 41009 | AB | 52478 | 36381 | 30.7 | |
-| 10 | 41010 | BA | 52653 | 36309 | 31.0 | |
+| 1 | 41001 | AB | 52569 | 36425 | 30.7 | yes |
+| 2 | 41002 | BA | 52559 | 36341 | 30.9 | yes |
+| 3 | 41003 | AB | 52487 | 36403 | 30.6 | yes |
+| 4 | 41004 | BA | 52502 | 36438 | 30.6 | yes |
+| 5 | 41005 | AB | 52449 | 36298 | 30.8 | yes |
+| 6 | 41006 | BA | 52499 | 36348 | 30.8 | yes |
+| 7 | 41007 | AB | 52478 | 36381 | 30.8 | yes |
+| 8 | 41008 | BA | 52490 | 36371 | 30.7 | yes |
+| 9 | 41009 | AB | 52478 | 36381 | 30.7 | yes |
+| 10 | 41010 | BA | 52653 | 36309 | 31.0 | yes |
 
 ### Result (executed 2026-07-17)
 
 **Median paired reduction: 30.8% — PASS** (threshold 15%). No B run had a Sage-specific
-failure; every B graph carried `PathchSageAttentionKJ` on both UNETLoaders. Visual pass
-column awaits the user's side-by-side review of the downloaded pairs — all 10 same-seed
-pairs plus raw timings are archived at `D:\mr\Emberforge\sage-ab-benchmark\`.
+failure; every B graph carried `PathchSageAttentionKJ` on both UNETLoaders. Visual review
+(user, 2026-07-17): pairs are similar but not pixel-identical — good enough, **pass**; all
+10 same-seed pairs plus raw timings are archived at `D:\mr\Emberforge\sage-ab-benchmark\`.
+Verdict: **Use SageAttention stays enabled** in fireengine's Emberforge preferences.
 
 Executed via direct `/prompt` submission of the exact graph Emberforge's
 `ComfyUiWorkflowPatcher` produces, with three deviations from the protocol above:
