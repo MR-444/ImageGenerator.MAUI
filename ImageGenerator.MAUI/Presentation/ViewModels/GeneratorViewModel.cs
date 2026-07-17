@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
-using System.Reflection;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -44,6 +43,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     private ImageGenerationParameters _parameters;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPersistentStatusMessageVisible))]
     private string? _statusMessage;
 
     [ObservableProperty]
@@ -52,7 +52,14 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     // Transient confirmation toast (e.g. "Image generated"). Distinct from StatusMessage,
     // which holds form-level errors / info that shouldn't auto-clear.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFlashMessageVisible))]
+    [NotifyPropertyChangedFor(nameof(IsPersistentStatusMessageVisible))]
     private string? _flashMessage;
+
+    public bool IsFlashMessageVisible => !string.IsNullOrEmpty(FlashMessage);
+
+    public bool IsPersistentStatusMessageVisible =>
+        !IsFlashMessageVisible && !string.IsNullOrEmpty(StatusMessage);
 
     // True while the Mutation engine's AI fan-out is in flight. The mutation VM (a singleton holding
     // this one) flips it so MainPage can show an in-progress banner if the user leaves that page —
@@ -67,12 +74,14 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     // holds the shared single-GPU gate (see GpuGate). Pushed directly from both acquire/release
     // sites — mirrors the IsAiMutationRunning cross-VM push above, no new gate-side plumbing.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WorkspaceSummary))]
     private bool _isGpuBusy;
 
-    // All-time count of images in the output folder, shown in the header. Null until the
+    // All-time count of images in the output folder, shown in the action bar. Null until the
     // background enumeration in LoadTotalImagesGeneratedAsync completes.
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TotalImagesGeneratedText))]
+    [NotifyPropertyChangedFor(nameof(WorkspaceSummary))]
     private int? _totalImagesGenerated;
 
     public string TotalImagesGeneratedText =>
@@ -86,7 +95,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     // per-job PropertyChanged wiring in the ctor).
     public bool HasFinishedJobs => Jobs.Any(j => j.IsFinished);
 
-    // Compact header summary, e.g. "2 running · 1 queued · 5 done". A "queued" batch job is
+    // Compact queue summary, e.g. "2 running · 1 queued · 5 done". A "queued" batch job is
     // !IsRunning with StatusKind still at the default Info (see GenerationJob.IsFinished comment) —
     // recomputed from the same hooks that already track HasFinishedJobs.
     public string JobStatusSummary
@@ -107,11 +116,15 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     public ProviderFilterCoordinator ProviderFilter { get; }
     public BatchCoordinator Batch { get; }
 
-    // Compact header summary, e.g. "Replicate · flux-dev".
+    // Compact model summary, e.g. "Replicate · flux-dev".
     public string SelectedModelSummary =>
         ProviderFilter.SelectedModel is { } model
             ? $"{ProviderFilter.SelectedProvider} · {model.Display}"
             : ProviderFilter.SelectedProvider;
+
+    public string WorkspaceSummary =>
+        $"{JobStatusSummary} · {SelectedModelSummary} · {TotalImagesGeneratedText}"
+        + (IsGpuBusy ? " · GPU busy" : string.Empty);
 
     [ObservableProperty]
     private List<string> _aspectRatioOptions = [];  // hydrated from registry in ctor
@@ -146,15 +159,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     private bool _isCustomAspectRatio;
 
     public InputImagesCoordinator InputImages { get; }
-
-    // Derived from <Version> in the csproj via the SDK-generated AssemblyInformationalVersion
-    // (which on Windows MAUI is the only version source not polluted by ApplicationVersion's
-    // build counter, the way AppInfo.Current.VersionString is). Strip the "+gitSha" suffix.
-    public string AppVersion =>
-        typeof(GeneratorViewModel).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-            ?.Split('+')[0]
-        ?? "0.0.0";
 
     [ObservableProperty]
     private bool _isValid;
@@ -873,6 +877,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     {
         OnPropertyChanged(nameof(HasFinishedJobs));
         OnPropertyChanged(nameof(JobStatusSummary));
+        OnPropertyChanged(nameof(WorkspaceSummary));
         ClearFinishedJobsCommand.NotifyCanExecuteChanged();
     }
 
@@ -971,12 +976,15 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
             setParametersModel: model => Parameters.Model = model,
             refreshCapabilities: RefreshCapabilities);
 
-        // Keep the header's SelectedModelSummary in sync as the provider/model pickers change.
+        // Keep the action bar's model and workspace summaries in sync with both pickers.
         ProviderFilter.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(ProviderFilterCoordinator.SelectedProvider)
                 or nameof(ProviderFilterCoordinator.SelectedModel))
+            {
                 OnPropertyChanged(nameof(SelectedModelSummary));
+                OnPropertyChanged(nameof(WorkspaceSummary));
+            }
         };
 
         Batch = new BatchCoordinator(

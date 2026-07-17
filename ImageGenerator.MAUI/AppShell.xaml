@@ -20,4 +20,7 @@
     <FlyoutItem Title="SETTINGS" Icon="studio_settings.svg" Route="settings-root">
         <ShellContent Title="Settings" ContentTemplate="{DataTemplate views:SettingsPage}" Route="settings" />
     </FlyoutItem>
+    <MenuItem Text="ABOUT"
+              IconImageSource="studio_about.svg"
+              Clicked="OnAboutClicked" />
 </Shell>

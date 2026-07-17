@@ -84,6 +84,48 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
+    public void WorkspaceSummary_TracksJobsModelImageCountAndGpuState()
+    {
+        var notifications = new List<string?>();
+        _viewModel.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+
+        var job = Job(isRunning: true, StatusKind.Info);
+        _viewModel.Jobs.Add(job);
+        job.IsRunning = false;
+        _viewModel.TotalImagesGenerated = 12;
+        _viewModel.IsGpuBusy = true;
+        var otherModel = _viewModel.ProviderFilter.AllModels
+            .First(model => model.Value != _viewModel.ProviderFilter.SelectedModel?.Value);
+        _viewModel.ProviderFilter.SelectedModel = otherModel;
+
+        _viewModel.WorkspaceSummary.Should().Contain("1 queued");
+        _viewModel.WorkspaceSummary.Should().Contain(otherModel.Display);
+        _viewModel.WorkspaceSummary.Should().Contain("12 images");
+        _viewModel.WorkspaceSummary.Should().EndWith("GPU busy");
+        notifications.Count(name => name == nameof(GeneratorViewModel.WorkspaceSummary))
+            .Should().BeGreaterThanOrEqualTo(5);
+    }
+
+    [Fact]
+    public void FeedbackVisibility_FlashTemporarilyTakesPrecedenceOverPersistentStatus()
+    {
+        _viewModel.StatusMessage = "Persistent warning";
+
+        _viewModel.IsFlashMessageVisible.Should().BeFalse();
+        _viewModel.IsPersistentStatusMessageVisible.Should().BeTrue();
+
+        _viewModel.FlashMessage = "Generation started";
+
+        _viewModel.IsFlashMessageVisible.Should().BeTrue();
+        _viewModel.IsPersistentStatusMessageVisible.Should().BeFalse();
+
+        _viewModel.FlashMessage = null;
+
+        _viewModel.IsFlashMessageVisible.Should().BeFalse();
+        _viewModel.IsPersistentStatusMessageVisible.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task RefreshOpenRouterVisionModels_FreeOnly_ClearsPaidSelection()
     {
         _viewModel.OpenRouterVisionFreeOnly = true;

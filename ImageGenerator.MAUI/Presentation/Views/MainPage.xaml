@@ -19,43 +19,13 @@
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <!-- Fixed header (row 0) and action bar (row 2); the two panes in row 1 scroll
-         independently, so Generate and the status line never scroll out of view. -->
-    <Grid RowDefinitions="Auto,*,Auto"
+    <!-- The two panes scroll independently while the action bar remains pinned. -->
+    <Grid RowDefinitions="*,Auto"
           Padding="24,16,24,12"
           RowSpacing="12">
 
-        <!-- Page header: compact single-row title + a live status strip (job counts, selected
-             model, image total, GPU busy) replacing the old title/static-subtitle stack. All
-             four segments are computed on GeneratorViewModel. -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
-            <Label Grid.Column="0"
-                   Text="Emberforge"
-                   Style="{StaticResource PageTitleCompact}"
-                   VerticalOptions="Center" />
-            <HorizontalStackLayout Grid.Column="1" Spacing="8" VerticalOptions="Center">
-                <Label Text="{Binding JobStatusSummary}" Style="{StaticResource PageSubtitle}" />
-                <Label Text="·" Style="{StaticResource PageSubtitle}" />
-                <Label Text="{Binding SelectedModelSummary}" Style="{StaticResource PageSubtitle}" />
-                <Label Text="·" Style="{StaticResource PageSubtitle}" />
-                <Label Text="{Binding TotalImagesGeneratedText}" Style="{StaticResource PageSubtitle}" />
-                <Label Text="·" Style="{StaticResource PageSubtitle}" IsVisible="{Binding IsGpuBusy}" />
-                <Label Text="GPU busy"
-                       Style="{StaticResource PageSubtitle}"
-                       TextColor="{AppThemeBinding Light={StaticResource StatusWarningLight}, Dark={StaticResource StatusWarningDark}}"
-                       FontAttributes="Bold"
-                       IsVisible="{Binding IsGpuBusy}" />
-            </HorizontalStackLayout>
-            <Button Grid.Column="2"
-                    Text="About"
-                    Style="{StaticResource SecondaryButton}"
-                    Clicked="OnAboutClicked"
-                    VerticalOptions="Center"
-                    AutomationId="AboutButton" />
-        </Grid>
-
         <!-- Two independently scrolling panes: settings left, queue/results right. -->
-        <Grid x:Name="MainWorkspaceGrid" Grid.Row="1"
+        <Grid x:Name="MainWorkspaceGrid" Grid.Row="0"
               ColumnDefinitions="3*,2*"
               RowDefinitions="*"
               ColumnSpacing="16"
@@ -598,7 +568,7 @@
         </Grid>
 
         <!-- ACTION BAR: always visible, replaces the old "Run" card. -->
-        <Border Grid.Row="2" Style="{StaticResource ActionBar}">
+        <Border Grid.Row="1" Style="{StaticResource ActionBar}">
             <Grid RowDefinitions="Auto,Auto"
                   RowSpacing="4"
                   ColumnDefinitions="Auto,Auto,Auto,*"
@@ -616,15 +586,16 @@
                         SemanticProperties.Description="Start image generation"
                         AutomationId="GenerateButton" />
 
-                <!-- Import and Cancel batch share the cell: their IsVisible bindings are
+                <!-- Run and Cancel batch share the cell: their IsVisible bindings are
                      mutually exclusive, so the bar never jumps when a batch starts. -->
                 <Button Grid.Row="0" Grid.Column="1"
-                        Text="Import prompts…"
+                        Text="Run prompt batch…"
                         Style="{StaticResource SecondaryButton}"
                         Clicked="OnImportPromptsClicked"
                         IsVisible="{Binding Batch.IsBatchRunning, Converter={StaticResource InverseBool}}"
                         VerticalOptions="Center"
-                        SemanticProperties.Description="Pick a textfile of prompts (separated by blank lines, # comments, or ---) and run them sequentially with the current model and settings"
+                        ToolTipProperties.Text="Choose a .txt file and run its prompts sequentially. Separate prompts with a blank line, a # comment line, or a line containing only ---. Lines starting with # are ignored."
+                        SemanticProperties.Description="Choose a text file and run its prompts sequentially as a batch using the current model and settings"
                         AutomationId="ImportPromptsButton" />
 
                 <Button Grid.Row="0" Grid.Column="1"
@@ -647,25 +618,33 @@
                 <VerticalStackLayout Grid.Row="0" Grid.Column="3"
                                      VerticalOptions="Center"
                                      Spacing="2">
-                    <!-- Transient toast — auto-clears after a couple of seconds. Distinct
-                         from the form-level Status label below (which sticks). -->
-                    <Label Text="{Binding FlashMessage}"
-                           IsVisible="{Binding FlashMessage, Converter={StaticResource NonEmptyStringToBool}}"
-                           TextColor="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}"
-                           FontAttributes="Bold"
+                    <!-- One pinned home for the former header overview and action feedback. -->
+                    <Label Text="{Binding WorkspaceSummary}"
+                           Style="{StaticResource PageSubtitle}"
                            LineBreakMode="TailTruncation"
                            MaxLines="1"
-                           AutomationId="FlashLabel" />
+                           ToolTipProperties.Text="{Binding WorkspaceSummary}"
+                           AutomationId="WorkspaceSummaryLabel" />
 
-                    <!-- Status (form-level errors and info); tooltip carries the full text
-                         past the 2-line truncation. -->
-                    <Label Text="{Binding StatusMessage}"
-                           Style="{StaticResource StatusLabel}"
-                           IsVisible="{Binding StatusMessage, Converter={StaticResource NonEmptyStringToBool}}"
-                           LineBreakMode="TailTruncation"
-                           MaxLines="2"
-                           ToolTipProperties.Text="{Binding StatusMessage}"
-                           AutomationId="StatusLabel" />
+                    <!-- A transient confirmation temporarily replaces the sticky form status. -->
+                    <Grid>
+                        <Label Text="{Binding FlashMessage}"
+                               IsVisible="{Binding IsFlashMessageVisible}"
+                               TextColor="{AppThemeBinding Light={StaticResource StatusSuccessLight}, Dark={StaticResource StatusSuccessDark}}"
+                               FontAttributes="Bold"
+                               LineBreakMode="TailTruncation"
+                               MaxLines="1"
+                               ToolTipProperties.Text="{Binding FlashMessage}"
+                               AutomationId="FlashLabel" />
+
+                        <Label Text="{Binding StatusMessage}"
+                               Style="{StaticResource StatusLabel}"
+                               IsVisible="{Binding IsPersistentStatusMessageVisible}"
+                               LineBreakMode="TailTruncation"
+                               MaxLines="1"
+                               ToolTipProperties.Text="{Binding StatusMessage}"
+                               AutomationId="StatusLabel" />
+                    </Grid>
                 </VerticalStackLayout>
 
                 <VerticalStackLayout Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5" Spacing="2">
@@ -674,12 +653,9 @@
                            FontAttributes="Italic"
                            IsVisible="{Binding IsAiMutationRunning}"
                            AutomationId="AiMutationBanner" />
-                    <Label Text="Enter a prompt to enable generation. Replicate-hosted models also need an API token — set it under Settings (top right)."
+                    <Label Text="Enter a prompt to enable generation. Replicate-hosted models also need an API token — set it under Settings in the left sidebar."
                            Style="{StaticResource HelperText}"
                            IsVisible="{Binding IsValid, Converter={StaticResource InverseBool}}" />
-                    <Label Text="Pick a .txt file. Prompts are separated by a blank line, a # comment line, or a line with only ---. Lines starting with # are ignored."
-                           Style="{StaticResource HelperText}"
-                           IsVisible="{Binding Batch.IsBatchRunning, Converter={StaticResource InverseBool}}" />
                 </VerticalStackLayout>
             </Grid>
         </Border>

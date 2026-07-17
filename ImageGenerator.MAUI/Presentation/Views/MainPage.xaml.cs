@@ -263,16 +263,6 @@ public partial class MainPage
         }
     }
 
-    private async void OnAboutClicked(object sender, EventArgs e)
-    {
-        var message =
-            $"Version {_viewModel.AppVersion}\n\n" +
-            "A hobby MAUI desktop workbench for image generation via Replicate, Pollinations.ai, and your own ComfyUI server.\n\n" +
-            "MIT License\n" +
-            "https://github.com/MR-444/ImageGenerator.MAUI";
-        await DisplayAlertAsync("About Emberforge", message, "OK");
-    }
-
     // Drag-and-drop for image-prompt input. MAUI's cross-platform DropGestureRecognizer
     // surfaces the gesture, but file paths require the WinUI DragEventArgs.DataView seen
     // through DropEventArgs.PlatformArgs.
