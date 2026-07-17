@@ -14,6 +14,14 @@ public sealed class ComfyUiPromptResponse
     [JsonPropertyName("node_errors")] public JsonElement? NodeErrors { get; set; }
 }
 
+/// <summary>POST /upload/image success body — the stored server-side name to feed LoadImage.</summary>
+public sealed class ComfyUiUploadResponse
+{
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("subfolder")] public string? Subfolder { get; set; }
+    [JsonPropertyName("type")] public string? Type { get; set; }
+}
+
 /// <summary>POST /prompt HTTP 400 body — node-level validation errors.</summary>
 public sealed class ComfyUiErrorEnvelope
 {

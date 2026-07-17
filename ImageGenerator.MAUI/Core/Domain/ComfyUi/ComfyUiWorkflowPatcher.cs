@@ -27,6 +27,7 @@ public static class ComfyUiWorkflowPatcher
 {
     private const string PromptBuilderClass = "Ideogram4PromptBuilderKJ";
     private const string TextEncodeClass = "CLIPTextEncode";
+    private const string LoadImageClass = "LoadImage";
     private const string ResolutionSelectorClass = "ResolutionSelector";
     private const string CheckpointLoaderClass = "CheckpointLoaderSimple";
     private const string UnetLoaderClass = "UNETLoader";
@@ -48,7 +49,8 @@ public static class ComfyUiWorkflowPatcher
         string templateJson,
         ComfyUiRequest request,
         DateTimeOffset? now = null,
-        bool useSageAttention = false)
+        bool useSageAttention = false,
+        string? inputImageName = null)
     {
         if (JsonNode.Parse(templateJson) is not JsonObject root)
             throw new InvalidOperationException("The workflow file does not contain a JSON object.");
@@ -68,6 +70,7 @@ public static class ComfyUiWorkflowPatcher
             ? PatchJsonPrompt(nodes, request.Prompt)
             : PatchPlainPrompt(nodes, request.Prompt);
 
+        var inputImageNote = PatchInputImage(nodes, inputImageName);
         var seedNodeIds = PatchSeeds(nodes, request.Seed);
         var resolutionNote = PatchResolution(nodes, request.AspectRatio, request.Megapixels);
         var presetNote = PatchQualityPreset(nodes, request.PresetChoice);
@@ -81,10 +84,55 @@ public static class ComfyUiWorkflowPatcher
 
         return new ComfyUiPatchResult(
             root.ToJsonString(),
-            promptTarget + resolutionNote + presetNote + dateNote + sageNote,
+            promptTarget + inputImageNote + resolutionNote + presetNote + dateNote + sageNote,
             seedNodeIds,
             sage.NodeIds,
             sage.LoaderIds);
+    }
+
+    /// <summary>
+    /// True when the workflow contains a LoadImage node — the marker that it consumes an
+    /// input image (img2img / upscale) and the app must upload one before queueing. A probe,
+    /// so it never throws; UI-format saves and unparseable files report false.
+    /// </summary>
+    public static bool HasLoadImageNode(string templateJson)
+    {
+        try
+        {
+            if (JsonNode.Parse(templateJson) is not JsonObject root || root["nodes"] is JsonArray)
+                return false;
+            return CollectNodes(root).Any(n => n.ClassType == LoadImageClass);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static string PatchInputImage(
+        List<(string Id, string ClassType, JsonObject Inputs)> nodes, string? inputImageName)
+    {
+        var loadImages = nodes.Where(n => n.ClassType == LoadImageClass).ToList();
+        if (loadImages.Count == 0)
+        {
+            // An image attached to a workflow without a LoadImage input is simply unused —
+            // same keep-the-workflow's-own-value convention as resolution/preset.
+            return string.Empty;
+        }
+
+        if (inputImageName is null)
+            throw new InvalidOperationException(
+                "This workflow has a LoadImage input and needs a source image — add one in "
+                + "the Input Image card (e.g. via 'Use as input' on a gallery image).");
+
+        foreach (var (_, _, inputs) in loadImages)
+        {
+            // The uploaded server-side name (possibly "subfolder/name"); LoadImage resolves it
+            // against the server's input directory. Overwrites links too — the app's upload is
+            // authoritative, exactly like the prompt injection.
+            inputs["image"] = inputImageName;
+        }
+        return $"; image on {loadImages.Count} {LoadImageClass} node(s)";
     }
 
     /// <summary>

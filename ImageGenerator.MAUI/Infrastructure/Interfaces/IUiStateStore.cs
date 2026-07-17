@@ -123,6 +123,13 @@ public interface IUiStateStore
     /// <inheritdoc cref="LoadComfyUiPreset"/>
     void PersistComfyUiPreset(string value, string workflowName);
     /// <summary>
+    /// Per-workflow "Upscale after render" checkbox — whether the extra pass is worth it is
+    /// a per-model habit. Default false.
+    /// </summary>
+    bool LoadComfyUiUpscaleAfter(string workflowName);
+    /// <inheritdoc cref="LoadComfyUiUpscaleAfter"/>
+    void PersistComfyUiUpscaleAfter(bool value, string workflowName);
+    /// <summary>
     /// Last window size/position in DIPs. Null when never persisted or unparseable —
     /// callers fall back to a screen-relative first-launch size. Values may describe a
     /// monitor that no longer exists; callers must clamp to the current screen.

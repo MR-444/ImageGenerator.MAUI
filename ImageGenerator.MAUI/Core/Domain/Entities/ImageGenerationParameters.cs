@@ -123,6 +123,18 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private string _comfyUiPresetDisplay = string.Empty;
 
+    // ComfyUI only: run the designated upscale workflow on the rendered image after saving
+    // (JobRunner chain step). Persisted per workflow via UiStateStore; always false on the
+    // chained pass itself so an upscale can never chain another upscale.
+    [ObservableProperty]
+    private bool _upscaleAfterRender;
+
+    // ComfyUI only: the workflow stem the chain feeds the render into. Resolved by the VM
+    // when the model changes (alphabetically first LoadImage workflow whose stem contains
+    // "upscale") and snapshotted here so JobRunner never scans the folder itself.
+    [ObservableProperty]
+    private string _upscaleWorkflow = string.Empty;
+
     // Post the saved image to CivitAI as an unpublished draft after generation. Session-only
     // (defaults OFF every launch, never persisted): it triggers an upload side effect, so a
     // sticky-on across sessions would be worse than re-checking it.
@@ -171,6 +183,8 @@ public partial class ImageGenerationParameters : ObservableObject
             ComfyUiPreset    = ComfyUiPreset,
             ComfyUiModelDisplay = ComfyUiModelDisplay,
             ComfyUiPresetDisplay = ComfyUiPresetDisplay,
+            UpscaleAfterRender = UpscaleAfterRender,
+            UpscaleWorkflow  = UpscaleWorkflow,
             PostToCivitai    = PostToCivitai,
             CivitaiIncludeMeta = CivitaiIncludeMeta,
             CivitaiModelRef  = CivitaiModelRef,

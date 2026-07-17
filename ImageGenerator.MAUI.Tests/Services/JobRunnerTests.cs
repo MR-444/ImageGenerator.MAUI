@@ -150,6 +150,139 @@ public class JobRunnerTests : IDisposable
         File.Exists(partialPath).Should().BeFalse("partial file must be cleaned up after save failure");
     }
 
+    // ---- Chained upscale ---------------------------------------------------------------------
+
+    private static readonly byte[] RenderBytes = [1, 2, 3];
+    private static readonly byte[] UpscaledBytes = [9, 9, 9, 9];
+
+    private static ImageGenerationParameters ChainParameters() => new()
+    {
+        Model = "comfyui/Render-Flow",
+        Prompt = "a cat",
+        Seed = 42,
+        UpscaleAfterRender = true,
+        UpscaleWorkflow = "Upscale-Sample",
+        UseJsonPrompt = true
+    };
+
+    /// <summary>Render succeeds and saves to <paramref name="renderPath"/>; captures the second pass's params.</summary>
+    private void SetupChainRender(ImageGenerationParameters parameters, string renderPath)
+    {
+        _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .ReturnsAsync(new GeneratedImage { ImageData = RenderBytes, Message = "ok" });
+        _imageFileService.Setup(f => f.GetUniqueSavePath(It.IsAny<string>(), parameters))
+            .Returns(renderPath);
+        _imageFileService.Setup(f => f.SaveImageWithMetadataAsync(It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<ImageGenerationParameters>()))
+            .Returns(Task.CompletedTask);
+    }
+
+    [Fact]
+    public async Task RunAsync_ChainedUpscale_RunsSecondPassAndSavesWithSuffix()
+    {
+        var parameters = ChainParameters();
+        var renderPath = PathInTempDir();
+        SetupChainRender(parameters, renderPath);
+        ImageGenerationParameters? upscalePass = null;
+        _imageService.Setup(s => s.GenerateImageAsync(
+                It.Is<ImageGenerationParameters>(p => p != parameters), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .Callback<ImageGenerationParameters, CancellationToken, IProgress<JobProgress>?>((p, _, _) => upscalePass = p)
+            .ReturnsAsync(new GeneratedImage { ImageData = UpscaledBytes, Message = "ok" });
+
+        var outcome = await _sut.RunAsync(parameters, CancellationToken.None);
+
+        var expectedUpscaledPath = PathInTempDir("out_upscaled.png");
+        outcome.Kind.Should().Be(JobOutcomeKind.Saved);
+        outcome.SavedPath.Should().Be(expectedUpscaledPath, "downstream side effects should act on the upscaled image");
+        outcome.Message.Should().Contain(renderPath).And.Contain(expectedUpscaledPath);
+
+        upscalePass.Should().NotBeNull();
+        upscalePass!.Model.Should().Be("comfyui/Upscale-Sample");
+        upscalePass.ImagePrompts.Should().Equal(Convert.ToBase64String(RenderBytes));
+        upscalePass.UseJsonPrompt.Should().BeFalse("upscale graphs take plain tile conditioning");
+        upscalePass.UpscaleAfterRender.Should().BeFalse("an upscale must never chain another upscale");
+
+        _imageFileService.Verify(
+            f => f.SaveImageWithMetadataAsync(expectedUpscaledPath, UpscaledBytes, upscalePass), Times.Once);
+    }
+
+    [Fact]
+    public async Task RunAsync_ChainedUpscale_SuffixCollision_AppendsCounter()
+    {
+        var parameters = ChainParameters();
+        var renderPath = PathInTempDir();
+        await File.WriteAllBytesAsync(PathInTempDir("out_upscaled.png"), [0]);
+        SetupChainRender(parameters, renderPath);
+        _imageService.Setup(s => s.GenerateImageAsync(
+                It.Is<ImageGenerationParameters>(p => p != parameters), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .ReturnsAsync(new GeneratedImage { ImageData = UpscaledBytes, Message = "ok" });
+
+        var outcome = await _sut.RunAsync(parameters, CancellationToken.None);
+
+        outcome.SavedPath.Should().Be(PathInTempDir("out_upscaled_1.png"));
+    }
+
+    [Theory]
+    [InlineData("black-forest-labs/flux-dev", "Upscale-Sample")] // chain is ComfyUI-only
+    [InlineData("comfyui/Upscale-Sample", "Upscale-Sample")]     // never re-upscale an upscale
+    [InlineData("comfyui/Render-Flow", "")]                      // no designated workflow
+    public async Task RunAsync_ChainedUpscale_SkippedWhenNotEligible(string model, string upscaleWorkflow)
+    {
+        var parameters = ChainParameters();
+        parameters.Model = model;
+        parameters.UpscaleWorkflow = upscaleWorkflow;
+        var renderPath = PathInTempDir();
+        SetupChainRender(parameters, renderPath);
+
+        var outcome = await _sut.RunAsync(parameters, CancellationToken.None);
+
+        outcome.SavedPath.Should().Be(renderPath);
+        _imageService.Verify(
+            s => s.GenerateImageAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()),
+            Times.Once, "no second pass may run for an ineligible job");
+    }
+
+    [Fact]
+    public async Task RunAsync_ChainedUpscale_UpscaleFails_KeepsRenderAsPartialSuccess()
+    {
+        var parameters = ChainParameters();
+        var renderPath = PathInTempDir();
+        SetupChainRender(parameters, renderPath);
+        _imageService.Setup(s => s.GenerateImageAsync(
+                It.Is<ImageGenerationParameters>(p => p != parameters), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .ReturnsAsync(new GeneratedImage { ImageData = null, Message = "server exploded" });
+
+        var outcome = await _sut.RunAsync(parameters, CancellationToken.None);
+
+        outcome.Kind.Should().Be(JobOutcomeKind.Saved, "the render is already on disk");
+        outcome.SavedPath.Should().Be(renderPath);
+        outcome.Message.Should().Contain("server exploded");
+    }
+
+    [Fact]
+    public async Task RunAsync_ChainedUpscale_RelabelsRenderingProgressToUpscaling()
+    {
+        var parameters = ChainParameters();
+        var renderPath = PathInTempDir();
+        SetupChainRender(parameters, renderPath);
+        _imageService.Setup(s => s.GenerateImageAsync(
+                It.Is<ImageGenerationParameters>(p => p != parameters), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .Callback<ImageGenerationParameters, CancellationToken, IProgress<JobProgress>?>(
+                (_, _, progress) => progress!.Report(new JobProgress("Rendering… 3/10", 0.3)))
+            .ReturnsAsync(new GeneratedImage { ImageData = UpscaledBytes, Message = "ok" });
+        var reports = new List<JobProgress>();
+        var sink = new InlineProgress(reports.Add);
+
+        await _sut.RunAsync(parameters, CancellationToken.None, sink);
+
+        reports.Should().Contain(p => p.Message == "Upscaling… 3/10" && p.Percent == 0.3);
+    }
+
+    /// <summary>Progress&lt;T&gt; posts via SynchronizationContext (racy in tests); this reports inline.</summary>
+    private sealed class InlineProgress(Action<JobProgress> onReport) : IProgress<JobProgress>
+    {
+        public void Report(JobProgress value) => onReport(value);
+    }
+
     [Fact]
     public async Task RunAsync_SaveThrowsWithNoPartialFile_ReturnsFailedWithoutThrowing()
     {

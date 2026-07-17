@@ -140,6 +140,58 @@ public class ComfyUiWorkflowPatcherTests
             .WithMessage("*Ideogram4PromptBuilderKJ*");
     }
 
+    // Minimal upscale/img2img shape: LoadImage feeding a tiled upscaler with its own seed.
+    private const string UpscaleTemplate =
+        """
+        {
+          "1": { "class_type": "LoadImage", "inputs": { "image": "input.png" } },
+          "3": { "class_type": "CLIPTextEncode", "inputs": { "text": "old positive" } },
+          "8": { "class_type": "UltimateSDUpscale", "inputs": { "image": ["1", 0], "seed": 0, "denoise": 0.35 } }
+        }
+        """;
+
+    [Fact]
+    public void HasLoadImageNode_TrueOnlyForLoadImageBearingApiGraphs()
+    {
+        ComfyUiWorkflowPatcher.HasLoadImageNode(UpscaleTemplate).Should().BeTrue();
+        ComfyUiWorkflowPatcher.HasLoadImageNode(PlainTemplate).Should().BeFalse();
+        // Probes never throw: UI-format saves and garbage both report false.
+        ComfyUiWorkflowPatcher.HasLoadImageNode("""{ "nodes": [ { "type": "LoadImage" } ] }""").Should().BeFalse();
+        ComfyUiWorkflowPatcher.HasLoadImageNode("not json").Should().BeFalse();
+    }
+
+    [Fact]
+    public void InputImage_PatchesEveryLoadImageNodeAndRerollsTheUpscalerSeed()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(
+            UpscaleTemplate, Request(prompt: "tile prompt", seed: 999),
+            inputImageName: "sub/emberforge_abc.png");
+
+        var graph = JsonNode.Parse(result.GraphJson)!;
+        graph["1"]!["inputs"]!["image"]!.GetValue<string>().Should().Be("sub/emberforge_abc.png");
+        graph["3"]!["inputs"]!["text"]!.GetValue<string>().Should().Be("tile prompt");
+        graph["8"]!["inputs"]!["seed"]!.GetValue<long>().Should().Be(999);
+        result.PromptTargetDescription.Should().Contain("1 LoadImage node(s)");
+    }
+
+    [Fact]
+    public void InputImage_MissingForALoadImageWorkflow_ThrowsWithGuidance()
+    {
+        var act = () => ComfyUiWorkflowPatcher.Patch(UpscaleTemplate, Request());
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*Input Image*");
+    }
+
+    [Fact]
+    public void InputImage_OnAWorkflowWithoutLoadImage_IsIgnored()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(
+            PlainTemplate, Request(), inputImageName: "emberforge_abc.png");
+
+        result.PromptTargetDescription.Should().NotContain("LoadImage");
+    }
+
     [Fact]
     public void PlainMode_PatchesOnlyTheLowestIdLiteralTextEncode()
     {

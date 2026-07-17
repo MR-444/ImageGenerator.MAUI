@@ -258,6 +258,20 @@
                                         AutomationId="QualityPresetPicker" />
                             </VerticalStackLayout>
 
+                            <!-- ComfyUI only: chain the finished render into the designated
+                                 upscale workflow (LoadImage-bearing, "upscale" in the file
+                                 name). Both images are kept; the upscaled one gets _upscaled. -->
+                            <VerticalStackLayout Spacing="2" IsVisible="{Binding SupportsUpscaleAfter}">
+                                <HorizontalStackLayout Spacing="8">
+                                    <CheckBox IsChecked="{Binding Parameters.UpscaleAfterRender}" VerticalOptions="Center"
+                                              AutomationId="UpscaleAfterRenderCheckBox" />
+                                    <Label Text="Upscale after render" VerticalOptions="Center" />
+                                </HorizontalStackLayout>
+                                <Label Text="{Binding UpscaleWorkflowDisplay}"
+                                       Style="{StaticResource HelperText}"
+                                       AutomationId="UpscaleWorkflowLabel" />
+                            </VerticalStackLayout>
+
                             <!-- Ideogram V4: copyright detection -->
                             <HorizontalStackLayout Spacing="8" IsVisible="{Binding SupportsIdeogramOptions}">
                                 <CheckBox IsChecked="{Binding Parameters.EnableCopyrightDetection}" VerticalOptions="Center"

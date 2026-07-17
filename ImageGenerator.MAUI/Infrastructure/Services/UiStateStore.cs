@@ -154,6 +154,14 @@ public sealed class UiStateStore : IUiStateStore
     private static string ComfyUiPresetKeyFor(string workflowName) =>
         $"imggen.comfyui_preset.{workflowName}";
 
+    // Per-workflow like resolution/preset: whether a render is worth the extra upscale pass
+    // is a per-model habit, so one workflow's checkbox must not leak into another.
+    public bool LoadComfyUiUpscaleAfter(string workflowName) =>
+        LoadBool($"imggen.comfyui_upscale_after.{workflowName}", false);
+
+    public void PersistComfyUiUpscaleAfter(bool value, string workflowName) =>
+        PersistBool($"imggen.comfyui_upscale_after.{workflowName}", value, false);
+
     public (double Width, double Height, double X, double Y)? LoadWindowBounds()
     {
         var raw = SafeGet(WindowBoundsKey);

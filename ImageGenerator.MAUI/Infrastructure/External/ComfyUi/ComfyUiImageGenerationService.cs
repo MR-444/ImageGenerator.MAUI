@@ -94,11 +94,46 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
             var template = await File.ReadAllTextAsync(templatePath, cancellationToken);
             var useSageAttention = _uiStateStore.LoadUseSageAttention();
 
+            // A LoadImage-bearing workflow (img2img / upscale) needs its source image uploaded
+            // BEFORE patching, so the stored server-side name can be written into the graph.
+            // The missing-image check runs first — no HTTP happens for an unusable request.
+            var needsInputImage = ComfyUiWorkflowPatcher.HasLoadImageNode(template);
+            if (needsInputImage && string.IsNullOrEmpty(request.InputImageBase64))
+            {
+                return Fail(
+                    $"Workflow '{request.WorkflowName}' has a LoadImage input and needs a source "
+                    + "image — add one in the Input Image card (e.g. via 'Use as input' on a "
+                    + "gallery image).");
+            }
+
+            var baseUrl = _uiStateStore.LoadComfyUiBaseUrl() ?? ModelConstants.ComfyUi.DefaultBaseUrl;
+            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
+            {
+                return Fail($"The ComfyUI server URL '{baseUrl}' is not a valid absolute URL — fix it in the ComfyUI server setting.");
+            }
+
+            // Re-read per run like the base URL — a header edit applies to the next job
+            // without a restart. Empty = LAN setup, no header (Apply no-ops).
+            var authHeader = await _authStore.LoadAsync();
+
+            using var httpClient = _httpClientFactory.CreateClient(HttpClientName);
+            ComfyUiAuthHeader.Apply(httpClient, authHeader);
+
+            string? inputImageName = null;
+            if (needsInputImage)
+            {
+                var upload = await UploadInputImageAsync(
+                    httpClient, baseUri, request.InputImageBase64!, cancellationToken);
+                if (upload.Error is not null) return Fail(upload.Error);
+                inputImageName = upload.Name;
+            }
+
             ComfyUiPatchResult patched;
             try
             {
                 patched = ComfyUiWorkflowPatcher.Patch(
-                    template, request, useSageAttention: useSageAttention);
+                    template, request, useSageAttention: useSageAttention,
+                    inputImageName: inputImageName);
             }
             catch (Exception ex) when (ex is InvalidOperationException or JsonException)
             {
@@ -114,19 +149,6 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
                 "ComfyUI patched Workflow={Workflow} Target={Target} SeedNodes={SeedNodes} SageNodes={SageNodes}",
                 request.WorkflowName, patched.PromptTargetDescription, string.Join(",", patched.SeedNodeIds),
                 string.Join(",", patched.SageAttentionNodeIds));
-
-            var baseUrl = _uiStateStore.LoadComfyUiBaseUrl() ?? ModelConstants.ComfyUi.DefaultBaseUrl;
-            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
-            {
-                return Fail($"The ComfyUI server URL '{baseUrl}' is not a valid absolute URL — fix it in the ComfyUI server setting.");
-            }
-
-            // Re-read per run like the base URL — a header edit applies to the next job
-            // without a restart. Empty = LAN setup, no header (Apply no-ops).
-            var authHeader = await _authStore.LoadAsync();
-
-            using var httpClient = _httpClientFactory.CreateClient(HttpClientName);
-            ComfyUiAuthHeader.Apply(httpClient, authHeader);
 
             // The ws connection must exist with the SAME clientId BEFORE the prompt is queued,
             // or the server's early events (execution_start, first progress) are lost.
@@ -250,6 +272,59 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
             coveredLoaderCount,
             outcome,
             queueToCompleteMs);
+    }
+
+    /// <summary>
+    /// Uploads the source image for a LoadImage-bearing workflow: multipart POST /upload/image
+    /// (type=input, overwrite=true — same call the browser UI makes). Returns the stored
+    /// server-side name, prefixed with the subfolder when the server put it in one, which is
+    /// exactly the string a LoadImage node's image input resolves.
+    /// </summary>
+    private async Task<(string? Name, string? Error)> UploadInputImageAsync(
+        HttpClient httpClient, Uri baseUri, string imageBase64, CancellationToken ct)
+    {
+        byte[] imageBytes;
+        try
+        {
+            imageBytes = Convert.FromBase64String(imageBase64);
+        }
+        catch (FormatException ex)
+        {
+            _logger.LogError(ex, "ComfyUI input image is not valid base64");
+            return (null, "The attached input image could not be decoded — re-add it and try again.");
+        }
+
+        // Unique per run: a fixed name + overwrite would race concurrent jobs on the server.
+        var fileName = $"emberforge_{Guid.NewGuid():N}.png";
+        using var content = new MultipartFormDataContent();
+        var imageContent = new ByteArrayContent(imageBytes);
+        imageContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+        content.Add(imageContent, "image", fileName);
+        content.Add(new StringContent("input"), "type");
+        content.Add(new StringContent("true"), "overwrite");
+
+        using var response = await httpClient.PostAsync(new Uri(baseUri, "upload/image"), content, ct);
+        var body = await ReadBodySafeAsync(response, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogError(
+                "ComfyUI HTTP {StatusCode} {Status} on POST /upload/image Body={Body}",
+                (int)response.StatusCode, response.StatusCode, body);
+            return (null, $"ComfyUI HTTP {(int)response.StatusCode} {response.StatusCode} uploading the input image: {Truncate(body)}");
+        }
+
+        var parsed = TryDeserialize<ComfyUiUploadResponse>(body);
+        if (string.IsNullOrEmpty(parsed?.Name))
+        {
+            _logger.LogError("ComfyUI POST /upload/image returned no name Body={Body}", body);
+            return (null, $"ComfyUI accepted the input image but returned no stored name: {Truncate(body)}");
+        }
+
+        var storedName = string.IsNullOrEmpty(parsed.Subfolder)
+            ? parsed.Name
+            : $"{parsed.Subfolder}/{parsed.Name}";
+        _logger.LogInformation("ComfyUI input image uploaded Name={Name}", storedName);
+        return (storedName, null);
     }
 
     private async Task<(string? Value, string? Error)> QueuePromptAsync(

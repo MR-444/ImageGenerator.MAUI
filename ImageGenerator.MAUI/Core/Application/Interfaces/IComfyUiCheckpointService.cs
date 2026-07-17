@@ -22,4 +22,18 @@ public interface IComfyUiCheckpointService
     /// exactly-one-CustomCombo rule.
     /// </summary>
     Task<ComfyUiQualityPresetSlot?> GetWorkflowQualityPresetSlotAsync(string workflowName, CancellationToken ct = default);
+
+    /// <summary>
+    /// True when the workflow template contains a LoadImage node — it consumes an input image
+    /// (img2img / upscale), so the UI shows the Input Image card for it. False on missing or
+    /// unreadable files.
+    /// </summary>
+    Task<bool> GetWorkflowHasInputImageAsync(string workflowName, CancellationToken ct = default);
+
+    /// <summary>
+    /// The workflow designated for the "Upscale after render" chain: the alphabetically first
+    /// LoadImage-bearing workflow whose file stem contains "upscale" (case-insensitive).
+    /// Null when none exists — the checkbox is hidden then.
+    /// </summary>
+    Task<string?> FindUpscaleWorkflowNameAsync(CancellationToken ct = default);
 }

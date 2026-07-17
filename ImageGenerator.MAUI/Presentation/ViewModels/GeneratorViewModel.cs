@@ -433,6 +433,20 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     // Monotonic token, same role as _checkpointRefreshVersion.
     private int _presetRefreshVersion;
 
+    // ComfyUI "Upscale after render" chain: visible only when a designated upscale workflow
+    // exists (LoadImage-bearing, stem contains "upscale") and the selected workflow isn't
+    // itself that workflow — an upscale never chains another upscale.
+    [ObservableProperty]
+    private bool _supportsUpscaleAfter;
+
+    [ObservableProperty]
+    private string _upscaleWorkflowDisplay = string.Empty;
+
+    private bool _suppressUpscalePersist;
+    // Monotonic tokens, same role as _checkpointRefreshVersion.
+    private int _upscaleRefreshVersion;
+    private int _inputImageRefreshVersion;
+
     partial void OnSelectedQualityPresetChanged(string? value)
     {
         // The WinUI ComboBox pushes SelectedItem=null on ItemsSource swaps; ignore it like
@@ -566,8 +580,14 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
 
         // Truncate attached images to the new model's cap so users don't silently lose excess
         // images at generation time. The coordinator's CollectionChanged handler raises
-        // CanAddImage etc. on the coordinator surface.
-        InputImages.TruncateToMaxInputs(caps.MaxImageInputs);
+        // CanAddImage etc. on the coordinator surface. ComfyUI is deferred: its real cap is
+        // workflow-specific (LoadImage → 1) and known only after the async probe below —
+        // truncating to the static 0 here would drop an image the probe is about to legitimize
+        // (e.g. gallery "Use as input" followed by picking the upscale workflow).
+        if (!ModelConstants.ComfyUi.IsId(modelValue))
+        {
+            InputImages.TruncateToMaxInputs(caps.MaxImageInputs);
+        }
 
         Capabilities = caps;
 
@@ -580,7 +600,100 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
         _ = RefreshBakedModelAsync(modelValue);
         // Same shape for the quality-preset picker.
         _ = RefreshQualityPresetOptionsAsync(modelValue);
+        // Same shape for the LoadImage input-image capability and the upscale-chain checkbox.
+        _ = RefreshInputImageSupportAsync(modelValue);
+        _ = RefreshUpscaleOptionAsync(modelValue);
     }
+
+    /// <summary>
+    /// A ComfyUI workflow containing a LoadImage node consumes an input image (img2img /
+    /// upscale) — raise the provider's static capabilities for it so the Input Image card
+    /// appears and the gallery's "Use as input" flow works.
+    /// </summary>
+    internal async Task RefreshInputImageSupportAsync(string? modelValue)
+    {
+        var version = ++_inputImageRefreshVersion;
+        try
+        {
+            // Non-ComfyUI models: the registry capabilities applied above are already final.
+            if (!ModelConstants.ComfyUi.IsId(modelValue)) return;
+
+            var workflowName = ModelConstants.ComfyUi.WorkflowName(modelValue!);
+            var hasInputImage = await _checkpointService.GetWorkflowHasInputImageAsync(workflowName);
+            if (version != _inputImageRefreshVersion) return;
+
+            // This probe owns the ComfyUI image-cap truncation RefreshCapabilities deferred:
+            // now the workflow-specific cap (LoadImage → 1, otherwise 0) is actually known.
+            DispatchToUi(() =>
+            {
+                if (hasInputImage)
+                {
+                    Capabilities = Capabilities with { ImagePrompt = true, MaxImageInputs = 1 };
+                }
+                InputImages.TruncateToMaxInputs(hasInputImage ? 1 : 0);
+            });
+        }
+        catch (Exception ex)
+        {
+            // Fire-and-forget caller — an unobserved throw here would be silent at best.
+            _logger.LogWarning(ex, "Input-image support refresh failed Model={Model}", modelValue);
+        }
+    }
+
+    internal async Task RefreshUpscaleOptionAsync(string? modelValue)
+    {
+        var version = ++_upscaleRefreshVersion;
+        try
+        {
+            if (!ModelConstants.ComfyUi.IsId(modelValue))
+            {
+                HideUpscaleOption();
+                return;
+            }
+
+            var workflowName = ModelConstants.ComfyUi.WorkflowName(modelValue!);
+            var upscaleWorkflow = await _checkpointService.FindUpscaleWorkflowNameAsync();
+            if (version != _upscaleRefreshVersion) return;
+            if (upscaleWorkflow is null
+                || string.Equals(upscaleWorkflow, workflowName, StringComparison.OrdinalIgnoreCase))
+            {
+                HideUpscaleOption();
+                return;
+            }
+
+            DispatchToUi(() =>
+            {
+                _suppressUpscalePersist = true;
+                try
+                {
+                    Parameters.UpscaleWorkflow = upscaleWorkflow;
+                    Parameters.UpscaleAfterRender = _uiStateStore.LoadComfyUiUpscaleAfter(workflowName);
+                    UpscaleWorkflowDisplay = $"via {upscaleWorkflow}";
+                    SupportsUpscaleAfter = true;
+                }
+                finally { _suppressUpscalePersist = false; }
+            });
+        }
+        catch (Exception ex)
+        {
+            // Fire-and-forget caller — an unobserved throw here would be silent at best.
+            _logger.LogWarning(ex, "Upscale option refresh failed Model={Model}", modelValue);
+        }
+    }
+
+    private void HideUpscaleOption() => DispatchToUi(() =>
+    {
+        _suppressUpscalePersist = true;
+        try
+        {
+            SupportsUpscaleAfter = false;
+            UpscaleWorkflowDisplay = string.Empty;
+            // Stale chain state must not linger in Clone() snapshots of other models.
+            Parameters.UpscaleAfterRender = false;
+            Parameters.UpscaleWorkflow = string.Empty;
+        }
+        finally { _suppressUpscalePersist = false; }
+    });
 
     internal async Task RefreshBakedModelAsync(string? modelValue)
     {
@@ -1024,6 +1137,17 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
                     // Persist unconditionally: the launch restore writes the value just loaded,
                     // which the store's skip-identical rule turns into a no-op.
                     _uiStateStore.PersistCivitaiModelRef(_parameters.CivitaiModelRef ?? string.Empty);
+                    break;
+                case nameof(ImageGenerationParameters.UpscaleAfterRender):
+                    // Per-workflow persistence; suppressed during the RefreshUpscaleOption
+                    // restore and the HideUpscaleOption clear (capability consequences, not
+                    // user picks).
+                    if (!_suppressUpscalePersist && ModelConstants.ComfyUi.IsId(_parameters.Model))
+                    {
+                        _uiStateStore.PersistComfyUiUpscaleAfter(
+                            _parameters.UpscaleAfterRender,
+                            ModelConstants.ComfyUi.WorkflowName(_parameters.Model));
+                    }
                     break;
                 case nameof(ImageGenerationParameters.Model):
                     ProviderFilter.SyncSelectionFromParameters(_parameters.Model);

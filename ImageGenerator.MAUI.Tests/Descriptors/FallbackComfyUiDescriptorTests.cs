@@ -102,6 +102,19 @@ public class FallbackComfyUiDescriptorTests
     }
 
     [Fact]
+    public void Build_FirstImagePromptFlowsIntoTheRequest()
+    {
+        var without = Parameters();
+        var with = Parameters();
+        with.ImagePrompts.Add("base64-image-1");
+        with.ImagePrompts.Add("base64-image-2");
+
+        ((ComfyUiRequest)_sut.Build(without)).InputImageBase64.Should().BeNull();
+        ((ComfyUiRequest)_sut.Build(with)).InputImageBase64.Should().Be("base64-image-1",
+            "ComfyUI LoadImage workflows take exactly one input image");
+    }
+
+    [Fact]
     public void Lines_IncludeThePresetOnlyWhenSet()
     {
         var defaulted = Parameters();

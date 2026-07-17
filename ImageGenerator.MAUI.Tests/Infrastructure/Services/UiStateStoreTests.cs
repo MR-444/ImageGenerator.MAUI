@@ -224,6 +224,20 @@ public class UiStateStoreTests
     }
 
     [Fact]
+    public void ComfyUiUpscaleAfter_RoundTripsPerWorkflowKeys_DefaultFalse()
+    {
+        _sut.LoadComfyUiUpscaleAfter("Never Picked").Should().BeFalse();
+
+        _sut.PersistComfyUiUpscaleAfter(true, "Ideogram4-Sample");
+
+        _sut.LoadComfyUiUpscaleAfter("Ideogram4-Sample").Should().BeTrue();
+        _sut.LoadComfyUiUpscaleAfter("Other Workflow").Should().BeFalse(
+            "the checkbox is a per-workflow habit and must not leak");
+        _preferences.Get("imggen.comfyui_upscale_after.Ideogram4-Sample", false)
+            .Should().BeTrue("the key shape is pinned like the others above");
+    }
+
+    [Fact]
     public void LoadUseJsonPrompt_KeyMissing_ReturnsFalse()
     {
         _sut.LoadUseJsonPrompt().Should().BeFalse();

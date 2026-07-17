@@ -102,4 +102,49 @@ public sealed class ComfyUiCheckpointServiceTests : IDisposable
         (await _service.GetWorkflowQualityPresetSlotAsync("does-not-exist")).Should().BeNull();
         (await _service.GetWorkflowQualityPresetSlotAsync("No Combo")).Should().BeNull();
     }
+
+    // ---- GetWorkflowHasInputImageAsync / FindUpscaleWorkflowNameAsync ------------------------
+
+    private const string LoadImageTemplate =
+        """
+        {
+          "1": { "class_type": "LoadImage", "inputs": { "image": "input.png" } },
+          "6": { "class_type": "CLIPTextEncode", "inputs": { "text": "x" } }
+        }
+        """;
+
+    private const string TextToImageTemplate =
+        """{ "6": { "class_type": "CLIPTextEncode", "inputs": { "text": "x" } } }""";
+
+    [Fact]
+    public async Task HasInputImage_TrueOnlyForLoadImageWorkflows()
+    {
+        File.WriteAllText(Path.Combine(_workflowDir, "Img2Img.json"), LoadImageTemplate);
+        File.WriteAllText(Path.Combine(_workflowDir, "Text2Img.json"), TextToImageTemplate);
+
+        (await _service.GetWorkflowHasInputImageAsync("Img2Img")).Should().BeTrue();
+        (await _service.GetWorkflowHasInputImageAsync("Text2Img")).Should().BeFalse();
+        (await _service.GetWorkflowHasInputImageAsync("does-not-exist")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task FindUpscaleWorkflow_PicksAlphabeticallyFirstLoadImageBearingUpscaleStem()
+    {
+        // "AAA-Upscale" would win alphabetically but has no LoadImage — it must be skipped.
+        File.WriteAllText(Path.Combine(_workflowDir, "AAA-Upscale.json"), TextToImageTemplate);
+        File.WriteAllText(Path.Combine(_workflowDir, "Upscale-Sample.json"), LoadImageTemplate);
+        File.WriteAllText(Path.Combine(_workflowDir, "ZZZ-upscale.json"), LoadImageTemplate);
+        // LoadImage but no "upscale" in the stem: an edit workflow, never the chain target.
+        File.WriteAllText(Path.Combine(_workflowDir, "Kontext-Edit.json"), LoadImageTemplate);
+
+        (await _service.FindUpscaleWorkflowNameAsync()).Should().Be("Upscale-Sample");
+    }
+
+    [Fact]
+    public async Task FindUpscaleWorkflow_NoQualifyingFile_ReturnsNull()
+    {
+        File.WriteAllText(Path.Combine(_workflowDir, "Text2Img.json"), TextToImageTemplate);
+
+        (await _service.FindUpscaleWorkflowNameAsync()).Should().BeNull();
+    }
 }

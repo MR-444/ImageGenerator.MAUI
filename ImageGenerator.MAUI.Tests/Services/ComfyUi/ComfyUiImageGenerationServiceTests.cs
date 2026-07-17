@@ -45,6 +45,8 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
     private Func<HttpResponseMessage> _viewResponse = ViewOk;
     private Func<HttpResponseMessage> _queueResponse = QueueEmpty;
     private Func<HttpResponseMessage> _queueDeleteResponse = () => Json("{}");
+    private Func<HttpResponseMessage> _uploadResponse = () =>
+        Json("""{ "name": "emberforge_x.png", "subfolder": "", "type": "input" }""");
 
     public ComfyUiImageGenerationServiceTests()
     {
@@ -163,6 +165,7 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
     private HttpResponseMessage Route(HttpRequestMessage req)
     {
         var path = req.RequestUri!.AbsolutePath;
+        if (path == "/upload/image") return _uploadResponse();
         if (path == "/prompt") return _promptResponse();
         if (path.StartsWith("/history/")) return _historyResponses.Count > 0 ? _historyResponses.Dequeue()() : HistoryDone();
         if (path == "/view") return _viewResponse();
@@ -718,5 +721,67 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
         await _service.GenerateImageAsync(Parameters());
 
         _socket.ConnectedAuthHeader.Should().BeNull();
+    }
+
+    // ---- LoadImage workflows (img2img / upscale) ---------------------------------------------
+
+    private const string UpscaleTemplate =
+        """
+        {
+          "1": { "class_type": "LoadImage", "inputs": { "image": "input.png" } },
+          "3": { "class_type": "CLIPTextEncode", "inputs": { "text": "old positive" } },
+          "8": { "class_type": "UltimateSDUpscale", "inputs": { "image": ["1", 0], "seed": 0 } },
+          "9": { "class_type": "SaveImage", "inputs": { "images": ["8", 0], "filename_prefix": "up" } }
+        }
+        """;
+
+    private ImageGenerationParameters UpscaleParameters(bool withImage = true)
+    {
+        File.WriteAllText(Path.Combine(_workflowDir, "Upscale Flow.json"), UpscaleTemplate);
+        var parameters = Parameters(json: false, model: "comfyui/Upscale Flow");
+        if (withImage) parameters.ImagePrompts.Add(Convert.ToBase64String(new byte[] { 1, 2, 3 }));
+        return parameters;
+    }
+
+    [Fact]
+    public async Task LoadImageWorkflow_UploadsTheInputImage_ThenQueuesWithThePatchedName()
+    {
+        _uploadResponse = () =>
+            Json("""{ "name": "emberforge_x.png", "subfolder": "sub", "type": "input" }""");
+
+        var result = await _service.GenerateImageAsync(UpscaleParameters());
+
+        result.ImageData.Should().NotBeNull();
+        _requests[0].RequestUri!.AbsolutePath.Should().Be("/upload/image",
+            "the image must exist server-side before the graph referencing it is queued");
+        _requests[0].Content.Should().BeOfType<MultipartFormDataContent>();
+
+        var promptIndex = _requests.FindIndex(r => r.RequestUri!.AbsolutePath == "/prompt");
+        promptIndex.Should().BePositive();
+        var graph = JsonNode.Parse(_requestBodies[promptIndex])!["prompt"]!;
+        graph["1"]!["inputs"]!["image"]!.GetValue<string>().Should().Be("sub/emberforge_x.png",
+            "the server's stored name (subfolder-prefixed) is what LoadImage resolves");
+    }
+
+    [Fact]
+    public async Task LoadImageWorkflow_WithoutAnInputImage_FailsCleanlyWithoutAnyHttp()
+    {
+        var result = await _service.GenerateImageAsync(UpscaleParameters(withImage: false));
+
+        result.ImageData.Should().BeNull();
+        result.Message.Should().Contain("Input Image card");
+        _requests.Should().BeEmpty("an unusable request must not touch the server");
+    }
+
+    [Fact]
+    public async Task LoadImageWorkflow_UploadFails_SurfacesTheErrorAndNeverQueues()
+    {
+        _uploadResponse = () => Json("""{ "error": "disk full" }""", HttpStatusCode.InternalServerError);
+
+        var result = await _service.GenerateImageAsync(UpscaleParameters());
+
+        result.ImageData.Should().BeNull();
+        result.Message.Should().Contain("500").And.Contain("input image");
+        _requests.Should().OnlyContain(r => r.RequestUri!.AbsolutePath == "/upload/image");
     }
 }

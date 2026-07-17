@@ -65,4 +65,57 @@ public sealed class ComfyUiCheckpointService : IComfyUiCheckpointService
             return null;
         }
     }
+
+    public async Task<bool> GetWorkflowHasInputImageAsync(string workflowName, CancellationToken ct = default)
+    {
+        try
+        {
+            var path = Path.Combine(_workflowsDirectory, workflowName + ".json");
+            if (!File.Exists(path)) return false;
+
+            var template = await File.ReadAllTextAsync(path, ct);
+            return ComfyUiWorkflowPatcher.HasLoadImageNode(template);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ComfyUI workflow input-image probe failed Workflow={Workflow}", workflowName);
+            return false;
+        }
+    }
+
+    public async Task<string?> FindUpscaleWorkflowNameAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            if (!Directory.Exists(_workflowsDirectory)) return null;
+
+            // "upscale" in the stem is the designation; LoadImage confirms the file can
+            // actually receive the rendered image. Alphabetically first wins so the pick is
+            // deterministic when several qualify.
+            var candidates = Directory.EnumerateFiles(_workflowsDirectory, "*.json")
+                .Select(Path.GetFileNameWithoutExtension)
+                .Where(stem => stem?.Contains("upscale", StringComparison.OrdinalIgnoreCase) == true)
+                .OrderBy(stem => stem, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var stem in candidates)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (await GetWorkflowHasInputImageAsync(stem!, ct)) return stem;
+            }
+            return null;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ComfyUI upscale-workflow scan failed Directory={Directory}", _workflowsDirectory);
+            return null;
+        }
+    }
 }

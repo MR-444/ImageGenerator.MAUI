@@ -50,7 +50,8 @@ public sealed class FallbackComfyUiDescriptor : IPayloadBuilder, ICapabilityProv
             ? p.AspectRatio
             : null,
         Megapixels: ParseMegapixels(p.Resolution),
-        PresetChoice: string.IsNullOrWhiteSpace(p.ComfyUiPreset) ? null : p.ComfyUiPreset);
+        PresetChoice: string.IsNullOrWhiteSpace(p.ComfyUiPreset) ? null : p.ComfyUiPreset,
+        InputImageBase64: p.ImagePrompts.Count > 0 ? p.ImagePrompts[0] : null);
 
     public IEnumerable<string> Lines(ImageGenerationParameters p)
     {

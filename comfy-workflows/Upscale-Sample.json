@@ -1,0 +1,99 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "_meta": { "title": "Load Image (patched by the app)" },
+    "inputs": {
+      "image": "input.png"
+    }
+  },
+  "2": {
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": { "title": "Load SDXL Checkpoint" },
+    "inputs": {
+      "ckpt_name": "zavychromaxl_v100.safetensors"
+    }
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Positive (source prompt, patched by the app)" },
+    "inputs": {
+      "clip": ["2", 1],
+      "text": "high detail, sharp focus, photographic"
+    }
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "Negative" },
+    "inputs": {
+      "clip": ["2", 1],
+      "text": "blurry, low quality, jpeg artifacts, oversharpened, deformed, text, watermark"
+    }
+  },
+  "5": {
+    "class_type": "ControlNetLoader",
+    "_meta": { "title": "Load Tile ControlNet (TTPlanet)" },
+    "inputs": {
+      "control_net_name": "TTPLANET_Controlnet_Tile_realistic_v2_fp16.safetensors"
+    }
+  },
+  "6": {
+    "class_type": "ControlNetApplyAdvanced",
+    "_meta": { "title": "Apply Tile ControlNet (anchor tiles to source)" },
+    "inputs": {
+      "positive": ["3", 0],
+      "negative": ["4", 0],
+      "control_net": ["5", 0],
+      "image": ["1", 0],
+      "strength": 0.6,
+      "start_percent": 0.0,
+      "end_percent": 0.85
+    }
+  },
+  "7": {
+    "class_type": "UpscaleModelLoader",
+    "_meta": { "title": "Load Upscale Model (pre-resize)" },
+    "inputs": {
+      "model_name": "4x_foolhardy_Remacri.pth"
+    }
+  },
+  "8": {
+    "class_type": "UltimateSDUpscale",
+    "_meta": { "title": "Ultimate SD Upscale (tiled i2i)" },
+    "inputs": {
+      "image": ["1", 0],
+      "model": ["2", 0],
+      "positive": ["6", 0],
+      "negative": ["6", 1],
+      "vae": ["2", 2],
+      "upscale_model": ["7", 0],
+      "upscale_by": 2.0,
+      "seed": 0,
+      "steps": 20,
+      "cfg": 6.0,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 0.35,
+      "mode_type": "Linear",
+      "tile_width": 1024,
+      "tile_height": 1024,
+      "mask_blur": 8,
+      "tile_padding": 32,
+      "seam_fix_mode": "Half Tile",
+      "seam_fix_denoise": 1.0,
+      "seam_fix_width": 64,
+      "seam_fix_mask_blur": 8,
+      "seam_fix_padding": 16,
+      "force_uniform_tiles": true,
+      "tiled_decode": false,
+      "batch_size": 1
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "_meta": { "title": "Save Image" },
+    "inputs": {
+      "images": ["8", 0],
+      "filename_prefix": "%date:yyyy-MM%/Upscale_%date:hhmmss%"
+    }
+  }
+}
