@@ -30,6 +30,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     private readonly IModelCatalogCoordinator _catalogCoordinator;
     private readonly IModelDescriptorRegistry _registry;
     private readonly IComfyUiCheckpointService _checkpointService;
+    private readonly IComfyUiLoraService? _comfyUiLoraService;
     private readonly IGalleryService _galleryService;
     private readonly IFolderPicker _folderPicker;
     private readonly IOllamaModelCatalog? _ollamaModelCatalog;
@@ -433,6 +434,36 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     // Monotonic token, same role as _checkpointRefreshVersion.
     private int _presetRefreshVersion;
 
+    // Krea-2 LoRA picker. The workflow probe is local; options are fetched from the selected
+    // ComfyUI host's native /models/loras catalog. "None" maps to an empty request sentinel.
+    internal const string NoKrea2LoraOption = "None";
+
+    [ObservableProperty]
+    private List<string> _krea2LoraOptions = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsKrea2LoraSelected))]
+    private string? _selectedKrea2Lora;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsKrea2LoraSelected))]
+    private bool _supportsKrea2Lora;
+
+    [ObservableProperty]
+    private bool _isLoadingKrea2Loras;
+
+    [ObservableProperty]
+    private string? _krea2LoraStatusText;
+
+    public bool IsKrea2LoraSelected =>
+        SupportsKrea2Lora
+        && SelectedKrea2Lora is { Length: > 0 }
+        && SelectedKrea2Lora != NoKrea2LoraOption;
+
+    private bool _suppressLoraPersist;
+    private int _loraRefreshVersion;
+    private string? _activeLoraWorkflow;
+
     // ComfyUI "Upscale after render" chain: visible only when a designated upscale workflow
     // exists (LoadImage-bearing, stem contains "upscale") and the selected workflow isn't
     // itself that workflow — an upscale never chains another upscale.
@@ -515,6 +546,24 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
         if (!_suppressPresetPersist && QualityPresetOptions.Contains(value))
         {
             _uiStateStore.PersistComfyUiPreset(
+                value, ModelConstants.ComfyUi.WorkflowName(Parameters.Model));
+        }
+    }
+
+    partial void OnSelectedKrea2LoraChanged(string? value)
+    {
+        // ItemsSource swaps make the Windows Picker push null; preserve the real selection.
+        if (value is null) return;
+
+        var loraName = value == NoKrea2LoraOption ? string.Empty : value;
+        Parameters.ComfyUiLora = loraName;
+        Parameters.ComfyUiLoraDisplay = loraName;
+
+        if (!_suppressLoraPersist
+            && Krea2LoraOptions.Contains(value)
+            && ModelConstants.ComfyUi.IsId(Parameters.Model))
+        {
+            _uiStateStore.PersistComfyUiLora(
                 value, ModelConstants.ComfyUi.WorkflowName(Parameters.Model));
         }
     }
@@ -651,6 +700,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
         _ = RefreshBakedModelAsync(modelValue);
         // Same shape for the quality-preset picker.
         _ = RefreshQualityPresetOptionsAsync(modelValue);
+        _ = RefreshKrea2LoraOptionsAsync(modelValue);
         // Same shape for the LoadImage input-image capability and the upscale-chain checkbox.
         _ = RefreshInputImageSupportAsync(modelValue);
         _ = RefreshUpscaleOptionAsync(modelValue);
@@ -930,6 +980,133 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
         finally { _suppressPresetPersist = false; }
     });
 
+    internal async Task RefreshKrea2LoraOptionsAsync(string? modelValue)
+    {
+        var version = ++_loraRefreshVersion;
+        var krea2Confirmed = false;
+        try
+        {
+            if (!ModelConstants.ComfyUi.IsId(modelValue) || _comfyUiLoraService is null)
+            {
+                HideKrea2LoraPicker();
+                return;
+            }
+
+            var workflowName = ModelConstants.ComfyUi.WorkflowName(modelValue!);
+            // Do not let a previous Krea workflow's selection ride in Parameters while the
+            // new workflow's local probe / host catalog request is still in flight.
+            if (!string.Equals(_activeLoraWorkflow, workflowName, StringComparison.Ordinal))
+            {
+                DispatchToUi(() =>
+                {
+                    if (version != _loraRefreshVersion) return;
+                    _suppressLoraPersist = true;
+                    try
+                    {
+                        Parameters.ComfyUiLora = string.Empty;
+                        Parameters.ComfyUiLoraDisplay = string.Empty;
+                        SelectedKrea2Lora = null;
+                    }
+                    finally { _suppressLoraPersist = false; }
+                });
+            }
+            krea2Confirmed = await _checkpointService.GetWorkflowIsKrea2Async(workflowName);
+            if (version != _loraRefreshVersion) return;
+            if (!krea2Confirmed)
+            {
+                HideKrea2LoraPicker();
+                return;
+            }
+
+            DispatchToUi(() =>
+            {
+                if (version != _loraRefreshVersion) return;
+                SupportsKrea2Lora = true;
+                IsLoadingKrea2Loras = true;
+                Krea2LoraStatusText = "Loading LoRAs from ComfyUI…";
+            });
+
+            var names = await _comfyUiLoraService.GetLoraNamesAsync();
+            if (version != _loraRefreshVersion) return;
+
+            DispatchToUi(() =>
+            {
+                if (version != _loraRefreshVersion) return;
+                _suppressLoraPersist = true;
+                try
+                {
+                    Krea2LoraOptions = [NoKrea2LoraOption, .. names];
+                    var saved = _uiStateStore.LoadComfyUiLora(workflowName);
+                    var target = saved is not null && Krea2LoraOptions.Contains(saved)
+                        ? saved
+                        : NoKrea2LoraOption;
+
+                    SelectedKrea2Lora = target;
+                    // Explicit because an unchanged selection label does not raise OnChanged
+                    // when switching between two workflows with different saved state.
+                    Parameters.ComfyUiLora = target == NoKrea2LoraOption ? string.Empty : target;
+                    Parameters.ComfyUiLoraDisplay = Parameters.ComfyUiLora;
+                    _activeLoraWorkflow = workflowName;
+                    SupportsKrea2Lora = true;
+                    IsLoadingKrea2Loras = false;
+                    Krea2LoraStatusText = names.Count == 0
+                        ? "No LoRAs are installed on this ComfyUI host."
+                        : null;
+                }
+                finally { _suppressLoraPersist = false; }
+            });
+        }
+        catch (Exception ex)
+        {
+            if (version != _loraRefreshVersion) return;
+            _logger.LogWarning(ex, "Krea-2 LoRA catalog refresh failed Model={Model}", modelValue);
+            if (!krea2Confirmed)
+            {
+                HideKrea2LoraPicker();
+                return;
+            }
+
+            DispatchToUi(() =>
+            {
+                if (version != _loraRefreshVersion) return;
+                _suppressLoraPersist = true;
+                try
+                {
+                    SupportsKrea2Lora = true;
+                    IsLoadingKrea2Loras = false;
+                    Krea2LoraOptions = [NoKrea2LoraOption];
+                    SelectedKrea2Lora = NoKrea2LoraOption;
+                    Parameters.ComfyUiLora = string.Empty;
+                    Parameters.ComfyUiLoraDisplay = string.Empty;
+                    Krea2LoraStatusText =
+                        "Couldn't load LoRAs. Check the ComfyUI server and authorization settings.";
+                }
+                finally { _suppressLoraPersist = false; }
+            });
+        }
+    }
+
+    [RelayCommand]
+    private Task RefreshKrea2LorasAsync() => RefreshKrea2LoraOptionsAsync(Parameters.Model);
+
+    private void HideKrea2LoraPicker() => DispatchToUi(() =>
+    {
+        _suppressLoraPersist = true;
+        try
+        {
+            SupportsKrea2Lora = false;
+            IsLoadingKrea2Loras = false;
+            Krea2LoraOptions = [];
+            SelectedKrea2Lora = null;
+            Krea2LoraStatusText = null;
+            Parameters.ComfyUiLora = string.Empty;
+            Parameters.ComfyUiLoraDisplay = string.Empty;
+            Parameters.ComfyUiLoraStrength = 1.0;
+            _activeLoraWorkflow = null;
+        }
+        finally { _suppressLoraPersist = false; }
+    });
+
     private void SetAspectRatioProgrammatically(string aspectRatio)
     {
         _suppressPreferredArUpdate = true;
@@ -1080,7 +1257,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
         IComfyUiVramService? comfyVram = null,
         IGpuGate? gpuGate = null,
         IOpenRouterTokenStore? openRouterTokenStore = null,
-        IOpenRouterModelCatalog? openRouterModelCatalog = null)
+        IOpenRouterModelCatalog? openRouterModelCatalog = null,
+        IComfyUiLoraService? comfyUiLoraService = null)
     {
         _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
@@ -1093,6 +1271,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
         _catalogCoordinator = catalogCoordinator ?? throw new ArgumentNullException(nameof(catalogCoordinator));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _checkpointService = checkpointService ?? throw new ArgumentNullException(nameof(checkpointService));
+        _comfyUiLoraService = comfyUiLoraService;
         _galleryService = galleryService ?? throw new ArgumentNullException(nameof(galleryService));
         _folderPicker = folderPicker ?? throw new ArgumentNullException(nameof(folderPicker));
         _ollamaModelCatalog = ollamaModelCatalog;
@@ -1773,6 +1952,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
         }
 
         ProviderFilter.ApplyCatalog(merged);
+        await RefreshKrea2LoraOptionsAsync(Parameters.Model);
         SetStatus($"Loaded {merged.Count} models.", StatusKind.Success);
     }
 

@@ -47,6 +47,8 @@ At submit time the app patches the graph: your **prompt** into the lowest-id `CL
 
 **Upscaling.** A workflow containing a `LoadImage` node is an image-to-image workflow: the app shows the Input Image card for it, uploads your image to the server (`/upload/image`) and patches the stored name into every `LoadImage`. When such a workflow's file name contains *upscale*, it also becomes the target of the **Upscale after render** checkbox (ComfyUI models only): the finished render is fed straight into it and both files are kept, the second one with an `_upscaled` suffix. [`comfy-workflows/Upscale-Sample.json`](comfy-workflows/Upscale-Sample.json) is a ready-to-use tiled [Ultimate SD Upscale](https://github.com/ssitu/ComfyUI_UltimateSDUpscale) 2× pass (SDXL `zavychromaxl` + TTPlanet tile ControlNet + `4x_foolhardy_Remacri`); to upscale an existing image, select it as the model and use **Use as input** on any gallery image.
 
+**Krea-2 LoRAs.** A workflow whose `CLIPLoader` has `type: "krea2"` gets a LoRA picker in the Output card. The picker reads the configured host's native `GET /models/loras` catalog (including subfolders), offers **None**, and remembers the selection per workflow. At queue time Emberforge injects ComfyUI's built-in `LoraLoaderModelOnly` with the selected model strength; the workflow JSON on disk is never modified. Only choose LoRAs trained for Krea-2—the ComfyUI catalog contains every file in `models/loras` and does not label model compatibility.
+
 ### Describe an idea (Claude or Ollama)
 
 **Describe an idea…** runs two passes: Pass 1 always turns a plain-English idea into a polished **prose** prompt (good for any model); Pass 2 optionally maps that onto a schema-valid **Ideogram V4 JSON** caption. The result card lets you copy the prose, use it as the prompt, or use the JSON. Pick **Claude Opus**, **Claude Sonnet**, or **Local** (your configured Ollama server/model). Anthropic tiers are billed per pass; Local needs no token and quality depends on the installed model. Power users can override the bundled clean-room instructions with private `vpe-prompt.md` / `system-prompt.md` files in your data folder's `prompt-builder\` subfolder (default `Pictures\Emberforge\prompt-builder\`) (read fresh, never enter the repo — an open-core split).
@@ -77,7 +79,7 @@ Needs the **.NET 10 SDK** + the MAUI workload (VS 2022 17.12+ or Rider), Windows
 git clone https://github.com/MR-444/ImageGenerator.MAUI.git
 ```
 
-Open `ImageGenerator.MAUI.sln`, restore, build, run. For the self-contained single-file release exe, run `pwsh ./publish.ps1` from the repo root. Tests: `dotnet test` (1298 tests — provider payloads, the ComfyUI patcher, catalog filtering/persistence, the V4 structured-prompt model + validator, the deterministic mutation operators and the RegionGraph geometry, the LLM seams via fakes, CivitAI posting, gallery + UI-state persistence).
+Open `ImageGenerator.MAUI.sln`, restore, build, run. For the self-contained single-file release exe, run `pwsh ./publish.ps1` from the repo root. Tests: `dotnet test` (1367 tests — provider payloads, the ComfyUI patcher, catalog filtering/persistence, the V4 structured-prompt model + validator, the deterministic mutation operators and the RegionGraph geometry, the LLM seams via fakes, CivitAI posting, gallery + UI-state persistence).
 
 ## 🛠️ Stack
 

@@ -258,6 +258,42 @@
                                         AutomationId="QualityPresetPicker" />
                             </VerticalStackLayout>
 
+                            <!-- Krea-2 ComfyUI workflows only. Names come from the configured
+                                 host's /models/loras catalog and are injected at queue time via
+                                 the built-in LoraLoaderModelOnly node; workflow files stay clean. -->
+                            <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsKrea2Lora}">
+                                <Label Text="LoRA" Style="{StaticResource FieldLabel}" />
+                                <HorizontalStackLayout Spacing="8">
+                                    <Picker ItemsSource="{Binding Krea2LoraOptions}"
+                                            SelectedItem="{Binding SelectedKrea2Lora}"
+                                            IsEnabled="{Binding IsLoadingKrea2Loras, Converter={StaticResource InverseBool}}"
+                                            MaximumWidthRequest="320"
+                                            HorizontalOptions="Start"
+                                            AutomationId="Krea2LoraPicker" />
+                                    <Button Text="Refresh"
+                                            Command="{Binding RefreshKrea2LorasCommand}"
+                                            IsEnabled="{Binding IsLoadingKrea2Loras, Converter={StaticResource InverseBool}}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            AutomationId="RefreshKrea2LorasButton" />
+                                    <ActivityIndicator IsRunning="{Binding IsLoadingKrea2Loras}"
+                                                       IsVisible="{Binding IsLoadingKrea2Loras}"
+                                                       VerticalOptions="Center" />
+                                </HorizontalStackLayout>
+                                <Label Text="{Binding Krea2LoraStatusText}"
+                                       Style="{StaticResource HelperText}"
+                                       IsVisible="{Binding Krea2LoraStatusText, Converter={StaticResource NonEmptyStringToBool}}" />
+
+                                <VerticalStackLayout Spacing="2" IsVisible="{Binding IsKrea2LoraSelected}">
+                                    <Label Text="{Binding Parameters.ComfyUiLoraStrength, StringFormat='LoRA strength: {0:F2}'}"
+                                           Style="{StaticResource HelperText}" />
+                                    <Slider Minimum="-2" Maximum="2"
+                                            Value="{Binding Parameters.ComfyUiLoraStrength, Mode=TwoWay}"
+                                            MaximumWidthRequest="320"
+                                            HorizontalOptions="Fill"
+                                            AutomationId="Krea2LoraStrengthSlider" />
+                                </VerticalStackLayout>
+                            </VerticalStackLayout>
+
                             <!-- ComfyUI only: chain the finished render into the designated
                                  upscale workflow (LoadImage-bearing, "upscale" in the file
                                  name). Both images are kept; the upscaled one gets _upscaled. -->

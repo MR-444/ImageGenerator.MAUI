@@ -156,6 +156,18 @@ public class UiStateStoreTests
         _sut.LoadResolution(null).Should().Be("1440x2880");
     }
 
+    [Fact]
+    public void ComfyUiLora_RoundTripsPerWorkflow()
+    {
+        _sut.PersistComfyUiLora(@"Krea2\portrait.safetensors", "Krea2-Sample");
+        _sut.PersistComfyUiLora("None", "Krea2-Raw");
+
+        _sut.LoadComfyUiLora("Krea2-Sample").Should().Be(@"Krea2\portrait.safetensors");
+        _sut.LoadComfyUiLora("Krea2-Raw").Should().Be("None");
+        _preferences.Get("imggen.comfyui_lora.Krea2-Sample", string.Empty)
+            .Should().Be(@"Krea2\portrait.safetensors");
+    }
+
     // Aspect ratio is persisted per family like resolution: ComfyUI workflows define their own
     // option set, so a portrait pick there must not override the Replicate models' landscape pick.
     private const string AspectRatioKey = "imggen.last_aspect_ratio";

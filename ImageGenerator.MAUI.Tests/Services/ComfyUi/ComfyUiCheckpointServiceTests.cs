@@ -128,6 +128,18 @@ public sealed class ComfyUiCheckpointServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task IsKrea2_TrueOnlyForAWorkflowWithKrea2ClipLoaderType()
+    {
+        File.WriteAllText(Path.Combine(_workflowDir, "Krea.json"),
+            """{ "2": { "class_type": "CLIPLoader", "inputs": { "type": "krea2" } } }""");
+        File.WriteAllText(Path.Combine(_workflowDir, "Other.json"), TextToImageTemplate);
+
+        (await _service.GetWorkflowIsKrea2Async("Krea")).Should().BeTrue();
+        (await _service.GetWorkflowIsKrea2Async("Other")).Should().BeFalse();
+        (await _service.GetWorkflowIsKrea2Async("does-not-exist")).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task FindUpscaleWorkflow_PicksAlphabeticallyFirstLoadImageBearingUpscaleStem()
     {
         // "AAA-Upscale" would win alphabetically but has no LoadImage — it must be skipped.

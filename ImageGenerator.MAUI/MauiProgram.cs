@@ -96,6 +96,11 @@ public static class MauiProgram
                 perAttemptTimeout: TimeSpan.FromSeconds(60),
                 totalTimeout: TimeSpan.FromMinutes(3));
 
+        // The Krea-2 LoRA picker is an interactive catalog read, so an offline LAN host must
+        // return control quickly rather than inheriting generation's multi-minute retry budget.
+        builder.Services.AddHttpClient(ComfyUiLoraService.HttpClientName, client =>
+            client.Timeout = TimeSpan.FromSeconds(10));
+
         // No BaseAddress: the service talks to two hosts (mcp.civitai.com for upload/whoami,
         // civitai.com for the tRPC post creation). 120 s per attempt because upload_image
         // carries the whole image as base64 (~4-11 MB for a 4 MP PNG). Note the standard
@@ -186,6 +191,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IPollinationsCatalogService, PollinationsCatalogService>();
         builder.Services.AddSingleton<IComfyUiWorkflowCatalogService, ComfyUiWorkflowCatalogService>();
         builder.Services.AddSingleton<IComfyUiCheckpointService, ComfyUiCheckpointService>();
+        builder.Services.AddSingleton<IComfyUiLoraService, ComfyUiLoraService>();
         builder.Services.AddSingleton<IGalleryService>(_ => new GalleryService());
         builder.Services.AddSingleton<IFileLauncher, FileLauncher>();
         builder.Services.AddSingleton<IFolderPicker, FolderPickerService>();

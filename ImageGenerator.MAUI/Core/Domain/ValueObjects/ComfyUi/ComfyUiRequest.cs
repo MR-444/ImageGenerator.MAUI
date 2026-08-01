@@ -22,4 +22,6 @@ public sealed record ComfyUiRequest(
     double? Megapixels,
     string? PresetChoice = null,
     string? InputImageBase64 = null,
-    double? UpscaleFactor = null);
+    double? UpscaleFactor = null,
+    string? LoraName = null,
+    double LoraStrength = 1.0);

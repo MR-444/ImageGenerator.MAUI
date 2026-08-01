@@ -48,6 +48,9 @@
       <Content Include="..\ImageGenerator.MAUI\AppShell.xaml"
                Link="TestAssets\AppShell.xaml"
                CopyToOutputDirectory="PreserveNewest" />
+      <Content Include="..\ImageGenerator.MAUI\App.xaml"
+               Link="TestAssets\App.xaml"
+               CopyToOutputDirectory="PreserveNewest" />
       <Content Include="..\ImageGenerator.MAUI\Presentation\Views\MainPage.xaml"
                Link="TestAssets\MainPage.xaml" CopyToOutputDirectory="PreserveNewest" />
       <Content Include="..\ImageGenerator.MAUI\Presentation\Views\MutationEnginePage.xaml"

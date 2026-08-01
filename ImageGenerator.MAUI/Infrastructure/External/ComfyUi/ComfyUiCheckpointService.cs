@@ -87,6 +87,27 @@ public sealed class ComfyUiCheckpointService : IComfyUiCheckpointService
         }
     }
 
+    public async Task<bool> GetWorkflowIsKrea2Async(string workflowName, CancellationToken ct = default)
+    {
+        try
+        {
+            var path = Path.Combine(_workflowsDirectory, workflowName + ".json");
+            if (!File.Exists(path)) return false;
+
+            var template = await File.ReadAllTextAsync(path, ct);
+            return ComfyUiWorkflowPatcher.IsKrea2Workflow(template);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ComfyUI Krea-2 workflow probe failed Workflow={Workflow}", workflowName);
+            return false;
+        }
+    }
+
     public async Task<double?> GetWorkflowUpscaleFactorAsync(string workflowName, CancellationToken ct = default)
     {
         try

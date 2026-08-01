@@ -96,6 +96,11 @@ public interface IUiStateStore
     /// workflow's pick must never leak into another. Null when never explicitly picked.
     /// </summary>
     string? LoadComfyUiPreset(string workflowName);
+    /// <summary>
+    /// Per-workflow Krea-2 LoRA selection. The value is an exact ComfyUI catalog path or
+    /// <c>None</c>; null when the user has never picked one.
+    /// </summary>
+    string? LoadComfyUiLora(string workflowName);
     void PersistPrompt(string value);
     void PersistModel(string value);
     /// <inheritdoc cref="LoadResolution"/>
@@ -130,6 +135,8 @@ public interface IUiStateStore
     void PersistCivitaiModelRef(string value);
     /// <inheritdoc cref="LoadComfyUiPreset"/>
     void PersistComfyUiPreset(string value, string workflowName);
+    /// <inheritdoc cref="LoadComfyUiLora"/>
+    void PersistComfyUiLora(string value, string workflowName);
     /// <summary>
     /// Per-workflow "Upscale after render" checkbox — whether the extra pass is worth it is
     /// a per-model habit. Default false.

@@ -24,8 +24,20 @@ public class Krea2SampleWorkflowTests
 
     private static ComfyUiRequest Request(
         string prompt = "p", bool json = false, long seed = 123,
-        string? ar = null, double? mp = null) =>
-        new("comfyui/Krea2-Sample", prompt, json, seed, ar, mp);
+        string? ar = null, double? mp = null, string? lora = null,
+        double loraStrength = 1.0) =>
+        new("comfyui/Krea2-Sample", prompt, json, seed, ar, mp,
+            LoraName: lora, LoraStrength: loraStrength);
+
+    [Fact]
+    public void WorkflowProbe_RecognizesTheLiteralKrea2ClipType()
+    {
+        ComfyUiWorkflowPatcher.IsKrea2Workflow(SampleJson).Should().BeTrue();
+        ComfyUiWorkflowPatcher.IsKrea2Workflow(
+            """{ "2": { "class_type": "CLIPLoader", "inputs": { "type": "flux" } } }""")
+            .Should().BeFalse();
+        ComfyUiWorkflowPatcher.IsKrea2Workflow("not json").Should().BeFalse();
+    }
 
     [Fact]
     public void PlainMode_PatchesTheSinglePromptEncode()
@@ -94,6 +106,40 @@ public class Krea2SampleWorkflowTests
         graph[sageId]!["inputs"]!["sage_attention"]!.GetValue<string>().Should().Be("auto");
         // The whole sampling stack must run saged: the enhancer consumes the patch node.
         graph["4"]!["inputs"]!["model"]![0]!.GetValue<string>().Should().Be(sageId);
+    }
+
+    [Fact]
+    public void Lora_InjectsBuiltInModelOnlyLoaderBeforeTheEnhancer()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(
+            SampleJson, Request(lora: @"Krea2\portrait.safetensors", loraStrength: 0.75), FixedNow);
+        var graph = JsonNode.Parse(result.GraphJson)!.AsObject();
+
+        graph.ContainsKey("emberforge:krea2-lora").Should().BeTrue();
+        var lora = graph["emberforge:krea2-lora"]!;
+        lora["class_type"]!.GetValue<string>().Should().Be("LoraLoaderModelOnly");
+        lora["inputs"]!["model"]![0]!.GetValue<string>().Should().Be("1");
+        lora["inputs"]!["lora_name"]!.GetValue<string>()
+            .Should().Be(@"Krea2\portrait.safetensors");
+        lora["inputs"]!["strength_model"]!.GetValue<double>().Should().Be(0.75);
+        graph["4"]!["inputs"]!["model"]![0]!.GetValue<string>()
+            .Should().Be("emberforge:krea2-lora");
+    }
+
+    [Fact]
+    public void Lora_WithSageAttention_PreservesLoaderSageLoraEnhancerOrder()
+    {
+        var result = ComfyUiWorkflowPatcher.Patch(
+            SampleJson, Request(lora: "style.safetensors"), FixedNow,
+            useSageAttention: true);
+        var graph = JsonNode.Parse(result.GraphJson)!.AsObject();
+        var sageId = result.SageAttentionNodeIds.Should().ContainSingle().Subject;
+
+        graph[sageId]!["inputs"]!["model"]![0]!.GetValue<string>().Should().Be("1");
+        graph["emberforge:krea2-lora"]!["inputs"]!["model"]![0]!.GetValue<string>()
+            .Should().Be(sageId);
+        graph["4"]!["inputs"]!["model"]![0]!.GetValue<string>()
+            .Should().Be("emberforge:krea2-lora");
     }
 
     [Fact]

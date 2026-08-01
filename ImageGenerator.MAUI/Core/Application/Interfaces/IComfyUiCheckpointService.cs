@@ -24,6 +24,12 @@ public interface IComfyUiCheckpointService
     Task<ComfyUiQualityPresetSlot?> GetWorkflowQualityPresetSlotAsync(string workflowName, CancellationToken ct = default);
 
     /// <summary>
+    /// True when the workflow declares a literal <c>CLIPLoader.type = "krea2"</c>. This is
+    /// the capability marker used to show the host-backed LoRA picker.
+    /// </summary>
+    Task<bool> GetWorkflowIsKrea2Async(string workflowName, CancellationToken ct = default);
+
+    /// <summary>
     /// True when the workflow template contains a LoadImage node — it consumes an input image
     /// (img2img / upscale), so the UI shows the Input Image card for it. False on missing or
     /// unreadable files.

@@ -35,6 +35,9 @@ public static class ComfyUiWorkflowPatcher
     private const string SageAttentionClass = "PathchSageAttentionKJ";
     private const string CustomComboClass = "CustomCombo";
     private const string UltimateUpscaleClass = "UltimateSDUpscale";
+    private const string ClipLoaderClass = "CLIPLoader";
+    private const string LoraLoaderModelOnlyClass = "LoraLoaderModelOnly";
+    private const string Krea2ClipType = "krea2";
     private static readonly string[] SageAttentionLoaderClasses =
         [CheckpointLoaderClass, UnetLoaderClass, UnetLoaderGgufClass];
 
@@ -76,6 +79,7 @@ public static class ComfyUiWorkflowPatcher
         var seedNodeIds = PatchSeeds(nodes, request.Seed);
         var resolutionNote = PatchResolution(nodes, request.AspectRatio, request.Megapixels);
         var presetNote = PatchQualityPreset(nodes, request.PresetChoice);
+        var loraNote = PatchKrea2Lora(root, nodes, request.LoraName, request.LoraStrength);
         var dateNote = PatchFilenamePrefixDates(nodes, now ?? DateTimeOffset.Now);
         var sage = useSageAttention
             ? PatchSageAttention(root, nodes)
@@ -86,7 +90,7 @@ public static class ComfyUiWorkflowPatcher
 
         return new ComfyUiPatchResult(
             root.ToJsonString(),
-            promptTarget + inputImageNote + upscaleFactorNote + resolutionNote + presetNote + dateNote + sageNote,
+            promptTarget + inputImageNote + upscaleFactorNote + resolutionNote + presetNote + loraNote + dateNote + sageNote,
             seedNodeIds,
             sage.NodeIds,
             sage.LoaderIds);
@@ -109,6 +113,92 @@ public static class ComfyUiWorkflowPatcher
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// True when an API-format workflow explicitly loads its text encoder as Krea-2. This
+    /// literal is more reliable than guessing from a workflow or diffusion-model filename.
+    /// A probe, so malformed and UI-format files simply return false.
+    /// </summary>
+    public static bool IsKrea2Workflow(string templateJson)
+    {
+        try
+        {
+            if (JsonNode.Parse(templateJson) is not JsonObject root || root["nodes"] is JsonArray)
+                return false;
+            return IsKrea2Workflow(CollectNodes(root));
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsKrea2Workflow(
+        List<(string Id, string ClassType, JsonObject Inputs)> nodes) =>
+        nodes.Any(n => n.ClassType == ClipLoaderClass
+                       && n.Inputs["type"]?.GetValueKind() == JsonValueKind.String
+                       && string.Equals(
+                           n.Inputs["type"]!.GetValue<string>(), Krea2ClipType,
+                           StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Injects ComfyUI's built-in model-only LoRA loader after the Krea-2 diffusion loader.
+    /// The new tuple is also appended to <paramref name="nodes"/> so the later SageAttention
+    /// pass sees and wraps its model edge, preserving loader -> Sage -> LoRA -> consumers.
+    /// </summary>
+    private static string PatchKrea2Lora(
+        JsonObject root,
+        List<(string Id, string ClassType, JsonObject Inputs)> nodes,
+        string? loraName,
+        double strength)
+    {
+        if (string.IsNullOrWhiteSpace(loraName)) return string.Empty;
+        if (!IsKrea2Workflow(nodes))
+            throw new InvalidOperationException(
+                "A Krea-2 LoRA is selected, but this workflow has no CLIPLoader with type 'krea2'.");
+        if (!double.IsFinite(strength) || strength < -2 || strength > 2)
+            throw new InvalidOperationException("Krea-2 LoRA strength must be between -2 and 2.");
+
+        var loaders = nodes
+            .Where(n => n.ClassType is UnetLoaderClass or UnetLoaderGgufClass)
+            .ToList();
+        if (loaders.Count != 1)
+            throw new InvalidOperationException(
+                "Krea-2 LoRA injection needs exactly one UNETLoader or UnetLoaderGGUF model source.");
+
+        var loader = loaders[0];
+        var consumers = nodes
+            .Where(n => n.Id != loader.Id)
+            .SelectMany(n => n.Inputs
+                .Where(input => IsLinkTo(input.Value, loader.Id, 0))
+                .Select(input => (Node: n, InputKey: input.Key)))
+            .ToList();
+        if (consumers.Count == 0)
+            throw new InvalidOperationException(
+                "The Krea-2 model loader has no MODEL consumer to receive the selected LoRA.");
+
+        var loraId = "emberforge:krea2-lora";
+        var suffix = 2;
+        while (root.ContainsKey(loraId)) loraId = $"emberforge:krea2-lora:{suffix++}";
+
+        var inputs = new JsonObject
+        {
+            ["model"] = new JsonArray(loader.Id, 0),
+            ["lora_name"] = loraName,
+            ["strength_model"] = strength
+        };
+        root[loraId] = new JsonObject
+        {
+            ["class_type"] = LoraLoaderModelOnlyClass,
+            ["inputs"] = inputs
+        };
+
+        foreach (var consumer in consumers)
+            consumer.Node.Inputs[consumer.InputKey] = new JsonArray(loraId, 0);
+
+        nodes.Add((loraId, LoraLoaderModelOnlyClass, inputs));
+        return $"; Krea-2 LoRA '{loraName}' at {strength:0.##}";
     }
 
     /// <summary>

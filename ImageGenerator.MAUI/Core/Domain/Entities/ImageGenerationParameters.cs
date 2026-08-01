@@ -123,6 +123,19 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private string _comfyUiPresetDisplay = string.Empty;
 
+    // ComfyUI Krea-2 only: optional host LoRA injected as a LoraLoaderModelOnly node between
+    // the workflow's single model loader and its consumers. Empty = no LoRA node. The name is
+    // the exact relative path returned by GET /models/loras (subfolders included).
+    [ObservableProperty]
+    private string _comfyUiLora = string.Empty;
+
+    [ObservableProperty]
+    private double _comfyUiLoraStrength = 1.0;
+
+    // Display-only provenance counterpart to ComfyUiLora. Empty when the picker is on None.
+    [ObservableProperty]
+    private string _comfyUiLoraDisplay = string.Empty;
+
     // ComfyUI only: override for the upscale workflow's UltimateSDUpscale upscale_by factor.
     // Null = keep the workflow's baked-in value (no patch) — same sentinel convention as
     // ComfyUiPreset. Applies to the workflow being generated AND rides the Clone() into a
@@ -190,6 +203,9 @@ public partial class ImageGenerationParameters : ObservableObject
             ComfyUiPreset    = ComfyUiPreset,
             ComfyUiModelDisplay = ComfyUiModelDisplay,
             ComfyUiPresetDisplay = ComfyUiPresetDisplay,
+            ComfyUiLora      = ComfyUiLora,
+            ComfyUiLoraStrength = ComfyUiLoraStrength,
+            ComfyUiLoraDisplay = ComfyUiLoraDisplay,
             ComfyUiUpscaleFactor = ComfyUiUpscaleFactor,
             UpscaleAfterRender = UpscaleAfterRender,
             UpscaleWorkflow  = UpscaleWorkflow,

@@ -102,6 +102,22 @@ public class FallbackComfyUiDescriptorTests
     }
 
     [Fact]
+    public void Build_Krea2LoraAndStrength_FlowIntoRequestAndMetadata()
+    {
+        var parameters = Parameters();
+        parameters.ComfyUiLora = @"Krea2\portrait.safetensors";
+        parameters.ComfyUiLoraDisplay = parameters.ComfyUiLora;
+        parameters.ComfyUiLoraStrength = 0.75;
+
+        var request = (ComfyUiRequest)_sut.Build(parameters);
+
+        request.LoraName.Should().Be(@"Krea2\portrait.safetensors");
+        request.LoraStrength.Should().Be(0.75);
+        _sut.Lines(parameters).Should().Contain("LoRA: Krea2\\portrait.safetensors");
+        _sut.Lines(parameters).Should().Contain("LoRA strength: 0.75");
+    }
+
+    [Fact]
     public void Build_UpscaleFactorFlowsIntoTheRequest_AndLinesStayInvariant()
     {
         var defaulted = Parameters();

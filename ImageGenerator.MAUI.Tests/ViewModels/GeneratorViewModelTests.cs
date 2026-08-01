@@ -32,6 +32,7 @@ public class GeneratorViewModelTests
     private readonly Mock<IModelCatalogCoordinator> _mockCatalogCoordinator;
     private readonly Mock<IPromptBatchParser> _mockPromptBatchParser;
     private readonly Mock<IComfyUiCheckpointService> _mockCheckpointService;
+    private readonly Mock<IComfyUiLoraService> _mockLoraService;
     private readonly Mock<IGalleryService> _mockGalleryService;
     private readonly Mock<IFolderPicker> _mockFolderPicker;
     private readonly Mock<IOpenRouterModelCatalog> _mockOpenRouterModelCatalog;
@@ -49,6 +50,7 @@ public class GeneratorViewModelTests
         _mockCatalogCoordinator = new Mock<IModelCatalogCoordinator>();
         _mockPromptBatchParser = new Mock<IPromptBatchParser>();
         _mockCheckpointService = new Mock<IComfyUiCheckpointService>();
+        _mockLoraService = new Mock<IComfyUiLoraService>();
         _mockGalleryService = new Mock<IGalleryService>();
         _mockFolderPicker = new Mock<IFolderPicker>();
         _mockOpenRouterModelCatalog = new Mock<IOpenRouterModelCatalog>();
@@ -69,7 +71,8 @@ public class GeneratorViewModelTests
             _mockGalleryService.Object,
             _mockFolderPicker.Object,
             NullLogger<GeneratorViewModel>.Instance,
-            openRouterModelCatalog: _mockOpenRouterModelCatalog.Object);
+            openRouterModelCatalog: _mockOpenRouterModelCatalog.Object,
+            comfyUiLoraService: _mockLoraService.Object);
     }
 
     [Fact]
@@ -2442,6 +2445,80 @@ public class GeneratorViewModelTests
             "a platform null push is a binding artifact, never a user pick");
         _mockUiStateStore.Verify(s => s.PersistComfyUiPreset("Turbo", ComfyWorkflowName), Times.Once,
             "only the explicit pick persists");
+    }
+
+    // --- Krea-2 LoRA picker (host /models/loras catalog) -----------------------------------
+
+    private void SetupKrea2Loras(params string[] names)
+    {
+        _mockCheckpointService
+            .Setup(s => s.GetWorkflowIsKrea2Async(ComfyWorkflowName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _mockLoraService
+            .Setup(s => s.GetLoraNamesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(names);
+    }
+
+    [Fact]
+    public async Task Krea2Workflow_LoadsHostLorasWithNoneAndPersistsExplicitPick()
+    {
+        SetupKrea2Loras(@"Krea2\portrait.safetensors", "style.safetensors");
+        SelectComfyWorkflow();
+
+        await _viewModel.RefreshKrea2LoraOptionsAsync(ComfyModelId);
+
+        _viewModel.SupportsKrea2Lora.Should().BeTrue();
+        _viewModel.Krea2LoraOptions.Should().Equal(
+            GeneratorViewModel.NoKrea2LoraOption,
+            @"Krea2\portrait.safetensors", "style.safetensors");
+        _viewModel.SelectedKrea2Lora.Should().Be(GeneratorViewModel.NoKrea2LoraOption);
+        _viewModel.Parameters.ComfyUiLora.Should().BeEmpty();
+
+        _viewModel.SelectedKrea2Lora = @"Krea2\portrait.safetensors";
+
+        _viewModel.IsKrea2LoraSelected.Should().BeTrue();
+        _viewModel.Parameters.ComfyUiLora.Should().Be(@"Krea2\portrait.safetensors");
+        _viewModel.Parameters.ComfyUiLoraDisplay.Should().Be(@"Krea2\portrait.safetensors");
+        _mockUiStateStore.Verify(s => s.PersistComfyUiLora(
+            @"Krea2\portrait.safetensors", ComfyWorkflowName), Times.Once);
+    }
+
+    [Fact]
+    public async Task Krea2Workflow_RestoresSavedLoraOnlyWhenHostStillOffersIt()
+    {
+        SetupKrea2Loras("saved.safetensors", "other.safetensors");
+        _mockUiStateStore.Setup(s => s.LoadComfyUiLora(ComfyWorkflowName))
+            .Returns("saved.safetensors");
+        SelectComfyWorkflow();
+
+        await _viewModel.RefreshKrea2LoraOptionsAsync(ComfyModelId);
+
+        _viewModel.SelectedKrea2Lora.Should().Be("saved.safetensors");
+        _viewModel.Parameters.ComfyUiLora.Should().Be("saved.safetensors");
+        _mockUiStateStore.Verify(
+            s => s.PersistComfyUiLora(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+
+        _mockUiStateStore.Setup(s => s.LoadComfyUiLora(ComfyWorkflowName))
+            .Returns("removed.safetensors");
+        _viewModel.SelectedKrea2Lora = GeneratorViewModel.NoKrea2LoraOption;
+        await _viewModel.RefreshKrea2LoraOptionsAsync(ComfyModelId);
+        _viewModel.SelectedKrea2Lora.Should().Be(GeneratorViewModel.NoKrea2LoraOption);
+        _viewModel.Parameters.ComfyUiLora.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task NonKreaWorkflow_HidesLoraStateAndDoesNotCallHost()
+    {
+        _mockCheckpointService
+            .Setup(s => s.GetWorkflowIsKrea2Async(ComfyWorkflowName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        SelectComfyWorkflow();
+
+        await _viewModel.RefreshKrea2LoraOptionsAsync(ComfyModelId);
+
+        _viewModel.SupportsKrea2Lora.Should().BeFalse();
+        _viewModel.Krea2LoraOptions.Should().BeEmpty();
+        _mockLoraService.Verify(s => s.GetLoraNamesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     // --- CivitAI posting ---
