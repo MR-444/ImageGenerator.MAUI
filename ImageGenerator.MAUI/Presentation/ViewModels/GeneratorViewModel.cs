@@ -435,8 +435,10 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     private int _presetRefreshVersion;
 
     // Krea-2 LoRA picker. The workflow probe is local; options are fetched from the selected
-    // ComfyUI host's native /models/loras catalog. "None" maps to an empty request sentinel.
-    internal const string NoKrea2LoraOption = "None";
+    // ComfyUI host's native /models/loras catalog. "No LoRA" maps to an empty request sentinel.
+    // Keep recognizing the original "None" label when restoring preferences written by v2.1.0.
+    internal const string NoKrea2LoraOption = "No LoRA";
+    private const string LegacyNoKrea2LoraOption = "None";
 
     [ObservableProperty]
     private List<string> _krea2LoraOptions = [];
@@ -1037,9 +1039,11 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
                 {
                     Krea2LoraOptions = [NoKrea2LoraOption, .. names];
                     var saved = _uiStateStore.LoadComfyUiLora(workflowName);
-                    var target = saved is not null && Krea2LoraOptions.Contains(saved)
-                        ? saved
-                        : NoKrea2LoraOption;
+                    var target = string.Equals(saved, LegacyNoKrea2LoraOption, StringComparison.Ordinal)
+                        ? NoKrea2LoraOption
+                        : saved is not null && Krea2LoraOptions.Contains(saved)
+                            ? saved
+                            : NoKrea2LoraOption;
 
                     SelectedKrea2Lora = target;
                     // Explicit because an unchanged selection label does not raise OnChanged

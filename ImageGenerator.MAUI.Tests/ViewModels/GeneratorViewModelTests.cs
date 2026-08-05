@@ -2460,7 +2460,7 @@ public class GeneratorViewModelTests
     }
 
     [Fact]
-    public async Task Krea2Workflow_LoadsHostLorasWithNoneAndPersistsExplicitPick()
+    public async Task Krea2Workflow_CanSwitchBetweenExplicitLoraAndNoLora()
     {
         SetupKrea2Loras(@"Krea2\portrait.safetensors", "style.safetensors");
         SelectComfyWorkflow();
@@ -2481,6 +2481,14 @@ public class GeneratorViewModelTests
         _viewModel.Parameters.ComfyUiLoraDisplay.Should().Be(@"Krea2\portrait.safetensors");
         _mockUiStateStore.Verify(s => s.PersistComfyUiLora(
             @"Krea2\portrait.safetensors", ComfyWorkflowName), Times.Once);
+
+        _viewModel.SelectedKrea2Lora = GeneratorViewModel.NoKrea2LoraOption;
+
+        _viewModel.IsKrea2LoraSelected.Should().BeFalse();
+        _viewModel.Parameters.ComfyUiLora.Should().BeEmpty();
+        _viewModel.Parameters.ComfyUiLoraDisplay.Should().BeEmpty();
+        _mockUiStateStore.Verify(s => s.PersistComfyUiLora(
+            GeneratorViewModel.NoKrea2LoraOption, ComfyWorkflowName), Times.Once);
     }
 
     [Fact]
@@ -2502,6 +2510,20 @@ public class GeneratorViewModelTests
             .Returns("removed.safetensors");
         _viewModel.SelectedKrea2Lora = GeneratorViewModel.NoKrea2LoraOption;
         await _viewModel.RefreshKrea2LoraOptionsAsync(ComfyModelId);
+        _viewModel.SelectedKrea2Lora.Should().Be(GeneratorViewModel.NoKrea2LoraOption);
+        _viewModel.Parameters.ComfyUiLora.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Krea2Workflow_MapsLegacyNonePreferenceToNoLora()
+    {
+        SetupKrea2Loras("style.safetensors");
+        _mockUiStateStore.Setup(s => s.LoadComfyUiLora(ComfyWorkflowName))
+            .Returns("None");
+        SelectComfyWorkflow();
+
+        await _viewModel.RefreshKrea2LoraOptionsAsync(ComfyModelId);
+
         _viewModel.SelectedKrea2Lora.Should().Be(GeneratorViewModel.NoKrea2LoraOption);
         _viewModel.Parameters.ComfyUiLora.Should().BeEmpty();
     }

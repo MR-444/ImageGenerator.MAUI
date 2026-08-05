@@ -160,10 +160,10 @@ public class UiStateStoreTests
     public void ComfyUiLora_RoundTripsPerWorkflow()
     {
         _sut.PersistComfyUiLora(@"Krea2\portrait.safetensors", "Krea2-Sample");
-        _sut.PersistComfyUiLora("None", "Krea2-Raw");
+        _sut.PersistComfyUiLora("No LoRA", "Krea2-Raw");
 
         _sut.LoadComfyUiLora("Krea2-Sample").Should().Be(@"Krea2\portrait.safetensors");
-        _sut.LoadComfyUiLora("Krea2-Raw").Should().Be("None");
+        _sut.LoadComfyUiLora("Krea2-Raw").Should().Be("No LoRA");
         _preferences.Get("imggen.comfyui_lora.Krea2-Sample", string.Empty)
             .Should().Be(@"Krea2\portrait.safetensors");
     }

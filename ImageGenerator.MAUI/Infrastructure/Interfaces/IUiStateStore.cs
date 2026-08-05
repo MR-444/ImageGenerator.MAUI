@@ -98,7 +98,7 @@ public interface IUiStateStore
     string? LoadComfyUiPreset(string workflowName);
     /// <summary>
     /// Per-workflow Krea-2 LoRA selection. The value is an exact ComfyUI catalog path or
-    /// <c>None</c>; null when the user has never picked one.
+    /// <c>No LoRA</c>; null when the user has never picked one.
     /// </summary>
     string? LoadComfyUiLora(string workflowName);
     void PersistPrompt(string value);
