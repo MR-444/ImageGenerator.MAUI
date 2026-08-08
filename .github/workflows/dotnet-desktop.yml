@@ -38,6 +38,9 @@
 
 name: .NET Core Desktop
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [ "master" ]
