@@ -676,6 +676,13 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
         }
 
         GptQualityOptions = caps.GptQualityOptions?.ToList() ?? [];
+        // The quality enum differs per host: Replicate offers auto/low/medium/high, Pollinations
+        // low/medium/high/hd. Carrying a selection across that boundary would leave the picker
+        // blank on a value the new model rejects, so snap to the model's own first option.
+        if (GptQualityOptions.Count > 0 && !GptQualityOptions.Contains(Parameters.GptQuality))
+        {
+            Parameters.GptQuality = GptQualityOptions[0];
+        }
         GptBackgroundOptions = caps.GptBackgroundOptions?.ToList() ?? [];
         GptModerationOptions = caps.GptModerationOptions?.ToList() ?? [];
         GptInputFidelityOptions = caps.GptInputFidelityOptions?.ToList() ?? [];

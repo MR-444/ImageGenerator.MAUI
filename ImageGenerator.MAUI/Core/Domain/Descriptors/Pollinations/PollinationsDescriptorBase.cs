@@ -48,7 +48,11 @@ public abstract class PollinationsDescriptorBase : IPayloadBuilder, ICapabilityP
     // at request time instead of from the ctor-supplied constant.
     protected virtual string ResolveServerModelName(ImageGenerationParameters p) => _serverModelName;
 
-    public ModelCapabilities Capabilities => new(
+    // Only the gptimage family accepts `quality`; every other model omits the param. Overridden
+    // by PollinationsGptImageDescriptor.
+    protected virtual string? ResolveQuality(ImageGenerationParameters p) => null;
+
+    public virtual ModelCapabilities Capabilities => new(
         SafetyTolerance: false, PromptUpsampling: false, OutputQuality: false,
         AspectRatio: true, CustomDimensions: true, Seed: true, ImagePrompt: false,
         AspectRatioLabel: "Aspect ratio", AspectRatios: AspectRatios,
@@ -66,13 +70,14 @@ public abstract class PollinationsDescriptorBase : IPayloadBuilder, ICapabilityP
             Width: w,
             Height: h,
             Seed: p.Seed,
-            Safe: p.Safe);
+            Safe: p.Safe,
+            Quality: ResolveQuality(p));
     }
 
-    public IEnumerable<string> Lines(ImageGenerationParameters p) =>
+    public virtual IEnumerable<string> Lines(ImageGenerationParameters p) =>
         [$"Safe: {p.Safe}"];
 
-    public void Apply(ImageGenerationParameters p, IReadOnlyDictionary<string, string> meta) =>
+    public virtual void Apply(ImageGenerationParameters p, IReadOnlyDictionary<string, string> meta) =>
         meta.ApplyBool("Safe", v => p.Safe = v);
 
     private static (int W, int H) ResolveDimensions(ImageGenerationParameters p) =>

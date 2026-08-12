@@ -37,11 +37,19 @@ public static class ModelConstants
     {
         public const string PrefixSlash = "pollinations/";
 
-        // Seed list: the free image-producing models on gen.pollinations.ai/models that the
-        // user actually generates with. Live catalog fetch surfaces any additional free models.
+        // Seed list: the image-producing models the user actually generates with, so they stay
+        // in the picker when the live fetch fails. QwenImage is paid_only upstream — its seed
+        // label says so. Live catalog fetch surfaces the rest of gen.pollinations.ai's roster.
         public const string Flux = "pollinations/flux";
         public const string Zimage = "pollinations/zimage";
         public const string QwenImage = "pollinations/qwen-image";
+
+        // The gptimage family is seeded explicitly (rather than left to the fallback descriptor)
+        // because these three are the only Pollinations models that accept a `quality` tier, and
+        // capabilities are resolved per descriptor rather than per request.
+        public const string GptImage = "pollinations/gptimage";
+        public const string GptImageLarge = "pollinations/gptimage-large";
+        public const string GptImage2 = "pollinations/gpt-image-2";
 
         public static bool IsId(string? modelId) =>
             !string.IsNullOrEmpty(modelId)

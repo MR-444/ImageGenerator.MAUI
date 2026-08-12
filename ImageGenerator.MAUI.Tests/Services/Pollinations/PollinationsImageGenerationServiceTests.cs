@@ -121,6 +121,55 @@ public class PollinationsImageGenerationServiceTests
     }
 
     [Fact]
+    public async Task GenerateImageAsync_GptImageModel_SendsQualityQueryParam()
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.Pollinations.GptImage2,
+            Prompt = "a cat",
+            GptQuality = "high"
+        };
+
+        await _service.GenerateImageAsync(parameters);
+
+        ExtractQueryParam("quality").Should().Be("high");
+    }
+
+    [Theory]
+    [InlineData("auto")]   // the Replicate-hosted default, which Pollinations rejects outright
+    [InlineData("")]
+    [InlineData("bogus")]
+    public async Task GenerateImageAsync_GptImageModel_OffMenuQuality_FallsBackToMedium(string quality)
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.Pollinations.GptImage,
+            Prompt = "a cat",
+            GptQuality = quality
+        };
+
+        await _service.GenerateImageAsync(parameters);
+
+        ExtractQueryParam("quality").Should().Be("medium");
+    }
+
+    [Fact]
+    public async Task GenerateImageAsync_NonGptImageModel_OmitsQualityQueryParam()
+    {
+        // Only gptimage/gptimage-large/gpt-image-2 accept `quality`; sending it elsewhere 400s.
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.Pollinations.Flux,
+            Prompt = "a cat",
+            GptQuality = "high"
+        };
+
+        await _service.GenerateImageAsync(parameters);
+
+        ExtractQueryParam("quality").Should().BeNull();
+    }
+
+    [Fact]
     public async Task GenerateImageAsync_WithToken_AddsBearerAuthorizationHeader()
     {
         var parameters = new ImageGenerationParameters
@@ -213,6 +262,57 @@ public class PollinationsImageGenerationServiceTests
         result.ImageData.Should().BeNull();
         result.Message.Should().Contain("HTTP 500");
         result.Message.Should().Contain("upstream queue overflow");
+    }
+
+    [Fact]
+    public async Task GenerateImageAsync_Http401_ReturnsApiKeyGuidanceInsteadOfRawEnvelope()
+    {
+        // Pollinations made auth mandatory — anonymous generation now 401s with a JSON envelope
+        // that reads badly in a job-row label. The user needs to be told to add a key.
+        _nextResponse = () => new HttpResponseMessage
+        {
+            StatusCode = HttpStatusCode.Unauthorized,
+            Content = new StringContent(
+                """{"success":false,"error":{"message":"Authentication required.","code":"UNAUTHORIZED"},"status":401}""")
+        };
+
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.Pollinations.Flux,
+            Prompt = "a cat"
+        };
+
+        var result = await _service.GenerateImageAsync(parameters);
+
+        result.ImageData.Should().BeNull();
+        result.Message.Should().Contain("API key");
+        result.Message.Should().Contain("enter.pollinations.ai");
+        result.Message.Should().NotContain("UNAUTHORIZED");
+    }
+
+    [Fact]
+    public async Task GenerateImageAsync_Http402_ReturnsPollenBalanceGuidance()
+    {
+        // 402 is the documented "insufficient pollen balance" code — what a paid-tagged model
+        // returns when the key has no credits. Distinct remedy from 401, so distinct message.
+        _nextResponse = () => new HttpResponseMessage
+        {
+            StatusCode = HttpStatusCode.PaymentRequired,
+            Content = new StringContent(
+                """{"success":false,"error":{"message":"Insufficient balance","code":"PAYMENT_REQUIRED"},"status":402}""")
+        };
+
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.Pollinations.QwenImage,
+            Prompt = "a cat"
+        };
+
+        var result = await _service.GenerateImageAsync(parameters);
+
+        result.ImageData.Should().BeNull();
+        result.Message.Should().Contain("pollen balance");
+        result.Message.Should().Contain("enter.pollinations.ai");
     }
 
     [Fact]

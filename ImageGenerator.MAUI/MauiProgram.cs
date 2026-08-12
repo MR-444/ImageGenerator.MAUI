@@ -169,7 +169,10 @@ public static class MauiProgram
             .AddModelDescriptor<IdeogramV4QualityDescriptor>()
             .AddModelDescriptor<PollinationsFluxDescriptor>()
             .AddModelDescriptor<PollinationsZimageDescriptor>()
-            .AddModelDescriptor<PollinationsQwenImageDescriptor>();
+            .AddModelDescriptor<PollinationsQwenImageDescriptor>()
+            .AddModelDescriptor<PollinationsGptImageDescriptor1Mini>()
+            .AddModelDescriptor<PollinationsGptImageLargeDescriptor>()
+            .AddModelDescriptor<PollinationsGptImage2Descriptor>();
 
         builder.Services.AddSingleton<IModelDescriptorRegistry, ModelDescriptorRegistry>();
 

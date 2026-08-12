@@ -99,6 +99,9 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
         new IdeogramV4QualityDescriptor(),
         new PollinationsFluxDescriptor(),
         new PollinationsZimageDescriptor(),
-        new PollinationsQwenImageDescriptor()
+        new PollinationsQwenImageDescriptor(),
+        new PollinationsGptImageDescriptor1Mini(),
+        new PollinationsGptImageLargeDescriptor(),
+        new PollinationsGptImage2Descriptor()
     ];
 }

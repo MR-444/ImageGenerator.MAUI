@@ -81,13 +81,35 @@ public class ModelDescriptorRegistryTests
         seedIds.Should().NotContain(ModelConstants.Flux.Max2);
     }
 
+    [Theory]
+    [InlineData(ModelConstants.Pollinations.GptImage)]
+    [InlineData(ModelConstants.Pollinations.GptImageLarge)]
+    [InlineData(ModelConstants.Pollinations.GptImage2)]
+    public void PollinationsGptImageModels_ExposeQualityOptions_MediumFirst(string modelId)
+    {
+        // Drives SupportsGptQuality → the quality Picker in MainPage. Pollinations' enum has no
+        // "auto" (unlike the same models on Replicate), and medium leads so that RefreshCapabilities'
+        // snap-to-first lands on the cost tier the user wants rather than a high-priced auto.
+        var caps = _registry.CapabilitiesFor(modelId).Capabilities;
+
+        caps.GptQualityOptions.Should().Equal("medium", "low", "high", "hd");
+    }
+
+    [Fact]
+    public void PollinationsNonGptImageModels_ExposeNoQualityOptions()
+    {
+        _registry.CapabilitiesFor(ModelConstants.Pollinations.Flux)
+            .Capabilities.GptQualityOptions.Should().BeNull();
+    }
+
     [Fact]
     public void Seeds_CountMatchesProductionDescriptorSet()
     {
         // 6 originals (GPT 1.5, GPT 2, Flux Pro, Flux Pro Ultra, Klein4b, NanoBanana2)
         // + 3 pinned Ideogram V4 (balanced/turbo/quality)
-        // + 3 Pollinations (flux/zimage/qwen-image) = 12.
-        _registry.Seeds.Should().HaveCount(12);
+        // + 3 Pollinations (flux/zimage/qwen-image)
+        // + 3 Pollinations gptimage family, seeded for their `quality` capability = 15.
+        _registry.Seeds.Should().HaveCount(15);
     }
 
     [Fact]
