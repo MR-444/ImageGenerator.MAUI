@@ -5,9 +5,12 @@ using FluentAssertions;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.External.Civitai;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
+using ImageGenerator.MAUI.Infrastructure.Services;
 using ImageGenerator.MAUI.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace ImageGenerator.MAUI.Tests.Services.Civitai;
 
@@ -45,6 +48,7 @@ public sealed class CivitaiPostingServiceTests : IDisposable
         _sut = new CivitaiPostingService(
             new StubHttpClientFactory(() => new HttpClient(_handler, disposeHandler: false)),
             _tokenStore.Object,
+            new ImageEncoderProvider(),
             NullLogger<CivitaiPostingService>.Instance);
     }
 
@@ -162,6 +166,91 @@ public sealed class CivitaiPostingServiceTests : IDisposable
 
         File.ReadAllBytes(_imagePath).Should().Equal(PngBytes,
             "the upload must be byte-identical and never touch the saved file");
+    }
+
+    [Fact]
+    public async Task PostImage_OversizeFile_UploadsRecompressedJpegAtSameDimensions()
+    {
+        // Regression: CivitAI's upload_image caps the *decoded* payload at 10 MiB and an
+        // upscaled PNG clears it (observed live: 13,246,392 bytes). Re-encode rather than fail.
+        var oversizePath = WriteIncompressiblePng(2600, 2600);
+        new FileInfo(oversizePath).Length.Should().BeGreaterThan(10 * 1024 * 1024);
+
+        _handler.Enqueue(HttpStatusCode.OK, UploadResponse);
+        _handler.Enqueue(HttpStatusCode.OK, CreatePostResponse);
+
+        var result = await _sut.PostImageAsync(oversizePath, "t", null, null);
+
+        result.Success.Should().BeTrue();
+        result.Message.Should().Contain("re-encoded to JPEG");
+
+        var uploaded = Convert.FromBase64String(UploadedDataArgument());
+        uploaded.Length.Should().BeLessThan(10 * 1024 * 1024, "the payload must fit CivitAI's cap");
+        using var sent = SixLabors.ImageSharp.Image.Load(uploaded);
+        sent.Width.Should().Be(2600, "re-encoding must preserve the upscaled resolution");
+        sent.Height.Should().Be(2600);
+    }
+
+    [Fact]
+    public async Task PostImage_OversizeFile_LeavesTheLocalFileUntouched()
+    {
+        var oversizePath = WriteIncompressiblePng(2600, 2600);
+        var originalBytes = File.ReadAllBytes(oversizePath);
+
+        _handler.Enqueue(HttpStatusCode.OK, UploadResponse);
+        _handler.Enqueue(HttpStatusCode.OK, CreatePostResponse);
+
+        await _sut.PostImageAsync(oversizePath, "t", null, null);
+
+        File.ReadAllBytes(oversizePath).Should().Equal(originalBytes,
+            "re-encoding happens in memory for the upload only");
+    }
+
+    [Fact]
+    public async Task PostImage_NormalSizedFile_UploadsBytesUnchanged()
+    {
+        _handler.Enqueue(HttpStatusCode.OK, UploadResponse);
+        _handler.Enqueue(HttpStatusCode.OK, CreatePostResponse);
+
+        var result = await _sut.PostImageAsync(_imagePath, "t", null, null);
+
+        result.Message.Should().NotContain("re-encoded");
+        Convert.FromBase64String(UploadedDataArgument()).Should().Equal(PngBytes,
+            "files under the cap must still upload byte-identical");
+    }
+
+    /// <summary>
+    /// Random pixels defeat PNG's compression, so this produces a genuinely oversize file
+    /// rather than a large-but-highly-compressible one. Seeded for determinism.
+    /// </summary>
+    private string WriteIncompressiblePng(int width, int height)
+    {
+        var random = new Random(20260812);
+        using var image = new Image<Rgba32>(width, height);
+        image.ProcessPixelRows(accessor =>
+        {
+            for (var y = 0; y < accessor.Height; y++)
+            {
+                var row = accessor.GetRowSpan(y);
+                for (var x = 0; x < row.Length; x++)
+                {
+                    row[x] = new Rgba32(
+                        (byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256), 255);
+                }
+            }
+        });
+
+        var path = Path.Combine(_tempDir, $"oversize_{width}x{height}.png");
+        image.SaveAsPng(path);
+        return path;
+    }
+
+    /// <summary>Pulls the base64 `data` argument out of the captured upload_image JSON-RPC call.</summary>
+    private string UploadedDataArgument()
+    {
+        using var doc = JsonDocument.Parse(_handler.Requests[0].Body);
+        return doc.RootElement
+            .GetProperty("params").GetProperty("arguments").GetProperty("data").GetString()!;
     }
 
     [Fact]
