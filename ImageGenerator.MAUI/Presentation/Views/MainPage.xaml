@@ -71,7 +71,7 @@
                                     Style="{StaticResource SecondaryButton}"
                                     Command="{Binding RefreshModelsCommand}"
                                     HorizontalOptions="Start"
-                                    SemanticProperties.Description="Fetch live model catalogs from Replicate and Pollinations. Replicate models require an API token; Pollinations refreshes anonymously."
+                                    SemanticProperties.Description="Fetch live model catalogs from Replicate and Pollinations. Replicate models require an API token. Pollinations model listing is anonymous, but generating an image requires a Pollinations API key; models tagged 'paid' also need pollen credits."
                                     AutomationId="RefreshModelsButton" />
 
                             <!-- One writer per direction: VM->view via OneWay binding, view->VM via the

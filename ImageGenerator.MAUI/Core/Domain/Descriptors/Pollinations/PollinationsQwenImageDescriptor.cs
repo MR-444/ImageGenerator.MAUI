@@ -5,5 +5,5 @@ namespace ImageGenerator.MAUI.Core.Domain.Descriptors.Pollinations;
 public sealed class PollinationsQwenImageDescriptor : PollinationsDescriptorBase
 {
     public PollinationsQwenImageDescriptor()
-        : base("Qwen Image Plus (Pollinations)", ModelConstants.Pollinations.QwenImage, "qwen-image") { }
+        : base("Qwen Image (Pollinations · paid)", ModelConstants.Pollinations.QwenImage, "qwen-image") { }
 }

@@ -5,5 +5,5 @@ namespace ImageGenerator.MAUI.Core.Domain.Descriptors.Pollinations;
 public sealed class PollinationsZimageDescriptor : PollinationsDescriptorBase
 {
     public PollinationsZimageDescriptor()
-        : base("Zimage (Pollinations)", ModelConstants.Pollinations.Zimage, "zimage") { }
+        : base("Z-Image Turbo (Pollinations)", ModelConstants.Pollinations.Zimage, "zimage") { }
 }

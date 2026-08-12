@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 using System.Text;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
@@ -108,7 +109,7 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
                 return new GeneratedImage
                 {
                     Message = Redact(
-                        $"Pollinations HTTP {(int)response.StatusCode} {response.StatusCode}: {shortBody}",
+                        DescribeFailure(response.StatusCode, shortBody),
                         parameters.PollinationsApiToken),
                     ImageData = null
                 };
@@ -163,6 +164,9 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
         Append(query, "height", r.Height.ToString(CultureInfo.InvariantCulture));
         Append(query, "seed", r.Seed.ToString(CultureInfo.InvariantCulture));
         Append(query, "enhance", "false");
+        // gptimage family only — the descriptor leaves this null for every other model, and an
+        // unsupported model would 400 on it rather than ignore it.
+        if (!string.IsNullOrWhiteSpace(r.Quality)) Append(query, "quality", r.Quality);
         // Spec: `safe` takes a comma-separated category list (privacy, secrets, sexual,
         // violence, shield, true, nsfw). Boolean true enables privacy+secrets; "nsfw" enables
         // sexual+violence (what the UI checkbox labels "NSFW filter"). Default is off — omit
@@ -171,6 +175,19 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
 
         return $"{PromptBaseUrl}{encodedPrompt}?{query}";
     }
+
+    // Pollinations moved to mandatory auth: anonymous generation now 401s, and paid-only models
+    // 402 when the key is out of pollen. Both arrive as a JSON error envelope that reads poorly
+    // in a job-row label, so translate the two actionable codes into plain instructions and let
+    // everything else fall through to the raw (truncated) body.
+    private static string DescribeFailure(HttpStatusCode statusCode, string body) => statusCode switch
+    {
+        HttpStatusCode.Unauthorized =>
+            "Pollinations requires an API key — add one in Settings (get one at enter.pollinations.ai/keys).",
+        HttpStatusCode.PaymentRequired =>
+            "Insufficient pollen balance for this paid Pollinations model — top up at enter.pollinations.ai, or pick a model without the “paid” tag.",
+        _ => $"Pollinations HTTP {(int)statusCode} {statusCode}: {body}"
+    };
 
     private static void Append(StringBuilder sb, string key, string value)
     {

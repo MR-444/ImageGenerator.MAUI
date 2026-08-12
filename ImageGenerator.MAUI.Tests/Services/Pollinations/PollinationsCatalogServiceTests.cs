@@ -40,18 +40,18 @@ public class PollinationsCatalogServiceTests
     }
 
     [Fact]
-    public async Task FetchAsync_ReturnsImageNonPaidEntries()
+    public async Task FetchAsync_MapsEntryToModelOption()
     {
         _nextResponse = () => JsonResponse("""
             [
-              {"name":"flux","description":"Flux Schnell - Fast generator","output_modalities":["image"],"paid_only":false}
+              {"name":"flux","title":"FLUX.1 Schnell","description":"Fast generator","output_modalities":["image"],"paid_only":false}
             ]
             """);
 
         var result = await _service.FetchAsync();
 
         result.Should().HaveCount(1);
-        result[0].Display.Should().Be("Flux Schnell (Pollinations)");
+        result[0].Display.Should().Be("FLUX.1 Schnell (Pollinations)");
         result[0].Value.Should().Be("pollinations/flux");
         result[0].Provider.Should().Be(ProviderConstants.Pollinations);
     }
@@ -73,27 +73,32 @@ public class PollinationsCatalogServiceTests
     }
 
     [Fact]
-    public async Task FetchAsync_FiltersOutPaidOnlyTrueEntries()
+    public async Task FetchAsync_KeepsPaidOnlyEntries_TaggedPaid()
     {
+        // Every request needs an API key now, so paid_only is about pollen credits rather than
+        // reachability — the models stay listed and carry the tag instead of being filtered out.
         _nextResponse = () => JsonResponse("""
             [
-              {"name":"free","output_modalities":["image"],"paid_only":false},
-              {"name":"paid","output_modalities":["image"],"paid_only":true}
+              {"name":"free","title":"Free Model","output_modalities":["image"],"paid_only":false},
+              {"name":"paid","title":"Paid Model","output_modalities":["image"],"paid_only":true}
             ]
             """);
 
         var result = await _service.FetchAsync();
 
-        result.Select(r => r.Value).Should().BeEquivalentTo(["pollinations/free"]);
+        result.Select(r => r.Display).Should().BeEquivalentTo([
+            "Free Model (Pollinations)",
+            "Paid Model (Pollinations · paid)"
+        ]);
     }
 
     [Fact]
-    public async Task FetchAsync_IncludesEntriesWithNullPaidOnly()
+    public async Task FetchAsync_TreatsMissingPaidOnlyAsFree()
     {
-        // paid_only key omitted entirely — `e.PaidOnly != true` allows null through.
+        // paid_only key omitted entirely — only an explicit `true` earns the tag.
         _nextResponse = () => JsonResponse("""
             [
-              {"name":"unknown-payment","output_modalities":["image"]}
+              {"name":"unknown-payment","title":"Unknown","output_modalities":["image"]}
             ]
             """);
 
@@ -101,6 +106,42 @@ public class PollinationsCatalogServiceTests
 
         result.Should().HaveCount(1);
         result[0].Value.Should().Be("pollinations/unknown-payment");
+        result[0].Display.Should().Be("Unknown (Pollinations)");
+    }
+
+    [Fact]
+    public async Task FetchAsync_FiltersOutCommunityAndAlphaEntries()
+    {
+        // Community models run on the owner's own backend, not Pollinations infrastructure, so
+        // prompts would leave to a third party — excluded regardless of the paid_only flag.
+        _nextResponse = () => JsonResponse("""
+            [
+              {"name":"first-party","title":"First Party","output_modalities":["image"]},
+              {"name":"vendouple/lucid-origin","title":"Lucid Origin","output_modalities":["image"],"community":true,"alpha":true,"paid_only":false},
+              {"name":"community-only","title":"Community Only","output_modalities":["image"],"community":true},
+              {"name":"alpha-only","title":"Alpha Only","output_modalities":["image"],"alpha":true}
+            ]
+            """);
+
+        var result = await _service.FetchAsync();
+
+        result.Select(r => r.Value).Should().BeEquivalentTo(["pollinations/first-party"]);
+    }
+
+    [Fact]
+    public async Task FetchAsync_FiltersOutVideoModels_FromImageModelsFeed()
+    {
+        // /image/models carries image AND video models; only image output belongs in the picker.
+        _nextResponse = () => JsonResponse("""
+            [
+              {"name":"flux","title":"FLUX.1 Schnell","output_modalities":["image"]},
+              {"name":"veo","title":"Veo","output_modalities":["video"]}
+            ]
+            """);
+
+        var result = await _service.FetchAsync();
+
+        result.Select(r => r.Value).Should().BeEquivalentTo(["pollinations/flux"]);
     }
 
     [Fact]
@@ -121,45 +162,69 @@ public class PollinationsCatalogServiceTests
     }
 
     [Fact]
-    public async Task FetchAsync_DisplayName_UsesDescriptionPrefixBeforeDash()
+    public async Task FetchAsync_DisplayName_UsesTitleField()
     {
         _nextResponse = () => JsonResponse("""
             [
-              {"name":"flux","description":"Flux Schnell - Fast generator","output_modalities":["image"]}
+              {"name":"zimage","title":"Z-Image Turbo","output_modalities":["image"]}
             ]
             """);
 
         var result = await _service.FetchAsync();
 
-        result[0].Display.Should().Be("Flux Schnell (Pollinations)");
+        result[0].Display.Should().Be("Z-Image Turbo (Pollinations)");
     }
 
     [Fact]
-    public async Task FetchAsync_DisplayName_UsesFullDescriptionWhenNoDashPresent()
+    public async Task FetchAsync_DisplayName_NeverUsesDescription()
     {
+        // Regression: the API moved the model name into "title" and left "description" as a
+        // marketing sentence — the old description parser surfaced that sentence as the name.
         _nextResponse = () => JsonResponse("""
             [
-              {"name":"x","description":"Plain description","output_modalities":["image"]}
+              {"name":"flux","title":"FLUX.1 Schnell","description":"Fast, high-quality images at a tiny cost","output_modalities":["image"]},
+              {"name":"kontext","description":"Edits an existing image - swap, restyle, refine","output_modalities":["image"]}
             ]
             """);
 
         var result = await _service.FetchAsync();
 
-        result[0].Display.Should().Be("Plain description (Pollinations)");
+        result.Select(r => r.Display).Should().BeEquivalentTo([
+            "FLUX.1 Schnell (Pollinations)",
+            "Kontext (Pollinations)"
+        ]);
     }
 
     [Fact]
-    public async Task FetchAsync_DisplayName_FallsBackToTitleCasedSlug_WhenDescriptionMissing()
+    public async Task FetchAsync_DisplayName_FallsBackToTitleCasedSlug_WhenTitleMissing()
     {
         _nextResponse = () => JsonResponse("""
             [
-              {"name":"flux-pro-ultra","output_modalities":["image"]}
+              {"name":"flux-pro-ultra","output_modalities":["image"]},
+              {"name":"x","title":"   ","output_modalities":["image"]}
             ]
             """);
 
         var result = await _service.FetchAsync();
 
-        result[0].Display.Should().Be("Flux Pro Ultra (Pollinations)");
+        result.Select(r => r.Display).Should().BeEquivalentTo([
+            "Flux Pro Ultra (Pollinations)",
+            "X (Pollinations)"
+        ]);
+    }
+
+    [Fact]
+    public async Task FetchAsync_DisplayName_SlugFallbackDropsVendorNamespace()
+    {
+        _nextResponse = () => JsonResponse("""
+            [
+              {"name":"vendouple/lucid-origin","output_modalities":["image"]}
+            ]
+            """);
+
+        var result = await _service.FetchAsync();
+
+        result[0].Display.Should().Be("Lucid Origin (Pollinations)");
     }
 
     [Fact]
@@ -167,8 +232,8 @@ public class PollinationsCatalogServiceTests
     {
         _nextResponse = () => JsonResponse("""
             [
-              {"name":"a","description":"With dash - tail","output_modalities":["image"]},
-              {"name":"b","description":"NoDash","output_modalities":["image"]},
+              {"name":"a","title":"Titled","output_modalities":["image"]},
+              {"name":"b","description":"Description only","output_modalities":["image"]},
               {"name":"slug-only","output_modalities":["image"]}
             ]
             """);

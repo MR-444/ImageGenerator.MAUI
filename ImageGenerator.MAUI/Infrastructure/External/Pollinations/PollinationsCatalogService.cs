@@ -11,9 +11,10 @@ namespace ImageGenerator.MAUI.Infrastructure.External.Pollinations;
 public sealed class PollinationsCatalogService : IPollinationsCatalogService
 {
     // gen.pollinations.ai is the canonical host (legacy image.pollinations.ai/models is
-    // effectively dead — returns only ["sana"]). The response is a JSON array of rich
-    // model objects; we filter to image-producing free-tier ones only.
-    private const string ModelsEndpoint = "https://gen.pollinations.ai/models";
+    // effectively dead — returns only ["sana"]). /image/models is the narrow feed (image +
+    // video models, ~54 entries vs ~221 on /models), so we still filter by output modality.
+    // Per the docs, listing endpoints need no auth — only *generation* requires an API key.
+    private const string ModelsEndpoint = "https://gen.pollinations.ai/image/models";
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<PollinationsCatalogService> _logger;
@@ -35,7 +36,11 @@ public sealed class PollinationsCatalogService : IPollinationsCatalogService
             return entries
                 .Where(e => !string.IsNullOrWhiteSpace(e.Name)
                             && e.OutputModalities?.Contains("image", StringComparer.OrdinalIgnoreCase) == true
-                            && e.PaidOnly != true)
+                            // Community models are alpha, unmonitored, and — per the docs — run on
+                            // the owner's own backend rather than Pollinations infrastructure, so
+                            // prompts would leave to a third party. Excluded on privacy grounds.
+                            && e.Community != true
+                            && e.Alpha != true)
                 .Select(e => new ModelOption(
                     Display: ToDisplayName(e),
                     Value: ModelConstants.Pollinations.PrefixSlash + e.Name!,
@@ -51,32 +56,42 @@ public sealed class PollinationsCatalogService : IPollinationsCatalogService
         }
     }
 
+    // Paid-only models are listed rather than hidden: every request needs an API key now, so
+    // the distinction is whether the key has pollen credits, not whether the model is reachable.
+    // A short suffix keeps that visible in the picker, which binds ModelOption.Display directly.
+    private const string PaidSuffix = " · paid";
+
     private static string ToDisplayName(PollinationsModelEntry entry)
     {
-        // Pollinations' description starts with a human title before " - " — e.g. "Flux Schnell -
-        // Fast high-quality image generation". Use that title when present, falling back to a
-        // title-cased slug if the description is missing.
-        if (!string.IsNullOrWhiteSpace(entry.Description))
-        {
-            var dash = entry.Description.IndexOf(" - ", StringComparison.Ordinal);
-            var title = dash > 0 ? entry.Description[..dash] : entry.Description;
-            return $"{title.Trim()} (Pollinations)";
-        }
+        var suffix = entry.PaidOnly == true ? PaidSuffix : string.Empty;
+        return $"{ToModelName(entry)} (Pollinations{suffix})";
+    }
 
+    private static string ToModelName(PollinationsModelEntry entry)
+    {
+        // "title" is the human model name ("FLUX.1 Schnell"); "description" is a marketing
+        // sentence and must never be used here. (An older API shape packed both into
+        // description as "Title - blurb"; that field no longer carries the title at all.)
+        if (!string.IsNullOrWhiteSpace(entry.Title)) return entry.Title.Trim();
+
+        // Slug fallback — "flux-pro-ultra" → "Flux Pro Ultra". Owner-namespaced community slugs
+        // ("vendouple/lucid-origin") keep only the model part.
         var slug = entry.Name ?? string.Empty;
-        var titled = string.Join(' ',
+        var lastSlash = slug.LastIndexOf('/');
+        if (lastSlash >= 0) slug = slug[(lastSlash + 1)..];
+
+        return string.Join(' ',
             slug.Split('-', StringSplitOptions.RemoveEmptyEntries)
                 .Select(s => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(s)));
-        return $"{titled} (Pollinations)";
     }
 
     private sealed class PollinationsModelEntry
     {
         [JsonPropertyName("name")] public string? Name { get; set; }
-        [JsonPropertyName("aliases")] public List<string>? Aliases { get; set; }
-        [JsonPropertyName("description")] public string? Description { get; set; }
-        [JsonPropertyName("input_modalities")] public List<string>? InputModalities { get; set; }
+        [JsonPropertyName("title")] public string? Title { get; set; }
         [JsonPropertyName("output_modalities")] public List<string>? OutputModalities { get; set; }
         [JsonPropertyName("paid_only")] public bool? PaidOnly { get; set; }
+        [JsonPropertyName("community")] public bool? Community { get; set; }
+        [JsonPropertyName("alpha")] public bool? Alpha { get; set; }
     }
 }
