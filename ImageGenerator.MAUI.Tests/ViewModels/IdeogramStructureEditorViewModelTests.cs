@@ -60,12 +60,14 @@ public class IdeogramStructureEditorViewModelTests
     }
 
     [Fact]
-    public void EnrichLocalModel_WithoutGenerator_FallsBackToDefaultOllamaModel()
+    public void EnrichLocalModel_WithoutGenerator_IsEmptyRatherThanAGuessedDefault()
     {
-        // Stand-alone construction has no generator, so the Local tier names the app default.
+        // There is no app-level default Ollama model: which models a server has is per-server, so
+        // guessing one only produced an opaque 404. Empty means "nothing picked" and callers must
+        // say so instead of sending a made-up model name.
         var sut = CreateSut();
 
-        sut.EnrichLocalModel.Should().Be(ModelConstants.Ollama.DefaultModel);
+        sut.EnrichLocalModel.Should().BeEmpty();
     }
 
     [Fact]

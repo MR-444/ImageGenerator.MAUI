@@ -672,4 +672,49 @@ public class UiStateStoreTests
 
         _sut.LoadIdeaBuildJson().Should().BeNull();
     }
+
+    // Cached Ollama model list: keeps the pickers populated at launch and while the server is
+    // down. The server URL rides inside the value so a cache from another host is discarded.
+
+    [Fact]
+    public void LoadOllamaModels_NeverCached_ReturnsEmpty()
+    {
+        _sut.LoadOllamaModels("http://fireengine:11434").Should().BeEmpty();
+        _sut.LoadOllamaVisionModels("http://fireengine:11434").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void OllamaModels_RoundTripThroughPreferences()
+    {
+        _sut.PersistOllamaModels("http://fireengine:11434", ["llama3.1", "gemma3:27b"], ["gemma3:27b"]);
+
+        _sut.LoadOllamaModels("http://fireengine:11434").Should().Equal("llama3.1", "gemma3:27b");
+        _sut.LoadOllamaVisionModels("http://fireengine:11434").Should().Equal("gemma3:27b");
+    }
+
+    [Fact]
+    public void LoadOllamaModels_DifferentServer_DiscardsTheCache()
+    {
+        _sut.PersistOllamaModels("http://fireengine:11434", ["llama3.1"], []);
+
+        _sut.LoadOllamaModels("http://localhost:11434").Should()
+            .BeEmpty("another host's models would be a lie about what this one has");
+    }
+
+    [Fact]
+    public void OllamaModels_EmptyList_RoundTripsWithoutInventingAModel()
+    {
+        _sut.PersistOllamaModels("http://fireengine:11434", [], []);
+
+        _sut.LoadOllamaModels("http://fireengine:11434").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void LoadOllamaModels_GetThrows_SwallowedAndReturnsEmpty()
+    {
+        _sut.PersistOllamaModels("http://fireengine:11434", ["llama3.1"], []);
+        _preferences.ThrowOnGet = new InvalidOperationException("backend down");
+
+        _sut.LoadOllamaModels("http://fireengine:11434").Should().BeEmpty();
+    }
 }

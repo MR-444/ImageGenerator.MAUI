@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
@@ -87,6 +89,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
     [NotifyPropertyChangedFor(nameof(IsImageSource))]
     [NotifyPropertyChangedFor(nameof(ShowObservation))]
     [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ReObserveCommand))]
     private IdeaSourceMode _sourceMode = IdeaSourceMode.Text;
 
     public bool IsTextSource => SourceMode == IdeaSourceMode.Text;
@@ -112,7 +115,9 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasReferenceImage))]
+    [NotifyPropertyChangedFor(nameof(ShowObservation))]
     [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ReObserveCommand))]
     private string _referenceImageBase64 = string.Empty;
 
     [ObservableProperty]
@@ -123,14 +128,54 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasObservation))]
-    [NotifyPropertyChangedFor(nameof(ShowObservation))]
     private string _observedImageDescription = string.Empty;
+
+    /// <summary>
+    /// True once the user has hand-edited the observation. An edited caption is never replaced
+    /// automatically — the edit IS the user's intent — so only "Observe again" discards it.
+    /// </summary>
+    [ObservableProperty]
+    private bool _observationEdited;
+
+    // Set while the VM writes the observation itself, so the Editor's two-way push-back isn't
+    // mistaken for a user edit. Same window idiom as GeneratorViewModel's _suppress* flags.
+    private bool _writingObservation;
+
+    partial void OnObservedImageDescriptionChanged(string value)
+    {
+        if (!_writingObservation) ObservationEdited = true;
+    }
+
+    // Identifies the inputs that produced the current observation. The idea box is deliberately NOT
+    // part of it: user notes never reach the vision model (BuildIdeaFromObservation merges them in
+    // afterwards, for the prose pass), so re-observing because the notes changed would buy nothing
+    // and cost a second vision call. The image is hashed rather than compared by reference —
+    // VisionImageNormalizer returns the SAME array for already-valid PNG/JPEG, so identity is not a
+    // usable change signal.
+    private string? _observationFingerprint;
+
+    private string CurrentObservationFingerprint() =>
+        $"{SelectedVisionProvider}|{ResolveVisionModel(SelectedVisionProvider)}|" +
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(ReferenceImageBase64)));
+
+    // Writes the observation without tripping the hand-edit detector, and re-keys it in one step.
+    private void SetObservation(string value, string? fingerprint)
+    {
+        _writingObservation = true;
+        try { ObservedImageDescription = value; }
+        finally { _writingObservation = false; }
+        _observationFingerprint = fingerprint;
+        ObservationEdited = false;
+    }
 
     public bool HasReferenceImage => !string.IsNullOrWhiteSpace(ReferenceImageBase64);
 
     public bool HasObservation => !string.IsNullOrWhiteSpace(ObservedImageDescription);
 
-    public bool ShowObservation => IsImageSource && HasObservation;
+    // Keyed off the IMAGE, not off having an observation: the card carries the "Observe again"
+    // button and an editable box, both of which must stay reachable after the text is cleared —
+    // and the user can write their own observation before ever running a vision pass.
+    public bool ShowObservation => IsImageSource && HasReferenceImage;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
@@ -138,6 +183,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
     [NotifyCanExecuteChangedFor(nameof(CopyProseCommand))]
     [NotifyCanExecuteChangedFor(nameof(UseProseCommand))]
     [NotifyCanExecuteChangedFor(nameof(UseJsonCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ReObserveCommand))]
     private bool _isBusy;
 
     /// <summary>The checkbox: also run pass 2 (prose → Ideogram V4 JSON). Defaults from the model.</summary>
@@ -306,7 +352,9 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         ReferenceImageBase64 = string.Empty;
         ReferenceImagePreview = null;
         ReferenceImageFileName = string.Empty;
-        ObservedImageDescription = string.Empty;
+        // Only the observation goes: it describes an image that is no longer here. Any prose built
+        // earlier stays on the page so it can still be copied or applied.
+        SetObservation(string.Empty, fingerprint: null);
         SetStatus("Reference image cleared.", StatusKind.Info);
     }
 
@@ -332,7 +380,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         ReferenceImageFileName = string.IsNullOrWhiteSpace(fileName)
             ? sourcePath is { Length: > 0 } path ? Path.GetFileName(path) : "reference image"
             : fileName;
-        ResetBuiltResults();
+        ResetAllResults();
 
         if (!createPreview)
         {
@@ -352,12 +400,36 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         return true;
     }
 
-    private void ResetBuiltResults()
+    // A new (or cleared) reference image invalidates everything, the observation included.
+    private void ResetAllResults()
+    {
+        ResetPromptResults();
+        SetObservation(string.Empty, fingerprint: null);
+    }
+
+    // A rebuild clears only what that build regenerates. The observation deliberately survives: it
+    // is re-validated against _observationFingerprint instead of being blanked, so a second build
+    // on the same image reuses the caption rather than paying for it twice.
+    private void ResetPromptResults()
     {
         Prose = string.Empty;
-        ObservedImageDescription = string.Empty;
         HasJson = false;
         _builtJson = null;
+    }
+
+    private bool CanReObserve() => !IsBusy && IsImageSource && HasReferenceImage;
+
+    /// <summary>
+    /// Discards the current observation so the next build captions the image again — the escape hatch
+    /// for a caption the user wants regenerated, or wants back after editing it. Marking it stale
+    /// rather than observing inline keeps the GPU gate and model unload in the one place that owns
+    /// them (<see cref="BuildAsync"/>).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanReObserve))]
+    private void ReObserve()
+    {
+        SetObservation(string.Empty, fingerprint: null);
+        SetStatus("The image will be observed again on the next build.", StatusKind.Info);
     }
 
     [RelayCommand(CanExecute = nameof(CanBuild))]
@@ -369,16 +441,24 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
             return;
         }
 
+        // There is no default Ollama model — guessing one only produced an opaque 404 from a server
+        // that never had it. Same contract as the OpenRouter vision picker below.
+        if (tier == ModelTier.Local && string.IsNullOrWhiteSpace(ResolveOllamaModel()))
+        {
+            SetStatus("Pick a local Ollama model first. Refresh the list, then choose a model.", StatusKind.Error);
+            return;
+        }
+
         // Fresh token source per build; the previous one (if any) is disposed in this method's finally.
         var cts = new CancellationTokenSource();
         _cts = cts;
         var token = cts.Token;
 
         IsBusy = true;
-        // A fresh build starts from a clean slate: drop the previous run's prose, observation,
-        // and JSON so stale results never linger (including when this build errors or is cancelled
-        // before producing new output). They repopulate below as each pass succeeds.
-        ResetBuiltResults();
+        // A fresh build drops the previous run's prose and JSON so stale results never linger
+        // (including when this build errors or is cancelled before producing new output). The
+        // observation is NOT dropped — see the reuse check below.
+        ResetPromptResults();
 
         var usesLocalVision = IsImageSource && SelectedVisionProvider == VisionObservationProvider.LocalOllama;
         var gpuGated = (tier == ModelTier.Local || usesLocalVision)
@@ -404,29 +484,50 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
                 }
 
                 var visionModel = ResolveVisionModel(SelectedVisionProvider);
-                if (SelectedVisionProvider == VisionObservationProvider.OpenRouter
-                    && string.IsNullOrWhiteSpace(visionModel))
+                if (string.IsNullOrWhiteSpace(visionModel))
                 {
-                    SetStatus("Pick an OpenRouter vision model first. Refresh the list, then choose a model.", StatusKind.Error);
+                    SetStatus(
+                        SelectedVisionProvider == VisionObservationProvider.OpenRouter
+                            ? "Pick an OpenRouter vision model first. Refresh the list, then choose a model."
+                            : "Pick a local vision model first. Refresh the list, then choose a model.",
+                        StatusKind.Error);
                     return;
                 }
 
-                SetStatus($"Asking {VisionProviderDisplay(SelectedVisionProvider)} to observe the reference image…", StatusKind.Info);
-                var observationResult = await _visionObserver.ObserveAsync(
-                    new VisionObservationRequest(
-                        SelectedVisionProvider,
-                        ReferenceImageBase64,
-                        ReferenceImageFileName,
-                        visionModel),
-                    token);
-
-                if (!observationResult.Success || observationResult.Observation is null)
+                // Observe only when there is nothing usable to reuse. The caption depends on the
+                // image and the vision model, never on the idea box, so a second build with changed
+                // notes must not pay for a second vision call — the notes are applied below, by
+                // BuildIdeaFromObservation. A hand-edited caption is always kept; "Observe again"
+                // is how the user discards it.
+                var fingerprint = CurrentObservationFingerprint();
+                if (!HasObservation || (_observationFingerprint != fingerprint && !ObservationEdited))
                 {
-                    SetStatus(observationResult.Error ?? "Couldn't observe the reference image.", StatusKind.Error);
-                    return;
+                    SetStatus($"Asking {VisionProviderDisplay(SelectedVisionProvider)} to observe the reference image…", StatusKind.Info);
+                    var observationResult = await _visionObserver.ObserveAsync(
+                        new VisionObservationRequest(
+                            SelectedVisionProvider,
+                            ReferenceImageBase64,
+                            ReferenceImageFileName,
+                            visionModel),
+                        token);
+
+                    if (!observationResult.Success || observationResult.Observation is null)
+                    {
+                        SetStatus(observationResult.Error ?? "Couldn't observe the reference image.", StatusKind.Error);
+                        return;
+                    }
+
+                    SetObservation(observationResult.Observation, fingerprint);
+                }
+                else
+                {
+                    SetStatus(
+                        ObservationEdited
+                            ? "Using your edited image observation…"
+                            : "Reusing the existing image observation…",
+                        StatusKind.Info);
                 }
 
-                ObservedImageDescription = observationResult.Observation;
                 ideaForPrompt = BuildIdeaFromObservation(ObservedImageDescription, Idea);
             }
 
@@ -597,7 +698,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         _generator?.OllamaBaseUrl is { Length: > 0 } u ? u : ModelConstants.Ollama.DefaultBaseUrl;
 
     private string ResolveOllamaModel() =>
-        _generator?.OllamaModel is { Length: > 0 } m ? m : ModelConstants.Ollama.DefaultModel;
+        _generator?.OllamaModel ?? string.Empty;
 
     private string ResolveOllamaVisionModel() =>
         _generator?.OllamaVisionModel is { Length: > 0 } m

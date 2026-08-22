@@ -303,7 +303,11 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
             var baseUrl = _uiStateStore.LoadOllamaBaseUrl() is { Length: > 0 } u
                 ? u
                 : ModelConstants.Ollama.DefaultBaseUrl;
-            return (null, baseUrl, null);
+            // The local tier has no default model — an unpicked one used to fall through to a
+            // hardcoded name the server usually didn't have, failing as an opaque 404.
+            return _uiStateStore.LoadOllamaModel() is { Length: > 0 }
+                ? (null, baseUrl, null)
+                : (null, baseUrl, "No local Ollama model selected — pick one on the Describe an idea page or in Settings.");
         }
 
         var apiKey = await _tokenStore.LoadAsync();
@@ -315,7 +319,7 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
     private string ResolveModelId(ModelTier tier) => tier switch
     {
         ModelTier.Sonnet => SonnetModelId,
-        ModelTier.Local => _uiStateStore.LoadOllamaModel() is { Length: > 0 } m ? m : ModelConstants.Ollama.DefaultModel,
+        ModelTier.Local => _uiStateStore.LoadOllamaModel() ?? string.Empty,
         _ => OpusModelId
     };
 

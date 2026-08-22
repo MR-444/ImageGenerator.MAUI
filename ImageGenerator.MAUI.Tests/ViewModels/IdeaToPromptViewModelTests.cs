@@ -220,7 +220,7 @@ public class IdeaToPromptViewModelTests
     {
         var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
         var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
-            NullLogger<IdeaToPromptViewModel>.Instance, generator: null);
+            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator());
         vm.SelectedModelTier = ModelTier.Local;
         vm.BuildJson = true;
         vm.Idea = "a red fox in snow";
@@ -295,7 +295,7 @@ public class IdeaToPromptViewModelTests
         var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
         var observer = new FakeVisionObserver(VisionObservationResult.Ok("A boy on a playground swing in warm sun."));
         var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
-            NullLogger<IdeaToPromptViewModel>.Instance, generator: null, visionObserver: observer);
+            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator(), visionObserver: observer);
         vm.SelectedModelTier = ModelTier.Local;
         vm.SourceMode = IdeaSourceMode.Image;
         vm.Idea = "make it uplifting";
@@ -316,13 +316,163 @@ public class IdeaToPromptViewModelTests
         vm.StatusKind.Should().Be(StatusKind.Success);
     }
 
+    // ---- Observe once, reuse until the image or vision model changes --------------------
+
+    // The reported bug: a second Build re-captioned an unchanged image, paying for a second vision
+    // call. The user's own scenario is the interesting one — they change the notes and rebuild to
+    // steer the prompt, which is a legitimate second build that must NOT re-observe: the notes never
+    // reach the vision model, they are merged in afterwards for the prose pass.
+    [Fact]
+    public async Task Build_ImageMode_SecondBuildWithChangedNotes_ReusesObservation_AndRestreersTheProse()
+    {
+        var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+        var observer = new FakeVisionObserver(VisionObservationResult.Ok("A boy on a playground swing in warm sun."));
+        var vm = NewImageVm(builder, observer);
+        vm.Idea = "make it uplifting";
+
+        await vm.BuildCommand.ExecuteAsync(null);
+        vm.Idea = "make it melancholy instead";
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        observer.Requests.Should().ContainSingle("the image and vision model never changed");
+        builder.ProseInputs.Should().HaveCount(2, "the prompt is still rebuilt for the new notes");
+        builder.ProseInputs[1].Should()
+            .Contain("A boy on a playground swing", "the cached observation is reused verbatim")
+            .And.Contain("make it melancholy instead")
+            .And.NotContain("make it uplifting");
+        vm.HasObservation.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Build_ImageMode_NewImage_ObservesAgain()
+    {
+        var observer = new FakeVisionObserver(VisionObservationResult.Ok("An observation."));
+        var vm = NewImageVm(new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())), observer);
+
+        await vm.BuildCommand.ExecuteAsync(null);
+        vm.SetReferenceImageForTest("other.png", OtherPng);
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        observer.Requests.Should().HaveCount(2, "a different image is a different caption");
+    }
+
+    [Fact]
+    public async Task Build_ImageMode_ChangedVisionModel_ObservesAgain()
+    {
+        var observer = new FakeVisionObserver(VisionObservationResult.Ok("An observation."));
+        var generator = BuildGenerator();
+        generator.OllamaVisionModel = "llava:13b";
+        var vm = NewImageVm(new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())), observer, generator);
+
+        await vm.BuildCommand.ExecuteAsync(null);
+        generator.OllamaVisionModel = "gemma3:27b";
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        observer.Requests.Should().HaveCount(2, "another vision model sees the image differently");
+    }
+
+    [Fact]
+    public async Task ReObserve_DiscardsTheObservation_AndTheNextBuildObservesAgain()
+    {
+        var observer = new FakeVisionObserver(VisionObservationResult.Ok("An observation."));
+        var vm = NewImageVm(new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())), observer);
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        vm.ReObserveCommand.CanExecute(null).Should().BeTrue();
+        vm.ReObserveCommand.Execute(null);
+
+        vm.HasObservation.Should().BeFalse("the box clears so the user can see it will be rebuilt");
+        await vm.BuildCommand.ExecuteAsync(null);
+        observer.Requests.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task Build_ImageMode_HandEditedObservation_IsUsedVerbatimWithoutObserving()
+    {
+        var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+        var observer = new FakeVisionObserver(VisionObservationResult.Ok("A boy on a playground swing in warm sun."));
+        var vm = NewImageVm(builder, observer);
+        await vm.BuildCommand.ExecuteAsync(null);
+        vm.ObservationEdited.Should().BeFalse("the VM wrote that text, not the user");
+
+        vm.ObservedImageDescription = "A girl on a swing at dusk, hand-corrected.";
+        vm.ObservationEdited.Should().BeTrue();
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        observer.Requests.Should().ContainSingle("an edited observation is never silently overwritten");
+        builder.ProseInputs[1].Should().Contain("hand-corrected");
+    }
+
+    [Fact]
+    public async Task Build_ImageMode_NewImage_ClearsTheHandEditedFlag()
+    {
+        var observer = new FakeVisionObserver(VisionObservationResult.Ok("An observation."));
+        var vm = NewImageVm(new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())), observer);
+        await vm.BuildCommand.ExecuteAsync(null);
+        vm.ObservedImageDescription = "My own words.";
+
+        vm.SetReferenceImageForTest("other.png", OtherPng);
+
+        vm.ObservationEdited.Should().BeFalse("an edit describes the old image, not the new one");
+        vm.HasObservation.Should().BeFalse();
+    }
+
+    // ---- No implicit Ollama model -------------------------------------------------------
+
+    [Fact]
+    public async Task Build_LocalTier_WithNoModelPicked_FailsBeforeAnyModelCall()
+    {
+        var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
+        var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator(ollamaModel: string.Empty));
+        vm.SelectedModelTier = ModelTier.Local;
+        vm.Idea = "a red fox in snow";
+
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        builder.ProseInputs.Should().BeEmpty("guessing a model name only produced an opaque Ollama 404");
+        vm.StatusKind.Should().Be(StatusKind.Error);
+        vm.StatusMessage.Should().Contain("Pick a local Ollama model first");
+    }
+
+    [Fact]
+    public async Task Build_LocalVisionWithNoModelPicked_FailsBeforeObservation()
+    {
+        var observer = new FakeVisionObserver(VisionObservationResult.Ok("An observation."));
+        var vm = NewImageVm(
+            new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())),
+            observer,
+            BuildGenerator(ollamaModel: string.Empty));
+        vm.SelectedModelTier = ModelTier.Sonnet;   // only the VISION model is missing
+
+        await vm.BuildCommand.ExecuteAsync(null);
+
+        observer.Requests.Should().BeEmpty();
+        vm.StatusKind.Should().Be(StatusKind.Error);
+        vm.StatusMessage.Should().Contain("Pick a local vision model first");
+    }
+
+    // Image mode, Local tier, one reference image already loaded — the shape every reuse test wants.
+    private IdeaToPromptViewModel NewImageVm(
+        TrackingPromptBuilder builder, FakeVisionObserver observer, GeneratorViewModel? generator = null)
+    {
+        var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
+            NullLogger<IdeaToPromptViewModel>.Instance,
+            generator: generator ?? BuildGenerator(), visionObserver: observer);
+        vm.SelectedModelTier = ModelTier.Local;
+        vm.SourceMode = IdeaSourceMode.Image;
+        vm.BuildJson = false;
+        vm.SetReferenceImageForTest("swing.png", TinyPng);
+        return vm;
+    }
+
     [Fact]
     public async Task Build_ImageMode_ObservationFailure_StopsBeforeVpe()
     {
         var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
         var observer = new FakeVisionObserver(VisionObservationResult.Fail("not a vision model"));
         var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
-            NullLogger<IdeaToPromptViewModel>.Instance, generator: null, visionObserver: observer);
+            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator(), visionObserver: observer);
         vm.SelectedModelTier = ModelTier.Local;
         vm.SourceMode = IdeaSourceMode.Image;
         vm.SetReferenceImageForTest("ref.png", TinyPng);
@@ -385,7 +535,7 @@ public class IdeaToPromptViewModelTests
     {
         var builder = new CancellableProseBuilder();
         var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
-            NullLogger<IdeaToPromptViewModel>.Instance, generator: null);
+            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator());
         vm.SelectedModelTier = ModelTier.Local;
         vm.Idea = "a red fox in snow";
 
@@ -425,7 +575,7 @@ public class IdeaToPromptViewModelTests
     {
         var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
         var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
-            NullLogger<IdeaToPromptViewModel>.Instance, generator: null);
+            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator());
         vm.SelectedModelTier = tier;
         vm.BuildJson = false;
         vm.Idea = "a red fox in snow";
@@ -495,6 +645,7 @@ public class IdeaToPromptViewModelTests
             new FakePromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())),
             _clipboard.Object,
             NullLogger<IdeaToPromptViewModel>.Instance,
+            generator: BuildGenerator(),
             visionObserver: observer);
         vm.SelectedModelTier = ModelTier.Local;
         vm.SourceMode = IdeaSourceMode.Image;
@@ -532,6 +683,12 @@ public class IdeaToPromptViewModelTests
         elements.Should().Contain(e => (string?)e.Attribute("AutomationId") == "ReferenceImageDropZone");
         elements.Should().Contain(e => (string?)e.Attribute("AutomationId") == "ImageObservationEditor"
                                        && (string?)e.Attribute("HeightRequest") == "260");
+        // The observation is hand-editable: the user can correct the caption and have the build
+        // use it verbatim, so the editor must NOT be read-only.
+        elements.Should().Contain(e => (string?)e.Attribute("AutomationId") == "ImageObservationEditor"
+                                       && (string?)e.Attribute("IsReadOnly") != "True");
+        elements.Should().Contain(e => (string?)e.Attribute("AutomationId") == "ReObserveImageButton"
+                                       && (string?)e.Attribute("Command") == "{Binding ReObserveCommand}");
         elements.Should().NotContain(e => e.Name.LocalName.Contains("KeyboardAccelerator", StringComparison.Ordinal),
             "KeyboardAccelerators is not loadable on this MAUI page at runtime");
     }
@@ -625,11 +782,13 @@ public class IdeaToPromptViewModelTests
 
     private static PromptBuilderResult JsonOk(V4JsonPrompt prompt) => PromptBuilderResult.Ok(prompt);
 
+    // Defaults to a generator with a local model picked — production always has one injected, and
+    // without a pick the Local tier (which most of these tests use) refuses to build at all.
     private IdeaToPromptViewModel NewVm(ProseResult prose, PromptBuilderResult json, GeneratorViewModel? generator = null) =>
         new(new FakePromptBuilder(prose, json),
             _clipboard.Object,
             NullLogger<IdeaToPromptViewModel>.Instance,
-            generator);
+            generator ?? BuildGenerator());
 
     private sealed class FakePromptBuilder(ProseResult prose, PromptBuilderResult json) : IPromptBuilderService
     {
@@ -730,7 +889,17 @@ public class IdeaToPromptViewModelTests
 
     // A GeneratorViewModel built from bare mocks — mirrors GeneratorViewModelTests; we only touch
     // Parameters, so no mock setups are needed.
-    private static GeneratorViewModel BuildGenerator() =>
+    // The Local tier has no default model, so a generator that has never picked one blocks every
+    // build with "pick a local Ollama model first". Tests about the prose/JSON passes want a
+    // working setup; the guard itself is covered by Build_LocalTier_WithNoModelPicked_*.
+    private static GeneratorViewModel BuildGenerator(string ollamaModel = "llama3.1")
+    {
+        var generator = BuildBareGenerator();
+        generator.OllamaModel = ollamaModel;
+        return generator;
+    }
+
+    private static GeneratorViewModel BuildBareGenerator() =>
         new(new Mock<IJobRunner>().Object,
             new Mock<IApiTokenStore>().Object,
             new Mock<IPollinationsTokenStore>().Object,

@@ -672,7 +672,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
     /// model the service used (generator settings, else the constants' defaults). Best-effort.</summary>
     private async Task UnloadLocalModelAsync()
     {
-        var model = _generator?.OllamaModel is { Length: > 0 } m ? m : ModelConstants.Ollama.DefaultModel;
+        var model = _generator?.OllamaModel ?? string.Empty;
         await _ollamaCatalog!.UnloadAsync(ResolveOllamaBaseUrl(), model);
     }
 

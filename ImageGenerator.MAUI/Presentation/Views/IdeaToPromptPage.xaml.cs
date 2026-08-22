@@ -28,6 +28,15 @@ public partial class IdeaToPromptPage
         BindingContext = viewModel;
     }
 
+    // Populate the Ollama model pickers without making the user press Refresh first. Idempotent and
+    // session-scoped on the VM, and silent when the server is down — the cached list stays on show.
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        if (BindingContext is IdeaToPromptViewModel { Generator: { } generator })
+            _ = generator.EnsureOllamaModelsLoadedAsync();
+    }
+
     private async void OnBackClicked(object sender, EventArgs e)
     {
         try

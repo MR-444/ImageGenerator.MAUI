@@ -24,6 +24,8 @@ public sealed class UiStateStore : IUiStateStore
     private const string OllamaBaseUrlKey = "imggen.ollama_base_url";
     private const string OllamaModelKey = "imggen.ollama_model";
     private const string OllamaVisionModelKey = "imggen.ollama_vision_model";
+    private const string OllamaModelCacheKey = "imggen.ollama_model_cache";
+    private const string OllamaVisionModelCacheKey = "imggen.ollama_vision_model_cache";
     private const string OpenRouterVisionModelKey = "imggen.openrouter_vision_model";
     private const string OpenRouterVisionFreeOnlyKey = "imggen.openrouter_vision_free_only";
     private const string IdeaBuildJsonKey = "imggen.idea_build_json";
@@ -220,6 +222,42 @@ public sealed class UiStateStore : IUiStateStore
     public string? LoadOllamaVisionModel() => LoadString(OllamaVisionModelKey);
 
     public void PersistOllamaVisionModel(string value) => PersistString(OllamaVisionModelKey, value);
+
+    public IReadOnlyList<string> LoadOllamaModels(string baseUrl) =>
+        LoadModelCache(OllamaModelCacheKey, baseUrl);
+
+    public IReadOnlyList<string> LoadOllamaVisionModels(string baseUrl) =>
+        LoadModelCache(OllamaVisionModelCacheKey, baseUrl);
+
+    public void PersistOllamaModels(string baseUrl, IReadOnlyList<string> models, IReadOnlyList<string> visionModels)
+    {
+        PersistModelCache(OllamaModelCacheKey, baseUrl, models);
+        PersistModelCache(OllamaVisionModelCacheKey, baseUrl, visionModels);
+    }
+
+    // Newline-joined, with the server URL as the FIRST line. Storing the URL inside the value
+    // (rather than mangling it into the key) makes the cache self-invalidating on a server switch
+    // and leaves exactly one Preferences entry per list to clean up. Ollama model tags cannot
+    // contain a newline, so the split is unambiguous.
+    private IReadOnlyList<string> LoadModelCache(string key, string baseUrl)
+    {
+        var raw = SafeGet(key);
+        if (raw is null) return [];
+
+        var lines = raw.Split('\n');
+        if (!string.Equals(lines[0], baseUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogDebug("UiStateStore.LoadModelCache({Key}) -> stale (cached for {Cached})", key, lines[0]);
+            return [];
+        }
+
+        var models = lines.Skip(1).Where(l => l.Length > 0).ToArray();
+        _logger.LogDebug("UiStateStore.LoadModelCache({Key}) -> {Count} model(s)", key, models.Length);
+        return models;
+    }
+
+    private void PersistModelCache(string key, string baseUrl, IReadOnlyList<string> models) =>
+        PersistString(key, string.Join('\n', models.Prepend(baseUrl)));
 
     public string? LoadOpenRouterVisionModel() => LoadString(OpenRouterVisionModelKey);
 

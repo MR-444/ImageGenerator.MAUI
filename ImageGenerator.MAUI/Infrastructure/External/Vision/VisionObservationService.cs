@@ -148,14 +148,17 @@ public sealed class VisionObservationService : IVisionObservationService
         var baseUrl = _uiStateStore.LoadOllamaBaseUrl() is { Length: > 0 } u
             ? u
             : ModelConstants.Ollama.DefaultBaseUrl;
+        // The chain ends at "nothing picked", not at a hardcoded model: the old fallback named a
+        // model most servers don't have, and a non-vision one at that, so it failed as an opaque
+        // 404 instead of telling the user to pick a vision model.
         var modelId = requestedModel is { Length: > 0 } m
             ? m
             : _uiStateStore.LoadOllamaVisionModel() is { Length: > 0 } vm
                 ? vm
-                : _uiStateStore.LoadOllamaModel() is { Length: > 0 } tm
-                    ? tm
-                    : ModelConstants.Ollama.DefaultModel;
-        return (modelId, baseUrl, null);
+                : _uiStateStore.LoadOllamaModel() ?? string.Empty;
+        return string.IsNullOrWhiteSpace(modelId)
+            ? (string.Empty, baseUrl, "Pick a local vision model first — refresh the list, then choose one.")
+            : (modelId, baseUrl, null);
     }
 
     private async Task<string> LoadPromptAsync()

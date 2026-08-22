@@ -56,15 +56,27 @@ public interface IUiStateStore
     /// </summary>
     string? LoadOllamaBaseUrl();
     /// <summary>
-    /// The Ollama model name (tag) the prompt builder and AI tools' "Local" tier requests. Null when never set — callers fall back to
-    /// <c>ModelConstants.Ollama.DefaultModel</c>.
+    /// The Ollama model name (tag) the prompt builder and AI tools' "Local" tier requests. Null when
+    /// never set — there is deliberately no default model (which models exist is per-server), so
+    /// callers must fail with a "pick a model first" message rather than guessing one.
     /// </summary>
     string? LoadOllamaModel();
     /// <summary>
     /// The Ollama vision-capable model used by image-to-prompt observation. Null when never set — callers
-    /// fall back to the ordinary Ollama model, then to <c>ModelConstants.Ollama.DefaultModel</c>.
+    /// fall back to the ordinary Ollama model, and must then ask the user to pick one.
     /// </summary>
     string? LoadOllamaVisionModel();
+    /// <summary>
+    /// Last-known model list from the Ollama server, so the pickers show real options at launch
+    /// instead of a lone seeded entry — and keep showing them while the server is down. The server
+    /// URL is stored WITH the list and checked on load, so a cache belonging to a different Ollama
+    /// host is discarded rather than shown. Empty when never cached or when the URL no longer matches.
+    /// </summary>
+    IReadOnlyList<string> LoadOllamaModels(string baseUrl);
+    /// <inheritdoc cref="LoadOllamaModels"/>
+    IReadOnlyList<string> LoadOllamaVisionModels(string baseUrl);
+    /// <inheritdoc cref="LoadOllamaModels"/>
+    void PersistOllamaModels(string baseUrl, IReadOnlyList<string> models, IReadOnlyList<string> visionModels);
     /// <summary>
     /// The OpenRouter model id used by image-to-prompt observation. Null when never set; callers must
     /// ask the user to pick a model before sending a remote vision request.

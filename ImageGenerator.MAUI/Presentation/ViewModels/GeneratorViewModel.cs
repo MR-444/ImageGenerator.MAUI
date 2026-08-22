@@ -231,23 +231,46 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
     partial void OnOllamaBaseUrlChanged(string value) =>
         _uiStateStore.PersistOllamaBaseUrl(value ?? string.Empty);
 
+    // No compile-time default model: which models exist is per-server, so the old hardcoded
+    // "qwen2.5" was wrong on most hosts and failed as an opaque Ollama 404. Empty means
+    // "never picked" and the pickers show their "Refresh, then pick a model…" title.
+    //
+    // The persist hooks are gated by a suppression window because a MAUI Picker whose
+    // SelectedItem is two-way bound here pushes NULL back the moment its ItemsSource is
+    // cleared — which every refresh does. Unsuppressed, that null persisted an empty string
+    // and silently destroyed the saved pick on the next launch.
     [ObservableProperty]
-    private string _ollamaModel = ModelConstants.Ollama.DefaultModel;
+    private string _ollamaModel = string.Empty;
 
-    partial void OnOllamaModelChanged(string value) =>
+    partial void OnOllamaModelChanged(string value)
+    {
+        if (_suppressOllamaModelPersist) return;
         _uiStateStore.PersistOllamaModel(value ?? string.Empty);
+    }
 
     [ObservableProperty]
-    private string _ollamaVisionModel = ModelConstants.Ollama.DefaultModel;
+    private string _ollamaVisionModel = string.Empty;
 
-    partial void OnOllamaVisionModelChanged(string value) =>
+    partial void OnOllamaVisionModelChanged(string value)
+    {
+        if (_suppressOllamaModelPersist) return;
         _uiStateStore.PersistOllamaVisionModel(value ?? string.Empty);
+    }
+
+    // One flag covers both pickers: they are always rebuilt together by the same refresh.
+    private bool _suppressOllamaModelPersist;
 
     [ObservableProperty]
     private string _openRouterVisionModel = string.Empty;
 
-    partial void OnOpenRouterVisionModelChanged(string value) =>
+    partial void OnOpenRouterVisionModelChanged(string value)
+    {
+        if (_suppressOpenRouterVisionModelPersist) return;
         _uiStateStore.PersistOpenRouterVisionModel(value ?? string.Empty);
+    }
+
+    // Same Picker-clears-its-selection hazard as _suppressOllamaModelPersist above.
+    private bool _suppressOpenRouterVisionModelPersist;
 
     [ObservableProperty]
     private bool _openRouterVisionFreeOnly = true;
@@ -270,12 +293,24 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
             var models = await _openRouterModelCatalog.ListVisionModelsAsync(OpenRouterVisionFreeOnly);
             var current = OpenRouterVisionModel;
 
-            OpenRouterVisionModels.Clear();
-            foreach (var model in models)
-                OpenRouterVisionModels.Add(model.Id);
+            _suppressOpenRouterVisionModelPersist = true;
+            try
+            {
+                OpenRouterVisionModels.Clear();
+                foreach (var model in models)
+                    OpenRouterVisionModels.Add(model.Id);
 
-            if (!string.IsNullOrWhiteSpace(current) && !OpenRouterVisionModels.Contains(current))
+                // Re-assert through empty so the picker re-selects even when clearing the
+                // ItemsSource did not push a null back through the binding.
+                var resolved = OpenRouterVisionModels.Contains(current) ? current : string.Empty;
                 OpenRouterVisionModel = string.Empty;
+                OpenRouterVisionModel = resolved;
+            }
+            finally { _suppressOpenRouterVisionModelPersist = false; }
+
+            // Deliberate write, outside the window: persists a restored pick and a genuine drop
+            // alike. SafeSet skips identical rewrites, so the common case costs nothing.
+            _uiStateStore.PersistOpenRouterVisionModel(OpenRouterVisionModel);
 
             SetStatus(models.Count > 0
                 ? $"Found {models.Count} OpenRouter vision model(s){(OpenRouterVisionFreeOnly ? " with free pricing." : ".")}"
@@ -297,7 +332,33 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
 
     /// <summary>Pull the model list from the configured Ollama server into the picker.</summary>
     [RelayCommand]
-    private async Task RefreshOllamaModelsAsync()
+    private Task RefreshOllamaModelsAsync() => LoadOllamaModelsAsync(announce: true);
+
+    // Set once per app session by EnsureOllamaModelsLoadedAsync, whether or not the fetch worked:
+    // a down server must not be re-probed (and re-stalled on) by every page navigation.
+    private bool _ollamaLoadAttempted;
+
+    /// <summary>
+    /// Fetch the model list once per app session, on first appearance of a page that shows an Ollama
+    /// picker, so the user doesn't have to press Refresh to see their models. Silent: a server that is
+    /// down leaves the cached list in place and says nothing — the Refresh button stays the diagnostic
+    /// path, and the "pick a model first" build guard points at it.
+    /// </summary>
+    public Task EnsureOllamaModelsLoadedAsync()
+    {
+        if (_ollamaLoadAttempted) return Task.CompletedTask;
+        _ollamaLoadAttempted = true;
+        return LoadOllamaModelsAsync(announce: false);
+    }
+
+    // Null-tolerant by design — see the call site in LoadSavedUiState.
+    private static void SeedPicker(ObservableCollection<string> picker, IReadOnlyList<string>? cached)
+    {
+        if (cached is null) return;
+        foreach (var m in cached) picker.Add(m);
+    }
+
+    private async Task LoadOllamaModelsAsync(bool announce)
     {
         if (_ollamaModelCatalog is null) return;
         try
@@ -309,26 +370,66 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
                 .Select(m => m.Name)
                 .ToArray();
 
+            // An empty list is ambiguous — a server with nothing pulled looks exactly like a
+            // misconfigured URL or a proxy answering for one. Refuse to reconcile against it:
+            // show the warning, but keep the cached options and the user's pick untouched.
+            if (models.Length == 0)
+            {
+                if (announce) SetStatus("No models installed on the Ollama server.", StatusKind.Warning);
+                return;
+            }
+
             var current = OllamaModel;
             var currentVision = OllamaVisionModel;
-            OllamaModels.Clear();
-            foreach (var m in models) OllamaModels.Add(m);
-            OllamaVisionModels.Clear();
-            foreach (var m in visionModels) OllamaVisionModels.Add(m);
-            // Preserve the saved selection even if the server doesn't list it (e.g. typo / not pulled yet).
-            if (!string.IsNullOrWhiteSpace(current) && !OllamaModels.Contains(current))
-                OllamaModels.Add(current);
-            if (!string.IsNullOrWhiteSpace(currentVision) && !OllamaVisionModels.Contains(currentVision))
-                OllamaVisionModels.Add(currentVision);
 
-            SetStatus(models.Length > 0
-                ? $"Found {models.Length} Ollama model(s), {visionModels.Length} with vision."
-                : "No models installed on the Ollama server.", models.Length > 0 ? StatusKind.Success : StatusKind.Warning);
+            _suppressOllamaModelPersist = true;
+            try
+            {
+                OllamaModels.Clear();
+                foreach (var m in models) OllamaModels.Add(m);
+                OllamaVisionModels.Clear();
+                foreach (var m in visionModels) OllamaVisionModels.Add(m);
+
+                // A model the server no longer lists is dropped rather than kept as a ghost entry
+                // that fails later as a 404. Re-assert through empty so the picker re-selects even
+                // when clearing the ItemsSource did not push a null back through the binding.
+                OllamaModel = string.Empty;
+                OllamaModel = OllamaModels.Contains(current) ? current : string.Empty;
+                OllamaVisionModel = string.Empty;
+                OllamaVisionModel = OllamaVisionModels.Contains(currentVision) ? currentVision : string.Empty;
+            }
+            finally { _suppressOllamaModelPersist = false; }
+
+            // Deliberate writes, outside the window: persist a restored pick and a genuine drop alike.
+            _uiStateStore.PersistOllamaModel(OllamaModel);
+            _uiStateStore.PersistOllamaVisionModel(OllamaVisionModel);
+            _uiStateStore.PersistOllamaModels(OllamaBaseUrl, models, visionModels);
+
+            // Report exactly what the reconciliation above cleared, by comparing each pick against
+            // its own list — a model that is still installed but stopped advertising vision is
+            // dropped from the vision picker only, and must still be named here.
+            var dropped = new[]
+                {
+                    OllamaModel.Length == 0 ? current : null,
+                    OllamaVisionModel.Length == 0 ? currentVision : null,
+                }
+                .Where(m => !string.IsNullOrWhiteSpace(m))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
+            if (!announce) return;
+            SetStatus(
+                dropped.Length > 0
+                    ? $"{string.Join(", ", dropped)} no longer installed on the Ollama server — pick another model."
+                    : $"Found {models.Length} Ollama model(s), {visionModels.Length} with vision.",
+                dropped.Length > 0 ? StatusKind.Warning : StatusKind.Success);
         }
         catch (Exception ex)
         {
+            // Nothing has been cleared at this point — ListModelInfosAsync throws before the
+            // rebuild below it — so a down server leaves the cached list and the pick intact.
             _logger.LogWarning(ex, "Couldn't list Ollama models from {Url}", OllamaBaseUrl);
-            SetStatus($"Couldn't reach Ollama at {OllamaBaseUrl}: {ex.Message}", StatusKind.Error);
+            if (announce) SetStatus($"Couldn't reach Ollama at {OllamaBaseUrl}: {ex.Message}", StatusKind.Error);
         }
     }
 
@@ -2031,7 +2132,15 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
         {
             OllamaVisionModel = savedOllamaVisionModel;
         }
-        // Seed the picker with the current model so it shows a value before the first live refresh.
+        // Seed the pickers from the last-known server list so they are usable immediately — before
+        // the first live refresh, and for the whole session if the server is down. The saved pick is
+        // appended when the cache predates it; startup has verified nothing against the server yet,
+        // so nothing is dropped here — the first successful refresh is what reconciles.
+        // Seed defensively: this runs on the startup path, where an unhandled exception is a native
+        // WinUI fail-fast rather than a catchable error, so a store handing back null degrades to
+        // "no cache" instead of taking the app down.
+        SeedPicker(OllamaModels, _uiStateStore.LoadOllamaModels(OllamaBaseUrl));
+        SeedPicker(OllamaVisionModels, _uiStateStore.LoadOllamaVisionModels(OllamaBaseUrl));
         if (!string.IsNullOrWhiteSpace(OllamaModel) && !OllamaModels.Contains(OllamaModel))
             OllamaModels.Add(OllamaModel);
         if (!string.IsNullOrWhiteSpace(OllamaVisionModel) && !OllamaVisionModels.Contains(OllamaVisionModel))

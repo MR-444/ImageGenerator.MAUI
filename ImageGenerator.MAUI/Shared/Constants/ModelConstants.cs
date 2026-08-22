@@ -80,8 +80,10 @@ public static class ModelConstants
         // user's fireEngine box (the same machine that runs ComfyUI); overridable per-user in Settings.
         public const string DefaultBaseUrl = "http://fireengine:11434";
 
-        // A capable, widely-available local model. Only the technical round-trip is verified on this
-        // tier, not output quality, so any installed json-schema-capable model works — overridable.
-        public const string DefaultModel = "qwen2.5";
+        // There is deliberately NO default model. A hardcoded fallback ("qwen2.5") only looked like
+        // a sensible default: the tier works with any installed json-schema-capable model, and which
+        // ones exist is per-server, so the guess was wrong on most hosts and surfaced as an opaque
+        // Ollama 404 at request time. Callers must resolve a user-picked model and fail with a
+        // "pick a model first" message when there isn't one — same contract as the OpenRouter tier.
     }
 }

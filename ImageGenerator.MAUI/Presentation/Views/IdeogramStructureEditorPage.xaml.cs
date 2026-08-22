@@ -52,6 +52,10 @@ public partial class IdeogramStructureEditorPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
+        // Fill the Ollama model picker without a manual Refresh (idempotent, once per session).
+        // Ahead of the _loaded gate: the picker is worth filling on every appearance.
+        if (_viewModel.Generator is { } generator) _ = generator.EnsureOllamaModelsLoadedAsync();
+
         // The page is transient, but OnAppearing can refire within one lifetime (window
         // re-activation); reloading would duplicate every element row.
         if (_loaded) return;

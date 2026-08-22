@@ -175,7 +175,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
 
     /// <summary>Resolved Ollama model the Local tier will use when the editor is hosted stand-alone.</summary>
     public string EnrichLocalModel =>
-        _generator?.OllamaModel is { Length: > 0 } m ? m : ModelConstants.Ollama.DefaultModel;
+        _generator?.OllamaModel ?? string.Empty;
 
     partial void OnEnrichTierChanged(ModelTier value)
     {

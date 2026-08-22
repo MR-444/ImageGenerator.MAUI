@@ -19,6 +19,13 @@ public partial class SettingsPage
         ShowCategory(SettingsCategory.Appearance);
     }
 
+    // Fill the Ollama model pickers without a manual Refresh (idempotent, once per session).
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        _ = _viewModel.EnsureOllamaModelsLoadedAsync();
+    }
+
     private enum SettingsCategory { Appearance, ApiKeys, Generation, AiServices, Output, Integrations }
 
     private void ShowCategory(SettingsCategory category)

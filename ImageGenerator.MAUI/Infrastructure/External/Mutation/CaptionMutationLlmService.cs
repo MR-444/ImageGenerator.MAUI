@@ -101,6 +101,10 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
         if (tier == ModelTier.Local)
         {
             baseUrl = _uiStateStore.LoadOllamaBaseUrl() is { Length: > 0 } u ? u : ModelConstants.Ollama.DefaultBaseUrl;
+            // The local tier has no default model — an unpicked one used to fall through to a
+            // hardcoded name the server usually didn't have, failing as an opaque 404.
+            if (string.IsNullOrWhiteSpace(modelId))
+                return LlmVariantResult.Fail("No local Ollama model selected — pick one in Settings.");
         }
         else
         {
@@ -175,7 +179,7 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
     private string ResolveModelId(ModelTier tier) => tier switch
     {
         ModelTier.Opus => OpusModelId,
-        ModelTier.Local => _uiStateStore.LoadOllamaModel() is { Length: > 0 } m ? m : ModelConstants.Ollama.DefaultModel,
+        ModelTier.Local => _uiStateStore.LoadOllamaModel() ?? string.Empty,
         _ => SonnetModelId
     };
 

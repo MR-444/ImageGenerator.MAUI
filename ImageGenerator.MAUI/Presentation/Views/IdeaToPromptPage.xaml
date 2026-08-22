@@ -340,16 +340,35 @@
                             IsVisible="{Binding ShowObservation}"
                             AutomationId="ImageObservationCard">
                         <VerticalStackLayout Spacing="8">
-                            <Label Text="Image observation" Style="{StaticResource CardTitle}" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <Label Grid.Column="0"
+                                       Text="Image observation"
+                                       Style="{StaticResource CardTitle}"
+                                       VerticalOptions="Center" />
+                                <Button Grid.Column="1"
+                                        Text="Observe again"
+                                        Command="{Binding ReObserveCommand}"
+                                        Style="{StaticResource SecondaryButton}"
+                                        SemanticProperties.Description="Discard this observation so the next build describes the image again"
+                                        AutomationId="ReObserveImageButton" />
+                            </Grid>
                             <!-- Fixed height + internal scroll, not AutoSize: MAUI's Editor
                                  AutoSize="TextChanges" is unreliable on Windows for
                                  programmatically-bound text — an in-place value change on an
                                  already-realized editor fails to repaint (stale text). -->
-                            <Editor Text="{Binding ObservedImageDescription}"
-                                    IsReadOnly="True"
+                            <Editor Text="{Binding ObservedImageDescription, Mode=TwoWay}"
                                     AutoSize="Disabled"
                                     HeightRequest="260"
+                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                    Placeholder="Built when you click Build prompt — or write your own description here."
+                                    SemanticProperties.Description="What the vision model saw in the reference image; editable"
                                     AutomationId="ImageObservationEditor" />
+                            <Label Text="Reused on every build until you change the image or the vision model, so a second build only re-writes the prompt. Edit this text to steer it directly."
+                                   Style="{StaticResource HelperText}" />
+                            <Label Text="Edited by hand — kept as-is until you press Observe again."
+                                   IsVisible="{Binding ObservationEdited}"
+                                   Style="{StaticResource HelperText}"
+                                   AutomationId="ImageObservationEditedLabel" />
                         </VerticalStackLayout>
                     </Border>
 
