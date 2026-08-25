@@ -17,10 +17,19 @@ public class GalleryItemDetailViewModelTests
     private readonly Mock<IFileLauncher> _fileLauncher = new();
     private readonly Mock<IClipboardService> _clipboard = new();
     private readonly Mock<IMutationLibraryService> _libraryService = new();
+    private readonly Mock<IInputImageTarget> _inputImageTarget = new();
+
+    public GalleryItemDetailViewModelTests()
+    {
+        // Default: a model that happily takes a reference image, so "Use as input" isn't refused.
+        _inputImageTarget.SetupGet(t => t.SupportsInputImage).Returns(true);
+        _inputImageTarget.SetupGet(t => t.CanAddInputImage).Returns(true);
+        _inputImageTarget.SetupGet(t => t.SelectedModelSummary).Returns("Replicate · flux-dev");
+    }
 
     private GalleryItemDetailViewModel CreateSut() =>
         new(_galleryService.Object, _fileLauncher.Object, _clipboard.Object, _libraryService.Object,
-            NullLogger<GalleryItemDetailViewModel>.Instance);
+            _inputImageTarget.Object, NullLogger<GalleryItemDetailViewModel>.Instance);
 
     [Fact]
     public async Task LoadAsync_PopulatesFileNameAndMetadataText()
@@ -223,5 +232,45 @@ public class GalleryItemDetailViewModelTests
 
         _galleryService.Verify(s => s.ReadMetadataAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         _libraryService.Verify(s => s.SaveAsync(It.IsAny<MutationLibrary>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UseAsInput_WhenModelTakesNoInputImage_RefusesOnTheDetailPage()
+    {
+        // The Input Image card is hidden for such models, so navigating would look like a dead
+        // button — the refusal has to be visible here.
+        _inputImageTarget.SetupGet(t => t.SupportsInputImage).Returns(false);
+        var sut = CreateSut();
+        sut.FilePath = @"C:\fake\shot.png";
+
+        await ((IAsyncRelayCommand)sut.UseAsInputCommand).ExecuteAsync(null);
+
+        sut.FlashMessage.Should().Contain("takes no input image");
+        sut.FlashMessage.Should().Contain("Replicate · flux-dev");
+        sut.IsFlashError.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UseAsInput_WhenImageSlotsFull_RefusesWithADistinctMessage()
+    {
+        _inputImageTarget.SetupGet(t => t.CanAddInputImage).Returns(false);
+        var sut = CreateSut();
+        sut.FilePath = @"C:\fake\shot.png";
+
+        await ((IAsyncRelayCommand)sut.UseAsInputCommand).ExecuteAsync(null);
+
+        sut.FlashMessage.Should().Contain("slots are full");
+        sut.IsFlashError.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UseAsInput_WhenNoFilePath_DoesNotFlash()
+    {
+        _inputImageTarget.SetupGet(t => t.SupportsInputImage).Returns(false);
+        var sut = CreateSut();
+
+        await ((IAsyncRelayCommand)sut.UseAsInputCommand).ExecuteAsync(null);
+
+        sut.FlashMessage.Should().BeNull();
     }
 }

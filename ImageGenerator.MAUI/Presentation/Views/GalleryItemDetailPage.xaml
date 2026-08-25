@@ -132,7 +132,14 @@
                        LineBreakMode="WordWrap"
                        MaxLines="2"
                        VerticalOptions="Center"
-                       AutomationId="DetailFlashLabel" />
+                       AutomationId="DetailFlashLabel">
+                    <Label.Triggers>
+                        <!-- Refusals (e.g. "model takes no input image") must not read green. -->
+                        <DataTrigger TargetType="Label" Binding="{Binding IsFlashError}" Value="True">
+                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource StatusErrorLight}, Dark={StaticResource StatusErrorDark}}" />
+                        </DataTrigger>
+                    </Label.Triggers>
+                </Label>
             </Grid>
         </Border>
 

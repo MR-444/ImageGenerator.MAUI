@@ -231,6 +231,9 @@ public static class MauiProgram
         // in-flight batch + history. MainPage matches the VM lifetime; it's the root
         // ShellContent (not a pushable route), so Shell never instantiates it twice.
         builder.Services.AddSingleton<GeneratorViewModel>();
+        // The gallery detail page reads the live generator state through this narrow facet so
+        // "Use as input" can refuse before navigating. Same instance — never a second VM.
+        builder.Services.AddSingleton<IInputImageTarget>(sp => sp.GetRequiredService<GeneratorViewModel>());
         builder.Services.AddTransient<GalleryViewModel>();
         builder.Services.AddTransient<GalleryItemDetailViewModel>();
         builder.Services.AddTransient<IdeogramStructureEditorViewModel>();

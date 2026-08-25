@@ -14,6 +14,7 @@ public partial class GalleryItemDetailViewModel : ObservableObject
     private readonly IFileLauncher _fileLauncher;
     private readonly IClipboardService _clipboard;
     private readonly IMutationLibraryService _libraryService;
+    private readonly IInputImageTarget _inputImageTarget;
     private readonly ILogger<GalleryItemDetailViewModel> _logger;
 
     [ObservableProperty]
@@ -45,17 +46,24 @@ public partial class GalleryItemDetailViewModel : ObservableObject
     [ObservableProperty]
     private string? _flashMessage;
 
+    // Colours the flash label red instead of green — a refusal ("model takes no input image")
+    // reads as a confirmation otherwise.
+    [ObservableProperty]
+    private bool _isFlashError;
+
     public GalleryItemDetailViewModel(
         IGalleryService galleryService,
         IFileLauncher fileLauncher,
         IClipboardService clipboard,
         IMutationLibraryService libraryService,
+        IInputImageTarget inputImageTarget,
         ILogger<GalleryItemDetailViewModel> logger)
     {
         _galleryService = galleryService ?? throw new ArgumentNullException(nameof(galleryService));
         _fileLauncher = fileLauncher ?? throw new ArgumentNullException(nameof(fileLauncher));
         _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
         _libraryService = libraryService ?? throw new ArgumentNullException(nameof(libraryService));
+        _inputImageTarget = inputImageTarget ?? throw new ArgumentNullException(nameof(inputImageTarget));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -106,12 +114,17 @@ public partial class GalleryItemDetailViewModel : ObservableObject
         }
     }
 
-    private async Task FlashAsync(string message, int durationMs = 2000)
+    private async Task FlashAsync(string message, int durationMs = 2000, bool isError = false)
     {
         FlashMessage = message;
+        IsFlashError = isError;
         await Task.Delay(durationMs);
         // Don't clobber a flash that a later action set in the meantime.
-        if (FlashMessage == message) FlashMessage = null;
+        if (FlashMessage == message)
+        {
+            FlashMessage = null;
+            IsFlashError = false;
+        }
     }
 
     [RelayCommand]
@@ -228,7 +241,7 @@ public partial class GalleryItemDetailViewModel : ObservableObject
             var library = await _libraryService.LoadAsync(ct);
             if (library.FragmentByName(styleName) is not null)
             {
-                _ = FlashAsync($"Style '{styleName}' already exists — pick another name.");
+                _ = FlashAsync($"Style '{styleName}' already exists — pick another name.", isError: true);
                 return;
             }
 
@@ -244,7 +257,7 @@ public partial class GalleryItemDetailViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "GalleryItemDetailVM.{Op}", "SaveStyle");
-            _ = FlashAsync("Couldn't save the style. See app.log for details.");
+            _ = FlashAsync("Couldn't save the style. See app.log for details.", isError: true);
         }
     }
 
@@ -254,6 +267,26 @@ public partial class GalleryItemDetailViewModel : ObservableObject
         try
         {
             if (string.IsNullOrEmpty(FilePath)) return;
+
+            // Refuse here rather than on MainPage. The Input Image card is hidden outright for
+            // models without Capabilities.ImagePrompt, so the coordinator's rejection would land
+            // on a page where nothing changed — indistinguishable from a dead button.
+            if (!_inputImageTarget.SupportsInputImage)
+            {
+                _ = FlashAsync(
+                    $"{_inputImageTarget.SelectedModelSummary} takes no input image. Pick a Flux / "
+                    + "gpt-image / Nano Banana model, or a ComfyUI workflow with a LoadImage node "
+                    + "(e.g. upscale).", 4000, isError: true);
+                return;
+            }
+            if (!_inputImageTarget.CanAddInputImage)
+            {
+                _ = FlashAsync(
+                    $"Input image slots are full for {_inputImageTarget.SelectedModelSummary} — "
+                    + "remove one on the Create page first.", 4000, isError: true);
+                return;
+            }
+
             // Hand the path off to MainPage's QueryProperty. The absolute "//MainPage" form
             // pops the gallery + detail off the stack so the user lands directly on the
             // generator with the image already attached. ShellNavigationQueryParameters is

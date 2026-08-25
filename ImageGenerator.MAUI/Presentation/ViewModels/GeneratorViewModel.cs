@@ -20,7 +20,7 @@ using ImageGenerationParameters = ImageGenerator.MAUI.Core.Domain.Entities.Image
 
 namespace ImageGenerator.MAUI.Presentation.ViewModels;
 
-public partial class GeneratorViewModel : ObservableObject, IStatusOwner
+public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInputImageTarget
 {
     private readonly IJobRunner _jobRunner;
     private readonly IApiTokenStore _tokenStore;
@@ -122,6 +122,13 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner
         ProviderFilter.SelectedModel is { } model
             ? $"{ProviderFilter.SelectedProvider} · {model.Display}"
             : ProviderFilter.SelectedProvider;
+
+    // IInputImageTarget: lets the gallery detail page's "Use as input" refuse on the spot when
+    // the current model can't take a reference image (the Input Image card is hidden then, so a
+    // silent navigation looks like a dead button). SelectedModelSummary above completes the
+    // interface.
+    public bool SupportsInputImage => Capabilities.ImagePrompt;
+    public bool CanAddInputImage => InputImages.CanAddImage;
 
     public string WorkspaceSummary =>
         $"{JobStatusSummary} · {SelectedModelSummary} · {TotalImagesGeneratedText}"
