@@ -8,7 +8,6 @@ using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.Common;
 using ImageGenerator.MAUI.Presentation.Drawing;
-using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
 // MAUI's implicit usings bring in Microsoft.Maui.Controls.Element — disambiguate.
 using Element = ImageGenerator.MAUI.Core.Domain.Ideogram.Element;

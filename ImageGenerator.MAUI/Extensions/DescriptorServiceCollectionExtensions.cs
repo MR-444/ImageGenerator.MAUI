@@ -1,5 +1,4 @@
 using ImageGenerator.MAUI.Core.Domain.Descriptors.Interfaces;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace ImageGenerator.MAUI.Extensions;
 

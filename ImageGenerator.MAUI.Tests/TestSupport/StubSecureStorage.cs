@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using Microsoft.Maui.Storage;
 
 namespace ImageGenerator.MAUI.Tests.TestSupport;
 

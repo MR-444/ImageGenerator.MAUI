@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text;
 using FluentAssertions;
-using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.External.Pollinations;
 using ImageGenerator.MAUI.Shared.Constants;
 using ImageGenerator.MAUI.Tests.TestSupport;

@@ -1,9 +1,7 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.ComfyUi;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects.ComfyUi;
-using Xunit;
 
 namespace ImageGenerator.MAUI.Tests.Core.Domain.ComfyUi;
 

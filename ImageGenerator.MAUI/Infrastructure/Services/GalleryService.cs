@@ -4,7 +4,7 @@ using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Shared.Constants;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
-using SixLabors.ImageSharp.PixelFormats;
+
 // `Image` collides with Microsoft.Maui.Controls.Image under the implicit MAUI usings, so
 // reach for ImageSharp's static factory through its full namespace at every call site.
 // The `using SixLabors.ImageSharp;` above is still required: GetPngMetadata is an extension

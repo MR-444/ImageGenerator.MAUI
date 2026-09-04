@@ -1,5 +1,3 @@
-using Microsoft.Maui;
-
 namespace ImageGenerator.MAUI.Infrastructure.Interfaces;
 
 /// <summary>

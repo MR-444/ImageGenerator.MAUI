@@ -2,7 +2,6 @@ using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
-using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Element = ImageGenerator.MAUI.Core.Domain.Ideogram.Element;

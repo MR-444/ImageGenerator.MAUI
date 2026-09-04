@@ -1,5 +1,4 @@
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
-using Microsoft.Maui.ApplicationModel.DataTransfer;
 
 namespace ImageGenerator.MAUI.Infrastructure.Services;
 

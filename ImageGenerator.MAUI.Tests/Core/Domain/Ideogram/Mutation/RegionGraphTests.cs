@@ -1,5 +1,4 @@
 using FluentAssertions;
-using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation;
 // MAUI's implicit usings bring in Microsoft.Maui.Controls.Element — disambiguate.
 using Element = ImageGenerator.MAUI.Core.Domain.Ideogram.Element;

@@ -1,5 +1,3 @@
-using Microsoft.Maui.ApplicationModel;
-
 namespace ImageGenerator.MAUI.Presentation.Common;
 
 /// <summary>

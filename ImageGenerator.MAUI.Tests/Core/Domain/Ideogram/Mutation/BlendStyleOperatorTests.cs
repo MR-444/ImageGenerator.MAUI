@@ -1,7 +1,6 @@
 using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation;
-using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Operators;
 
 namespace ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;

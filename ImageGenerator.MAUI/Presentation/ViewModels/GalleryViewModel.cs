@@ -8,7 +8,6 @@ using ImageGenerator.MAUI.Core.Domain.Services;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
-using Microsoft.Maui.ApplicationModel;
 using static ImageGenerator.MAUI.Presentation.Common.UiDispatcher;
 
 namespace ImageGenerator.MAUI.Presentation.ViewModels;

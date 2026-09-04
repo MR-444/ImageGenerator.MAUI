@@ -1,6 +1,5 @@
 using FluentAssertions;
 using ImageGenerator.MAUI.Extensions;
-using Microsoft.Extensions.DependencyInjection;
 using Refit;
 using System.Net;
 
