@@ -116,7 +116,7 @@ public sealed class GalleryService : IGalleryService
         return ParseLines(raw);
     }
 
-    private static string? ExtractCommentText(SixLabors.ImageSharp.ImageInfo info, string extension)
+    private static string? ExtractCommentText(ImageInfo info, string extension)
     {
         if (string.Equals(extension, ".png", StringComparison.OrdinalIgnoreCase))
         {

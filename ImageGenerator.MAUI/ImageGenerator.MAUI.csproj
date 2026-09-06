@@ -67,18 +67,18 @@
 	<ItemGroup>
 		<PackageReference Include="AsyncAwaitBestPractices.MVVM" Version="10.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.80" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.9" />
-		<PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
-		<PackageReference Include="NLog" Version="6.1.3" />
-		<PackageReference Include="NLog.Extensions.Logging" Version="6.1.3" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.100" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.11" />
+		<PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.9.0" />
+		<PackageReference Include="NLog" Version="6.2.0" />
+		<PackageReference Include="NLog.Extensions.Logging" Version="6.2.0" />
 		<!-- Refit 10.2.0 is the non-breaking replacement for 10.1.6; 11+ changes exception behavior. -->
 		<PackageReference Include="Refit" Version="10.2.0" />
 		<PackageReference Include="Refit.HttpClientFactory" Version="10.2.0" />
 		<!-- Pinned below 4.x because newer ImageSharp licensing is not acceptable for this project. -->
 		<PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
 		<!-- Hardware-accelerated CRC-32/ISO-HDLC for PngTextChunkWriter (Microsoft, MIT, no transitive deps). -->
-		<PackageReference Include="System.IO.Hashing" Version="10.0.0" />
+		<PackageReference Include="System.IO.Hashing" Version="10.0.11" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -239,7 +239,7 @@ public class IdeaToPromptViewModelTests
 
     private static byte[] CreatePng(int size)
     {
-        using var image = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(size, size);
+        using var image = new Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(size, size);
         using var ms = new MemoryStream();
         image.SaveAsPng(ms);
         return ms.ToArray();
@@ -711,7 +711,7 @@ public class IdeaToPromptViewModelTests
         // The live-bug shape: a browser image (WebP, often with a lying .png/.jfif name) used
         // to pass through untouched and die at generate time as Ollama's opaque HTTP 400
         // ("Failed to load image or audio file"). Intake must hand every backend PNG/JPEG.
-        using var image = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(2, 2);
+        using var image = new Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(2, 2);
         using var ms = new MemoryStream();
         image.SaveAsWebp(ms);
         var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));

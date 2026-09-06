@@ -23,8 +23,8 @@ public sealed class FolderPickerService : IFolderPicker
             // PickSingleFolderAsync throws unless at least one filter is present.
             picker.FileTypeFilter.Add("*");
 
-            var mauiWindow = Microsoft.Maui.Controls.Application.Current?.Windows
-                .FirstOrDefault(w => w.Handler?.PlatformView is not null) ?? Microsoft.Maui.Controls.Application.Current?.Windows.FirstOrDefault();
+            var mauiWindow = Application.Current?.Windows
+                .FirstOrDefault(w => w.Handler?.PlatformView is not null) ?? Application.Current?.Windows.FirstOrDefault();
             if (mauiWindow?.Handler?.PlatformView is not Microsoft.UI.Xaml.Window nativeWindow)
                 return null;
 

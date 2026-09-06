@@ -7,7 +7,7 @@
     FlyoutBehavior="Locked"
     FlyoutWidth="184"
     FlyoutBackgroundColor="{AppThemeBinding Light={StaticResource SurfaceRaisedLight}, Dark={StaticResource CanvasDark}}"
-    Shell.BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceRaisedLight}, Dark={StaticResource CanvasDark}}"
+    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceRaisedLight}, Dark={StaticResource CanvasDark}}"
     Shell.ForegroundColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}"
     Shell.TabBarIsVisible="False">
 

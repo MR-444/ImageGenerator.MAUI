@@ -82,7 +82,7 @@ public class PngTextChunkWriterTests
 
     private static byte[] BuildPng(string? existingComment = null)
     {
-        using var image = new SixLabors.ImageSharp.Image<Rgba32>(6, 6);
+        using var image = new Image<Rgba32>(6, 6);
         for (var y = 0; y < 6; y++)
             for (var x = 0; x < 6; x++)
                 image[x, y] = new Rgba32((byte)(x * 40), (byte)(y * 40), 128, 255);

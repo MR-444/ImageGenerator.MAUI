@@ -116,24 +116,22 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
             }
 
             var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-            if (bytes.Length < MinValidImageBytes)
-            {
-                _logger.LogError(
-                    "Pollinations undersized response Bytes={Bytes} Url={Url}",
-                    bytes.Length,
-                    Redact(url, parameters.PollinationsApiToken));
+            if (bytes.Length >= MinValidImageBytes)
                 return new GeneratedImage
                 {
-                    Message = $"Pollinations returned an undersized response ({bytes.Length} bytes) — likely an error page rather than an image.",
-                    ImageData = null
+                    Message = $"Image generated successfully with model {parameters.Model}.",
+                    ImageData = bytes
                 };
-            }
-
+            _logger.LogError(
+                "Pollinations undersized response Bytes={Bytes} Url={Url}",
+                bytes.Length,
+                Redact(url, parameters.PollinationsApiToken));
             return new GeneratedImage
             {
-                Message = $"Image generated successfully with model {parameters.Model}.",
-                ImageData = bytes
+                Message = $"Pollinations returned an undersized response ({bytes.Length} bytes) — likely an error page rather than an image.",
+                ImageData = null
             };
+
         }
         catch (OperationCanceledException)
         {

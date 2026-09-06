@@ -57,7 +57,7 @@ public static class MauiProgram
         // so scrolling the (tall) pages over a Picker can't silently change its value — notably the
         // free Local model flipping to a paid tier. See WheelGuardPickerHandler.
         builder.ConfigureMauiHandlers(handlers =>
-            handlers.AddHandler<Microsoft.Maui.Controls.Picker,
+            handlers.AddHandler<Picker,
                 Platforms.Windows.Handlers.WheelGuardPickerHandler>());
 #endif
 

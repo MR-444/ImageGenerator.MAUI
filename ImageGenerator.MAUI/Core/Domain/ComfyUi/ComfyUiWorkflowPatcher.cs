@@ -541,7 +541,7 @@ public static class ComfyUiWorkflowPatcher
         if (string.IsNullOrWhiteSpace(text) || !text.TrimStart().StartsWith('{')) return false;
         try
         {
-            using var doc = System.Text.Json.JsonDocument.Parse(text);
+            using var doc = JsonDocument.Parse(text);
             return doc.RootElement.ValueKind == JsonValueKind.Object;
         }
         catch (JsonException) { return false; }

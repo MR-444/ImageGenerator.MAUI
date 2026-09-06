@@ -112,18 +112,18 @@ public static class CrashLogger
         {
             // NOTE: LoggingRule's string ctor sets RuleName, not the pattern.
             var suppress = new LoggingRule { LoggerNamePattern = noisy, Final = true };
-            suppress.SetLoggingLevels(NLog.LogLevel.Trace, NLog.LogLevel.Info);
+            suppress.SetLoggingLevels(LogLevel.Trace, LogLevel.Info);
             config.LoggingRules.Add(suppress);
         }
 
         // Default rule: Info+ to file + debugger.
-        config.AddRule(NLog.LogLevel.Info, NLog.LogLevel.Fatal, fileTarget, "*");
-        config.AddRule(NLog.LogLevel.Info, NLog.LogLevel.Fatal, debugTarget, "*");
+        config.AddRule(LogLevel.Info, LogLevel.Fatal, fileTarget, "*");
+        config.AddRule(LogLevel.Info, LogLevel.Fatal, debugTarget, "*");
 
         // Bump Infrastructure.External.* (HTTP request/response details) to Debug so
         // wire-level diagnostics surface without flipping the global level.
         config.AddRule(
-            NLog.LogLevel.Debug, NLog.LogLevel.Info,
+            LogLevel.Debug, LogLevel.Info,
             fileTarget,
             "ImageGenerator.MAUI.Infrastructure.External.*",
             final: false);
@@ -132,18 +132,18 @@ public static class CrashLogger
         // ViewModels — together these trace who writes Parameters.Resolution in what order,
         // which is the diagnostic for the saved-resolution-resets-on-restart class of bug.
         config.AddRule(
-            NLog.LogLevel.Debug, NLog.LogLevel.Info,
+            LogLevel.Debug, LogLevel.Info,
             fileTarget,
             "ImageGenerator.MAUI.Infrastructure.Services.*",
             final: false);
         config.AddRule(
-            NLog.LogLevel.Debug, NLog.LogLevel.Info,
+            LogLevel.Debug, LogLevel.Info,
             fileTarget,
             "ImageGenerator.MAUI.Presentation.ViewModels.*",
             final: false);
         // Views carry the Generate-button activation forensics (GotFocus is Debug).
         config.AddRule(
-            NLog.LogLevel.Debug, NLog.LogLevel.Info,
+            LogLevel.Debug, LogLevel.Info,
             fileTarget,
             "ImageGenerator.MAUI.Presentation.Views.*",
             final: false);

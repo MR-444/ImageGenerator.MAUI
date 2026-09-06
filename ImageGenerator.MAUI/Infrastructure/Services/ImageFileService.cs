@@ -51,7 +51,7 @@ public sealed class ImageFileService : IImageFileService
         // ImageSharp does not dispose streams it didn't own — wrap explicitly so a 4-15 MB image
         // buffer isn't held until the next GC2 (matters under the concurrent queue).
         using var ms = new MemoryStream(imageBytes);
-        SixLabors.ImageSharp.Image<Rgba32>? image = null;
+        Image<Rgba32>? image = null;
         int width, height;
         try
         {

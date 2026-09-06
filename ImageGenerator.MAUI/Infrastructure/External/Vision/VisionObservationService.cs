@@ -238,11 +238,9 @@ public sealed class VisionObservationService : IVisionObservationService
         };
 
         var endpoint = $"{baseUrl.TrimEnd('/')}/api/chat";
-        using var client = httpClientFactory.CreateClient(ImageGenerator.MAUI.Infrastructure.External.Ollama.OllamaChatTransport.HttpClientName);
-        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
-        {
-            Content = new StringContent(JsonSerializer.Serialize(body, BodyJson), Encoding.UTF8, "application/json")
-        };
+        using var client = httpClientFactory.CreateClient(Ollama.OllamaChatTransport.HttpClientName);
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+        request.Content = new StringContent(JsonSerializer.Serialize(body, BodyJson), Encoding.UTF8, "application/json");
         request.Options.Set(RemoteHttpLoggingHandler.PurposeKey, "local image observation");
         request.Options.Set(RemoteHttpLoggingHandler.ModelKey, modelId);
 

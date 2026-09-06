@@ -35,7 +35,7 @@ public static class RefitServiceExtensions
         ContentSerializer = new SystemTextJsonContentSerializer(CreateContentSerializerOptions())
     };
 
-    internal sealed class NullSkippingDictionaryConverter : JsonConverter<Dictionary<string, object?>>
+    private sealed class NullSkippingDictionaryConverter : JsonConverter<Dictionary<string, object?>>
     {
         public override Dictionary<string, object?>? Read(
             ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -78,78 +78,77 @@ public static class RefitServiceExtensions
             .AddRemoteHttpLogging(typeof(T).Name);
     }
 
-    public static IHttpClientBuilder AddRemoteHttpLogging(
-        this IHttpClientBuilder builder,
-        string clientName) =>
-        builder.AddHttpMessageHandler(sp =>
-            new RemoteHttpLoggingHandler(
-                sp.GetRequiredService<ILogger<RemoteHttpLoggingHandler>>(),
-                clientName));
-
-    /// <summary>
-    /// Apply the project's standard outbound-HTTP pipeline to a named or typed client:
-    /// auto-decompression on the primary handler, Polly-owned timeouts (HttpClient.Timeout
-    /// opts out), and a TotalTimeout → Retry → PerAttemptTimeout resilience stack.
-    /// </summary>
-    public static IHttpClientBuilder ConfigureStandardResilience(
-        this IHttpClientBuilder builder,
-        TimeSpan perAttemptTimeout,
-        TimeSpan totalTimeout,
-        TimeSpan? retryDelay = null)
+    extension(IHttpClientBuilder builder)
     {
-        var delay = retryDelay ?? TimeSpan.FromSeconds(2);
+        public IHttpClientBuilder AddRemoteHttpLogging(string clientName) =>
+            builder.AddHttpMessageHandler(sp =>
+                new RemoteHttpLoggingHandler(
+                    sp.GetRequiredService<ILogger<RemoteHttpLoggingHandler>>(),
+                    clientName));
 
-        builder
-            .ConfigureHttpClient(client =>
-            {
-                // Polly owns timeouts (per-attempt + total). Opt out of HttpClient's per-request
-                // default (100s) so two ceilings can't compete or surface as TaskCanceledException
-                // instead of Polly's TimeoutRejectedException.
-                client.Timeout = Timeout.InfiniteTimeSpan;
-            })
-            // Replicate/OpenAI send gzip/brotli-compressed JSON responses. Without automatic
-            // decompression on the primary handler, Refit reads raw bytes that fail to
-            // deserialize, surfacing as "HTTP 2xx: (no body)" ApiExceptions. Harmless on
-            // non-compressed responses (Pollinations image bytes, CDN downloads).
-            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-            {
-                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli
-            });
-
-        // Resilience strategies wrap outside-in in registration order: outer TotalTimeout
-        // wraps Retry wraps inner PerAttemptTimeout. Up to 4 attempts (1 + 3 retries) are
-        // bounded by the total; each attempt is bounded by per-attempt. Reordering silently
-        // breaks the contract — e.g. PerAttempt first would make it the only effective ceiling.
-        builder.AddResilienceHandler("standard", pipeline =>
+        /// <summary>
+        /// Apply the project's standard outbound-HTTP pipeline to a named or typed client:
+        /// auto-decompression on the primary handler, Polly-owned timeouts (HttpClient.Timeout
+        /// opts out), and a TotalTimeout → Retry → PerAttemptTimeout resilience stack.
+        /// </summary>
+        public IHttpClientBuilder ConfigureStandardResilience(TimeSpan perAttemptTimeout,
+            TimeSpan totalTimeout,
+            TimeSpan? retryDelay = null)
         {
-            pipeline.AddTimeout(new HttpTimeoutStrategyOptions
+            var delay = retryDelay ?? TimeSpan.FromSeconds(2);
+
+            builder
+                .ConfigureHttpClient(client =>
+                {
+                    // Polly owns timeouts (per-attempt + total). Opt out of HttpClient's per-request
+                    // default (100s) so two ceilings can't compete or surface as TaskCanceledException
+                    // instead of Polly's TimeoutRejectedException.
+                    client.Timeout = Timeout.InfiniteTimeSpan;
+                })
+                // Replicate/OpenAI send gzip/brotli-compressed JSON responses. Without automatic
+                // decompression on the primary handler, Refit reads raw bytes that fail to
+                // deserialize, surfacing as "HTTP 2xx: (no body)" ApiExceptions. Harmless on
+                // non-compressed responses (Pollinations image bytes, CDN downloads).
+                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+                {
+                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli
+                });
+
+            // Resilience strategies wrap outside-in in registration order: outer TotalTimeout
+            // wraps Retry wraps inner PerAttemptTimeout. Up to 4 attempts (1 + 3 retries) are
+            // bounded by the total; each attempt is bounded by per-attempt. Reordering silently
+            // breaks the contract — e.g. PerAttempt first would make it the only effective ceiling.
+            builder.AddResilienceHandler("standard", pipeline =>
             {
-                Timeout = totalTimeout,
-                Name = "TotalRequestTimeout"
+                pipeline.AddTimeout(new HttpTimeoutStrategyOptions
+                {
+                    Timeout = totalTimeout,
+                    Name = "TotalRequestTimeout"
+                });
+
+                pipeline.AddRetry(new HttpRetryStrategyOptions
+                {
+                    MaxRetryAttempts = 3,
+                    BackoffType = DelayBackoffType.Exponential,
+                    UseJitter = true,
+                    Delay = delay,
+                    ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
+                        .Handle<HttpRequestException>()
+                        .Handle<TimeoutException>()
+                        .HandleResult(response =>
+                            response.StatusCode == HttpStatusCode.RequestTimeout ||
+                            response.StatusCode == HttpStatusCode.TooManyRequests ||
+                            (int)response.StatusCode >= 500)
+                });
+
+                pipeline.AddTimeout(new HttpTimeoutStrategyOptions
+                {
+                    Timeout = perAttemptTimeout,
+                    Name = "PerAttemptTimeout"
+                });
             });
 
-            pipeline.AddRetry(new HttpRetryStrategyOptions
-            {
-                MaxRetryAttempts = 3,
-                BackoffType = DelayBackoffType.Exponential,
-                UseJitter = true,
-                Delay = delay,
-                ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
-                    .Handle<HttpRequestException>()
-                    .Handle<TimeoutException>()
-                    .HandleResult(response =>
-                        response.StatusCode == System.Net.HttpStatusCode.RequestTimeout ||
-                        response.StatusCode == System.Net.HttpStatusCode.TooManyRequests ||
-                        (int)response.StatusCode >= 500)
-            });
-
-            pipeline.AddTimeout(new HttpTimeoutStrategyOptions
-            {
-                Timeout = perAttemptTimeout,
-                Name = "PerAttemptTimeout"
-            });
-        });
-
-        return builder;
+            return builder;
+        }
     }
 }

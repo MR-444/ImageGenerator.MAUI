@@ -20,16 +20,15 @@ public abstract class FluxBase
     public string OutputFormat { get; set; } = "png";
     
     [JsonPropertyName("aspect_ratio")]
-    public virtual string AspectRatio { get; set; } = "1:1";
+    public string AspectRatio { get; set; } = "1:1";
 
     [JsonPropertyName("image_prompt")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ImagePrompt
     {
-        get => _imagePrompt;
-        set => _imagePrompt = string.IsNullOrWhiteSpace(value) ? null : value;
+        get;
+        set => field = string.IsNullOrWhiteSpace(value) ? null : value;
     }
-    private string? _imagePrompt;
 
     [JsonPropertyName("safety_tolerance")]
     [Range(1, 6, ErrorMessage = "Safety tolerance must be between 1 and 6.")]

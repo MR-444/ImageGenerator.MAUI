@@ -279,7 +279,7 @@ public class ImageFileServiceTests : IDisposable
 
     private static byte[] Build1x1Image(ImageOutputFormat format)
     {
-        using var image = new SixLabors.ImageSharp.Image<Rgba32>(1, 1);
+        using var image = new Image<Rgba32>(1, 1);
         using var memory = new MemoryStream();
         if (format == ImageOutputFormat.Png) image.Save(memory, new PngEncoder());
         else image.Save(memory, new JpegEncoder());
@@ -288,7 +288,7 @@ public class ImageFileServiceTests : IDisposable
 
     private static byte[] BuildContentPng(int width, int height, string? existingComment = null)
     {
-        using var image = new SixLabors.ImageSharp.Image<Rgba32>(width, height);
+        using var image = new Image<Rgba32>(width, height);
         for (var y = 0; y < height; y++)
             for (var x = 0; x < width; x++)
                 image[x, y] = new Rgba32((byte)(x * 17), (byte)(y * 23), (byte)((x + y) * 7), 255);
