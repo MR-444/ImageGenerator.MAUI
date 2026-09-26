@@ -72,7 +72,7 @@ public static class RefitServiceExtensions
         TimeSpan? retryDelay = null) where T : class
     {
         return services
-            .AddRefitClient<T>(SharedRefitSettings)
+            .AddRefitGeneratedClient<T>(SharedRefitSettings)
             .ConfigureHttpClient(client => client.BaseAddress = new Uri(baseAddress))
             .ConfigureStandardResilience(RefitPerAttemptTimeout, RefitTotalRequestTimeout, retryDelay)
             .AddRemoteHttpLogging(typeof(T).Name);
