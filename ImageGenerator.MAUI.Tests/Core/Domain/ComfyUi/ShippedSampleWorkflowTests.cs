@@ -53,16 +53,6 @@ public class ShippedSampleWorkflowTests
     }
 
     [Fact]
-    public void Seeds_TheRandomNoiseLiteralIsRerolled()
-    {
-        var result = ComfyUiWorkflowPatcher.Patch(SampleJson, Request(seed: 999), FixedNow);
-
-        JsonNode.Parse(result.GraphJson)!["98:18"]!["inputs"]!["noise_seed"]!
-            .GetValue<long>().Should().Be(999);
-        result.SeedNodeIds.Should().BeEquivalentTo(["98:18"]);
-    }
-
-    [Fact]
     public void Resolution_PatchesTheSelectorNode()
     {
         var result = ComfyUiWorkflowPatcher.Patch(

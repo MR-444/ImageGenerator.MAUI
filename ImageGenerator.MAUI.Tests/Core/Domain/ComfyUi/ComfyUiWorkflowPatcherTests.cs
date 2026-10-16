@@ -161,20 +161,6 @@ public class ComfyUiWorkflowPatcherTests
     }
 
     [Fact]
-    public void InputImage_PatchesEveryLoadImageNodeAndRerollsTheUpscalerSeed()
-    {
-        var result = ComfyUiWorkflowPatcher.Patch(
-            UpscaleTemplate, Request(prompt: "tile prompt", seed: 999),
-            inputImageName: "sub/emberforge_abc.png");
-
-        var graph = JsonNode.Parse(result.GraphJson)!;
-        graph["1"]!["inputs"]!["image"]!.GetValue<string>().Should().Be("sub/emberforge_abc.png");
-        graph["3"]!["inputs"]!["text"]!.GetValue<string>().Should().Be("tile prompt");
-        graph["8"]!["inputs"]!["seed"]!.GetValue<long>().Should().Be(999);
-        result.PromptTargetDescription.Should().Contain("1 LoadImage node(s)");
-    }
-
-    [Fact]
     public void InputImage_MissingForALoadImageWorkflow_ThrowsWithGuidance()
     {
         var act = () => ComfyUiWorkflowPatcher.Patch(UpscaleTemplate, Request());

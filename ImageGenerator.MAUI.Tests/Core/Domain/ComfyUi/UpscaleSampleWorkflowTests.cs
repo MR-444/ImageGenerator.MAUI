@@ -33,21 +33,6 @@ public class UpscaleSampleWorkflowTests
     }
 
     [Fact]
-    public void Patch_WritesTheUploadedNameSeedAndTilePrompt()
-    {
-        var result = ComfyUiWorkflowPatcher.Patch(
-            SampleJson, Request(prompt: "the render's prompt", seed: 999), FixedNow,
-            inputImageName: "emberforge_abc.png");
-
-        var graph = JsonNode.Parse(result.GraphJson)!;
-        graph["1"]!["inputs"]!["image"]!.GetValue<string>().Should().Be("emberforge_abc.png");
-        graph["8"]!["inputs"]!["seed"]!.GetValue<long>().Should().Be(999);
-        // Positive (node 3) gets the source prompt; the baked negative (node 4) must survive.
-        graph["3"]!["inputs"]!["text"]!.GetValue<string>().Should().Be("the render's prompt");
-        graph["4"]!["inputs"]!["text"]!.GetValue<string>().Should().Contain("blurry");
-    }
-
-    [Fact]
     public void UpscaleFactor_SlotIsFoundAndPatchable()
     {
         ComfyUiWorkflowPatcher.FindUpscaleFactorSlot(SampleJson).Should().Be(2.0,

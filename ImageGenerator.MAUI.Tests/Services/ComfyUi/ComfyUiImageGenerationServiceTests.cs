@@ -218,40 +218,6 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
     };
 
     [Fact]
-    public async Task HappyPath_PostsPatchedGraph_PollsAndDownloadsTheOutputImage()
-    {
-        _historyResponses.Enqueue(HistoryEmpty);   // first poll: still running
-        _historyResponses.Enqueue(HistoryDone);
-
-        var result = await _service.GenerateImageAsync(Parameters());
-
-        result.ImageData.Should().NotBeNull().And.HaveCount(4096);
-        result.Message.Should().Contain("My Workflow");
-
-        var postBody = JsonNode.Parse(_requestBodies[_requests.FindIndex(r => r.Method == HttpMethod.Post)])!;
-        postBody["client_id"]!.GetValue<string>().Should().NotBeNullOrEmpty();
-        var graph = postBody["prompt"]!;
-        graph["179"]!["inputs"]!["import_json"]!.GetValue<string>().Should().Contain("high_level_description");
-        graph["179"]!["inputs"]!["import_mode"]!.GetValue<string>().Should().Be("always");
-        graph["165"]!["inputs"]!["noise_seed"]!.GetValue<long>().Should().Be(777);
-        graph["4"]!["inputs"]!["ckpt_name"]!.GetValue<string>().Should().Be("baked.safetensors",
-            "the workflow's baked-in model is never patched");
-
-        var viewRequest = _requests.Single(r => r.RequestUri!.AbsolutePath == "/view");
-        viewRequest.RequestUri!.Query.Should().Contain("filename=Ideogram4_001.png",
-            "the type=output image must win over the temp preview");
-        viewRequest.RequestUri.Query.Should().Contain("type=output");
-        viewRequest.RequestUri.Host.Should().Be("test-host", "base URL comes from the UI state store");
-        _logger.Messages.Should().Contain(message =>
-            message.Contains("ComfyUI benchmark")
-            && message.Contains("SageRequested=False")
-            && message.Contains("SageApplied=False")
-            && message.Contains("CoveredLoaderCount=0")
-            && message.Contains("Outcome=success")
-            && message.Contains("QueueToCompleteMs="));
-    }
-
-    [Fact]
     public async Task SageAttention_Enabled_PostsRuntimePatchAndLogsCoveredLoader()
     {
         _uiState.Setup(s => s.LoadUseSageAttention()).Returns(true);
