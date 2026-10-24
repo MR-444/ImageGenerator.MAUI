@@ -37,7 +37,7 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
     // resilience pipeline would allow minutes).
     private static readonly TimeSpan CancelNotifyTimeout = TimeSpan.FromSeconds(5);
     // WS connect budget: a proxied/blocked setup must degrade to polling fast, not stall the job.
-    private static readonly TimeSpan WsConnectTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan WsConnectTimeout = TimeSpan.FromSeconds(15);
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IModelDescriptorRegistry _registry;
@@ -178,7 +178,7 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
                 {
                     await WaitViaWebSocketAsync(socket, promptId.Value!, progress, cancellationToken);
                 }
-
+                
                 // First iteration returns immediately when the ws saw completion; otherwise
                 // this is the unchanged 2 s polling fallback.
                 var entry = await PollHistoryAsync(httpClient, baseUri, promptId.Value!, cancellationToken);
@@ -413,30 +413,55 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
 
             while (true)
             {
-                var message = await socket.ReceiveTextAsync(deadlineCts.Token);
+                string? message;
+                try
+                {
+                    message = await socket.ReceiveTextAsync(deadlineCts.Token);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "ComfyUI ws connection error — falling back to polling");
+                    return;
+                }
+
                 if (message is null)
                 {
                     _logger.LogWarning("ComfyUI ws closed by server — falling back to polling");
                     return;
                 }
 
-                switch (ComfyUiWsEvent.TryParse(message))
+                // Isolate parsing: one unhandled/malformed event must NEVER kill the progress stream
+                try
                 {
-                    case ComfyUiWsEvent.ExecutionStart start when start.PromptId == promptId:
-                        progress?.Report(new JobProgress("Rendering…"));
-                        break;
+                    var ev = ComfyUiWsEvent.TryParse(message);
 
-                    case ComfyUiWsEvent.Progress step when step.PromptId == promptId:
-                        progress?.Report(new JobProgress(
-                            $"Rendering… {step.Value}/{step.Max}",
-                            step.Max > 0 ? (double)step.Value / step.Max : null));
-                        break;
-
-                    case ComfyUiWsEvent.Completed completed when completed.PromptId == promptId:
+                    // Terminal events: prompt finished or failed -> exit to let PollHistoryAsync handle outcome
+                    if (ev is ComfyUiWsEvent.Completed c && c.PromptId == promptId
+                        || ev is ComfyUiWsEvent.Failed f && f.PromptId == promptId)
+                    {
                         return;
+                    }
 
-                    case ComfyUiWsEvent.Failed failed when failed.PromptId == promptId:
-                        return;
+                    switch (ev)
+                    {
+                        case ComfyUiWsEvent.ExecutionStart start when start.PromptId == promptId || start.PromptId is null:
+                            progress?.Report(new JobProgress("Rendering…"));
+                            break;
+
+                        case ComfyUiWsEvent.Progress step when step.PromptId == promptId || step.PromptId is null:
+                            progress?.Report(new JobProgress(
+                                $"Rendering… {step.Value}/{step.Max}",
+                                step.Max > 0 ? (double)step.Value / step.Max : null));
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Ignored unparseable ComfyUI ws message");
                 }
             }
         }

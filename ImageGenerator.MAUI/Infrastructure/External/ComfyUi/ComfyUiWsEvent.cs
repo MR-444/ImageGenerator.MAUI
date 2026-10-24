@@ -10,16 +10,9 @@ namespace ImageGenerator.MAUI.Infrastructure.External.ComfyUi;
 /// </summary>
 public abstract record ComfyUiWsEvent
 {
-    /// <summary>execution_start — the prompt left the queue and the render began.</summary>
     public sealed record ExecutionStart(string? PromptId) : ComfyUiWsEvent;
-
-    /// <summary>progress — sampler (or other long node) step Value of Max.</summary>
     public sealed record Progress(string? PromptId, int Value, int Max) : ComfyUiWsEvent;
-
-    /// <summary>executing with node:null (legacy completion signal) or execution_success.</summary>
     public sealed record Completed(string? PromptId) : ComfyUiWsEvent;
-
-    /// <summary>execution_error or execution_interrupted — /history carries the detail.</summary>
     public sealed record Failed(string? PromptId) : ComfyUiWsEvent;
 
     public static ComfyUiWsEvent? TryParse(string json)
@@ -37,9 +30,9 @@ public abstract record ComfyUiWsEvent
                 return null;
             }
 
-            var promptId = data.TryGetProperty("prompt_id", out var pid) && pid.ValueKind == JsonValueKind.String
-                ? pid.GetString()
-                : null;
+            // prompt_id can live inside data, or on some custom servers at root level
+            var promptId = (data.TryGetProperty("prompt_id", out var pid) && pid.ValueKind == JsonValueKind.String ? pid.GetString() : null)
+                        ?? (root.TryGetProperty("prompt_id", out var rpid) && rpid.ValueKind == JsonValueKind.String ? rpid.GetString() : null);
 
             switch (typeEl.GetString())
             {
@@ -47,8 +40,7 @@ public abstract record ComfyUiWsEvent
                     return new ExecutionStart(promptId);
 
                 case "progress":
-                    return data.TryGetProperty("value", out var value) && value.TryGetInt32(out var v)
-                           && data.TryGetProperty("max", out var max) && max.TryGetInt32(out var m)
+                    return TryReadInt(data, "value", out var v) && TryReadInt(data, "max", out var m)
                         ? new Progress(promptId, v, m)
                         : null;
 
@@ -69,9 +61,32 @@ public abstract record ComfyUiWsEvent
                     return null;
             }
         }
-        catch (JsonException)
+        catch (Exception)
         {
             return null;
         }
+    }
+
+    private static bool TryReadInt(JsonElement parent, string propertyName, out int result)
+    {
+        result = 0;
+        if (!parent.TryGetProperty(propertyName, out var prop) || prop.ValueKind != JsonValueKind.Number)
+        {
+            return false;
+        }
+
+        if (prop.TryGetInt32(out result))
+        {
+            return true;
+        }
+
+        // Fallback if the server serialized an integer as float/double e.g. 5.0
+        if (prop.TryGetDouble(out var d))
+        {
+            result = (int)d;
+            return true;
+        }
+
+        return false;
     }
 }
