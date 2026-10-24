@@ -1,0 +1,145 @@
+{
+  "9": {
+    "inputs": {
+      "filename_prefix": "2026-10/2026-10-21_moss_image_t2i",
+      "images": [
+        "18_8",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "19": {
+    "inputs": {
+      "aspect_ratio": "3:4 (Portrait Standard)",
+      "megapixels": 1.5,
+      "multiple": 16
+    },
+    "class_type": "ResolutionSelector",
+    "_meta": {
+      "title": "Resolution Selector"
+    }
+  },
+  "18_1": {
+    "inputs": {
+      "unet_name": "moss_image_sft_bf16.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "18_2": {
+    "inputs": {
+      "clip_name": "qwen3.5_9b_bf16.safetensors",
+      "type": "moss_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "18_3": {
+    "inputs": {
+      "vae_name": "flux2-vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "18_6": {
+    "inputs": {
+      "width": [
+        "19",
+        0
+      ],
+      "height": [
+        "19",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyFlux2LatentImage",
+    "_meta": {
+      "title": "Empty Flux 2 Latent"
+    }
+  },
+  "18_4": {
+    "inputs": {
+      "text": "The ember catches, burns down to the wood.\nThe air turns heavy, thicker than it should.\nYou exhale a cloud of crushed amethyst.\nIt wraps around my shoulders, settling on my wrist.\nI watch your silhouette detach from the wall.",
+      "clip": [
+        "18_2",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt"
+    }
+  },
+  "18_5": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "18_2",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt (empty = reference default)"
+    }
+  },
+  "18_7": {
+    "inputs": {
+      "seed": 508924235517440,
+      "steps": 50,
+      "cfg": 3,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "18_1",
+        0
+      ],
+      "positive": [
+        "18_4",
+        0
+      ],
+      "negative": [
+        "18_5",
+        0
+      ],
+      "latent_image": [
+        "18_6",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "18_8": {
+    "inputs": {
+      "samples": [
+        "18_7",
+        0
+      ],
+      "vae": [
+        "18_3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  }
+}
