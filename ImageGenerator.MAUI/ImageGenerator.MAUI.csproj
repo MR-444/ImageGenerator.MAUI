@@ -67,18 +67,18 @@
 	<ItemGroup>
 		<PackageReference Include="AsyncAwaitBestPractices.MVVM" Version="10.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.110" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.12" />
-		<PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.10.0" />
-		<PackageReference Include="NLog" Version="6.2.1" />
-		<PackageReference Include="NLog.Extensions.Logging" Version="6.2.1" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.120" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.14" />
+		<PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.11.0" />
+		<PackageReference Include="NLog" Version="6.2.2" />
+		<PackageReference Include="NLog.Extensions.Logging" Version="6.2.2" />
 		<!-- Refit clients use generated request builders; Refit.Reflection is not required. -->
-		<PackageReference Include="Refit" Version="16.3.0" />
-		<PackageReference Include="Refit.HttpClientFactory" Version="16.3.0" />
+		<PackageReference Include="Refit" Version="16.4.0" />
+		<PackageReference Include="Refit.HttpClientFactory" Version="16.4.0" />
 		<!-- Pinned below 4.x because newer ImageSharp licensing is not acceptable for this project. -->
 		<PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
 		<!-- Hardware-accelerated CRC-32/ISO-HDLC for PngTextChunkWriter (Microsoft, MIT, no transitive deps). -->
-		<PackageReference Include="System.IO.Hashing" Version="10.0.12" />
+		<PackageReference Include="System.IO.Hashing" Version="10.0.14" />
 	</ItemGroup>
 
 	<ItemGroup>
