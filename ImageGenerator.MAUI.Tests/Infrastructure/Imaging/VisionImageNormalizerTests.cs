@@ -78,4 +78,42 @@ public class VisionImageNormalizerTests
         bytes.Should().BeNull();
         error.Should().NotBeNullOrEmpty();
     }
+    
+    [Fact]
+    public void OversizedPng_IsDownscaledToMaxDimension()
+    {
+        using var image = new Image<Rgba32>(2000, 1000);
+        using var ms = new MemoryStream();
+        image.SaveAsPng(ms);
+        var original = ms.ToArray();
+
+        var (bytes, error) = VisionImageNormalizer.Normalize(original);
+
+        error.Should().BeNull();
+        bytes.Should().NotBeNull();
+        bytes.Should().NotBeSameAs(original, "oversized image must be re-encoded, not passed through");
+
+        using var resultImage = SixLabors.ImageSharp.Image.Load(bytes);
+        resultImage.Width.Should().Be(VisionImageNormalizer.MaxDimension);
+        resultImage.Height.Should().Be(512); // Proportional: 1000 * (1024 / 2000) = 512
+    }
+
+    [Fact]
+    public void OversizedJpeg_IsDownscaledToMaxDimension()
+    {
+        using var image = new Image<Rgba32>(1000, 2000);
+        using var ms = new MemoryStream();
+        image.SaveAsJpeg(ms);
+        var original = ms.ToArray();
+
+        var (bytes, error) = VisionImageNormalizer.Normalize(original);
+
+        error.Should().BeNull();
+        bytes.Should().NotBeNull();
+        bytes.Should().NotBeSameAs(original);
+
+        using var resultImage = SixLabors.ImageSharp.Image.Load(bytes);
+        resultImage.Width.Should().Be(512);
+        resultImage.Height.Should().Be(VisionImageNormalizer.MaxDimension);
+    }
 }

@@ -20,7 +20,7 @@ public partial class IdeaToPromptPage
     {
         ".png", ".jpg", ".jpeg", ".webp", ".gif"
     };
-    private const long MaxReferenceImageBytes = 20L * 1024 * 1024;
+    private const long MaxReferenceImageBytes = 128L * 1024 * 1024; // 128 MB
 
     public IdeaToPromptPage(IdeaToPromptViewModel viewModel)
     {

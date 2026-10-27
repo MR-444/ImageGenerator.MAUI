@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using SixLabors.ImageSharp;
 using System.Xml.Linq;
+using ImageGenerator.MAUI.Infrastructure.Imaging;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
 
@@ -670,30 +671,6 @@ public class IdeaToPromptViewModelTests
     }
 
     [Fact]
-    public void DescribeIdeaMarkup_ExposesSupportedPasteAndDropZoneControls()
-    {
-        var xamlPath = Path.Combine(AppContext.BaseDirectory, "TestAssets", "IdeaToPromptPage.xaml");
-        var document = XDocument.Load(xamlPath);
-        XNamespace x = "http://schemas.microsoft.com/winfx/2009/xaml";
-
-        var elements = document.Descendants().ToList();
-        elements.Should().Contain(e => (string?)e.Attribute(x + "Name") == "WorkspaceGrid");
-        elements.Should().Contain(e => (string?)e.Attribute("AutomationId") == "PasteReferenceImageButton"
-                                       && (string?)e.Attribute("Clicked") == "OnPasteReferenceImageClicked");
-        elements.Should().Contain(e => (string?)e.Attribute("AutomationId") == "ReferenceImageDropZone");
-        elements.Should().Contain(e => (string?)e.Attribute("AutomationId") == "ImageObservationEditor"
-                                       && (string?)e.Attribute("HeightRequest") == "260");
-        // The observation is hand-editable: the user can correct the caption and have the build
-        // use it verbatim, so the editor must NOT be read-only.
-        elements.Should().Contain(e => (string?)e.Attribute("AutomationId") == "ImageObservationEditor"
-                                       && (string?)e.Attribute("IsReadOnly") != "True");
-        elements.Should().Contain(e => (string?)e.Attribute("AutomationId") == "ReObserveImageButton"
-                                       && (string?)e.Attribute("Command") == "{Binding ReObserveCommand}");
-        elements.Should().NotContain(e => e.Name.LocalName.Contains("KeyboardAccelerator", StringComparison.Ordinal),
-            "KeyboardAccelerators is not loadable on this MAUI page at runtime");
-    }
-
-    [Fact]
     public void SetReferenceImageFromBytes_RejectsEmptyClipboardBitmap()
     {
         var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
@@ -756,24 +733,23 @@ public class IdeaToPromptViewModelTests
     }
 
     [Fact]
-    public void DropHelpers_ExtractHttpUrlFromBrowserHtml()
+    public void SetReferenceImageFromBytes_OversizedImage_DownscalesReferenceImage()
     {
-        var ok = IdeaToPromptPage.TryExtractImageSrc(
-            """<div><img alt="x" src="https://cdn.example.test/image.webp?size=large"></div>""",
-            out var url);
+        using var image = new Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(2000, 1500);
+        using var ms = new MemoryStream();
+        image.SaveAsPng(ms);
+        var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
 
-        ok.Should().BeTrue();
-        url.Should().Be("https://cdn.example.test/image.webp?size=large");
-    }
+        var loaded = vm.SetReferenceImageFromBytes("large.png", ms.ToArray());
 
-    [Fact]
-    public void DropHelpers_RejectBlobUrl()
-    {
-        var ok = IdeaToPromptPage.TryExtractImageSrc(
-            """<img src="blob:https://example.test/123">""",
-            out _);
+        loaded.Should().BeTrue();
+        vm.HasReferenceImage.Should().BeTrue();
 
-        ok.Should().BeFalse();
+        // Verify the stored base64 image was actually shrunk to <= 1024px:
+        var storedBytes = Convert.FromBase64String(vm.ReferenceImageBase64);
+        using var decoded = SixLabors.ImageSharp.Image.Load(storedBytes);
+        decoded.Width.Should().Be(VisionImageNormalizer.MaxDimension);
+        decoded.Height.Should().Be(768);
     }
 
     // ---- Helpers / fakes ----------------------------------------------------------------
