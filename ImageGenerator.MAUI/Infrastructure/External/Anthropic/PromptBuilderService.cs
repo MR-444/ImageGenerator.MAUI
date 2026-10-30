@@ -21,7 +21,7 @@ namespace ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 /// or the handoff — once its publish behavior is verified on the trimmed target.
 /// </para>
 /// </summary>
-public sealed class AnthropicPromptBuilderService : IPromptBuilderService
+public sealed class PromptBuilderService : IPromptBuilderService
 {
     private const string SonnetModelId = "claude-sonnet-4-6";
     private const string OpusModelId = "claude-opus-4-8";
@@ -83,17 +83,17 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
 
     private readonly IAnthropicTokenStore _tokenStore;
     private readonly IUiStateStore _uiStateStore;
-    private readonly ILogger<AnthropicPromptBuilderService> _logger;
+    private readonly ILogger<PromptBuilderService> _logger;
     private readonly Func<string, Task<Stream>> _assetOpener;
     private readonly string _promptDirectory;
     private readonly StructuredCompletion _complete;
 
     /// <summary>Production ctor (DI): the transport is one Anthropic Messages call over the named
     /// HttpClient. The token store, logger, and factory are all resolved from the container.</summary>
-    public AnthropicPromptBuilderService(
+    public PromptBuilderService(
         IAnthropicTokenStore tokenStore,
         IUiStateStore uiStateStore,
-        ILogger<AnthropicPromptBuilderService> logger,
+        ILogger<PromptBuilderService> logger,
         IHttpClientFactory httpClientFactory)
         : this(tokenStore, uiStateStore, logger,
             BuildHttpCompletion(httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory)), logger))
@@ -107,10 +107,10 @@ public sealed class AnthropicPromptBuilderService : IPromptBuilderService
     /// make the override-precedence + request-building + validate-retry logic unit-testable without
     /// disk or HTTP. Internal so the <see cref="StructuredCompletion"/> seam stays non-public.
     /// </summary>
-    internal AnthropicPromptBuilderService(
+    internal PromptBuilderService(
         IAnthropicTokenStore tokenStore,
         IUiStateStore uiStateStore,
-        ILogger<AnthropicPromptBuilderService> logger,
+        ILogger<PromptBuilderService> logger,
         StructuredCompletion completion,
         string? promptDirectoryOverride = null,
         Func<string, Task<Stream>>? assetOpener = null)

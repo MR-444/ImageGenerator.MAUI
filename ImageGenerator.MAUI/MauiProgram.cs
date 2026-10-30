@@ -213,7 +213,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<ICivitaiPostingService, CivitaiPostingService>();
         builder.Services.AddSingleton<IAnthropicTokenStore, AnthropicTokenStore>();
         builder.Services.AddSingleton<IOpenRouterTokenStore, OpenRouterTokenStore>();
-        builder.Services.AddSingleton<IPromptBuilderService, AnthropicPromptBuilderService>();
+        builder.Services.AddSingleton<IPromptBuilderService, PromptBuilderService>();
         builder.Services.AddSingleton<IVisionObservationService, VisionObservationService>();
         builder.Services.AddSingleton<IOpenRouterModelCatalog, OpenRouterModelCatalog>();
         builder.Services.AddSingleton<ICaptionMutationLlmService, CaptionMutationLlmService>();

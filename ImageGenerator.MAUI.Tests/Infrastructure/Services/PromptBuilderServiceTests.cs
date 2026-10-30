@@ -9,7 +9,7 @@ using Moq;
 
 namespace ImageGenerator.MAUI.Tests.Infrastructure.Services;
 
-public sealed class AnthropicPromptBuilderServiceTests : IDisposable
+public sealed class PromptBuilderServiceTests : IDisposable
 {
     // A plausible prose prompt the fake "Claude" can return for the VPE pass.
     private const string ProseReply = "A russet-red fox mid-step through fresh snow at dawn, breath fogging the cold air.";
@@ -316,20 +316,20 @@ public sealed class AnthropicPromptBuilderServiceTests : IDisposable
 
     // ---- Helpers / fakes ----------------------------------------------------------------
 
-    private AnthropicPromptBuilderService CreateSut(
+    private PromptBuilderService CreateSut(
         Mock<IAnthropicTokenStore> store,
         LegacyCompletion completion) =>
         CreateRoutedSut(store, UiStore(),
             (tier, modelId, apiKey, baseUrl, systemPrompt, messages, schema, ct) =>
                 completion(apiKey ?? string.Empty, systemPrompt, messages, schema, ct));
 
-    private AnthropicPromptBuilderService CreateRoutedSut(
+    private PromptBuilderService CreateRoutedSut(
         Mock<IAnthropicTokenStore> store,
         Mock<IUiStateStore> uiStore,
-        AnthropicPromptBuilderService.StructuredCompletion completion) =>
+        PromptBuilderService.StructuredCompletion completion) =>
         new(store.Object,
             uiStore.Object,
-            NullLogger<AnthropicPromptBuilderService>.Instance,
+            NullLogger<PromptBuilderService>.Instance,
             completion,
             promptDirectoryOverride: _tempDir,
             assetOpener: FakeBundledAsset);

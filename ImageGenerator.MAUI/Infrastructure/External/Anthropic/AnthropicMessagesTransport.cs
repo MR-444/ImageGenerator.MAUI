@@ -12,7 +12,7 @@ internal readonly record struct ChatTurn(string Role, string Content);
 /// <summary>
 /// The raw <see cref="HttpClient"/> + System.Text.Json transport against api.anthropic.com's Messages
 /// API, with native structured outputs (<c>output_config.format = json_schema</c>, GA — no beta header).
-/// Extracted from <see cref="AnthropicPromptBuilderService"/> so the prompt builder and the caption
+/// Extracted from <see cref="PromptBuilderService"/> so the prompt builder and the caption
 /// mutator share one body shape; <paramref name="modelId"/> is a parameter (Sonnet 4.6 / Opus 4.8), no
 /// longer hardcoded. The official <c>Anthropic</c> NuGet SDK can replace this later without touching the
 /// callers — once its publish behaviour is verified on the trimmed win-x64 single-file target.

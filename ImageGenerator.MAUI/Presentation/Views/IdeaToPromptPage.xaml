@@ -377,15 +377,11 @@
                             AutomationId="ProseResultCard">
                         <VerticalStackLayout Spacing="8">
                             <Label Text="Prose prompt" Style="{StaticResource CardTitle}" />
-                            <!-- Fixed height + internal scroll, not AutoSize: MAUI's Editor
-                                 AutoSize="TextChanges" is unreliable on Windows for
-                                 programmatically-bound text — a second Build reassigns Prose in
-                                 place on the already-visible editor, which then keeps the previous
-                                 run's text unless the height is fixed. -->
-                            <Editor Text="{Binding Prose}"
-                                    IsReadOnly="True"
+                            <Editor Text="{Binding Prose, Mode=TwoWay}"
                                     AutoSize="Disabled"
                                     HeightRequest="260"
+                                    HorizontalOptions="Fill"
+                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                                     AutomationId="ProseResultEditor" />
                             <Label Text="A normal prompt that works with any model. Copy it, or use it as your prompt."
                                    Style="{StaticResource HelperText}" />
