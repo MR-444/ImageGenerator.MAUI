@@ -21,6 +21,9 @@ secrets.json
 .env
 launchSettings.json
 
+# Local license files (contain live license keys — CI gets the key via secrets)
+*.lic
+
 # Claude Code workspace state
 .claude/
 
