@@ -12,6 +12,7 @@ namespace ImageGenerator.MAUI.Presentation.Views;
 
 public partial class IdeaToPromptPage
 {
+    private string? _lastRefreshedProse;
     private WorkspaceLayoutMode _workspaceLayoutMode = WorkspaceLayoutMode.Wide;
 
     private enum WorkspaceLayoutMode { Wide, Narrow }
@@ -116,12 +117,11 @@ public partial class IdeaToPromptPage
     private void OnReferenceImageDragOver(object? sender, DragEventArgs e)
     {
         var winArgs = e.PlatformArgs?.DragEventArgs;
-        if (winArgs?.DataView is { } dv && ContainsReferenceImageDropData(dv))
-        {
-            e.AcceptedOperation = MauiDataPackageOperation.Copy;
-            winArgs.AcceptedOperation = WinDataPackageOperation.Copy;
-            winArgs.DragUIOverride.Caption = "Use as vision reference image";
-        }
+        if (winArgs?.DataView is not { } dv || !ContainsReferenceImageDropData(dv)) return;
+        
+        e.AcceptedOperation = MauiDataPackageOperation.Copy;
+        winArgs.AcceptedOperation = WinDataPackageOperation.Copy;
+        winArgs.DragUIOverride.Caption = "Use as vision reference image";
     }
 
     private async void OnReferenceImageDropped(object? sender, DropEventArgs e)
@@ -129,7 +129,7 @@ public partial class IdeaToPromptPage
         if (BindingContext is not IdeaToPromptViewModel viewModel)
             return;
 
-        var dv = e.PlatformArgs?.DragEventArgs?.DataView;
+        var dv = e.PlatformArgs?.DragEventArgs.DataView;
         if (dv is null || !ContainsReferenceImageDropData(dv)) return;
 
         try
@@ -241,10 +241,7 @@ public partial class IdeaToPromptPage
         // already present on the clipboard so Paste stays local and does not wait on a network
         // download. The URL remains a fallback for clipboards that do not provide usable pixels.
         var url = await TryGetReferenceImageUrlAsync(dataView);
-        if (url is not null && await viewModel.SetReferenceImageFromUrlAsync(url))
-            return true;
-
-        return false;
+        return url is not null && await viewModel.SetReferenceImageFromUrlAsync(url);
     }
 
     private static bool ContainsReferenceImageDropData(WinDataPackageView dataView) =>
@@ -386,4 +383,37 @@ public partial class IdeaToPromptPage
 
     private static bool IsHttpOrHttps(Uri? uri) =>
         uri is not null && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    
+    
+    private void OnProseTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(e.NewTextValue) || e.NewTextValue == _lastRefreshedProse)
+            return;
+
+        _lastRefreshedProse = e.NewTextValue;
+
+        // Use DispatchDelayed with a normal Action to avoid async void lambdas.
+        Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(50), () =>
+        {
+            try
+            {
+                if (sender is not Editor editor) return;
+                editor.InvalidateMeasure();
+#if WINDOWS
+                if (editor.Handler?.PlatformView is Microsoft.UI.Xaml.Controls.TextBox textBox)
+                {
+                    textBox.TextWrapping = Microsoft.UI.Xaml.TextWrapping.NoWrap;
+                    textBox.TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap;
+                    textBox.InvalidateMeasure();
+                    textBox.InvalidateArrange();
+                    textBox.UpdateLayout();
+                }
+#endif
+            }
+            catch
+            {
+                // Best-effort visual layout refresh
+            }
+        });
+    }
 }
