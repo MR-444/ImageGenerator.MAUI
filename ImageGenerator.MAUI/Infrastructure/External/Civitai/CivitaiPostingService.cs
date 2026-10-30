@@ -334,11 +334,9 @@ public sealed class CivitaiPostingService : ICivitaiPostingService
         CancellationToken cancellationToken)
     {
         using var client = _httpClientFactory.CreateClient(HttpClientName);
-        using var request = new HttpRequestMessage(HttpMethod.Post, url)
-        {
-            Content = new StringContent(
-                JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json"),
-        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Content = new StringContent(
+            JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
         request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {apiKey}");
         request.Headers.TryAddWithoutValidation("Accept", "application/json, text/event-stream");
 

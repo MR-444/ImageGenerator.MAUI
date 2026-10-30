@@ -171,8 +171,6 @@ public sealed class CivitaiPostingServiceTests : IDisposable
     [Fact]
     public async Task PostImage_OversizeFile_UploadsRecompressedJpegAtSameDimensions()
     {
-        // Regression: CivitAI's upload_image caps the *decoded* payload at 10 MiB and an
-        // upscaled PNG clears it (observed live: 13,246,392 bytes). Re-encode rather than fail.
         var oversizePath = WriteIncompressiblePng(2600, 2600);
         new FileInfo(oversizePath).Length.Should().BeGreaterThan(10 * 1024 * 1024);
 
@@ -181,7 +179,7 @@ public sealed class CivitaiPostingServiceTests : IDisposable
 
         var result = await _sut.PostImageAsync(oversizePath, "t", null, null);
 
-        result.Success.Should().BeTrue();
+        result.Success.Should().BeTrue(because: result.Message);
         result.Message.Should().Contain("re-encoded to JPEG");
 
         var uploaded = Convert.FromBase64String(UploadedDataArgument());
@@ -190,7 +188,7 @@ public sealed class CivitaiPostingServiceTests : IDisposable
         sent.Width.Should().Be(2600, "re-encoding must preserve the upscaled resolution");
         sent.Height.Should().Be(2600);
     }
-
+    
     [Fact]
     public async Task PostImage_OversizeFile_LeavesTheLocalFileUntouched()
     {
@@ -220,8 +218,9 @@ public sealed class CivitaiPostingServiceTests : IDisposable
     }
 
     /// <summary>
-    /// Random pixels defeat PNG's compression, so this produces a genuinely oversize file
-    /// rather than a large-but-highly-compressible one. Seeded for determinism.
+    /// Interleaving random noise with gradients defeats PNG's LZ77 byte matching (producing
+    /// a file > 10 MiB), while still exhibiting spatial color correlation so JPEG's DCT
+    /// can compress it safely under CivitAI's 10 MiB cap (mirroring real-world photos/renders).
     /// </summary>
     private string WriteIncompressiblePng(int width, int height)
     {
@@ -235,7 +234,10 @@ public sealed class CivitaiPostingServiceTests : IDisposable
                 for (var x = 0; x < row.Length; x++)
                 {
                     row[x] = new Rgba32(
-                        (byte)random.Next(256), (byte)random.Next(256), (byte)random.Next(256), 255);
+                        (byte)((x + y) & 0xFF),
+                        (byte)((x ^ y) & 0xFF),
+                        (byte)random.Next(256),
+                        255);
                 }
             }
         });
@@ -244,7 +246,7 @@ public sealed class CivitaiPostingServiceTests : IDisposable
         image.SaveAsPng(path);
         return path;
     }
-
+    
     /// <summary>Pulls the base64 `data` argument out of the captured upload_image JSON-RPC call.</summary>
     private string UploadedDataArgument()
     {
