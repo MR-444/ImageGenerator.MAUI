@@ -73,8 +73,13 @@ public sealed class FallbackComfyUiDescriptor : IPayloadBuilder, ICapabilityProv
             yield return $"LoRA: {p.ComfyUiLoraDisplay}";
             yield return $"LoRA strength: {p.ComfyUiLoraStrength.ToString("0.##", CultureInfo.InvariantCulture)}";
         }
-        // Only when the user overrode the workflow's baked factor (null = no patch applied);
-        // invariant culture — a de-DE "2,5" broke the Remix metadata reader once already.
+        // Only while the factor is actually in force for THIS render: null means nothing was
+        // patched. The view-model owns that guarantee (it clears the value whenever the upscale
+        // slot is unreachable — e.g. a chain-target factor with "Upscale after render" off), so a
+        // non-null value here means an UltimateSDUpscale really ran: in this workflow, or in the
+        // chained upscale pass that produced this file. Don't weaken it back to "the user picked
+        // a factor" — that stamped "UpscaleBy" into renders that upscaled nothing.
+        // Invariant culture — a de-DE "2,5" broke the Remix metadata reader once already.
         if (p.ComfyUiUpscaleFactor is { } factor)
             yield return $"UpscaleBy: {factor.ToString(CultureInfo.InvariantCulture)}";
     }

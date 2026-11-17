@@ -162,6 +162,7 @@ public class JobRunnerTests : IDisposable
         Seed = 42,
         UpscaleAfterRender = true,
         UpscaleWorkflow = "Upscale-Sample",
+        ComfyUiUpscaleFactor = 1.5,
         UseJsonPrompt = true
     };
 
@@ -200,6 +201,8 @@ public class JobRunnerTests : IDisposable
         upscalePass.ImagePrompts.Should().Equal(Convert.ToBase64String(RenderBytes));
         upscalePass.UseJsonPrompt.Should().BeFalse("upscale graphs take plain tile conditioning");
         upscalePass.UpscaleAfterRender.Should().BeFalse("an upscale must never chain another upscale");
+        upscalePass.ComfyUiUpscaleFactor.Should().Be(1.5,
+            "the chained pass is what the factor patches, and its own file reports UpscaleBy");
 
         _imageFileService.Verify(
             f => f.SaveImageWithMetadataAsync(expectedUpscaledPath, UpscaledBytes, upscalePass), Times.Once);

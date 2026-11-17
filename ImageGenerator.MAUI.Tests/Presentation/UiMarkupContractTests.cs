@@ -101,6 +101,21 @@ public class UiMarkupContractTests
         ((string?)strengthSlider.Attribute("MaximumWidthRequest")).Should().Be("320");
     }
 
+    [Fact]
+    public void MainPage_UpscaleFactorCard_IsVisibleOnlyWhileTheFactorCanApply()
+    {
+        var markup = Markup("MainPage.xaml");
+        var picker = XDocument.Parse(markup)
+            .Descendants()
+            .Single(element => (string?)element.Attribute("AutomationId") == "UpscaleFactorPicker");
+        var card = (string?)picker.Parent!.Attribute("IsVisible");
+
+        card.Should().Be("{Binding IsUpscaleFactorVisible}",
+            "a factor whose upscale slot lives in the chain workflow edits nothing while " +
+            "\"Upscale after render\" is off, and offered it there it produced false UpscaleBy metadata");
+        markup.Should().NotContain("IsVisible=\"{Binding SupportsUpscaleFactor}\"");
+    }
+
     private static string Markup(string asset) =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "TestAssets", asset));
 

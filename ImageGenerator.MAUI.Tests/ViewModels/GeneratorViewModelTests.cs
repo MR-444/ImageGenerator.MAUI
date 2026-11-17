@@ -2707,6 +2707,152 @@ public class GeneratorViewModelTests
         _mockLoraService.Verify(s => s.GetLoraNamesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // --- ComfyUI upscale factor -------------------------------------------------------------
+    // The factor patches the UltimateSDUpscale of the selected workflow when it owns one, and
+    // otherwise the chain target's ("Upscale-Sample"). It must only reach Parameters — and with
+    // it the "UpscaleBy" metadata line — when it will really be applied: an unapplied factor
+    // used to claim "UpscaleBy: 1.5" on renders that upscaled nothing.
+
+    private const string UpscaleWorkflowName = "Upscale-Sample";
+
+    // A designated upscale workflow exists, with its own baked factor.
+    private void SetupUpscaleChain(double bakedFactor = 2.0)
+    {
+        _mockCheckpointService
+            .Setup(s => s.FindUpscaleWorkflowNameAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(UpscaleWorkflowName);
+        _mockCheckpointService
+            .Setup(s => s.GetWorkflowUpscaleFactorAsync(UpscaleWorkflowName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(bakedFactor);
+    }
+
+    // The selected workflow carries its own UltimateSDUpscale (standalone upscaling).
+    private void SetupOwnUpscaleSlot(double bakedFactor)
+        => _mockCheckpointService
+            .Setup(s => s.GetWorkflowUpscaleFactorAsync(ComfyWorkflowName, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(bakedFactor);
+
+    [Fact]
+    public async Task ChainTargetFactor_WithChainOff_KeepsOutOfTheParameters()
+    {
+        SetupUpscaleChain();
+        _mockUiStateStore.Setup(s => s.LoadComfyUiUpscaleFactor(UpscaleWorkflowName)).Returns("1.5");
+        SelectComfyWorkflow();
+
+        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+
+        _viewModel.Parameters.UpscaleAfterRender.Should().BeFalse();
+        _viewModel.SelectedUpscaleFactor.Should().Be("1.5×", "the saved pick is still restored");
+        _viewModel.Parameters.ComfyUiUpscaleFactor.Should().BeNull(
+            "this render upscales nothing, so its metadata must not claim UpscaleBy: 1.5");
+        _viewModel.IsUpscaleFactorVisible.Should().BeFalse(
+            "an editable factor with no workflow to patch is a dead control");
+        _mockUiStateStore.Verify(
+            s => s.PersistComfyUiUpscaleFactor(It.IsAny<string>(), It.IsAny<string>()), Times.Never,
+            "restoring is not a user pick");
+    }
+
+    [Fact]
+    public async Task ChainTargetFactor_ArmsAndDisarmsWithTheUpscaleAfterRenderCheckbox()
+    {
+        SetupUpscaleChain();
+        _mockUiStateStore.Setup(s => s.LoadComfyUiUpscaleFactor(UpscaleWorkflowName)).Returns("1.5");
+        SelectComfyWorkflow();
+        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+
+        _viewModel.Parameters.UpscaleAfterRender = true;
+        _viewModel.Parameters.ComfyUiUpscaleFactor.Should().Be(1.5,
+            "the chained upscale pass is what gets patched, so the factor is now in force");
+        _viewModel.IsUpscaleFactorVisible.Should().BeTrue();
+
+        _viewModel.Parameters.UpscaleAfterRender = false;
+        _viewModel.Parameters.ComfyUiUpscaleFactor.Should().BeNull();
+        _viewModel.SelectedUpscaleFactor.Should().Be("1.5×",
+            "unchecking disarms the factor but must not forget the user's pick");
+    }
+
+    [Fact]
+    public async Task FactorPickedWhileChainIsOff_AppliesOnceTheChainIsOn()
+    {
+        SetupUpscaleChain();
+        SelectComfyWorkflow();
+        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+
+        _viewModel.SelectedUpscaleFactor = "3×";
+        _viewModel.Parameters.ComfyUiUpscaleFactor.Should().BeNull();
+        _mockUiStateStore.Verify(s => s.PersistComfyUiUpscaleFactor("3", UpscaleWorkflowName), Times.Once,
+            "an explicit pick persists even while it is inert");
+
+        _viewModel.Parameters.UpscaleAfterRender = true;
+        _viewModel.Parameters.ComfyUiUpscaleFactor.Should().Be(3.0);
+    }
+
+    [Fact]
+    public async Task ChainTargetFactor_AtTheBakedDefault_WritesNoOverride()
+    {
+        SetupUpscaleChain(bakedFactor: 2.0);
+        _mockUiStateStore.Setup(s => s.LoadComfyUiUpscaleFactor(UpscaleWorkflowName)).Returns("3");
+        SelectComfyWorkflow();
+        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+        _viewModel.Parameters.UpscaleAfterRender = true;
+
+        _viewModel.SelectedUpscaleFactor = "2×";
+
+        _viewModel.Parameters.ComfyUiUpscaleFactor.Should().BeNull(
+            "the baked value means no patch — same sentinel convention as the preset picker");
+    }
+
+    [Fact]
+    public async Task OwnWorkflowFactor_AppliesWithoutAnyChain()
+    {
+        SetupUpscaleChain();          // a chain exists…
+        SetupOwnUpscaleSlot(2.0);     // …but the selected workflow owns the upscale slot
+        _mockUiStateStore.Setup(s => s.LoadComfyUiUpscaleFactor(ComfyWorkflowName)).Returns("1.5");
+        SelectComfyWorkflow();
+
+        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+
+        _viewModel.Parameters.UpscaleAfterRender.Should().BeFalse();
+        _viewModel.Parameters.ComfyUiUpscaleFactor.Should().Be(1.5,
+            "the render itself is what gets patched, so no chain has to be running");
+        _viewModel.IsUpscaleFactorVisible.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task OwnWorkflowFactor_AtTheBakedDefault_WritesNoOverride()
+    {
+        SetupUpscaleChain();
+        SetupOwnUpscaleSlot(2.0);
+        SelectComfyWorkflow();
+
+        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+
+        _viewModel.SelectedUpscaleFactor.Should().Be("2×");
+        _viewModel.Parameters.ComfyUiUpscaleFactor.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RefreshUpscaleOption_OffComfyUi_ClearsTheFactorAndItsIntent()
+    {
+        SetupOwnUpscaleSlot(2.0);
+        _mockUiStateStore.Setup(s => s.LoadComfyUiUpscaleFactor(ComfyWorkflowName)).Returns("1.5");
+        SelectComfyWorkflow();
+        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+        _viewModel.Parameters.ComfyUiUpscaleFactor.Should().Be(1.5);
+
+        await _viewModel.RefreshUpscaleOptionAsync(ModelConstants.Flux.Pro11);
+
+        _viewModel.Parameters.ComfyUiUpscaleFactor.Should().BeNull(
+            "a stale factor must not ride into another model's Clone() snapshot");
+        _viewModel.SupportsUpscaleFactor.Should().BeFalse();
+        _viewModel.IsUpscaleFactorVisible.Should().BeFalse();
+        _viewModel.SelectedUpscaleFactor.Should().BeNull();
+
+        // Back to the workflow: the persisted pick is restored, not lost with the intent.
+        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+        _viewModel.Parameters.ComfyUiUpscaleFactor.Should().Be(1.5);
+    }
+
     // --- CivitAI posting ---
 
     [Fact]

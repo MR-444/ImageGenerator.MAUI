@@ -42,6 +42,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     private ImageGenerationParameters _parameters;
 
+    private ImageGenerationParameters? _subscribedParameters;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsPersistentStatusMessageVisible))]
     private string? _statusMessage;
@@ -55,6 +57,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [NotifyPropertyChangedFor(nameof(IsFlashMessageVisible))]
     [NotifyPropertyChangedFor(nameof(IsPersistentStatusMessageVisible))]
     private string? _flashMessage;
+
+    private int _flashVersion;
 
     public bool IsFlashMessageVisible => !string.IsNullOrEmpty(FlashMessage);
 
@@ -76,6 +80,9 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(WorkspaceSummary))]
     private bool _isGpuBusy;
+
+    private IDisposable? _batchGpuLease;
+    private string? _batchComfyModel;
 
     // All-time count of images in the output folder, shown in the action bar. Null until the
     // background enumeration in LoadTotalImagesGeneratedAsync completes.
@@ -103,7 +110,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         get
         {
             var running = Jobs.Count(j => j.IsRunning);
-            var queued = Jobs.Count(j => !j.IsRunning && j.StatusKind == StatusKind.Info);
+            var queued = Jobs.Count(j => j is { IsRunning: false, StatusKind: StatusKind.Info });
             var done = Jobs.Count(j => j.IsFinished);
             var parts = new List<string>(3);
             if (running > 0) parts.Add($"{running} running");
@@ -283,6 +290,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
     partial void OnOpenRouterVisionFreeOnlyChanged(bool value)
     {
+        if (_suppressOpenRouterVisionModelPersist) return;
         _uiStateStore.PersistOpenRouterVisionFreeOnly(value);
         OpenRouterVisionModels.Clear();
         OpenRouterVisionModel = string.Empty;
@@ -372,7 +380,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             var modelInfos = await _ollamaModelCatalog.ListModelInfosAsync(OllamaBaseUrl);
             var models = modelInfos.Select(m => m.Name).ToArray();
             var visionModels = modelInfos
-                .Where(m => m.SupportsCompletion && m.SupportsVision)
+                .Where(m => m is { SupportsCompletion: true, SupportsVision: true })
                 .Select(m => m.Name)
                 .ToArray();
 
@@ -476,6 +484,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [NotifyPropertyChangedFor(nameof(SupportsGptQuality))]
     [NotifyPropertyChangedFor(nameof(SupportsIdeogramOptions))]
     [NotifyPropertyChangedFor(nameof(SupportsJsonPromptEditor))]
+    [NotifyPropertyChangedFor(nameof(SupportsInputImage))]
     private ModelCapabilities _capabilities;  // hydrated from registry in ctor
     private bool _cachedCatalogLoaded;
     private bool _tokensLoaded;
@@ -590,6 +599,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     // Upscale-factor picker: patches the UltimateSDUpscale upscale_by of whichever workflow
     // is in play — the selected workflow itself (standalone upscaling) or the chain target.
     // Options come from the workflow's baked value (first, = no patch) plus common factors.
+    // The card's IsVisible binds to IsUpscaleFactorVisible, not SupportsUpscaleFactor: a factor
+    // whose slot lives in the chain workflow is meaningless while "Upscale after render" is off.
     [ObservableProperty]
     private List<string> _upscaleFactorOptions = [];
 
@@ -602,6 +613,13 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     private double? _workflowDefaultUpscaleFactor;
     // The workflow whose upscale_by the picker patches; doubles as the persistence key.
     private string? _upscaleFactorWorkflow;
+    // True when that workflow IS the one being rendered (it owns the UltimateSDUpscale node).
+    // False when the slot lives in the chain target, so the factor only takes effect while
+    // "Upscale after render" is checked.
+    private bool _upscaleFactorOwnsRender;
+    // The picker's intent, kept even while it cannot apply (chain off) so re-checking the box
+    // re-arms the factor without asking the user to pick it again.
+    private double? _pickedUpscaleFactor;
     private bool _suppressUpscaleFactorPersist;
 
     private static readonly double[] CommonUpscaleFactors = [1.5, 2.0, 3.0, 4.0];
@@ -625,9 +643,10 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         var factor = ParseUpscaleFactor(value);
         if (factor is null) return;
 
-        // Same sentinel convention as ComfyUiPreset: picking the baked default means no patch.
-        Parameters.ComfyUiUpscaleFactor =
-            _workflowDefaultUpscaleFactor is { } baked && factor.Value == baked ? null : factor;
+        // Remembered as intent first: with the chain off this pick is inert, but it must not be
+        // forgotten — checking "Upscale after render" later arms it.
+        _pickedUpscaleFactor = factor;
+        ApplyUpscaleFactor();
 
         if (!_suppressUpscaleFactorPersist
             && _upscaleFactorWorkflow is { } workflow
@@ -637,6 +656,32 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
                 factor.Value.ToString(CultureInfo.InvariantCulture), workflow);
         }
     }
+
+    /// <summary>
+    /// The factor the render pipeline must see: the picker's intent, but only when it can
+    /// actually change pixels — either the workflow being rendered owns the upscale slot, or
+    /// "Upscale after render" is on and the factor targets the chain workflow. Any other
+    /// combination patches nothing (the patcher's "no UltimateSDUpscale node" no-op), and
+    /// forwarding it would stamp a false "UpscaleBy:" line into the image metadata.
+    /// Same sentinel convention as ComfyUiPreset: the baked default means no patch.
+    /// </summary>
+    private void ApplyUpscaleFactor()
+    {
+        Parameters.ComfyUiUpscaleFactor =
+            _pickedUpscaleFactor is { } picked
+            && picked != _workflowDefaultUpscaleFactor
+            && (_upscaleFactorOwnsRender || Parameters.UpscaleAfterRender)
+                ? picked
+                : null;
+    }
+
+    /// <summary>
+    /// Whether the factor card can do something right now: a slot must exist AND be reachable —
+    /// its own workflow, or the chain target with the chain checked. Showing it otherwise is an
+    /// editable control with no effect (and the source of the metadata lie this guards).
+    /// </summary>
+    public bool IsUpscaleFactorVisible =>
+        SupportsUpscaleFactor && (_upscaleFactorOwnsRender || Parameters.UpscaleAfterRender);
 
     partial void OnSelectedQualityPresetChanged(string? value)
     {
@@ -652,7 +697,9 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         // this is set even when the pick equals the baked default — mirrors ComfyUiModelDisplay.
         Parameters.ComfyUiPresetDisplay = value;
 
-        if (!_suppressPresetPersist && QualityPresetOptions.Contains(value))
+        if (!_suppressPresetPersist
+            && QualityPresetOptions.Contains(value)
+            && ModelConstants.ComfyUi.IsId(Parameters.Model))
         {
             _uiStateStore.PersistComfyUiPreset(
                 value, ModelConstants.ComfyUi.WorkflowName(Parameters.Model));
@@ -695,8 +742,19 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     // models (whose graphs consume the caption JSON) both set this.
     public bool SupportsJsonPromptEditor => Capabilities.JsonPromptEditor;
 
+    private void AttachParameters(ImageGenerationParameters parameters)
+    {
+        if (ReferenceEquals(_subscribedParameters, parameters)) return;
+        if (_subscribedParameters is not null)
+            _subscribedParameters.PropertyChanged -= OnParametersPropertyChanged;
+
+        _subscribedParameters = parameters;
+        parameters.PropertyChanged += OnParametersPropertyChanged;
+    }
+
     partial void OnParametersChanged(ImageGenerationParameters value)
     {
+        AttachParameters(value);
         UpdateCustomAspectRatio(value.AspectRatio);
         ValidateParameters();
         ProviderFilter.SyncSelectionFromParameters(value.Model);
@@ -827,7 +885,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     /// upscale) — raise the provider's static capabilities for it so the Input Image card
     /// appears and the gallery's "Use as input" flow works.
     /// </summary>
-    internal async Task RefreshInputImageSupportAsync(string? modelValue)
+    private async Task RefreshInputImageSupportAsync(string? modelValue)
     {
         var version = ++_inputImageRefreshVersion;
         try
@@ -843,6 +901,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             // now the workflow-specific cap (LoadImage → 1, otherwise 0) is actually known.
             DispatchToUi(() =>
             {
+                if (version != _inputImageRefreshVersion) return;
                 if (hasInputImage)
                 {
                     Capabilities = Capabilities with { ImagePrompt = true, MaxImageInputs = 1 };
@@ -864,8 +923,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         {
             if (!ModelConstants.ComfyUi.IsId(modelValue))
             {
-                HideUpscaleOption();
-                HideUpscaleFactorPicker();
+                HideUpscaleOption(version);
+                HideUpscaleFactorPicker(version);
                 return;
             }
 
@@ -889,12 +948,13 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
             if (!chainVisible)
             {
-                HideUpscaleOption();
+                HideUpscaleOption(version);
             }
             else
             {
                 DispatchToUi(() =>
                 {
+                    if (version != _upscaleRefreshVersion) return;
                     _suppressUpscalePersist = true;
                     try
                     {
@@ -909,17 +969,21 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
             if (bakedFactor is null || factorWorkflow is null)
             {
-                HideUpscaleFactorPicker();
+                HideUpscaleFactorPicker(version);
                 return;
             }
 
             DispatchToUi(() =>
             {
+                if (version != _upscaleRefreshVersion) return;
                 _suppressUpscaleFactorPersist = true;
                 try
                 {
                     _workflowDefaultUpscaleFactor = bakedFactor.Value;
                     _upscaleFactorWorkflow = factorWorkflow;
+                    // Whose slot gets patched decides when the factor is live: own workflow →
+                    // always; chain target → only while the chain is checked.
+                    _upscaleFactorOwnsRender = ownFactor is not null;
                     var factors = new List<double> { bakedFactor.Value };
                     factors.AddRange(CommonUpscaleFactors.Where(f => !factors.Contains(f)));
                     UpscaleFactorOptions = factors.Select(FormatUpscaleFactor).ToList();
@@ -928,11 +992,13 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
                     var saved = ParseUpscaleFactor(_uiStateStore.LoadComfyUiUpscaleFactor(factorWorkflow));
                     var target = saved is { } s && factors.Contains(s) ? s : bakedFactor.Value;
                     SelectedUpscaleFactor = FormatUpscaleFactor(target);
+                    _pickedUpscaleFactor = target;
                     // Explicit, not only via the changed-handler: an unchanged label across a
                     // workflow switch fires no event, but the baked default (= null sentinel)
-                    // may differ between the two workflows.
-                    Parameters.ComfyUiUpscaleFactor = target == bakedFactor.Value ? null : target;
+                    // and the slot ownership may differ between the two workflows.
+                    ApplyUpscaleFactor();
                     SupportsUpscaleFactor = true;
+                    OnPropertyChanged(nameof(IsUpscaleFactorVisible));
                 }
                 finally { _suppressUpscaleFactorPersist = false; }
             });
@@ -944,8 +1010,9 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         }
     }
 
-    private void HideUpscaleFactorPicker() => DispatchToUi(() =>
+    private void HideUpscaleFactorPicker(int? expectedVersion = null) => DispatchToUi(() =>
     {
+        if (expectedVersion is { } v && v != _upscaleRefreshVersion) return;
         _suppressUpscaleFactorPersist = true;
         try
         {
@@ -953,15 +1020,19 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             UpscaleFactorOptions = [];
             _workflowDefaultUpscaleFactor = null;
             _upscaleFactorWorkflow = null;
+            _upscaleFactorOwnsRender = false;
+            _pickedUpscaleFactor = null;
             SelectedUpscaleFactor = null;
             // A stale factor must not linger in Clone() snapshots of other models.
             Parameters.ComfyUiUpscaleFactor = null;
+            OnPropertyChanged(nameof(IsUpscaleFactorVisible));
         }
         finally { _suppressUpscaleFactorPersist = false; }
     });
 
-    private void HideUpscaleOption() => DispatchToUi(() =>
+    private void HideUpscaleOption(int? expectedVersion = null) => DispatchToUi(() =>
     {
+        if (expectedVersion is { } v && v != _upscaleRefreshVersion) return;
         _suppressUpscalePersist = true;
         try
         {
@@ -981,7 +1052,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         {
             if (!ModelConstants.ComfyUi.IsId(modelValue))
             {
-                HideBakedModel();
+                HideBakedModel(version);
                 return;
             }
 
@@ -996,12 +1067,13 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
                     "Baked-model display hidden: workflow {Workflow} has no unambiguous model loader "
                     + "(needs CheckpointLoaderSimple or exactly one UNETLoader with a literal name)",
                     workflowName);
-                HideBakedModel();
+                HideBakedModel(version);
                 return;
             }
 
             DispatchToUi(() =>
             {
+                if (version != _checkpointRefreshVersion) return;
                 BakedModelName = slot.BakedName;
                 CheckpointLabel = slot.Kind == ComfyUiLoaderKind.Unet ? "Diffusion model" : "Checkpoint";
                 SupportsCheckpoint = true;
@@ -1017,8 +1089,9 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         }
     }
 
-    private void HideBakedModel() => DispatchToUi(() =>
+    private void HideBakedModel(int? expectedVersion = null) => DispatchToUi(() =>
     {
+        if (expectedVersion is { } v && v != _checkpointRefreshVersion) return;
         SupportsCheckpoint = false;
         BakedModelName = string.Empty;
         CheckpointLabel = "Checkpoint";
@@ -1033,7 +1106,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         {
             if (!ModelConstants.ComfyUi.IsId(modelValue))
             {
-                HideQualityPresetPicker();
+                HideQualityPresetPicker(version);
                 return;
             }
 
@@ -1048,7 +1121,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
                     "Preset picker hidden: workflow {Workflow} does not have exactly one "
                     + "CustomCombo node with a literal choice",
                     workflowName);
-                HideQualityPresetPicker();
+                HideQualityPresetPicker(version);
                 return;
             }
             var baked = slot.BakedChoice;
@@ -1057,6 +1130,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             // picker there is no async second phase to wait for.
             DispatchToUi(() =>
             {
+                if (version != _presetRefreshVersion) return;
                 _suppressPresetPersist = true;
                 try
                 {
@@ -1080,8 +1154,9 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         }
     }
 
-    private void HideQualityPresetPicker() => DispatchToUi(() =>
+    private void HideQualityPresetPicker(int? expectedVersion = null) => DispatchToUi(() =>
     {
+        if (expectedVersion is { } v && v != _presetRefreshVersion) return;
         _suppressPresetPersist = true;
         try
         {
@@ -1104,7 +1179,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         {
             if (!ModelConstants.ComfyUi.IsId(modelValue) || _comfyUiLoraService is null)
             {
-                HideKrea2LoraPicker();
+                HideKrea2LoraPicker(version);
                 return;
             }
 
@@ -1130,7 +1205,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             if (version != _loraRefreshVersion) return;
             if (!krea2Confirmed)
             {
-                HideKrea2LoraPicker();
+                HideKrea2LoraPicker(version);
                 return;
             }
 
@@ -1180,7 +1255,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             _logger.LogWarning(ex, "Krea-2 LoRA catalog refresh failed Model={Model}", modelValue);
             if (!krea2Confirmed)
             {
-                HideKrea2LoraPicker();
+                HideKrea2LoraPicker(version);
                 return;
             }
 
@@ -1207,8 +1282,9 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [RelayCommand]
     private Task RefreshKrea2LorasAsync() => RefreshKrea2LoraOptionsAsync(Parameters.Model);
 
-    private void HideKrea2LoraPicker() => DispatchToUi(() =>
+    private void HideKrea2LoraPicker(int? expectedVersion = null) => DispatchToUi(() =>
     {
+        if (expectedVersion is { } v && v != _loraRefreshVersion) return;
         _suppressLoraPersist = true;
         try
         {
@@ -1282,7 +1358,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             var msg = ex.Message;
             var cut = msg.IndexOf(" LineNumber:", StringComparison.Ordinal);
             if (cut > 0) msg = msg[..cut].TrimEnd();
-            return ex.LineNumber is { } line && ex.BytePositionInLine is { } pos
+            return ex is { LineNumber: { } line, BytePositionInLine: { } pos }
                 ? $"{msg} (line {line + 1}, pos {pos})"
                 : msg;
         }
@@ -1452,123 +1528,21 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             promptBatchParser: promptBatchParser,
             parametersAccessor: () => Parameters,
             enqueueJob: job => DispatchToUi(() => Jobs.Insert(0, job)),
-            runJob: RunJobAsync,
+            runJob: RunBatchJobAsync,
             setStatus: SetStatus,
             addAsInputAsync: InputImages.AddAsInputAsync,
             mutateFromImageAsync: path => MutateFromImageAsync(path));
 
         // Free the ComfyUI GPU once a whole batch finishes (per-job frees would reload the checkpoint
-        // between every variant). The per-job path handles single Generates; here IsBatchRunning has just
-        // gone false, so MaybeFree proceeds for the batch as a whole.
+        // between every variant), while still holding the batch GPU lease so waiting Ollama work
+        // sees a freed card.
         Batch.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(BatchCoordinator.IsBatchRunning) && !Batch.IsBatchRunning)
-                _ = MaybeFreeComfyUiVramAsync(Parameters.Model);
+                _ = CompleteBatchGpuAsync();
         };
 
-        _parameters.PropertyChanged += (_, e) =>
-        {
-            switch (e.PropertyName)
-            {
-                case nameof(ImageGenerationParameters.AspectRatio):
-                    UpdateCustomAspectRatio(_parameters.AspectRatio);
-                    if (!_suppressPreferredArUpdate)
-                    {
-                        InputImages.RecordExplicitAspectRatioPick(_parameters.AspectRatio);
-                        // Persist genuine user picks so the choice survives a restart (mirrors
-                        // resolution). Skip "custom" — its width/height aren't persisted, so
-                        // restoring it would be wrong; and only a value the model actually offers
-                        // (never a Picker null/swap artifact).
-                        if (!_suppressAspectRatioPersist
-                            && !string.IsNullOrEmpty(_parameters.AspectRatio)
-                            && _parameters.AspectRatio != "custom"
-                            && AspectRatioOptions.Contains(_parameters.AspectRatio))
-                        {
-                            _uiStateStore.PersistAspectRatio(_parameters.AspectRatio, _parameters.Model);
-                        }
-                    }
-                    break;
-                case nameof(ImageGenerationParameters.ApiToken):
-                    // Persistence lives on TokenProviderViewModel now — only revalidate here.
-                    ValidateParameters();
-                    break;
-                case nameof(ImageGenerationParameters.PollinationsApiToken):
-                    ValidateParameters();
-                    break;
-                case nameof(ImageGenerationParameters.Prompt):
-                    ValidateParameters();
-                    _uiStateStore.PersistPrompt(_parameters.Prompt);
-                    break;
-                case nameof(ImageGenerationParameters.UseJsonPrompt):
-                    ValidateParameters();
-                    if (!_suppressJsonPromptPersist) _uiStateStore.PersistUseJsonPrompt(_parameters.UseJsonPrompt);
-                    break;
-                case nameof(ImageGenerationParameters.Resolution):
-                    // Revert the deferred null push (see _lastValidResolution). Unsuppressed
-                    // null/empty while the model still offers options is never a user pick —
-                    // the Picker only offers list members.
-                    if (!_suppressResolutionPersist
-                        && string.IsNullOrEmpty(_parameters.Resolution)
-                        && ResolutionOptions.Contains(_lastValidResolution))
-                    {
-                        _logger.LogDebug(
-                            "Resolution null push reverted -> \"{Value}\"", _lastValidResolution);
-                        _suppressResolutionPersist = true;
-                        try { _parameters.Resolution = _lastValidResolution; }
-                        finally { _suppressResolutionPersist = false; }
-                        break;
-                    }
-
-                    if (!string.IsNullOrEmpty(_parameters.Resolution)
-                        && ResolutionOptions.Contains(_parameters.Resolution))
-                    {
-                        _lastValidResolution = _parameters.Resolution;
-                    }
-
-                    // Membership guard: only a value the current model actually offers can be
-                    // a user pick. Binding artifacts (the Pickers pushing null on ItemsSource
-                    // attach/swap) must never overwrite the saved choice.
-                    var resolutionPersistable = !_suppressResolutionPersist
-                        && !string.IsNullOrEmpty(_parameters.Resolution)
-                        && ResolutionOptions.Contains(_parameters.Resolution);
-                    if (_logger.IsEnabled(LogLevel.Debug))
-                        _logger.LogDebug(
-                            "Resolution changed -> \"{Value}\" (suppressed={Suppressed}, inOptions={InOptions}, persisting={Persisting})",
-                            _parameters.Resolution,
-                            _suppressResolutionPersist,
-                            ResolutionOptions.Contains(_parameters.Resolution ?? string.Empty),
-                            resolutionPersistable);
-                    if (resolutionPersistable)
-                    {
-                        _uiStateStore.PersistResolution(_parameters.Resolution!, _parameters.Model);
-                    }
-                    break;
-                case nameof(ImageGenerationParameters.CivitaiModelRef):
-                    // Persist unconditionally: the launch restore writes the value just loaded,
-                    // which the store's skip-identical rule turns into a no-op.
-                    _uiStateStore.PersistCivitaiModelRef(_parameters.CivitaiModelRef ?? string.Empty);
-                    break;
-                case nameof(ImageGenerationParameters.UpscaleAfterRender):
-                    // Per-workflow persistence; suppressed during the RefreshUpscaleOption
-                    // restore and the HideUpscaleOption clear (capability consequences, not
-                    // user picks).
-                    if (!_suppressUpscalePersist && ModelConstants.ComfyUi.IsId(_parameters.Model))
-                    {
-                        _uiStateStore.PersistComfyUiUpscaleAfter(
-                            _parameters.UpscaleAfterRender,
-                            ModelConstants.ComfyUi.WorkflowName(_parameters.Model));
-                    }
-                    break;
-                case nameof(ImageGenerationParameters.Model):
-                    ProviderFilter.SyncSelectionFromParameters(_parameters.Model);
-                    if (!ProviderFilter.SuppressModelPersist) _uiStateStore.PersistModel(_parameters.Model);
-                    // Switching to or from a Pollinations model changes the token-required rule
-                    // and toggles the Pollinations-only UI sections.
-                    ValidateParameters();
-                    OnPropertyChanged(nameof(IsPollinationsSelected));
-                    break;
-            }
-        };
+        AttachParameters(_parameters);
 
         ValidateParameters();
 
@@ -1634,6 +1608,114 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         _selectedTokenProvider = TokenProviders[0];
     }
 
+    private void OnParametersPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(ImageGenerationParameters.AspectRatio):
+                UpdateCustomAspectRatio(Parameters.AspectRatio);
+                if (!_suppressPreferredArUpdate)
+                {
+                    InputImages.RecordExplicitAspectRatioPick(Parameters.AspectRatio);
+                    // Persist genuine user picks so the choice survives a restart (mirrors
+                    // resolution). Skip "custom" — its width/height aren't persisted, so
+                    // restoring it would be wrong; and only a value the model actually offers
+                    // (never a Picker null/swap artifact).
+                    if (!_suppressAspectRatioPersist
+                        && !string.IsNullOrEmpty(Parameters.AspectRatio)
+                        && Parameters.AspectRatio != "custom"
+                        && AspectRatioOptions.Contains(Parameters.AspectRatio))
+                    {
+                        _uiStateStore.PersistAspectRatio(Parameters.AspectRatio, Parameters.Model);
+                    }
+                }
+                break;
+            case nameof(ImageGenerationParameters.ApiToken):
+                // Persistence lives on TokenProviderViewModel now — only revalidate here.
+                ValidateParameters();
+                break;
+            case nameof(ImageGenerationParameters.PollinationsApiToken):
+                ValidateParameters();
+                break;
+            case nameof(ImageGenerationParameters.Prompt):
+                ValidateParameters();
+                _uiStateStore.PersistPrompt(Parameters.Prompt);
+                break;
+            case nameof(ImageGenerationParameters.UseJsonPrompt):
+                ValidateParameters();
+                if (!_suppressJsonPromptPersist) _uiStateStore.PersistUseJsonPrompt(Parameters.UseJsonPrompt);
+                break;
+            case nameof(ImageGenerationParameters.Resolution):
+                // Revert the deferred null push (see _lastValidResolution). Unsuppressed
+                // null/empty while the model still offers options is never a user pick —
+                // the Picker only offers list members.
+                if (!_suppressResolutionPersist
+                    && string.IsNullOrEmpty(Parameters.Resolution)
+                    && ResolutionOptions.Contains(_lastValidResolution))
+                {
+                    _logger.LogDebug(
+                        "Resolution null push reverted -> \"{Value}\"", _lastValidResolution);
+                    _suppressResolutionPersist = true;
+                    try { Parameters.Resolution = _lastValidResolution; }
+                    finally { _suppressResolutionPersist = false; }
+                    break;
+                }
+
+                if (!string.IsNullOrEmpty(Parameters.Resolution)
+                    && ResolutionOptions.Contains(Parameters.Resolution))
+                {
+                    _lastValidResolution = Parameters.Resolution;
+                }
+
+                // Membership guard: only a value the current model actually offers can be
+                // a user pick. Binding artifacts (the Pickers pushing null on ItemsSource
+                // attach/swap) must never overwrite the saved choice.
+                var resolutionPersistable = !_suppressResolutionPersist
+                    && !string.IsNullOrEmpty(Parameters.Resolution)
+                    && ResolutionOptions.Contains(Parameters.Resolution);
+                if (_logger.IsEnabled(LogLevel.Debug))
+                    _logger.LogDebug(
+                        "Resolution changed -> \"{Value}\" (suppressed={Suppressed}, inOptions={InOptions}, persisting={Persisting})",
+                        Parameters.Resolution,
+                        _suppressResolutionPersist,
+                        ResolutionOptions.Contains(Parameters.Resolution ?? string.Empty),
+                        resolutionPersistable);
+                if (resolutionPersistable)
+                {
+                    _uiStateStore.PersistResolution(Parameters.Resolution!, Parameters.Model);
+                }
+                break;
+            case nameof(ImageGenerationParameters.CivitaiModelRef):
+                // Persist unconditionally: the launch restore writes the value just loaded,
+                // which the store's skip-identical rule turns into a no-op.
+                _uiStateStore.PersistCivitaiModelRef(Parameters.CivitaiModelRef ?? string.Empty);
+                break;
+            case nameof(ImageGenerationParameters.UpscaleAfterRender):
+                // The chain checkbox arms the factor whenever the upscale slot lives in the
+                // chain workflow, and the factor card's visibility follows the same rule.
+                ApplyUpscaleFactor();
+                OnPropertyChanged(nameof(IsUpscaleFactorVisible));
+                // Per-workflow persistence; suppressed during the RefreshUpscaleOption
+                // restore and the HideUpscaleOption clear (capability consequences, not
+                // user picks).
+                if (!_suppressUpscalePersist && ModelConstants.ComfyUi.IsId(Parameters.Model))
+                {
+                    _uiStateStore.PersistComfyUiUpscaleAfter(
+                        Parameters.UpscaleAfterRender,
+                        ModelConstants.ComfyUi.WorkflowName(Parameters.Model));
+                }
+                break;
+            case nameof(ImageGenerationParameters.Model):
+                ProviderFilter.SyncSelectionFromParameters(Parameters.Model);
+                if (!ProviderFilter.SuppressModelPersist) _uiStateStore.PersistModel(Parameters.Model);
+                // Switching to or from a Pollinations model changes the token-required rule
+                // and toggles the Pollinations-only UI sections.
+                ValidateParameters();
+                OnPropertyChanged(nameof(IsPollinationsSelected));
+                break;
+        }
+    }
+
     [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task GenerateImageAsync()
     {
@@ -1675,22 +1757,38 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         await RunJobAsync(job);
     }
 
-    private async Task RunJobAsync(GenerationJob job)
+    private Task RunBatchJobAsync(GenerationJob job) => RunJobAsync(job, isBatchJob: true);
+
+    private async Task RunJobAsync(GenerationJob job, bool isBatchJob = false)
     {
         // Serialize GPU work: a ComfyUI render and local Ollama prompt/AI work share fireEngine's
         // VRAM, so co-loading both thrashes/OOMs. Hold the gate from before submit until the post-render
         // VRAM free, so a mutation (or another render) waits rather than collides. Non-ComfyUI providers
         // and split-host setups (ComfyUI ≠ Ollama box) skip the gate entirely.
+        var isComfyJob = ModelConstants.ComfyUi.IsId(job.Parameters.Model);
         var gpuGated = _gpuGate is not null
-            && ModelConstants.ComfyUi.IsId(job.Parameters.Model)
+            && isComfyJob
             && GpuColocation.SameHost(ComfyUiBaseUrl, OllamaBaseUrl);
-        IDisposable? gpuLease = null;
+
+        IDisposable? singleJobLease = null;
         if (gpuGated)
         {
             try
             {
-                gpuLease = await _gpuGate!.AcquireAsync(job.Cts.Token);
-                DispatchToUi(() => IsGpuBusy = true);
+                if (isBatchJob)
+                {
+                    if (_batchGpuLease is null)
+                    {
+                        _batchGpuLease = await _gpuGate!.AcquireAsync(job.Cts.Token);
+                        DispatchToUi(() => IsGpuBusy = true);
+                    }
+                    _batchComfyModel = job.Parameters.Model;
+                }
+                else
+                {
+                    singleJobLease = await _gpuGate!.AcquireAsync(job.Cts.Token);
+                    DispatchToUi(() => IsGpuBusy = true);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -1706,6 +1804,12 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
                 job.Cts.Dispose();
                 return;
             }
+        }
+        else if (isBatchJob && isComfyJob)
+        {
+            // Split-host or test without _gpuGate: remember the batch's actual model so
+            // CompleteBatchGpuAsync still frees ComfyUI VRAM even if the UI picker changes mid-batch.
+            _batchComfyModel = job.Parameters.Model;
         }
 
         try
@@ -1766,8 +1870,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             // Post-save side effect, deliberately fire-and-forget: a slow CivitAI upload must
             // not delay the next batch job, and its failure must never touch the job outcome
             // above. Internal method so tests can await it directly.
-            if (outcome.Kind == JobOutcomeKind.Saved
-                && outcome.SavedPath is not null
+            if (outcome is { Kind: JobOutcomeKind.Saved, SavedPath: not null }
                 && job.Parameters.PostToCivitai)
             {
                 _ = PostJobToCivitaiAsync(job, outcome.SavedPath);
@@ -1802,19 +1905,43 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             job.Cts.Dispose();
         }
 
-        // Rendering for this job is done — free the ComfyUI GPU when idle. A batch ITEM sees
-        // IsBatchRunning true and skips (no mid-batch checkpoint reload); the batch-completion hook
-        // frees once at the end. A single Generate frees here. The GPU gate is released only after the
-        // free, so a queued mutation gets a freed card (the inner try/catch never rethrows, so control
-        // always reaches here; the finally guards against a future change or a throwing free).
+        // Batch jobs keep their lease and skip /free until CompleteBatchGpuAsync runs at batch end.
+        if (isBatchJob) return;
+
+        // Rendering for this single job is done — free the ComfyUI GPU when idle, then release
+        // the gate so a queued mutation gets a freed card.
         try
         {
             await MaybeFreeComfyUiVramAsync(job.Parameters.Model);
         }
         finally
         {
-            gpuLease?.Dispose();
             if (gpuGated) DispatchToUi(() => IsGpuBusy = false);
+            singleJobLease?.Dispose();
+        }
+    }
+
+    private async Task CompleteBatchGpuAsync()
+    {
+        var lease = _batchGpuLease;
+        var model = _batchComfyModel;
+        _batchGpuLease = null;
+        _batchComfyModel = null;
+
+        if (lease is null && model is null) return;
+
+        try
+        {
+            if (model is not null)
+                await MaybeFreeComfyUiVramAsync(model);
+        }
+        finally
+        {
+            if (lease is not null)
+            {
+                DispatchToUi(() => IsGpuBusy = false);
+                lease.Dispose();
+            }
         }
     }
 
@@ -1893,9 +2020,13 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
     private async Task FlashAsync(string message, int durationMs = 2500)
     {
-        FlashMessage = message;
+        var version = ++_flashVersion;
+        DispatchToUi(() => FlashMessage = message);
         await Task.Delay(durationMs);
-        if (FlashMessage == message) FlashMessage = null;
+        DispatchToUi(() =>
+        {
+            if (_flashVersion == version) FlashMessage = null;
+        });
     }
 
     [RelayCommand]
@@ -2013,7 +2144,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             try { PendingMutationBase = V4JsonPromptSerializer.Deserialize(prompt); }
             catch (V4JsonPromptParseException) { PendingMutationBase = null; }
 
-            await Shell.Current.GoToAsync("mutation-engine");
+            await NavigateAsync("mutation-engine", "the mutation engine");
         }
         catch (Exception ex)
         {
@@ -2128,38 +2259,47 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         }
 
         var savedOllamaModel = _uiStateStore.LoadOllamaModel();
-        if (!string.IsNullOrEmpty(savedOllamaModel))
-        {
-            OllamaModel = savedOllamaModel;
-        }
-
         var savedOllamaVisionModel = _uiStateStore.LoadOllamaVisionModel();
-        if (!string.IsNullOrEmpty(savedOllamaVisionModel))
-        {
-            OllamaVisionModel = savedOllamaVisionModel;
-        }
-        // Seed the pickers from the last-known server list so they are usable immediately — before
-        // the first live refresh, and for the whole session if the server is down. The saved pick is
+        // Seed the pickers from the last-known server list BEFORE assigning the selected
+        // model so any attached Picker already sees the item in ItemsSource. The saved pick is
         // appended when the cache predates it; startup has verified nothing against the server yet,
         // so nothing is dropped here — the first successful refresh is what reconciles.
         // Seed defensively: this runs on the startup path, where an unhandled exception is a native
         // WinUI fail-fast rather than a catchable error, so a store handing back null degrades to
         // "no cache" instead of taking the app down.
-        SeedPicker(OllamaModels, _uiStateStore.LoadOllamaModels(OllamaBaseUrl));
-        SeedPicker(OllamaVisionModels, _uiStateStore.LoadOllamaVisionModels(OllamaBaseUrl));
-        if (!string.IsNullOrWhiteSpace(OllamaModel) && !OllamaModels.Contains(OllamaModel))
-            OllamaModels.Add(OllamaModel);
-        if (!string.IsNullOrWhiteSpace(OllamaVisionModel) && !OllamaVisionModels.Contains(OllamaVisionModel))
-            OllamaVisionModels.Add(OllamaVisionModel);
-
-        OpenRouterVisionFreeOnly = _uiStateStore.LoadOpenRouterVisionFreeOnly();
-        var savedOpenRouterVisionModel = _uiStateStore.LoadOpenRouterVisionModel();
-        if (savedOpenRouterVisionModel is { Length: > 0 } savedOpenRouterModel
-            && (!OpenRouterVisionFreeOnly || savedOpenRouterModel.EndsWith(":free", StringComparison.OrdinalIgnoreCase)))
+        _suppressOllamaModelPersist = true;
+        try
         {
-            OpenRouterVisionModel = savedOpenRouterModel;
-            OpenRouterVisionModels.Add(savedOpenRouterModel);
+            SeedPicker(OllamaModels, _uiStateStore.LoadOllamaModels(OllamaBaseUrl));
+            SeedPicker(OllamaVisionModels, _uiStateStore.LoadOllamaVisionModels(OllamaBaseUrl));
+            if (!string.IsNullOrWhiteSpace(savedOllamaModel))
+            {
+                if (!OllamaModels.Contains(savedOllamaModel))
+                    OllamaModels.Add(savedOllamaModel);
+                OllamaModel = savedOllamaModel;
+            }
+            if (!string.IsNullOrWhiteSpace(savedOllamaVisionModel))
+            {
+                if (!OllamaVisionModels.Contains(savedOllamaVisionModel))
+                    OllamaVisionModels.Add(savedOllamaVisionModel);
+                OllamaVisionModel = savedOllamaVisionModel;
+            }
         }
+        finally { _suppressOllamaModelPersist = false; }
+
+        _suppressOpenRouterVisionModelPersist = true;
+        try
+        {
+            OpenRouterVisionFreeOnly = _uiStateStore.LoadOpenRouterVisionFreeOnly();
+            var savedOpenRouterVisionModel = _uiStateStore.LoadOpenRouterVisionModel();
+            if (savedOpenRouterVisionModel is { Length: > 0 } savedOpenRouterModel
+                && (!OpenRouterVisionFreeOnly || savedOpenRouterModel.EndsWith(":free", StringComparison.OrdinalIgnoreCase)))
+            {
+                OpenRouterVisionModels.Add(savedOpenRouterModel);
+                OpenRouterVisionModel = savedOpenRouterModel;
+            }
+        }
+        finally { _suppressOpenRouterVisionModelPersist = false; }
 
         // Default-on; only flips the field when the user previously turned it off (OnChanged re-persist is
         // a harmless echo — nothing else writes this field).
@@ -2383,5 +2523,5 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
     // GenerationJob's "Use as input" delegate keeps targeting the VM-level method name; route
     // it into the coordinator.
-    internal Task AddAsInputAsync(string filePath) => InputImages.AddAsInputAsync(filePath);
+    private Task AddAsInputAsync(string filePath) => InputImages.AddAsInputAsync(filePath);
 }

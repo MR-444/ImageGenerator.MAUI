@@ -310,8 +310,10 @@
 
                             <!-- ComfyUI only: upscale_by override for the UltimateSDUpscale in
                                  play (the selected workflow itself, or the chain target). First
-                                 option = the workflow's baked value = no patch. -->
-                            <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsUpscaleFactor}">
+                                 option = the workflow's baked value = no patch. Hidden while the
+                                 slot lives in the chain workflow and the chain is off, because
+                                 then the factor can change nothing. -->
+                            <VerticalStackLayout Spacing="4" IsVisible="{Binding IsUpscaleFactorVisible}">
                                 <Label Text="Upscale factor" Style="{StaticResource FieldLabel}" />
                                 <Picker ItemsSource="{Binding UpscaleFactorOptions}"
                                         SelectedItem="{Binding SelectedUpscaleFactor}"

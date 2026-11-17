@@ -60,9 +60,11 @@ public sealed partial class BatchCoordinator : ObservableObject
     {
         var parameters = _parametersAccessor();
 
-        // Pollinations models can run anonymously; only require the Replicate token when the
-        // currently-selected model actually needs it.
-        if (!ModelConstants.Pollinations.IsId(parameters.Model) && string.IsNullOrWhiteSpace(parameters.ApiToken))
+        // Pollinations and ComfyUI models don't use a Replicate token; only require it when
+        // the currently-selected model actually needs one.
+        if (!ModelConstants.Pollinations.IsId(parameters.Model)
+            && !ModelConstants.ComfyUi.IsId(parameters.Model)
+            && string.IsNullOrWhiteSpace(parameters.ApiToken))
         {
             _setStatus("Enter an API token before running a batch.", StatusKind.Error);
             return null;
@@ -78,7 +80,7 @@ public sealed partial class BatchCoordinator : ObservableObject
                 PickerTitle = "Pick a prompt textfile",
                 FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
                 {
-                    { DevicePlatform.WinUI, new[] { ".txt" } },
+                    { DevicePlatform.WinUI, [".txt"] },
                 }),
             });
         }

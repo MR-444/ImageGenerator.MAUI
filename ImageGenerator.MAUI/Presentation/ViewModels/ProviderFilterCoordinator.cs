@@ -84,10 +84,9 @@ public sealed partial class ProviderFilterCoordinator : ObservableObject
     }
 
     /// <summary>
-    /// Restore the saved model from Preferences. We set SelectedModel (not Parameters.Model)
-    /// so the Picker's two-way binding sees a reference already in FilteredModels — avoiding
-    /// the binding-race class where setting Parameters.Model first lets the Picker reset
-    /// SelectedItem to the first row before the SelectedModel re-sync runs.
+    /// Restore the saved model from Preferences (or Remix). Switch SelectedProvider first if
+    /// the target model isn't in the active filter so FilteredModels contains it BEFORE
+    /// SelectedModel updates, avoiding MAUI Picker rejections.
     /// </summary>
     public void RestoreSelectedModel(string savedModel)
     {
@@ -100,7 +99,11 @@ public sealed partial class ProviderFilterCoordinator : ObservableObject
         SuppressModelPersist = true;
         try
         {
-            SelectedModel = match;
+            if (SelectedProvider != AllProvidersLabel && SelectedProvider != match.Provider)
+            {
+                SelectedProvider = match.Provider;
+            }
+            SelectedModel = FilteredModels.FirstOrDefault(m => m.Value == match.Value) ?? match;
         }
         finally
         {
