@@ -21,8 +21,6 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInputImageTarget
 {
     private readonly IJobRunner _jobRunner;
-    private readonly IApiTokenStore _tokenStore;
-    private readonly IPollinationsTokenStore _pollinationsTokenStore;
     private readonly ICivitaiPostingService _civitaiPostingService;
     private readonly IUiStateStore _uiStateStore;
     private readonly IModelCatalogCoordinator _catalogCoordinator;
@@ -32,7 +30,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     private readonly IOllamaModelCatalog? _ollamaModelCatalog;
     private readonly IComfyUiVramService? _comfyVram;
     private readonly IGpuGate? _gpuGate;
-    private readonly IOpenRouterTokenStore? _openRouterTokenStore;
     private readonly IOpenRouterModelCatalog? _openRouterModelCatalog;
     private readonly ILogger<GeneratorViewModel> _logger;
 
@@ -142,7 +139,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         + (IsGpuBusy ? " · GPU busy" : string.Empty);
 
     [ObservableProperty]
-    private List<string> _aspectRatioOptions = [];  // hydrated from registry in ctor
+    private List<string> _aspectRatioOptions;  // hydrated from registry in ctor
 
     [ObservableProperty]
     private List<string> _resolutionOptions = [];
@@ -195,7 +192,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     private string _comfyUiBaseUrl = ModelConstants.ComfyUi.DefaultBaseUrl;
 
-    partial void OnComfyUiBaseUrlChanged(string value) =>
+    partial void OnComfyUiBaseUrlChanged(string? value) =>
         _uiStateStore.PersistComfyUiBaseUrl(value ?? string.Empty);
 
     // Runtime-only ComfyUI optimization. Default off because the KJNodes patch node and the
@@ -242,7 +239,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     private string _ollamaBaseUrl = ModelConstants.Ollama.DefaultBaseUrl;
 
-    partial void OnOllamaBaseUrlChanged(string value) =>
+    partial void OnOllamaBaseUrlChanged(string? value) =>
         _uiStateStore.PersistOllamaBaseUrl(value ?? string.Empty);
 
     // No compile-time default model: which models exist is per-server, so the old hardcoded
@@ -259,13 +256,13 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     partial void OnOllamaModelChanged(string value)
     {
         if (_suppressOllamaModelPersist) return;
-        _uiStateStore.PersistOllamaModel(value ?? string.Empty);
+        _uiStateStore.PersistOllamaModel(value);
     }
 
     [ObservableProperty]
     private string _ollamaVisionModel = string.Empty;
 
-    partial void OnOllamaVisionModelChanged(string value)
+    partial void OnOllamaVisionModelChanged(string? value)
     {
         if (_suppressOllamaModelPersist) return;
         _uiStateStore.PersistOllamaVisionModel(value ?? string.Empty);
@@ -277,7 +274,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     private string _openRouterVisionModel = string.Empty;
 
-    partial void OnOpenRouterVisionModelChanged(string value)
+    partial void OnOpenRouterVisionModelChanged(string? value)
     {
         if (_suppressOpenRouterVisionModelPersist) return;
         _uiStateStore.PersistOpenRouterVisionModel(value ?? string.Empty);
@@ -456,7 +453,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     private string _outputFolder = OutputPaths.DefaultRootDirectory;
 
-    partial void OnOutputFolderChanged(string value)
+    partial void OnOutputFolderChanged(string? value)
     {
         var trimmed = value?.Trim();
         _uiStateStore.PersistOutputFolder(trimmed ?? string.Empty);
@@ -690,8 +687,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
         if (!IsCustomAspectRatio) return;
 
-        Parameters.Width = Math.Clamp((int)Parameters.Width, ValidationConstants.ImageWidthMin, ValidationConstants.ImageWidthMax);
-        Parameters.Height = Math.Clamp((int)Parameters.Height, ValidationConstants.ImageHeightMin, ValidationConstants.ImageHeightMax);
+        Parameters.Width = Math.Clamp(Parameters.Width, ValidationConstants.ImageWidthMin, ValidationConstants.ImageWidthMax);
+        Parameters.Height = Math.Clamp(Parameters.Height, ValidationConstants.ImageHeightMin, ValidationConstants.ImageHeightMax);
     }
 
     private void ValidateParameters()
@@ -825,8 +822,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         IComfyUiLoraService? comfyUiLoraService = null)
     {
         _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
-        _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
-        _pollinationsTokenStore = pollinationsTokenStore ?? throw new ArgumentNullException(nameof(pollinationsTokenStore));
+        var tokenStore1 = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+        var pollinationsTokenStore1 = pollinationsTokenStore ?? throw new ArgumentNullException(nameof(pollinationsTokenStore));
         if (comfyUiAuthStore is null) throw new ArgumentNullException(nameof(comfyUiAuthStore));
         if (civitaiTokenStore is null) throw new ArgumentNullException(nameof(civitaiTokenStore));
         if (anthropicTokenStore is null) throw new ArgumentNullException(nameof(anthropicTokenStore));
@@ -839,7 +836,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         _ollamaModelCatalog = ollamaModelCatalog;
         _comfyVram = comfyVram;
         _gpuGate = gpuGate;
-        _openRouterTokenStore = openRouterTokenStore;
         _openRouterModelCatalog = openRouterModelCatalog;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         if (promptBatchParser is null) throw new ArgumentNullException(nameof(promptBatchParser));
@@ -942,14 +938,14 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             displayName: "Replicate",
             placeholder: "Paste your Replicate API token…",
             helperText: "Required for Replicate-hosted models (Flux, GPT, Nano Banana). Stored in OS secure storage.",
-            store: _tokenStore,
+            store: tokenStore1,
             syncToParameters: v => Parameters.ApiToken = v));
         TokenProviders.Add(new TokenProviderViewModel(
             key: "pollinations",
             displayName: "Pollinations",
             placeholder: "Paste your Pollinations token (optional)…",
             helperText: "Optional. Anonymous mode is rate-limited (1 req / 15 s). Register at auth.pollinations.ai for higher limits.",
-            store: _pollinationsTokenStore,
+            store: pollinationsTokenStore1,
             syncToParameters: v => Parameters.PollinationsApiToken = v));
         // No parameters slot: the ComfyUI services read the store directly per run (the
         // checkpoint fetch has no ImageGenerationParameters at all), and ComfyUI must stay
@@ -981,14 +977,14 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
                         + "console.anthropic.com. Stored in OS secure storage.",
             store: anthropicTokenStore,
             syncToParameters: static _ => { }));
-        if (_openRouterTokenStore is not null)
+        if (openRouterTokenStore is not null)
         {
             TokenProviders.Add(new TokenProviderViewModel(
                 key: "openrouter",
                 displayName: "OpenRouter",
                 placeholder: "Paste your OpenRouter API key…",
                 helperText: "Required when image observation uses OpenRouter. The model id is configured below.",
-                store: _openRouterTokenStore,
+                store: openRouterTokenStore,
                 syncToParameters: static _ => { }));
         }
         _selectedTokenProvider = TokenProviders[0];
@@ -1064,17 +1060,17 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
                         "Resolution changed -> \"{Value}\" (suppressed={Suppressed}, inOptions={InOptions}, persisting={Persisting})",
                         Parameters.Resolution,
                         _suppressResolutionPersist,
-                        ResolutionOptions.Contains(Parameters.Resolution ?? string.Empty),
+                        ResolutionOptions.Contains(Parameters.Resolution),
                         resolutionPersistable);
                 if (resolutionPersistable)
                 {
-                    _uiStateStore.PersistResolution(Parameters.Resolution!, Parameters.Model);
+                    _uiStateStore.PersistResolution(Parameters.Resolution, Parameters.Model);
                 }
                 break;
             case nameof(ImageGenerationParameters.CivitaiModelRef):
                 // Persist unconditionally: the launch restore writes the value just loaded,
                 // which the store's skip-identical rule turns into a no-op.
-                _uiStateStore.PersistCivitaiModelRef(Parameters.CivitaiModelRef ?? string.Empty);
+                _uiStateStore.PersistCivitaiModelRef(Parameters.CivitaiModelRef);
                 break;
             case nameof(ImageGenerationParameters.UpscaleAfterRender):
                 // Owned by the workflow coordinator, which holds the persist-suppression flag
@@ -1553,11 +1549,11 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     /// </summary>
     internal string BuildEditorRoute()
     {
-        var json = Uri.EscapeDataString(Parameters.Prompt ?? string.Empty);
+        var json = Uri.EscapeDataString(Parameters.Prompt);
         var shape = ModelConstants.ComfyUi.IsId(Parameters.Model)
             ? Parameters.AspectRatio
             : Parameters.Resolution;
-        return $"ideogram-editor?json={json}&resolution={Uri.EscapeDataString(shape ?? string.Empty)}";
+        return $"ideogram-editor?json={json}&resolution={Uri.EscapeDataString(shape)}";
     }
 
     [RelayCommand]
