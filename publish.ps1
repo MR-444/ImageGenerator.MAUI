@@ -10,7 +10,7 @@
 # or install PowerShell 7.
 #
 # Output:
-#   ImageGenerator.MAUI/bin/Release/net10.0-windows10.0.22621.0/win-x64/publish/Emberforge.exe
+#   ImageGenerator.MAUI/bin/Release/net11.0-windows10.0.22621.0/win-x64/publish/Emberforge.exe
 #   (the project folder/csproj stay ImageGenerator.MAUI; only the binary is Emberforge.exe via AssemblyName)
 #
 # Close the running app first — MSBuild can't overwrite a locked .exe.
@@ -22,7 +22,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = $PSScriptRoot
 $project  = Join-Path $repoRoot 'ImageGenerator.MAUI\ImageGenerator.MAUI.csproj'
-$tfm      = 'net10.0-windows10.0.22621.0'
+$tfm      = 'net11.0-windows10.0.22621.0'
 $rid      = 'win-x64'
 
 if (-not $SkipClean) {

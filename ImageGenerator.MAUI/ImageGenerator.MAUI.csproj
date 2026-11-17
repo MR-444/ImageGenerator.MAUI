@@ -4,7 +4,7 @@
 		<!-- Windows-only: only platform the author can test against.
 		     SDK is 22621 (Windows 11 22H2) for modern WinUI/WinRT API surface.
 		     Min/supported runtime stays at 17763 so Windows 10 1809+ still runs it. -->
-		<TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+		<TargetFramework>net11.0-windows10.0.22621.0</TargetFramework>
 
 		<OutputType>Exe</OutputType>
 		
@@ -67,21 +67,21 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="AsyncAwaitBestPractices.MVVM" Version="10.0.0" />
+		<PackageReference Include="AsyncAwaitBestPractices.MVVM" Version="11.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.120" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.14" />
-		<PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.11.0" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="11.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="11.0.0" />
 		<PackageReference Include="NLog" Version="6.2.2" />
-		<PackageReference Include="NLog.Extensions.Logging" Version="6.2.2" />
+		<PackageReference Include="NLog.Extensions.Logging" Version="6.3.0" />
 		<!-- Refit clients use generated request builders; Refit.Reflection is not required. -->
-		<PackageReference Include="Refit" Version="16.4.0" />
-		<PackageReference Include="Refit.HttpClientFactory" Version="16.4.0" />
+		<PackageReference Include="Refit" Version="17.0.0" />
+		<PackageReference Include="Refit.HttpClientFactory" Version="17.0.0" />
 		<!-- 4.x licensed build: the license key is supplied at build time via the
 	     SIXLABORS_LICENSE_KEY secret/MSBuild property (see <SixLaborsLicenseKey>). -->
 		<PackageReference Include="SixLabors.ImageSharp" Version="4.1.3" />
 		<!-- Hardware-accelerated CRC-32/ISO-HDLC for PngTextChunkWriter (Microsoft, MIT, no transitive deps). -->
-		<PackageReference Include="System.IO.Hashing" Version="10.0.14" />
+		<PackageReference Include="System.IO.Hashing" Version="11.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>

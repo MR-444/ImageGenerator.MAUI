@@ -74,14 +74,14 @@ jobs:
       
       # Install the .NET Core workload
       - name: Install .NET Core
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 11.0.x
       
       # Narrow MAUI workload: Windows-only project, installing the full `maui` pack
       # pulls maui-tizen and fails on NETSDK1147.
-      - name: Install MAUI Windows workload
-        run: dotnet workload install maui-windows --ignore-failed-sources
+      - name: Install MAUI workloads
+        run: dotnet workload restore $env:Solution_Name
       
       # Build and test purely via the .NET SDK CLI — decoupled from whichever
       # Visual Studio the runner image ships (windows-latest moved VS2022 -> VS2026

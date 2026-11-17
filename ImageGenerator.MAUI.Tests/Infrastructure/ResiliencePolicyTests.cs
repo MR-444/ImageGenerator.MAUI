@@ -71,7 +71,7 @@ public class ResiliencePolicyTests
         services
             .AddRefitClient<IReplicateApi>("https://api.replicate.com")
             .ConfigurePrimaryHttpMessageHandler(() => handler);
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         var api = provider.GetRequiredService<IReplicateApi>();
         var response = await api.CreatePredictionAsync(

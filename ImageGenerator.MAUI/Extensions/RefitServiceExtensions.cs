@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using ImageGenerator.MAUI.Infrastructure.Diagnostics;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
@@ -27,7 +28,9 @@ public static class RefitServiceExtensions
         new(JsonSerializerDefaults.Web)
         {
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            Converters = { new NullSkippingDictionaryConverter() }
+            Converters = { new NullSkippingDictionaryConverter() },
+            // Refit 17 change for hand-built options
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver()
         };
 
     private static readonly RefitSettings SharedRefitSettings = new()
