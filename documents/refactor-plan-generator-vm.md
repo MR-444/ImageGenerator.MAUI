@@ -285,26 +285,29 @@ Prefix with `ComfyUi.`:
 
 > Written before Phase 1 landed, when `GeneratorViewModel` was still 2,527 lines. Its numbers are
 > **wrong**: measured XAML surface is **40** occurrences over 5 pages, not "16 bindings"; measured
-> test surface is **54 + 4 + 2 + 0**, not "~58 + 10 + 11 + 1". Its claim that GVM reads
+> test surface is **54 + 4 + 2 + 0**, not "~58 + 10 + 11 + 1" (neither figure is current: the live numbers are §11.3's **33** XAML occurrences and §11.8 item 8's **65 refs / 27 methods / 5 files**). Its claim that GVM reads
 > `ComfyUiBaseUrl` "in the render path" is also **false** — `ComfyUiBaseUrl` has exactly 2 uses in
 > the VM (declaration + persist hook). Read §11 instead.
 >
-> Two points from it stay valid and are folded into §11:
+> Two points from it were folded into §11 — one is now fixed, one stays a hazard:
 > - **Load order is load-bearing** → §11.6, first bullet (verified again against current source).
-> - **`syncToParameters` captures the `_parameters` field** (`v => _parameters.ApiToken = v`)
->   instead of re-reading the `Parameters` property, unlike everything else — a latent bug if
->   `Parameters` is ever reassigned. Only matters for the token cluster, which §11.4.4 recommends
->   leaving alone; if that ever changes, fix the capture to `Parameters.ApiToken = v`.
+> - **`syncToParameters` captured the `_parameters` field** (`v => _parameters.ApiToken = v`) instead
+>   of re-reading the `Parameters` property, unlike everything else — a latent bug if `Parameters` is
+>   ever reassigned. **Fixed in `ab71fcc`** (§11.8 item 5).
+>
+> The recommendation in item 1 below is also **half rejected**: `GeneratorViewModel.Settings` stands, but
+> the three sibling VMs get **no** `Settings` forwarding property — sibling pages bind
+> `{Binding Generator.Settings.<Prop>}` (§11.4.1, §11.8 item 2).
 
 Scope per brief: Appearance/Theme, `OutputFolder`, ComfyUI URL / `UseSageAttention` / `FreeVramAfterRendering`, Ollama & OpenRouter catalogs, CivitAI test, `TokenProviders`. Measured reality:
 
 1. **Wider than "MainPage + SettingsPage".** Three *other* pages bind these settings through a sibling VM's `Generator` property — `IdeaToPromptPage.xaml` (10 `Generator.*` bindings incl. `Generator.OllamaModel`, `Generator.OllamaVisionModels`, `Generator.RefreshOllamaModelsCommand`, `Generator.OpenRouterVisionFreeOnly`), `IdeogramStructureEditorPage.xaml` (3), `MutationEnginePage.xaml` (3). Plus C# readers: `IdeaToPromptViewModel:698-710`, `MutationEngineViewModel:675-682`, `IdeogramStructureEditorViewModel:177`, and **`GpuColocation.SameHost(_generator?.ComfyUiBaseUrl, ResolveOllamaBaseUrl())` in two VMs** (also GVM:1771 in the render path).
-   → Recommended: `GeneratorViewModel.Settings` + a thin `public AppSettingsCoordinator? Settings => _generator?.Settings;` on the three sibling VMs, then repath 16 XAML bindings `Generator.X` → `Settings.X`. Keeps `GpuColocation` semantics by reading `Settings.ComfyUiBaseUrl` / `Settings.OllamaBaseUrl`.
+   → Recommended: `GeneratorViewModel.Settings` + a thin `public AppSettingsCoordinator? Settings => _generator?.Settings;` on the three sibling VMs, then repath 16 XAML bindings `Generator.X` → `Generator.Settings.X`. **Superseded and partly rejected:** the VM side of that recommendation (`public AppSettingsCoordinator? Settings => _generator?.Settings;` on the three sibling VMs) is **out** — one piece of state gets one object in the binding path, so siblings bind straight through `Generator.Settings.` and keep no forwarding property (§11.4.1, §11.8 item 2). Keeps `GpuColocation` semantics by reading `Settings.ComfyUiBaseUrl` / `Settings.OllamaBaseUrl`.
 2. **`IsValid` needs no token duplication at all.** It reads only `Parameters.ApiToken` / `PollinationsApiToken`, and `TokenProviderViewModel` writes those through its `syncToParameters` delegate. So `TokenProviders` can move as long as the coordinator is handed `() => Parameters` — the token *state* has one owner, the *channel* is `Parameters`. The `SettingsPage.xaml.cs` comment ("a separate VM would just mirror it") is stale; delete it.
-   Side-note worth fixing while there: the existing delegates capture the `_parameters` **field** (`v => _parameters.ApiToken = v`) rather than re-reading the property, unlike everything else — reassignment would strand tokens on the old instance.
+   Side-note worth fixing while there: the existing delegates capture the `_parameters` **field** (`v => _parameters.ApiToken = v`) rather than re-reading the property, unlike everything else — reassignment would strand tokens on the old instance. **Fixed in `ab71fcc`:** both delegates now write through the property (`v => Parameters.ApiToken = v`, same for `PollinationsApiToken`), `OnParametersChanged` re-seeds both slots when the instance is replaced, and `RemixFromImageAsync` was measured to write into the live instance rather than reassign it (§11.8 item 5).
 3. **Load order is load-bearing.** `LoadSavedUiState` restores settings *before* `ProviderFilter.RestoreSelectedModel`, and resolution/AR/JSON-prompt *after* it. Splitting the method must preserve that sequence exactly (`Settings.LoadSavedState()` first, then the model-dependent restores) and keep the single `_uiStateLoaded` / new `_settingsLoaded` re-entry guards — `MainPage.OnAppearing` calls `LoadAllTokensAsync` → `LoadCachedCatalogAsync` → `LoadSavedUiState` in order (MainPage.xaml.cs:206-213).
 4. Phase 2 also moves the last 2 picker flags (`_suppressOllamaModelPersist` — deliberately shared by both Ollama pickers, keep it one flag — and `_suppressOpenRouterVisionModelPersist`, which also guards `OnOpenRouterVisionFreeOnlyChanged`'s cascade) and frees `_ollamaModelCatalog`, `_openRouterModelCatalog`, `_openRouterTokenStore`, `_folderPicker`. Only then does the ctor parameter count actually drop (settings services can be injected into `AppSettingsCoordinator` directly).
-   → Phase 2 test blast radius: ~58 refs in `GeneratorViewModelTests.cs` + 10 in `IdeaToPromptViewModelTests.cs` + 11 in `MutationEngineViewModelTests.cs` + 1 in `IdeogramStructureEditorViewModelTests.cs`, and 2 of the 5 `new GeneratorViewModel(...)` sites shrink signature.
+   → Phase 2 test blast radius: ~58 refs in `GeneratorViewModelTests.cs` + 10 in `IdeaToPromptViewModelTests.cs` + 11 in `MutationEngineViewModelTests.cs` + 1 in `IdeogramStructureEditorViewModelTests.cs`, and 2 of the 5 `new GeneratorViewModel(...)` sites shrink signature. *Blast radius superseded — §11.3 and §11.8 item 8.*
 
 ---
 
@@ -527,13 +530,18 @@ namespace, so no new `using` and no cycle.
 
 ### 11.5 Steps (Phase 1's order, with the gates that caught things last time)
 
-0. **Extend the binding guard test to all 5 pages first** — `UiMarkupContractTests` currently
-   checks only `MainPage`. Generalize `MainPage_PageLevelBindings_ResolveAgainstTheViewModelGraph`
-   to `(page, rootType)` pairs, including the `Generator` sub-model hop on the 3 sibling pages.
-   Run it **green before moving anything**; it enumerates the true page-level binding surface (33
-   of those paths are the 2A set) and makes the repath machine-checked. ⚠ **never verify a XAML
-   change with `--no-build`** — those tests read
-   XAML from `bin/…/TestAssets`, which is a build-time copy (§10).
+0. **Extend the binding guard test — DONE (`451b50e`, green before any code moved).** It covers
+   **all 7** pages, not the 5 named here, each rooted at the `x:DataType` its own page declares;
+   `MainPage_PageLevelBindings_ResolveAgainstTheViewModelGraph` became
+   `PageLevelBindings_ResolveAgainstTheViewModelGraph(string asset)` over
+   `PagesWithADeclaredViewModel()`. The `DataTemplate`/`RelativeSource` scopes to watch were checked
+   and skipped deliberately: all 9 `DataTemplate`s in the 5 pages declare their own `x:DataType`
+   (so they are not page-level scope), and bindings naming `Source=` / `RelativeSource=` /
+   `x:DataType` are skipped too; a page contributing almost no bindings **fails**, so an
+   over-aggressive scope filter cannot pass silently. Surface now under contract: **382 page-level
+   bindings, 38 through a coordinator, 16 of them the sibling `Generator.` settings hop** — the 33
+   repaths are machine-checked from here. ⚠ **never verify a XAML change with `--no-build`** — those
+   tests read XAML from `bin/…/TestAssets`, a build-time copy (§10). Details §11.8 item 1.
 1. Add `AppSettingsCoordinator.cs` (flat, `Presentation/ViewModels/` — same folder and shape as
    `ComfyUiWorkflowCoordinator`), cut D + E + F **verbatim** with the Phase 1 extraction script
    pattern, then add: ctor (`IUiStateStore`, 2 catalogs, `IFolderPicker`, `ILogger`,
@@ -552,8 +560,12 @@ namespace, so no new `using` and no cycle.
    assertions** (the Phase 1 script pattern), then re-run the guard test.
 4. Repath **4** code-behind calls + **65** test occurrences over 27 methods (§11.3, scripted, with
    per-name assertions).
-5. **Gates**: build 0 errors/0 warnings; `dotnet test` **1,417 passed, 0 failed** (same count —
-   the guard test is generalized, not added).
+5. **Gates**: build 0 errors/0 warnings; `dotnet test` **1,427 passed, 0 failed, 0 skipped** (all
+   four counts measured, never copied). The chain to know while stepping: **1,417** at Phase 1 →
+   **1,419** after Prep A/B (+2 `MutateWithAi_LocalTier_*`) → **1,425** after Step 0 (+6: the single
+   MainPage case became a 7-case theory) → **1,427** after Prep C (+2 token cases). Phase 2 adds its
+   own cases only when `AppSettingsCoordinatorTests` appears, so a step ending on a *lower* number
+   deleted coverage. Never gate a XAML step on `--no-build` (§10).
 6. Manual WinUI smoke: Settings page — theme picker actually re-themes, ComfyUI URL + Ollama URL
    round-trip across restart, Ollama "Refresh models" against a live server, output-folder browse +
    "Open output folder", and the Krea-2 path from Phase 1 still generates.
@@ -595,6 +607,13 @@ namespace, so no new `using` and no cycle.
 - `SettingsPage.xaml.cs` holds `_viewModel` typed as `GeneratorViewModel` — fine in 2A (its 23
   bindings are XAML-only), and the reason `SelectedTokenProvider` stays put.
 - **Do not touch `GalleryPage.xaml:48`** (§11.3) — same command *name*, different owner.
+- **A new `AppSettingsCoordinatorTests` class needs `[Collection("OutputPathsState")]` on itself.**
+  `OnOutputFolderChanged` calls `OutputPaths.SetRootOverride`, a process-wide static (the hazard above
+  says not to re-order it). Today that serialisation rides on a single attribute, on the partial
+  declaration at `GeneratorViewModelTests.cs:17`; `GeneratorViewModelTests.Settings.cs` carries none
+  because it is the *same class* — its header comment says so. A new class is a new xUnit collection,
+  so it would run in parallel with the output-folder tests and race them over the root override
+  (§11.8 item 7).
 
 ### 11.7 After Phase 2 — what is left in the VM (rough shape, unmeasured — re-measure before planning)
 
@@ -603,7 +622,7 @@ Ctor ≈197, `OnParametersPropertyChanged` ≈98, job pipeline (`GenerateImageAs
 17 / `WaitForGpuSlotAsync` 16 / `ShouldKeepComfyUiVramForNextJobAsync` 22 / `MaybeFreeComfyUiVramAsync`
 20 + `StartNextIfIdle` 28) ≈300, remix + navigation (`RemixFromImageAsync` 63,
 `LoadSavedJobIntoParametersAsync` 53, `ApplyRemixAsync` 34, `NavigateAsync` 27,
-`NavigateToGalleryAfterGenerationAsync` 23, `OpenOutputFolderAsync` 24) ≈250,
+`NavigateToGalleryAfterGenerationAsync` 23) ≈226,
 catalog + capabilities (`LoadCachedCatalogAsync` 41, `ApplyWorkflowDefaultsForSelectedModel` 43,
 `RefreshCapabilities` ~45, `OnSelectedModelChanged` 28, `SetModelOptionsProgrammatically` 29)
 ≈230, picker/status/token glue (`SetAspectRatioProgrammatically` 29,
@@ -612,10 +631,18 @@ catalog + capabilities (`LoadCachedCatalogAsync` 41, `ApplyWorkflowDefaultsForSe
 the capabilities/picker cluster is the riskiest because it is entangled with `Parameters`,
 `Capabilities` and 4 more suppress flags. The 21-param ctor is the last real smell.
 
+*Corrected 2026-11-17: this cluster used to count `OpenOutputFolderAsync` (24) among what stays, which
+contradicted §11.4.3 — it leaves with region **F**, taking `MainPage.xaml`’s single
+`OpenOutputFolderCommand` binding with it (`GalleryPage.xaml:48` is a different owner and stays).
+The ≈ 250 it came from also included those 24, and §11.7’s own heading already admits the
+250 was never measured.*
+
 ### 11.8 Measured update — Step 0 is done, and six numbers above have moved (2026-11-17)
 
 Everything in §11.1–§11.7 above is unchanged original text. This subsection is the delta, measured at
-`ab71fcc` on a green tree (**1,427 passed / 0 failed / 8 skipped**, app 0 warnings / 0 errors). Each
+`ab71fcc` on a green tree (**1,427 passed / 0 failed / 0 skipped**, app 0 warnings / 0 errors —
+re-confirmed at `3573148`; one intermediate run reported 8 skipped and there is no `Skip=` anywhere in
+the test source, so that number is an artifact and is not carried anywhere). Each
 item names the command or file:line it came from.
 
 **1. Step 0 (`451b50e`) is done — and it is not the generalisation §11.5 step 0 sketched.**
@@ -684,17 +711,16 @@ it, and nothing in app or tests assigns `Parameters` — so the "Remix swaps the
 describing a swap no caller performs. Constraint: `Parameters` stays on the VM per §11.4/§11.7; if a
 later phase moves it, the re-seed moves with it.
 
-**6. Two gates in §11.5 need restating with their new numbers.** Step 0 changed the test count, so
-step 5's "1,417, same count" is now **1,425 after step 0, 1,427 after Prep C**. And step 0's own
-warning generalises: every page-level binding on all 7 pages is machine-checked from Step 0 onward,
-which is what makes step 3's 33 scripted repaths reviewable — leaving one of the 16 sibling paths on
-the old owner now fails the case naming the page, the line and the new path.
+**6. §11.5 step 0 and step 5 now carry their own corrected numbers**, so nothing in §11.5 has to be
+read together with this subsection to be right. The part worth keeping here is *why* step 0 pays:
+every page-level binding on all 7 pages is machine-checked from Step 0 onward, which is what makes
+step 3's 33 scripted repaths reviewable — leaving one of the 16 sibling paths on the old owner now
+fails the case that names the page, the line and the path to bind instead.
 
-**7. Add one line to §11.6's hazards: any new fixture needs `[Collection("OutputPathsState")]`.**
-`OnOutputFolderChanged` calls `OutputPaths.SetRootOverride`, a process-wide static that §11.6 already
-warns not to re-order; `GeneratorViewModelTests.Settings.cs` is inside that collection precisely so
-those tests stay serialised. An `AppSettingsCoordinatorTests` fixture written outside it would race
-the output-folder tests over the root override.
+**7. §11.6 gained a hazard: a new `AppSettingsCoordinatorTests` class needs
+`[Collection("OutputPathsState")]` on itself.** The serialisation today rides on one attribute, on the
+`GeneratorViewModelTests.cs:17` partial declaration; a new class is a new xUnit collection and would
+race the output-folder tests over the `OutputPaths.SetRootOverride` static.
 
 **8. §11.3's "Tests 53" is now 65 occurrences / 27 methods / 5 files — the definition matters more than the number.**
 Counted case-sensitively as **standalone tokens** of exactly the moving members: `ComfyUiBaseUrl`,
@@ -737,7 +763,7 @@ test already machine-checks.
 
 | Cluster | Shrink? | Action |
 |---|---|---|
-| 53 test refs | ✅ **Prep A, done** | 17 settings tests moved to `GeneratorViewModelTests.Settings.cs` (§12.1) |
+| 53 test refs → **65 measured** (§11.8 item 8) | ✅ **Prep A, done** | 17 settings tests moved to `GeneratorViewModelTests.Settings.cs` (§12.1) |
 | 9 sibling reads | ✅ **Prep B, done** | one shared settings-resolution helper (§12.2) |
 | 33 XAML paths | ❌ don't | the 3 sibling picker blocks are **25 / 8 / 7** lines with different layouts — not duplicated boilerplate; a shared control is a bigger, visually riskier change than the repath it would avoid |
 | 4 code-behind calls | ❌ don't | collapsing them into one startup call moves an Ollama HTTP fetch to app start, including when Ollama is down |
@@ -826,3 +852,22 @@ Two findings from that exercise, both worth keeping:
 **Phase 2 consequence:** the settings surface the coordinator must serve outside XAML is now *one
 file* (`GeneratorSettingsReader`) plus 33 XAML paths, 4 code-behind `EnsureOllamaModelsLoadedAsync`
 calls and 1 markup-contract literal.
+
+### 12.3 Prep C — **DONE** (`ab71fcc`): replacing the `Parameters` instance keeps the tokens
+
+- §7.2's side-note, promoted to a commit because Phase 2 makes `Parameters` reach more owners. Both
+  token delegates now write through the property (`v => Parameters.ApiToken = v`, and the
+  `PollinationsApiToken` twin) instead of capturing the `_parameters` field, so there is one access
+  funnel; `TokenProviderViewModel.PushToParameters()` exposes it and `OnParametersChanged` calls it
+  for every provider before revalidating.
+- Pinned by `Parameters_WhenInstanceIsReplaced_SeedsBothTokenSlotsFromTheRows` (failed before the
+  fix: expected `"fresh-token"`, got `""`) and `RemixFromImage_KeepsThePastedApiToken`.
+- Measured while at it: `RemixFromImageAsync` writes into the live `ImageGenerationParameters` and
+  never swaps it, and nothing in app or tests assigns `Parameters` — the "Remix swaps the instance"
+  comment described a swap no caller performs. So this was a latent bug, not a live one, which is
+  exactly the kind of thing to close out *before* Phase 2 adds owners.
+- Gates: build **0 errors / 0 warnings**; **1,427 passed, 0 failed, 0 skipped** (re-run and confirmed;
+  1,425 after Step 0, +2 here).
+- **Phase 2 consequence:** `Parameters` stays on the VM (§11.4.4, §11.7). If a later phase moves it,
+  the re-seed in `OnParametersChanged` moves with it — that call is the only thing keeping a pasted
+  token alive across an instance replacement.
