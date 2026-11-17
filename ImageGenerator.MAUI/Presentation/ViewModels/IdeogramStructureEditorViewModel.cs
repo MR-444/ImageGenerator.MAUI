@@ -27,6 +27,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
     private readonly IFileLauncher _fileLauncher;
     private readonly ILogger<IdeogramStructureEditorViewModel> _logger;
     private readonly GeneratorViewModel? _generator;
+    private readonly GeneratorSettingsReader _settings;
     private readonly IEnrichRegionsLlmService? _enrich;
 
     /// <summary>Raised whenever anything the canvas renders may have changed. The page maps it to GraphicsView.Invalidate().</summary>
@@ -49,6 +50,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         _fileLauncher = fileLauncher ?? throw new ArgumentNullException(nameof(fileLauncher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _generator = generator;
+        _settings = new GeneratorSettingsReader(generator);
         _enrich = enrich;
 
         // Mode snapshot is safe: this VM is transient (fresh per navigation) and the singleton
@@ -174,7 +176,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
 
     /// <summary>Resolved Ollama model the Local tier will use when the editor is hosted stand-alone.</summary>
     public string EnrichLocalModel =>
-        _generator?.OllamaModel ?? string.Empty;
+        _settings.OllamaModel;
 
     partial void OnEnrichTierChanged(ModelTier value)
     {
@@ -206,8 +208,8 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
     /// <summary>Default longest canvas side in device-independent pixels; the stage can grow or shrink it.</summary>
     public const double CanvasFitBox = 480;
 
-    public const double CanvasMinFitBox = 320;
-    public const double CanvasMaxFitBox = 720;
+    private const double CanvasMinFitBox = 320;
+    private const double CanvasMaxFitBox = 720;
 
     private double _canvasFitBox = CanvasFitBox;
 
@@ -266,9 +268,8 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
 
     private void UpdateCanvasRequest()
     {
-        int width, height;
         var parsed = IsAspectRatioMode
-            ? CanvasCoordinateMapper.TryParseAspectRatioLabel(SelectedResolution, out width, out height)
+            ? CanvasCoordinateMapper.TryParseAspectRatioLabel(SelectedResolution, out var width, out var height)
             : CanvasCoordinateMapper.TryParseResolution(SelectedResolution, out width, out height);
         if (parsed)
         {
@@ -436,7 +437,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         {
             var model = V4JsonPromptSerializer.Deserialize(json);
             HighLevelDescription = model.HighLevelDescription;
-            Background = model.CompositionalDeconstruction?.Background ?? string.Empty;
+            Background = model.CompositionalDeconstruction.Background ?? string.Empty;
 
             if (model.StyleDescription is { } style)
             {
@@ -503,7 +504,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
     // all state and math live here so the gestures are unit-testable without MAUI.
 
     /// <summary>Pointer-to-handle hit radius in pixels (pixel space so the AR can't stretch it).</summary>
-    public const float HandleTouchRadius = 14f;
+    private const float HandleTouchRadius = 14f;
 
     /// <summary>Smallest box edge a resize can produce, in grid units.</summary>
     public const int MinBoxSize = 20;
@@ -801,8 +802,8 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
     private void BuildEnrichPreview(V4JsonPrompt original, V4JsonPrompt enriched)
     {
         EnrichPreview.Clear();
-        var before = original.CompositionalDeconstruction?.Elements ?? [];
-        var after = enriched.CompositionalDeconstruction?.Elements ?? [];
+        var before = original.CompositionalDeconstruction.Elements;
+        var after = enriched.CompositionalDeconstruction.Elements;
         var count = Math.Min(before.Count, after.Count);
         for (var i = 0; i < count; i++)
             EnrichPreview.Add(new EnrichPreviewItemViewModel(

@@ -6,6 +6,7 @@ using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
+using ImageGenerator.MAUI.Shared.Constants;
 using ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -267,7 +268,7 @@ public class MutationEngineViewModelTests
         await sut.MutateWithAiCommand.ExecuteAsync(null);
 
         stub.MutateCalls.Should().HaveCount(5);
-        stub.MutateCalls.Select(c => c.Index).Should().BeEquivalentTo(new[] { 0, 1, 2, 3, 4 });
+        stub.MutateCalls.Select(c => c.Index).Should().BeEquivalentTo([0, 1, 2, 3, 4]);
         stub.MutateCalls.Should().OnlyContain(c => c.Steer == "make it winter" && c.Tier == ModelTier.Opus);
         sut.StatusKind.Should().Be(StatusKind.Success); // no generator ⇒ "variants ready"
     }
@@ -319,7 +320,7 @@ public class MutationEngineViewModelTests
     {
         var sut = CreateSutWithAi(new StubMutationLlm());
 
-        sut.SetBreedSetForTest(new[] { MutationTestData.BaseCaption(), MutationTestData.BaseCaption() });
+        sut.SetBreedSetForTest([MutationTestData.BaseCaption(), MutationTestData.BaseCaption()]);
 
         sut.IsBreedMode.Should().BeTrue();
         sut.IsAiMode.Should().BeTrue("breeding is an AI-only path");
@@ -331,7 +332,7 @@ public class MutationEngineViewModelTests
     public void Initialize_OrdinaryVisitAfterBreed_RestoresPrimaryAiWorkflow()
     {
         var sut = CreateSutWithAi(new StubMutationLlm());
-        sut.SetBreedSetForTest(new[] { MutationTestData.BaseCaption(), MutationTestData.BaseCaption() });
+        sut.SetBreedSetForTest([MutationTestData.BaseCaption(), MutationTestData.BaseCaption()]);
         sut.IsAiMode.Should().BeTrue("breeding forced the paid LLM path on");
 
         // An ordinary re-entry restores the user's ordinary-session preference. AI is the product
@@ -359,7 +360,7 @@ public class MutationEngineViewModelTests
     {
         var stub = new StubMutationLlm();
         var sut = CreateSutWithAi(stub);
-        sut.SetBreedSetForTest(new[] { MutationTestData.BaseCaption(), MutationTestData.BaseCaption() });
+        sut.SetBreedSetForTest([MutationTestData.BaseCaption(), MutationTestData.BaseCaption()]);
         sut.Steer = "blend them";
         sut.SelectedModelTier = ModelTier.Sonnet;
         sut.Count = 4;
@@ -368,7 +369,7 @@ public class MutationEngineViewModelTests
 
         stub.MutateCalls.Should().BeEmpty("breed mode never calls MutateAsync");
         stub.BreedCalls.Should().HaveCount(4);
-        stub.BreedCalls.Select(c => c.Index).Should().BeEquivalentTo(new[] { 0, 1, 2, 3 });
+        stub.BreedCalls.Select(c => c.Index).Should().BeEquivalentTo([0, 1, 2, 3]);
         stub.BreedCalls.Should().OnlyContain(c =>
             c.WinnerCount == 2 && c.Steer == "blend them" && c.Tier == ModelTier.Sonnet);
     }
@@ -442,7 +443,7 @@ public class MutationEngineViewModelTests
         sut.IsAiMode = true;
         sut.ShowStylePin.Should().BeTrue("AI can restyle into a saved style");
 
-        sut.SetBreedSetForTest(new[] { MutationTestData.BaseCaption(), MutationTestData.BaseCaption() });
+        sut.SetBreedSetForTest([MutationTestData.BaseCaption(), MutationTestData.BaseCaption()]);
         sut.ShowStylePin.Should().BeFalse("breed blends the winners' own looks");
     }
 
@@ -516,6 +517,54 @@ public class MutationEngineViewModelTests
         await sut.MutateWithAiCommand.ExecuteAsync(null);
 
         catalog.UnloadCalls.Should().Be(1, "the local model is freed once after the whole sequential batch");
+    }
+
+    // The unload is where the resolved endpoint actually leaves the process, so the two strings are
+    // the contract worth pinning: the generator's Ollama URL — never its ComfyUI URL — and the
+    // generator's picked model. Sibling pages used to derive both per page; one shared reader now
+    // owns the fallbacks, and these two tests are what keep it honest.
+    [Fact]
+    public async Task MutateWithAi_LocalTier_UnloadsAtTheGeneratorsEndpointAndModel()
+    {
+        var catalog = new StubOllamaCatalog();
+        var generator = BuildGenerator("http://comfy.example:8188", "http://ollama.example:11434");
+        generator.OllamaModel = "qwen2.5-vl:7b";
+        var sut = CreateSutWithAiAndGate(
+            new FailingMutationLlm(), catalog, new FakeGpuGate(), generator);
+        sut.SetBaseForTest(MutationTestData.BaseCaption());
+        sut.IsAiMode = true;
+        sut.SelectedModelTier = ModelTier.Local;
+        sut.Count = 1;
+
+        await sut.MutateWithAiCommand.ExecuteAsync(null);
+
+        catalog.Unloads.Should().HaveCount(1);
+        catalog.Unloads[0].Url.Should().Be("http://ollama.example:11434",
+            "the model is freed at the endpoint the Local tier talked to, not at the ComfyUI one");
+        catalog.Unloads[0].Model.Should().Be("qwen2.5-vl:7b", "and the model unloaded is the generator's pick");
+    }
+
+    // A blank setting is not an endpoint: the default host has to reach the unload too, or the model
+    // stays resident on the box the Local tier really used.
+    [Fact]
+    public async Task MutateWithAi_LocalTier_BlankOllamaUrl_UnloadsAtTheDefaultEndpoint()
+    {
+        var catalog = new StubOllamaCatalog();
+        var generator = BuildGenerator("http://comfy.example:8188", "");
+        generator.OllamaModel = "qwen2.5-vl:7b";
+        var sut = CreateSutWithAiAndGate(
+            new FailingMutationLlm(), catalog, new FakeGpuGate(), generator);
+        sut.SetBaseForTest(MutationTestData.BaseCaption());
+        sut.IsAiMode = true;
+        sut.SelectedModelTier = ModelTier.Local;
+        sut.Count = 1;
+
+        await sut.MutateWithAiCommand.ExecuteAsync(null);
+
+        catalog.Unloads.Should().HaveCount(1);
+        catalog.Unloads[0].Url.Should().Be(ModelConstants.Ollama.DefaultBaseUrl,
+            "a blank Ollama URL falls back to the configured default, same as the gate check does");
+        catalog.Unloads[0].Model.Should().Be("qwen2.5-vl:7b");
     }
 
     [Fact]
@@ -600,9 +649,11 @@ public class MutationEngineViewModelTests
             Mock.Of<IComfyUiCheckpointService>(),
             Mock.Of<IGalleryService>(),
             Mock.Of<IFolderPicker>(),
-            NullLogger<GeneratorViewModel>.Instance);
-        gen.ComfyUiBaseUrl = comfyUrl;
-        gen.OllamaBaseUrl = ollamaUrl;
+            NullLogger<GeneratorViewModel>.Instance)
+        {
+            ComfyUiBaseUrl = comfyUrl,
+            OllamaBaseUrl = ollamaUrl
+        };
         return gen;
     }
 
@@ -637,14 +688,17 @@ public class MutationEngineViewModelTests
 
     private sealed class StubOllamaCatalog : IOllamaModelCatalog
     {
-        public int UnloadCalls { get; private set; }
+        /// <summary>Every unload with the endpoint/model it was given — the calls-only count below is
+        /// what the older tests assert, the list is what the endpoint tests assert.</summary>
+        public List<(string Url, string Model)> Unloads { get; } = [];
+        public int UnloadCalls => Unloads.Count;
         public Task<IReadOnlyList<string>> ListModelsAsync(string baseUrl, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<string>>([]);
         public Task<IReadOnlyList<OllamaModelInfo>> ListModelInfosAsync(string baseUrl, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<OllamaModelInfo>>([]);
         public Task UnloadAsync(string baseUrl, string model, CancellationToken ct = default)
         {
-            UnloadCalls++;
+            Unloads.Add((baseUrl, model));
             return Task.CompletedTask;
         }
     }

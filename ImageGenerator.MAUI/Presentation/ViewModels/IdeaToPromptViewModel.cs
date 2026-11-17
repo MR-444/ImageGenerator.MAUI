@@ -5,7 +5,6 @@ using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Infrastructure.Imaging;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
-using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
 
 namespace ImageGenerator.MAUI.Presentation.ViewModels;
@@ -31,6 +30,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
     private readonly IPromptBuilderService _builder;
     private readonly IClipboardService _clipboard;
     private readonly GeneratorViewModel? _generator;
+    private readonly GeneratorSettingsReader _settings;
     private readonly IOllamaModelCatalog? _ollamaCatalog;
     private readonly IGpuGate? _gpuGate;
     private readonly IVisionObservationService? _visionObserver;
@@ -60,6 +60,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _generator = generator;
+        _settings = new GeneratorSettingsReader(generator);
         _ollamaCatalog = ollamaCatalog;
         _gpuGate = gpuGate;
         _visionObserver = visionObserver;
@@ -307,7 +308,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
 
     public async Task<bool> SetReferenceImageFromUrlAsync(string url)
     {
-        if (!Uri.TryCreate(url?.Trim(), UriKind.Absolute, out var uri)
+        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
             SetStatus("Only http and https image URLs can be imported.", StatusKind.Error);
@@ -443,7 +444,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
 
         // There is no default Ollama model — guessing one only produced an opaque 404 from a server
         // that never had it. Same contract as the OpenRouter vision picker below.
-        if (tier == ModelTier.Local && string.IsNullOrWhiteSpace(ResolveOllamaModel()))
+        if (tier == ModelTier.Local && string.IsNullOrWhiteSpace(_settings.OllamaModel))
         {
             SetStatus("Pick a local Ollama model first. Refresh the list, then choose a model.", StatusKind.Error);
             return;
@@ -463,14 +464,14 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         var usesLocalVision = IsImageSource && SelectedVisionProvider == VisionObservationProvider.LocalOllama;
         var gpuGated = (tier == ModelTier.Local || usesLocalVision)
             && _gpuGate is not null
-            && GpuColocation.SameHost(_generator?.ComfyUiBaseUrl, ResolveOllamaBaseUrl());
+            && _settings.SharesGpuWithComfyUi;
         IDisposable? gpuLease = null;
         try
         {
             if (gpuGated)
             {
                 SetStatus("Waiting for the current render to finish…", StatusKind.Info);
-                gpuLease = await _gpuGate!.AcquireAsync();
+                gpuLease = await _gpuGate!.AcquireAsync(token);
                 if (_generator is not null) _generator.IsGpuBusy = true;
             }
 
@@ -579,9 +580,9 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
             if (_ollamaCatalog is not null)
             {
                 if (tier == ModelTier.Local)
-                    await _ollamaCatalog.UnloadAsync(ResolveOllamaBaseUrl(), ResolveOllamaModel());
+                    await _ollamaCatalog.UnloadAsync(_settings.OllamaBaseUrl, _settings.OllamaModel, token);
                 if (usesLocalVision)
-                    await _ollamaCatalog.UnloadAsync(ResolveOllamaBaseUrl(), ResolveOllamaVisionModel());
+                    await _ollamaCatalog.UnloadAsync(_settings.OllamaBaseUrl, _settings.OllamaVisionModel, token);
             }
 
             gpuLease?.Dispose();
@@ -661,7 +662,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
 
     /// <summary>The established handoff: serialize compact into the prompt box and flip on JSON mode —
     /// identical to <c>IdeogramStructureEditorViewModel.ApplyToGenerator</c>. Internal so tests assert it.</summary>
-    internal void ApplyToGenerator(V4JsonPrompt prompt)
+    private void ApplyToGenerator(V4JsonPrompt prompt)
     {
         if (_generator is null) return;
         _generator.Parameters.Prompt = V4JsonPromptSerializer.Serialize(prompt);
@@ -694,23 +695,10 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         _ => "Claude Opus"
     };
 
-    private string ResolveOllamaBaseUrl() =>
-        _generator?.OllamaBaseUrl is { Length: > 0 } u ? u : ModelConstants.Ollama.DefaultBaseUrl;
-
-    private string ResolveOllamaModel() =>
-        _generator?.OllamaModel ?? string.Empty;
-
-    private string ResolveOllamaVisionModel() =>
-        _generator?.OllamaVisionModel is { Length: > 0 } m
-            ? m
-            : ResolveOllamaModel();
-
     private string ResolveVisionModel(VisionObservationProvider provider) =>
         provider == VisionObservationProvider.OpenRouter
-            ? _generator?.OpenRouterVisionModel is { Length: > 0 } m
-                ? m
-                : string.Empty
-            : ResolveOllamaVisionModel();
+            ? _settings.OpenRouterVisionModel
+            : _settings.OllamaVisionModel;
 
     private static string VisionProviderDisplay(VisionObservationProvider provider) => provider switch
     {

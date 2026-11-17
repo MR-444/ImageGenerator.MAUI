@@ -6,7 +6,6 @@ using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
-using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
 using static ImageGenerator.MAUI.Presentation.Common.UiDispatcher;
 // MAUI's implicit usings bring in Microsoft.Maui.Controls.Element — disambiguate.
@@ -43,6 +42,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
     private const decimal OpusPerCallUsd = 0.028m;
 
     private readonly GeneratorViewModel? _generator;
+    private readonly GeneratorSettingsReader _settings;
     private readonly IMutationLibraryService _libraryService;
     private readonly CaptionMutationEngine _engine;
     private readonly ICaptionMutationLlmService? _mutationLlm;
@@ -83,6 +83,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _generator = generator;
+        _settings = new(generator);
         _clipboard = clipboard;
         _mutationLlm = mutationLlm;
         _ollamaCatalog = ollamaCatalog;
@@ -337,7 +338,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
                 AnchorPresets.Add(NoPreset);    // neutral first entry
                 foreach (var preset in library.AnchorPresets)
                     AnchorPresets.Add(preset);
-                if (SelectedAnchorPreset is null) SelectedAnchorPreset = NoPreset;
+                SelectedAnchorPreset ??= NoPreset;
             }
 
             // Refresh the style names + the name→fragment cache, keeping the current pick if it still
@@ -401,11 +402,11 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         }
 
         var tags = SlotTagger.Resolve(_base);
-        foreach (var element in _base.CompositionalDeconstruction?.Elements ?? [])
+        foreach (var element in _base.CompositionalDeconstruction.Elements ?? [])
         {
             // Pre-select the picker on the inferred tag's FRIENDLY label (or Auto when nothing
             // inferred), so each row visibly shows what the app guessed for that element.
-            var inferred = SlotTagDisplay.ToFriendly(tags.TryGetValue(element, out var t) ? t : null);
+            var inferred = SlotTagDisplay.ToFriendly(tags.GetValueOrDefault(element));
             SlotReview.Add(new MutationSlotReviewItem(element, Describe(element), inferred));
         }
 
@@ -563,7 +564,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         }
 
         var tier = SelectedModelTier;
-        var steer = Steer ?? string.Empty;
+        var steer = Steer;
         var baseCaption = _base;
         var count = Count;
         var breedSet = _breedSet;
@@ -598,7 +599,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
             // off can take the gate in turn.
             var gpuGated = tier == ModelTier.Local
                 && _gpuGate is not null
-                && GpuColocation.SameHost(_generator?.ComfyUiBaseUrl, ResolveOllamaBaseUrl());
+                && _settings.SharesGpuWithComfyUi;
 
             IDisposable? gpuLease = null;
             if (gpuGated)
@@ -657,29 +658,21 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         return SelectedStyleName != RandomStyleSentinel && _styleByName.TryGetValue(SelectedStyleName, out fragment!);
     }
 
-    /// <summary>Prepend a style-lock directive so the LLM keeps the (pre-applied) style fixed across
-    /// variants and only varies the interpretation; the user's steer (if any) follows.</summary>
     private static string ComposeStyleLockedSteer(string userSteer)
     {
-        const string Lock =
+        const string styleLock =
             "Keep the style_description in the base EXACTLY as given (medium, art_style/photo, lighting, "
             + "and palette); rewrite the high_level_description, background and every element desc so they "
             + "read coherently in that style. Vary the interpretation between variations, never the style itself.";
-        return string.IsNullOrWhiteSpace(userSteer) ? Lock : $"{Lock} Also: {userSteer.Trim()}";
+        return string.IsNullOrWhiteSpace(userSteer) ? styleLock : $"{styleLock} Also: {userSteer.Trim()}";
     }
 
     /// <summary>Unload the Ollama model from the GPU after the Local batch, resolving the same endpoint/
     /// model the service used (generator settings, else the constants' defaults). Best-effort.</summary>
     private async Task UnloadLocalModelAsync()
     {
-        var model = _generator?.OllamaModel ?? string.Empty;
-        await _ollamaCatalog!.UnloadAsync(ResolveOllamaBaseUrl(), model);
+        await _ollamaCatalog!.UnloadAsync(_settings.OllamaBaseUrl, _settings.OllamaModel);
     }
-
-    /// <summary>The Ollama endpoint the Local tier talks to: the generator's setting, else the default
-    /// (fireEngine). Shared by the unload call and the GPU-gate same-host check.</summary>
-    private string ResolveOllamaBaseUrl() =>
-        _generator?.OllamaBaseUrl is { Length: > 0 } u ? u : ModelConstants.Ollama.DefaultBaseUrl;
 
     /// <summary>A local model on one GPU serves requests serially, so concurrent calls would queue
     /// server-side and trip the per-call timeout; run the Local tier one-at-a-time. Cloud tiers fan out.</summary>
@@ -713,7 +706,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
     /// </summary>
     internal static (List<string> Prompts, List<string> Labels) BuildAiBatch(IReadOnlyList<LlmVariantResult> results)
     {
-        var ok = results.Where(r => r.Success && r.Prompt is not null).ToList();
+        var ok = results.Where(r => r is { Success: true, Prompt: not null }).ToList();
         var prompts = ok.Select(r => V4JsonPromptSerializer.Serialize(r.Prompt!)).ToList();
         var labels = ok.Select(r => r.Label ?? "AI variant").ToList();
         return (prompts, labels);
@@ -733,7 +726,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
     /// <summary>Turn successful AI variants into the seed-pinned render batch (shared handoff).</summary>
     private async Task DispatchAiResultsAsync(IReadOnlyList<LlmVariantResult> results)
     {
-        var ok = results.Where(r => r.Success && r.Prompt is not null).ToList();
+        var ok = results.Where(r => r is { Success: true, Prompt: not null }).ToList();
         if (ok.Count == 0)
         {
             var why = results.Select(r => r.Error).FirstOrDefault(e => !string.IsNullOrWhiteSpace(e))
