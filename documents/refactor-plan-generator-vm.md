@@ -491,10 +491,10 @@ namespace, so no new `using` and no cycle.
 |---|---|---|
 | XAML binding occurrences | **33** for 2A, over 5 pages | `SettingsPage` 16 (bare — its DataContext *is* `GeneratorViewModel`), `IdeaToPromptPage` 10 + `IdeogramStructureEditorPage` 3 + `MutationEnginePage` 3 (all via `Generator.`, since those pages bind their own VM which exposes `public GeneratorViewModel? Generator`), `MainPage` 1 (`OpenOutputFolderCommand`). A further **7** `TokenProviders`/`SelectedTokenProvider` occurrences sit in `SettingsPage` and stay put (§11.4.4) |
 | ~~GalleryPage~~ | 0 | `GalleryPage.xaml:48` binds **`GalleryViewModel`'s own** `OpenOutputFolderCommand` (its own method at 377) — **must not be touched** |
-| Sibling-VM C# reads | **9** | `_generator?.OllamaModel` ×3, `.OllamaBaseUrl` ×2, `.ComfyUiBaseUrl` ×2, `.OllamaVisionModel` ×1, `.OpenRouterVisionModel` ×1 |
+| Sibling-VM C# reads | ~~9~~ → **0, done** | *Corrected 2026-11-17 (§11.8 item 2).* `_generator?.OllamaModel` ×3, `.OllamaBaseUrl` ×2, `.ComfyUiBaseUrl` ×2, `.OllamaVisionModel` ×1, `.OpenRouterVisionModel` ×1 no longer exist — `3e740db` (§12.2) resolved them through `GeneratorSettingsReader`: **5 reads, 1 file, 3 sibling VMs**. Phase 2 owes only that reader's `GeneratorViewModel?` parameter |
 | Page code-behind | **4** in scope | `EnsureOllamaModelsLoadedAsync` at `SettingsPage:26`, `IdeaToPromptPage:38`, `MutationEnginePage:27`, `IdeogramStructureEditorPage:57` |
 | Code-behind **not** in scope | 3 | `MainPage:211 LoadAllTokensAsync`, `MainPage:213 LoadSavedUiState` (both stay on the VM), `SettingsPage:55 SelectedTokenProvider` (Phase 2B) |
-| Tests | **53** → mostly isolated already | `GeneratorViewModelTests` 47 + `IdeaToPromptViewModelTests` 4 + `MutationEngineViewModelTests` 2; `IdeogramStructureEditorViewModelTests` 0. **Prep A (§12.1) already moved 17 settings tests into `GeneratorViewModelTests.Settings.cs`**, so this is now "move one 297-line file", not "reach across a 3,221-line fixture" |
+| Tests | **65** occurrences / **27** methods / **5** files | *Re-measured 2026-11-17, definition and traps in §11.8 item 8; the earlier 53 was unreproducible — no stated member list.* `GeneratorViewModelTests.Settings.cs` **50** (all 17 of its methods), `GeneratorViewModelTests.cs` **6** (3), `IdeaToPromptViewModelTests.cs` **4** (3), `MutationEngineViewModelTests.cs` **4** (3), `UiMarkupContractTests.cs` **1** (1); `IdeogramStructureEditorViewModelTests` **0**. Prep A (§12.1) already concentrated 17 of them into one file, so it is "edit one 297-line fixture + 4 refs elsewhere", not "reach across 3,221 lines" |
 | Tests **avoided** | 33 | `LoadSavedUiState` ×22 keeps its VM signature, `LoadAllTokensAsync` ×4 and the 7 `TokenProviders` refs are 2B → all untouched |
 | Markup-contract literals | **1** | `UiMarkupContractTests.cs:83` asserts `IsToggled="{Binding UseSageAttention, Mode=TwoWay}"` verbatim → part of the repath set, and it will fail **first** (exactly as Phase 1's 2 markup assertions did). The guard test in step 0 will not excuse it |
 
@@ -504,8 +504,9 @@ namespace, so no new `using` and no cycle.
    `Settings*` identifiers in the app are `SettingsPage` and `SettingsCategory`, and a
    `Generator.Settings.OllamaModel` path is unambiguous even in pages that reach it via
    `Generator.`. Alternative `AppSettings` if you prefer to avoid any echo of `SettingsPage`.
-2. **Repath the 9 sibling-VM reads + 4 code-behind calls** rather than leave read-through
-   properties on the VM (same "no shims" rule as Phase 1).
+2. **Repath the 4 code-behind calls** rather than leave read-through properties on the VM (same
+   "no shims" rule as Phase 1). *The sibling-VM half went with Prep B (§12.2); the only C# read path
+   left is `GeneratorSettingsReader`'s constructor.*
 3. **`OpenOutputFolderCommand` moves too** (region F) → 1 XAML repath in `MainPage.xaml`.
    Alternative: keep the command on the VM reading `Settings.OutputFolder` — saves 1 repath but
    leaves `OutputFolder` reached into from two owners. Recommend moving.
@@ -549,7 +550,8 @@ namespace, so no new `using` and no cycle.
    and removes "did I change an order?" from the review. Do it in place.
 3. Build app → expect 0 warnings; then the **33** XAML repaths **by script with per-name count
    assertions** (the Phase 1 script pattern), then re-run the guard test.
-4. Repath **9 + 4 + 53** C# references (script, per-name assertions).
+4. Repath **4** code-behind calls + **65** test occurrences over 27 methods (§11.3, scripted, with
+   per-name assertions).
 5. **Gates**: build 0 errors/0 warnings; `dotnet test` **1,417 passed, 0 failed** (same count —
    the guard test is generalized, not added).
 6. Manual WinUI smoke: Settings page — theme picker actually re-themes, ComfyUI URL + Ollama URL
@@ -610,7 +612,7 @@ catalog + capabilities (`LoadCachedCatalogAsync` 41, `ApplyWorkflowDefaultsForSe
 the capabilities/picker cluster is the riskiest because it is entangled with `Parameters`,
 `Capabilities` and 4 more suppress flags. The 21-param ctor is the last real smell.
 
-### 11.8 Measured update — Step 0 is done, and four numbers above have moved (2026-11-17)
+### 11.8 Measured update — Step 0 is done, and six numbers above have moved (2026-11-17)
 
 Everything in §11.1–§11.7 above is unchanged original text. This subsection is the delta, measured at
 `ab71fcc` on a green tree (**1,427 passed / 0 failed / 8 skipped**, app 0 warnings / 0 errors). Each
@@ -694,7 +696,33 @@ warns not to re-order; `GeneratorViewModelTests.Settings.cs` is inside that coll
 those tests stay serialised. An `AppSettingsCoordinatorTests` fixture written outside it would race
 the output-folder tests over the root override.
 
-**8. Provenance note.** §11.1–§11.7 were restored from a copy after an external save at 14:46
+**8. §11.3's "Tests 53" is now 65 occurrences / 27 methods / 5 files — the definition matters more than the number.**
+Counted case-sensitively as **standalone tokens** of exactly the moving members: `ComfyUiBaseUrl`,
+`UseSageAttention`, `FreeVramAfterRendering`, `AppThemeIndex`, `OllamaBaseUrl`,
+`OllamaModel`/`OllamaModels`, `OllamaVisionModel`/`OllamaVisionModels`,
+`OpenRouterVisionModel`/`OpenRouterVisionModels`, `OpenRouterVisionFreeOnly`,
+`OutputFolder`, `RefreshOllamaModelsCommand`, `RefreshOpenRouterVisionModelsCommand`,
+`BrowseOutputFolderCommand`, `OpenOutputFolderCommand`,
+`EnsureOllamaModelsLoadedAsync`. Three traps, all re-caught today:
+
+- **`rg -c` counts matching *lines* and matches *substrings***: **85** lines for
+  `GeneratorViewModelTests.Settings.cs`, and **15** files instead of 5. All 10 extra files are
+  innocent, and for one reason — they name the *store*, not the setting:
+  `UiStateStoreTests`, `ComfyUiImageGenerationServiceTests`,
+  `ComfyUiLoraServiceTests` and `ComfyUiVramServiceTests` say
+  `LoadComfyUiBaseUrl()` / `PersistComfyUiBaseUrl(...)`, an `IUiStateStore` API Phase 2
+  does not rename, and `OllamaModelCatalogTests` matches `OllamaModel` inside a type name.
+  §10 correction 5, third time.
+- **Commands are reached as `…Command`, never `…Async`, in tests** (6 + 2 + 1 = 9 refs; zero
+  `RefreshOllamaModelsAsync`). Counting only the `…Async` spelling — which is what the source
+  declares under `[RelayCommand]` — reports **0** and the repath looks free.
+  `OpenOutputFolder*` has **zero** test refs either way.
+- **Test method names embed member names** (9 of them: `RefreshOllamaModels_*` ×6,
+  `BrowseOutputFolder_*` ×2, `RefreshOpenRouterVisionModels_*` ×1) and are *not* member refs,
+  so they are outside the 65 — but a scripted rename that works on substrings will rewrite them too.
+  The honest edit-site count is "65 + whatever you decide to rename".
+
+**9. Provenance note.** §11.1–§11.7 were restored from a copy after an external save at 14:46
 reverted this untracked file; see §10 for the incident, and commit the file.
 
 ---
