@@ -2434,11 +2434,11 @@ public class GeneratorViewModelTests
         SetupModelSlotService(new ComfyUiModelSlot(ComfyUiLoaderKind.Checkpoint, "baked.safetensors"));
 
         SelectComfyWorkflow();
-        await _viewModel.RefreshBakedModelAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshBakedModelAsync(ComfyModelId);
 
-        _viewModel.SupportsCheckpoint.Should().BeTrue();
-        _viewModel.BakedModelName.Should().Be("baked.safetensors");
-        _viewModel.CheckpointLabel.Should().Be("Checkpoint");
+        _viewModel.ComfyUi.SupportsCheckpoint.Should().BeTrue();
+        _viewModel.ComfyUi.BakedModelName.Should().Be("baked.safetensors");
+        _viewModel.ComfyUi.CheckpointLabel.Should().Be("Checkpoint");
         _viewModel.Parameters.ComfyUiModelDisplay.Should().Be("baked.safetensors",
             "the job card and metadata report which model produced the image");
     }
@@ -2449,11 +2449,11 @@ public class GeneratorViewModelTests
         SetupModelSlotService(new ComfyUiModelSlot(ComfyUiLoaderKind.Unet, "ideogram4_fp8_scaled.safetensors"));
 
         SelectComfyWorkflow();
-        await _viewModel.RefreshBakedModelAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshBakedModelAsync(ComfyModelId);
 
-        _viewModel.SupportsCheckpoint.Should().BeTrue();
-        _viewModel.CheckpointLabel.Should().Be("Diffusion model");
-        _viewModel.BakedModelName.Should().Be("ideogram4_fp8_scaled.safetensors");
+        _viewModel.ComfyUi.SupportsCheckpoint.Should().BeTrue();
+        _viewModel.ComfyUi.CheckpointLabel.Should().Be("Diffusion model");
+        _viewModel.ComfyUi.BakedModelName.Should().Be("ideogram4_fp8_scaled.safetensors");
     }
 
     [Fact]
@@ -2464,10 +2464,10 @@ public class GeneratorViewModelTests
         SetupModelSlotService(null);
 
         SelectComfyWorkflow();
-        await _viewModel.RefreshBakedModelAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshBakedModelAsync(ComfyModelId);
 
-        _viewModel.SupportsCheckpoint.Should().BeFalse();
-        _viewModel.BakedModelName.Should().BeEmpty();
+        _viewModel.ComfyUi.SupportsCheckpoint.Should().BeFalse();
+        _viewModel.ComfyUi.BakedModelName.Should().BeEmpty();
         _viewModel.Parameters.ComfyUiModelDisplay.Should().BeEmpty();
     }
 
@@ -2476,15 +2476,15 @@ public class GeneratorViewModelTests
     {
         SetupModelSlotService(new ComfyUiModelSlot(ComfyUiLoaderKind.Unet, "ideogram4_fp8_scaled.safetensors"));
         SelectComfyWorkflow();
-        await _viewModel.RefreshBakedModelAsync(ComfyModelId);
-        _viewModel.CheckpointLabel.Should().Be("Diffusion model");
+        await _viewModel.ComfyUi.RefreshBakedModelAsync(ComfyModelId);
+        _viewModel.ComfyUi.CheckpointLabel.Should().Be("Diffusion model");
 
         SelectIdeogramTurbo();
-        await _viewModel.RefreshBakedModelAsync(ModelConstants.Ideogram.V4Turbo);
+        await _viewModel.ComfyUi.RefreshBakedModelAsync(ModelConstants.Ideogram.V4Turbo);
 
-        _viewModel.SupportsCheckpoint.Should().BeFalse();
-        _viewModel.CheckpointLabel.Should().Be("Checkpoint");
-        _viewModel.BakedModelName.Should().BeEmpty();
+        _viewModel.ComfyUi.SupportsCheckpoint.Should().BeFalse();
+        _viewModel.ComfyUi.CheckpointLabel.Should().Be("Checkpoint");
+        _viewModel.ComfyUi.BakedModelName.Should().BeEmpty();
         _viewModel.Parameters.ComfyUiModelDisplay.Should().BeEmpty(
             "a stale model name must not linger in Clone() snapshots of other models");
     }
@@ -2507,12 +2507,12 @@ public class GeneratorViewModelTests
         SetupPresetService(SamplePresetSlot());
 
         SelectComfyWorkflow();
-        await _viewModel.RefreshQualityPresetOptionsAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshQualityPresetOptionsAsync(ComfyModelId);
 
-        _viewModel.SupportsQualityPreset.Should().BeTrue();
+        _viewModel.ComfyUi.SupportsQualityPreset.Should().BeTrue();
         // The baked choice leads and its duplicate among the options is removed.
-        _viewModel.QualityPresetOptions.Should().Equal("Default", "Quality", "Turbo");
-        _viewModel.SelectedQualityPreset.Should().Be("Default");
+        _viewModel.ComfyUi.QualityPresetOptions.Should().Equal("Default", "Quality", "Turbo");
+        _viewModel.ComfyUi.SelectedQualityPreset.Should().Be("Default");
         _viewModel.Parameters.ComfyUiPreset.Should().BeEmpty("the baked selection means no patch");
         _viewModel.Parameters.ComfyUiPresetDisplay.Should().Be("Default",
             "the display field records the resolved preset even for the baked default");
@@ -2526,10 +2526,10 @@ public class GeneratorViewModelTests
         SetupPresetService(null);
 
         SelectComfyWorkflow();
-        await _viewModel.RefreshQualityPresetOptionsAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshQualityPresetOptionsAsync(ComfyModelId);
 
-        _viewModel.SupportsQualityPreset.Should().BeFalse();
-        _viewModel.QualityPresetOptions.Should().BeEmpty();
+        _viewModel.ComfyUi.SupportsQualityPreset.Should().BeFalse();
+        _viewModel.ComfyUi.QualityPresetOptions.Should().BeEmpty();
         _viewModel.Parameters.ComfyUiPreset.Should().BeEmpty();
     }
 
@@ -2538,15 +2538,15 @@ public class GeneratorViewModelTests
     {
         SetupPresetService(SamplePresetSlot());
         SelectComfyWorkflow();
-        await _viewModel.RefreshQualityPresetOptionsAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshQualityPresetOptionsAsync(ComfyModelId);
 
-        _viewModel.SelectedQualityPreset = "Turbo";
+        _viewModel.ComfyUi.SelectedQualityPreset = "Turbo";
 
         _viewModel.Parameters.ComfyUiPreset.Should().Be("Turbo");
         _viewModel.Parameters.ComfyUiPresetDisplay.Should().Be("Turbo");
         _mockUiStateStore.Verify(s => s.PersistComfyUiPreset("Turbo", ComfyWorkflowName), Times.Once);
 
-        _viewModel.SelectedQualityPreset = "Default";
+        _viewModel.ComfyUi.SelectedQualityPreset = "Default";
 
         _viewModel.Parameters.ComfyUiPreset.Should().BeEmpty("re-picking the baked choice means no patch again");
         _viewModel.Parameters.ComfyUiPresetDisplay.Should().Be("Default",
@@ -2560,18 +2560,18 @@ public class GeneratorViewModelTests
         _mockUiStateStore.Setup(s => s.LoadComfyUiPreset(ComfyWorkflowName)).Returns("Turbo");
 
         SelectComfyWorkflow();
-        await _viewModel.RefreshQualityPresetOptionsAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshQualityPresetOptionsAsync(ComfyModelId);
 
-        _viewModel.SelectedQualityPreset.Should().Be("Turbo");
+        _viewModel.ComfyUi.SelectedQualityPreset.Should().Be("Turbo");
         _viewModel.Parameters.ComfyUiPreset.Should().Be("Turbo");
         // The restore is programmatic, not a user pick — it must not re-persist.
         _mockUiStateStore.Verify(s => s.PersistComfyUiPreset(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
 
         // A saved label the workflow no longer offers must never be invented into the selection.
         _mockUiStateStore.Setup(s => s.LoadComfyUiPreset(ComfyWorkflowName)).Returns("Vanished");
-        await _viewModel.RefreshQualityPresetOptionsAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshQualityPresetOptionsAsync(ComfyModelId);
 
-        _viewModel.SelectedQualityPreset.Should().Be("Default");
+        _viewModel.ComfyUi.SelectedQualityPreset.Should().Be("Default");
         _viewModel.Parameters.ComfyUiPreset.Should().BeEmpty();
     }
 
@@ -2580,14 +2580,14 @@ public class GeneratorViewModelTests
     {
         SetupPresetService(SamplePresetSlot());
         SelectComfyWorkflow();
-        await _viewModel.RefreshQualityPresetOptionsAsync(ComfyModelId);
-        _viewModel.SelectedQualityPreset = "Turbo";
+        await _viewModel.ComfyUi.RefreshQualityPresetOptionsAsync(ComfyModelId);
+        _viewModel.ComfyUi.SelectedQualityPreset = "Turbo";
 
         SelectIdeogramTurbo();
-        await _viewModel.RefreshQualityPresetOptionsAsync(ModelConstants.Ideogram.V4Turbo);
+        await _viewModel.ComfyUi.RefreshQualityPresetOptionsAsync(ModelConstants.Ideogram.V4Turbo);
 
-        _viewModel.SupportsQualityPreset.Should().BeFalse();
-        _viewModel.QualityPresetOptions.Should().BeEmpty();
+        _viewModel.ComfyUi.SupportsQualityPreset.Should().BeFalse();
+        _viewModel.ComfyUi.QualityPresetOptions.Should().BeEmpty();
         _viewModel.Parameters.ComfyUiPreset.Should().BeEmpty(
             "a stale preset must not linger in Clone() snapshots of other models");
         _viewModel.Parameters.ComfyUiPresetDisplay.Should().BeEmpty(
@@ -2599,11 +2599,11 @@ public class GeneratorViewModelTests
     {
         SetupPresetService(SamplePresetSlot());
         SelectComfyWorkflow();
-        await _viewModel.RefreshQualityPresetOptionsAsync(ComfyModelId);
-        _viewModel.SelectedQualityPreset = "Turbo";
+        await _viewModel.ComfyUi.RefreshQualityPresetOptionsAsync(ComfyModelId);
+        _viewModel.ComfyUi.SelectedQualityPreset = "Turbo";
 
         // The WinUI ComboBox pushes SelectedItem=null on ItemsSource swaps.
-        _viewModel.SelectedQualityPreset = null;
+        _viewModel.ComfyUi.SelectedQualityPreset = null;
 
         _viewModel.Parameters.ComfyUiPreset.Should().Be("Turbo",
             "a platform null push is a binding artifact, never a user pick");
@@ -2629,30 +2629,30 @@ public class GeneratorViewModelTests
         SetupKrea2Loras(@"Krea2\portrait.safetensors", "style.safetensors");
         SelectComfyWorkflow();
 
-        await _viewModel.RefreshKrea2LoraOptionsAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshKrea2LoraOptionsAsync(ComfyModelId);
 
-        _viewModel.SupportsKrea2Lora.Should().BeTrue();
-        _viewModel.Krea2LoraOptions.Should().Equal(
-            GeneratorViewModel.NoKrea2LoraOption,
+        _viewModel.ComfyUi.SupportsKrea2Lora.Should().BeTrue();
+        _viewModel.ComfyUi.Krea2LoraOptions.Should().Equal(
+            ComfyUiWorkflowCoordinator.NoKrea2LoraOption,
             @"Krea2\portrait.safetensors", "style.safetensors");
-        _viewModel.SelectedKrea2Lora.Should().Be(GeneratorViewModel.NoKrea2LoraOption);
+        _viewModel.ComfyUi.SelectedKrea2Lora.Should().Be(ComfyUiWorkflowCoordinator.NoKrea2LoraOption);
         _viewModel.Parameters.ComfyUiLora.Should().BeEmpty();
 
-        _viewModel.SelectedKrea2Lora = @"Krea2\portrait.safetensors";
+        _viewModel.ComfyUi.SelectedKrea2Lora = @"Krea2\portrait.safetensors";
 
-        _viewModel.IsKrea2LoraSelected.Should().BeTrue();
+        _viewModel.ComfyUi.IsKrea2LoraSelected.Should().BeTrue();
         _viewModel.Parameters.ComfyUiLora.Should().Be(@"Krea2\portrait.safetensors");
         _viewModel.Parameters.ComfyUiLoraDisplay.Should().Be(@"Krea2\portrait.safetensors");
         _mockUiStateStore.Verify(s => s.PersistComfyUiLora(
             @"Krea2\portrait.safetensors", ComfyWorkflowName), Times.Once);
 
-        _viewModel.SelectedKrea2Lora = GeneratorViewModel.NoKrea2LoraOption;
+        _viewModel.ComfyUi.SelectedKrea2Lora = ComfyUiWorkflowCoordinator.NoKrea2LoraOption;
 
-        _viewModel.IsKrea2LoraSelected.Should().BeFalse();
+        _viewModel.ComfyUi.IsKrea2LoraSelected.Should().BeFalse();
         _viewModel.Parameters.ComfyUiLora.Should().BeEmpty();
         _viewModel.Parameters.ComfyUiLoraDisplay.Should().BeEmpty();
         _mockUiStateStore.Verify(s => s.PersistComfyUiLora(
-            GeneratorViewModel.NoKrea2LoraOption, ComfyWorkflowName), Times.Once);
+            ComfyUiWorkflowCoordinator.NoKrea2LoraOption, ComfyWorkflowName), Times.Once);
     }
 
     [Fact]
@@ -2663,18 +2663,18 @@ public class GeneratorViewModelTests
             .Returns("saved.safetensors");
         SelectComfyWorkflow();
 
-        await _viewModel.RefreshKrea2LoraOptionsAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshKrea2LoraOptionsAsync(ComfyModelId);
 
-        _viewModel.SelectedKrea2Lora.Should().Be("saved.safetensors");
+        _viewModel.ComfyUi.SelectedKrea2Lora.Should().Be("saved.safetensors");
         _viewModel.Parameters.ComfyUiLora.Should().Be("saved.safetensors");
         _mockUiStateStore.Verify(
             s => s.PersistComfyUiLora(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
 
         _mockUiStateStore.Setup(s => s.LoadComfyUiLora(ComfyWorkflowName))
             .Returns("removed.safetensors");
-        _viewModel.SelectedKrea2Lora = GeneratorViewModel.NoKrea2LoraOption;
-        await _viewModel.RefreshKrea2LoraOptionsAsync(ComfyModelId);
-        _viewModel.SelectedKrea2Lora.Should().Be(GeneratorViewModel.NoKrea2LoraOption);
+        _viewModel.ComfyUi.SelectedKrea2Lora = ComfyUiWorkflowCoordinator.NoKrea2LoraOption;
+        await _viewModel.ComfyUi.RefreshKrea2LoraOptionsAsync(ComfyModelId);
+        _viewModel.ComfyUi.SelectedKrea2Lora.Should().Be(ComfyUiWorkflowCoordinator.NoKrea2LoraOption);
         _viewModel.Parameters.ComfyUiLora.Should().BeEmpty();
     }
 
@@ -2686,9 +2686,9 @@ public class GeneratorViewModelTests
             .Returns("None");
         SelectComfyWorkflow();
 
-        await _viewModel.RefreshKrea2LoraOptionsAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshKrea2LoraOptionsAsync(ComfyModelId);
 
-        _viewModel.SelectedKrea2Lora.Should().Be(GeneratorViewModel.NoKrea2LoraOption);
+        _viewModel.ComfyUi.SelectedKrea2Lora.Should().Be(ComfyUiWorkflowCoordinator.NoKrea2LoraOption);
         _viewModel.Parameters.ComfyUiLora.Should().BeEmpty();
     }
 
@@ -2700,10 +2700,10 @@ public class GeneratorViewModelTests
             .ReturnsAsync(false);
         SelectComfyWorkflow();
 
-        await _viewModel.RefreshKrea2LoraOptionsAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshKrea2LoraOptionsAsync(ComfyModelId);
 
-        _viewModel.SupportsKrea2Lora.Should().BeFalse();
-        _viewModel.Krea2LoraOptions.Should().BeEmpty();
+        _viewModel.ComfyUi.SupportsKrea2Lora.Should().BeFalse();
+        _viewModel.ComfyUi.Krea2LoraOptions.Should().BeEmpty();
         _mockLoraService.Verify(s => s.GetLoraNamesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -2739,13 +2739,13 @@ public class GeneratorViewModelTests
         _mockUiStateStore.Setup(s => s.LoadComfyUiUpscaleFactor(UpscaleWorkflowName)).Returns("1.5");
         SelectComfyWorkflow();
 
-        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshUpscaleOptionAsync(ComfyModelId);
 
         _viewModel.Parameters.UpscaleAfterRender.Should().BeFalse();
-        _viewModel.SelectedUpscaleFactor.Should().Be("1.5×", "the saved pick is still restored");
+        _viewModel.ComfyUi.SelectedUpscaleFactor.Should().Be("1.5×", "the saved pick is still restored");
         _viewModel.Parameters.ComfyUiUpscaleFactor.Should().BeNull(
             "this render upscales nothing, so its metadata must not claim UpscaleBy: 1.5");
-        _viewModel.IsUpscaleFactorVisible.Should().BeFalse(
+        _viewModel.ComfyUi.IsUpscaleFactorVisible.Should().BeFalse(
             "an editable factor with no workflow to patch is a dead control");
         _mockUiStateStore.Verify(
             s => s.PersistComfyUiUpscaleFactor(It.IsAny<string>(), It.IsAny<string>()), Times.Never,
@@ -2758,16 +2758,16 @@ public class GeneratorViewModelTests
         SetupUpscaleChain();
         _mockUiStateStore.Setup(s => s.LoadComfyUiUpscaleFactor(UpscaleWorkflowName)).Returns("1.5");
         SelectComfyWorkflow();
-        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshUpscaleOptionAsync(ComfyModelId);
 
         _viewModel.Parameters.UpscaleAfterRender = true;
         _viewModel.Parameters.ComfyUiUpscaleFactor.Should().Be(1.5,
             "the chained upscale pass is what gets patched, so the factor is now in force");
-        _viewModel.IsUpscaleFactorVisible.Should().BeTrue();
+        _viewModel.ComfyUi.IsUpscaleFactorVisible.Should().BeTrue();
 
         _viewModel.Parameters.UpscaleAfterRender = false;
         _viewModel.Parameters.ComfyUiUpscaleFactor.Should().BeNull();
-        _viewModel.SelectedUpscaleFactor.Should().Be("1.5×",
+        _viewModel.ComfyUi.SelectedUpscaleFactor.Should().Be("1.5×",
             "unchecking disarms the factor but must not forget the user's pick");
     }
 
@@ -2776,9 +2776,9 @@ public class GeneratorViewModelTests
     {
         SetupUpscaleChain();
         SelectComfyWorkflow();
-        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshUpscaleOptionAsync(ComfyModelId);
 
-        _viewModel.SelectedUpscaleFactor = "3×";
+        _viewModel.ComfyUi.SelectedUpscaleFactor = "3×";
         _viewModel.Parameters.ComfyUiUpscaleFactor.Should().BeNull();
         _mockUiStateStore.Verify(s => s.PersistComfyUiUpscaleFactor("3", UpscaleWorkflowName), Times.Once,
             "an explicit pick persists even while it is inert");
@@ -2793,10 +2793,10 @@ public class GeneratorViewModelTests
         SetupUpscaleChain(bakedFactor: 2.0);
         _mockUiStateStore.Setup(s => s.LoadComfyUiUpscaleFactor(UpscaleWorkflowName)).Returns("3");
         SelectComfyWorkflow();
-        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshUpscaleOptionAsync(ComfyModelId);
         _viewModel.Parameters.UpscaleAfterRender = true;
 
-        _viewModel.SelectedUpscaleFactor = "2×";
+        _viewModel.ComfyUi.SelectedUpscaleFactor = "2×";
 
         _viewModel.Parameters.ComfyUiUpscaleFactor.Should().BeNull(
             "the baked value means no patch — same sentinel convention as the preset picker");
@@ -2810,12 +2810,12 @@ public class GeneratorViewModelTests
         _mockUiStateStore.Setup(s => s.LoadComfyUiUpscaleFactor(ComfyWorkflowName)).Returns("1.5");
         SelectComfyWorkflow();
 
-        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshUpscaleOptionAsync(ComfyModelId);
 
         _viewModel.Parameters.UpscaleAfterRender.Should().BeFalse();
         _viewModel.Parameters.ComfyUiUpscaleFactor.Should().Be(1.5,
             "the render itself is what gets patched, so no chain has to be running");
-        _viewModel.IsUpscaleFactorVisible.Should().BeTrue();
+        _viewModel.ComfyUi.IsUpscaleFactorVisible.Should().BeTrue();
     }
 
     [Fact]
@@ -2825,9 +2825,9 @@ public class GeneratorViewModelTests
         SetupOwnUpscaleSlot(2.0);
         SelectComfyWorkflow();
 
-        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshUpscaleOptionAsync(ComfyModelId);
 
-        _viewModel.SelectedUpscaleFactor.Should().Be("2×");
+        _viewModel.ComfyUi.SelectedUpscaleFactor.Should().Be("2×");
         _viewModel.Parameters.ComfyUiUpscaleFactor.Should().BeNull();
     }
 
@@ -2837,19 +2837,19 @@ public class GeneratorViewModelTests
         SetupOwnUpscaleSlot(2.0);
         _mockUiStateStore.Setup(s => s.LoadComfyUiUpscaleFactor(ComfyWorkflowName)).Returns("1.5");
         SelectComfyWorkflow();
-        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshUpscaleOptionAsync(ComfyModelId);
         _viewModel.Parameters.ComfyUiUpscaleFactor.Should().Be(1.5);
 
-        await _viewModel.RefreshUpscaleOptionAsync(ModelConstants.Flux.Pro11);
+        await _viewModel.ComfyUi.RefreshUpscaleOptionAsync(ModelConstants.Flux.Pro11);
 
         _viewModel.Parameters.ComfyUiUpscaleFactor.Should().BeNull(
             "a stale factor must not ride into another model's Clone() snapshot");
-        _viewModel.SupportsUpscaleFactor.Should().BeFalse();
-        _viewModel.IsUpscaleFactorVisible.Should().BeFalse();
-        _viewModel.SelectedUpscaleFactor.Should().BeNull();
+        _viewModel.ComfyUi.SupportsUpscaleFactor.Should().BeFalse();
+        _viewModel.ComfyUi.IsUpscaleFactorVisible.Should().BeFalse();
+        _viewModel.ComfyUi.SelectedUpscaleFactor.Should().BeNull();
 
         // Back to the workflow: the persisted pick is restored, not lost with the intent.
-        await _viewModel.RefreshUpscaleOptionAsync(ComfyModelId);
+        await _viewModel.ComfyUi.RefreshUpscaleOptionAsync(ComfyModelId);
         _viewModel.Parameters.ComfyUiUpscaleFactor.Should().Be(1.5);
     }
 

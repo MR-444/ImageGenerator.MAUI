@@ -236,9 +236,9 @@
                                  workflow file IS the model choice (one provider entry per file),
                                  so there is nothing to pick here; label switches by loader kind
                                  (checkpoint vs UNETLoader diffusion model). -->
-                            <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsCheckpoint}">
-                                <Label Text="{Binding CheckpointLabel}" Style="{StaticResource FieldLabel}" />
-                                <Label Text="{Binding BakedModelName}"
+                            <VerticalStackLayout Spacing="4" IsVisible="{Binding ComfyUi.SupportsCheckpoint}">
+                                <Label Text="{Binding ComfyUi.CheckpointLabel}" Style="{StaticResource FieldLabel}" />
+                                <Label Text="{Binding ComfyUi.BakedModelName}"
                                        LineBreakMode="TailTruncation"
                                        MaximumWidthRequest="320"
                                        HorizontalOptions="Start"
@@ -249,10 +249,10 @@
                                  node. Options come from the file itself (option1..option4); first
                                  entry is the baked-in choice = no patch. Binds the VM-level
                                  SelectedQualityPreset, never Parameters directly. -->
-                            <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsQualityPreset}">
+                            <VerticalStackLayout Spacing="4" IsVisible="{Binding ComfyUi.SupportsQualityPreset}">
                                 <Label Text="Preset" Style="{StaticResource FieldLabel}" />
-                                <Picker ItemsSource="{Binding QualityPresetOptions}"
-                                        SelectedItem="{Binding SelectedQualityPreset}"
+                                <Picker ItemsSource="{Binding ComfyUi.QualityPresetOptions}"
+                                        SelectedItem="{Binding ComfyUi.SelectedQualityPreset}"
                                         MaximumWidthRequest="320"
                                         HorizontalOptions="Start"
                                         AutomationId="QualityPresetPicker" />
@@ -261,29 +261,29 @@
                             <!-- Krea-2 ComfyUI workflows only. Names come from the configured
                                  host's /models/loras catalog and are injected at queue time via
                                  the built-in LoraLoaderModelOnly node; workflow files stay clean. -->
-                            <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsKrea2Lora}">
+                            <VerticalStackLayout Spacing="4" IsVisible="{Binding ComfyUi.SupportsKrea2Lora}">
                                 <Label Text="LoRA" Style="{StaticResource FieldLabel}" />
                                 <HorizontalStackLayout Spacing="8">
-                                    <Picker ItemsSource="{Binding Krea2LoraOptions}"
-                                            SelectedItem="{Binding SelectedKrea2Lora}"
-                                            IsEnabled="{Binding IsLoadingKrea2Loras, Converter={StaticResource InverseBool}}"
+                                    <Picker ItemsSource="{Binding ComfyUi.Krea2LoraOptions}"
+                                            SelectedItem="{Binding ComfyUi.SelectedKrea2Lora}"
+                                            IsEnabled="{Binding ComfyUi.IsLoadingKrea2Loras, Converter={StaticResource InverseBool}}"
                                             MaximumWidthRequest="320"
                                             HorizontalOptions="Start"
                                             AutomationId="Krea2LoraPicker" />
                                     <Button Text="Refresh"
-                                            Command="{Binding RefreshKrea2LorasCommand}"
-                                            IsEnabled="{Binding IsLoadingKrea2Loras, Converter={StaticResource InverseBool}}"
+                                            Command="{Binding ComfyUi.RefreshKrea2LorasCommand}"
+                                            IsEnabled="{Binding ComfyUi.IsLoadingKrea2Loras, Converter={StaticResource InverseBool}}"
                                             Style="{StaticResource SecondaryButton}"
                                             AutomationId="RefreshKrea2LorasButton" />
-                                    <ActivityIndicator IsRunning="{Binding IsLoadingKrea2Loras}"
-                                                       IsVisible="{Binding IsLoadingKrea2Loras}"
+                                    <ActivityIndicator IsRunning="{Binding ComfyUi.IsLoadingKrea2Loras}"
+                                                       IsVisible="{Binding ComfyUi.IsLoadingKrea2Loras}"
                                                        VerticalOptions="Center" />
                                 </HorizontalStackLayout>
-                                <Label Text="{Binding Krea2LoraStatusText}"
+                                <Label Text="{Binding ComfyUi.Krea2LoraStatusText}"
                                        Style="{StaticResource HelperText}"
-                                       IsVisible="{Binding Krea2LoraStatusText, Converter={StaticResource NonEmptyStringToBool}}" />
+                                       IsVisible="{Binding ComfyUi.Krea2LoraStatusText, Converter={StaticResource NonEmptyStringToBool}}" />
 
-                                <VerticalStackLayout Spacing="2" IsVisible="{Binding IsKrea2LoraSelected}">
+                                <VerticalStackLayout Spacing="2" IsVisible="{Binding ComfyUi.IsKrea2LoraSelected}">
                                     <Label Text="{Binding Parameters.ComfyUiLoraStrength, StringFormat='LoRA strength: {0:F2}'}"
                                            Style="{StaticResource HelperText}" />
                                     <Slider Minimum="-2" Maximum="2"
@@ -297,13 +297,13 @@
                             <!-- ComfyUI only: chain the finished render into the designated
                                  upscale workflow (LoadImage-bearing, "upscale" in the file
                                  name). Both images are kept; the upscaled one gets _upscaled. -->
-                            <VerticalStackLayout Spacing="2" IsVisible="{Binding SupportsUpscaleAfter}">
+                            <VerticalStackLayout Spacing="2" IsVisible="{Binding ComfyUi.SupportsUpscaleAfter}">
                                 <HorizontalStackLayout Spacing="8">
                                     <CheckBox IsChecked="{Binding Parameters.UpscaleAfterRender}" VerticalOptions="Center"
                                               AutomationId="UpscaleAfterRenderCheckBox" />
                                     <Label Text="Upscale after render" VerticalOptions="Center" />
                                 </HorizontalStackLayout>
-                                <Label Text="{Binding UpscaleWorkflowDisplay}"
+                                <Label Text="{Binding ComfyUi.UpscaleWorkflowDisplay}"
                                        Style="{StaticResource HelperText}"
                                        AutomationId="UpscaleWorkflowLabel" />
                             </VerticalStackLayout>
@@ -313,10 +313,10 @@
                                  option = the workflow's baked value = no patch. Hidden while the
                                  slot lives in the chain workflow and the chain is off, because
                                  then the factor can change nothing. -->
-                            <VerticalStackLayout Spacing="4" IsVisible="{Binding IsUpscaleFactorVisible}">
+                            <VerticalStackLayout Spacing="4" IsVisible="{Binding ComfyUi.IsUpscaleFactorVisible}">
                                 <Label Text="Upscale factor" Style="{StaticResource FieldLabel}" />
-                                <Picker ItemsSource="{Binding UpscaleFactorOptions}"
-                                        SelectedItem="{Binding SelectedUpscaleFactor}"
+                                <Picker ItemsSource="{Binding ComfyUi.UpscaleFactorOptions}"
+                                        SelectedItem="{Binding ComfyUi.SelectedUpscaleFactor}"
                                         MaximumWidthRequest="140"
                                         HorizontalOptions="Start"
                                         AutomationId="UpscaleFactorPicker" />
