@@ -81,4 +81,13 @@ public sealed partial class TokenProviderViewModel : ObservableObject
             _suspendCallbacks = false;
         }
     }
+
+    /// <summary>
+    /// Re-applies the current value to the host without touching secure storage. Called by the host
+    /// when it replaces the whole parameters object: the row still shows this value (and the user
+    /// expects it to be in force), so the new instance has to carry it — otherwise the slot is
+    /// empty, generation refuses with "API Token missing", and nothing pushes again until the user
+    /// re-pastes a token they already pasted.
+    /// </summary>
+    public void PushToParameters() => _syncToParameters(Value);
 }

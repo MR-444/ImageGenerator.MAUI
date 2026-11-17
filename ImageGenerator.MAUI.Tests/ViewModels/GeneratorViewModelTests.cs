@@ -743,6 +743,44 @@ public partial class GeneratorViewModelTests
         _viewModel.Parameters.ApiToken.Should().Be("fresh-token");
     }
 
+    // The token rows hold what the user can see; Parameters holds what the services read, and a row
+    // pushes into it. Replacing the whole instance therefore has to re-seed both slots from the
+    // rows, or the picker still shows a token while generation refuses with "API Token missing".
+    // Nothing swaps the instance today (Remix restores into the live one, pinned just below), but
+    // AttachParameters + OnParametersChanged exist exactly to support a swap, so a swap must not be
+    // able to lose credentials quietly.
+    [Fact]
+    public void Parameters_WhenInstanceIsReplaced_SeedsBothTokenSlotsFromTheRows()
+    {
+        _viewModel.TokenProviders.Single(p => p.Key == "replicate").Value = "fresh-token";
+        _viewModel.TokenProviders.Single(p => p.Key == "pollinations").Value = "poll-token";
+
+        _viewModel.Parameters = new ImageGenerationParameters { Model = ModelConstants.Flux.Pro11 };
+
+        _viewModel.Parameters.ApiToken.Should().Be("fresh-token",
+            "the row is the truth the picker shows, and a bare new instance starts with an empty slot");
+        _viewModel.Parameters.PollinationsApiToken.Should().Be("poll-token");
+    }
+
+    // The other half of the same contract: the recipe path. A saved image carries settings, never
+    // credentials, so restoring it must leave a pasted token in place.
+    [Fact]
+    public async Task RemixFromImage_KeepsThePastedApiToken()
+    {
+        const string path = @"C:\fake\flux-remix-token.png";
+        _viewModel.TokenProviders.Single(p => p.Key == "replicate").Value = "keep-me";
+        StubRecipe(path,
+            ("Prompt", "a remix prompt"),
+            ("ModelName", ModelConstants.Flux.Pro11),
+            ("Seed", "5"));
+
+        await _viewModel.RemixFromImageAsync(path);
+
+        _viewModel.Parameters.Prompt.Should().Be("a remix prompt"); // the remix really ran
+        _viewModel.Parameters.ApiToken.Should().Be("keep-me",
+            "remixing an image must not send the user off to paste the token again");
+    }
+
     [Fact]
     public void TokenProvider_PollinationsValueChange_PersistsToPollinationsStore()
     {

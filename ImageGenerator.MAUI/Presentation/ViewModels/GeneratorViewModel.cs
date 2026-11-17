@@ -546,6 +546,11 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     partial void OnParametersChanged(ImageGenerationParameters value)
     {
         AttachParameters(value);
+        // A replacement instance arrives with empty token slots while every token row still shows —
+        // and validates against — its stored value, so re-seed from the rows before revalidating.
+        // Without this, swapping Parameters silently turns into "API Token missing" with a token
+        // visibly in the box: the rows push on change only, so nothing else would ever fill them.
+        foreach (var provider in TokenProviders) provider.PushToParameters();
         UpdateCustomAspectRatio(value.AspectRatio);
         ValidateParameters();
         ProviderFilter.SyncSelectionFromParameters(value.Model);
@@ -873,7 +878,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         // ComfyUI workflow probing/ownership. Constructed before ProviderFilter because
         // RefreshCapabilities (which drives ComfyUi.RefreshForModel) is reachable from the
         // provider's selection callback. All collaborators are read through delegates: the
-        // parameters instance can be swapped later (Remix), so nothing is captured by value.
+        // parameters instance is replaceable through its property (a replacement also re-seeds the
+        // token slots — see OnParametersChanged), so no owner may pin the instance by value.
         ComfyUi = new ComfyUiWorkflowCoordinator(
             checkpointService: checkpointService,
             uiStateStore: uiStateStore,
@@ -924,24 +930,27 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         ValidateParameters();
 
         // Build the tabbed token list. Order = display order in the Picker. Each entry's
-        // syncToParameters callback writes to the right parameters field so service code
+        // syncToParameters callback writes to the right parameters slot so service code
         // (ReplicateImageGenerationService.parameters.ApiToken,
         // PollinationsImageGenerationService.parameters.PollinationsApiToken) keeps reading
-        // its own slot.
+        // its own slot. Written through the Parameters property, never the _parameters field: the
+        // property is the single access funnel for the instance, and a callback that pinned the
+        // instance (or wrote the field behind OnParametersChanged) would keep working while writing
+        // somewhere nobody re-seeds or revalidates — see OnParametersChanged.
         TokenProviders.Add(new TokenProviderViewModel(
             key: "replicate",
             displayName: "Replicate",
             placeholder: "Paste your Replicate API token…",
             helperText: "Required for Replicate-hosted models (Flux, GPT, Nano Banana). Stored in OS secure storage.",
             store: _tokenStore,
-            syncToParameters: v => _parameters.ApiToken = v));
+            syncToParameters: v => Parameters.ApiToken = v));
         TokenProviders.Add(new TokenProviderViewModel(
             key: "pollinations",
             displayName: "Pollinations",
             placeholder: "Paste your Pollinations token (optional)…",
             helperText: "Optional. Anonymous mode is rate-limited (1 req / 15 s). Register at auth.pollinations.ai for higher limits.",
             store: _pollinationsTokenStore,
-            syncToParameters: v => _parameters.PollinationsApiToken = v));
+            syncToParameters: v => Parameters.PollinationsApiToken = v));
         // No parameters slot: the ComfyUI services read the store directly per run (the
         // checkpoint fetch has no ImageGenerationParameters at all), and ComfyUI must stay
         // tokenless for validation — see TokenlessModel.
