@@ -74,6 +74,73 @@ public class ReplicateImageGenerationServiceTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// A rejected payload is the one failure whose fix Replicate writes down, and it writes it in
+    /// the response body. The label has to carry the field and the accepted values, not the JSON.
+    /// </summary>
+    [Fact]
+    public async Task GenerateImageAsync_InputRejected_SurfacesTheFieldInsteadOfTheBody()
+    {
+        const string body =
+            """
+            {"detail":"- input.aspect_ratio: aspect_ratio must be one of the following: \"1:1\", \"3:2\"\n","status":422,"title":"Input validation failed","invalid_fields":[{"type":"enum","field":"input.aspect_ratio","description":"aspect_ratio must be one of the following: \"1:1\", \"3:2\""}]}
+            """;
+        _mockReplicateApi
+            .Setup(x => x.CreatePredictionAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ReplicatePredictionRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(await Rejected(422, body));
+
+        var result = await _service.GenerateImageAsync(new ImageGenerationParameters
+        {
+            Model = "openai/gpt-image-2.6-sunburst",
+            Prompt = "x",
+            ApiToken = "test-token"
+        });
+
+        result.ImageData.Should().BeNull();
+        result.Message.Should().NotBeNull();
+        result.Message.Should().StartWith("HTTP 422: Input validation failed:")
+            .And.Contain("aspect_ratio").And.Contain(@"""1:1""");
+        // The whole point: the status label stops being a JSON dump.
+        result.Message.Should().NotContain("invalid_fields");
+    }
+
+    /// <summary>The token never reaches the body today; it must still never come back out of the
+    /// summarising path, which rebuilds the message from server-controlled text.</summary>
+    [Fact]
+    public async Task GenerateImageAsync_InputRejectedWithTokenInBody_RedactsTheToken()
+    {
+        const string body =
+            """
+            {"status":422,"title":"Input validation failed","invalid_fields":[{"field":"input.prompt","description":"contains a credential r8_abc123secret"}]}
+            """;
+        _mockReplicateApi
+            .Setup(x => x.CreatePredictionAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ReplicatePredictionRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(await Rejected(422, body));
+
+        var result = await _service.GenerateImageAsync(new ImageGenerationParameters
+        {
+            Model = "openai/gpt-image-2.6-sunburst",
+            Prompt = "x",
+            ApiToken = "r8_abc123secret"
+        });
+
+        result.Message.Should().NotBeNull().And.NotContain("r8_abc123secret").And.Contain("[REDACTED]");
+    }
+
+    /// <summary>Builds the exception Refit throws for a non-2xx reply, body and all. Refit's own
+    /// factory is the only public way to one — every ApiException constructor is protected.</summary>
+    private static async Task<Refit.ApiException> Rejected(int statusCode, string body) =>
+        await Refit.ApiException.Create(
+            new HttpRequestMessage(HttpMethod.Post, "https://api.replicate.com/v1/models/openai/predictions"),
+            HttpMethod.Post,
+            new HttpResponseMessage((HttpStatusCode)statusCode)
+            {
+                Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json")
+            },
+            new Refit.RefitSettings());
+
     private static bool HasImagesArrayWithUri(ReplicatePredictionRequest req, string uri)
     {
         var dict = (Dictionary<string, object?>)req.Input;

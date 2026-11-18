@@ -98,7 +98,7 @@ public sealed class ReplicateImageGenerationService : IImageGenerationService
         }
     }
 
-    private static string FormatError(Exception ex, string apiToken)
+    private string FormatError(Exception ex, string apiToken)
     {
         string result;
         // Refit wraps non-2xx as ApiException with StatusCode + body. Deserialization failures
@@ -109,6 +109,20 @@ public sealed class ReplicateImageGenerationService : IImageGenerationService
             var body = string.IsNullOrWhiteSpace(api.Content) ? "(no body)" : api.Content;
             var head = $"HTTP {(int)api.StatusCode} {api.StatusCode}: {body}";
             result = api.InnerException != null ? $"{head} — inner: {api.InnerException.Message}" : head;
+
+            // A rejected payload is the one failure whose fix is written inside the response, and
+            // the status label is too small to read it in JSON form. 400 and 422 are the two codes
+            // Replicate uses for input validation; anything else keeps the raw dump verbatim.
+            if ((int)api.StatusCode is 400 or 422
+                && ReplicateValidationErrors.TrySummarize(api.Content, out var summary))
+            {
+                // The raw body still goes to the log: the summary is truncated, and a summary that
+                // quietly replaced a body we mis-parsed would be worse than the unreadable one it
+                // replaced.
+                _logger.LogWarning(
+                    "Replicate rejected the input; raw body: {Body}", string.IsNullOrWhiteSpace(api.Content) ? "(no body)" : api.Content);
+                result = $"HTTP {(int)api.StatusCode}: {summary}";
+            }
         }
         else
         {
