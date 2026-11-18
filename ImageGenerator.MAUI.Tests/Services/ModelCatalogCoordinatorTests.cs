@@ -208,4 +208,97 @@ public class ModelCatalogCoordinatorTests
             x => x.SaveCachedAsync(It.IsAny<IReadOnlyList<ModelOption>>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
+
+    // --- entries this build has no field list for -------------------------------
+    // Replicate answers for any model of an allow-listed owner, so being listed has never meant the
+    // app knows how to drive the model. They stay in the picker — the prompt alone often works — but
+    // the entry says which ones are a guess. See IModelDescriptorRegistry.IsSchemaKnown.
+
+    [Fact]
+    public async Task RefreshAsync_ReplicateModelWithoutADescriptor_IsMarked()
+    {
+        _catalogService.Setup(x => x.FetchAsync("token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ModelOption("Some New Model", "some-owner/some-new-model", ProviderConstants.Replicate)]);
+
+        var merged = await _sut.RefreshAsync("token");
+
+        merged!.Single(m => m.Value == "some-owner/some-new-model").Display
+            .Should().Be("Some New Model · may not work");
+    }
+
+    [Fact]
+    public async Task RefreshAsync_ModelWithADescriptor_KeepsTheProvidersNameExactly()
+    {
+        _catalogService.Setup(x => x.FetchAsync("token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ModelOption("FLUX.2 [klein] 4B", ModelConstants.Flux.Klein4b, ProviderConstants.Replicate)]);
+
+        var merged = await _sut.RefreshAsync("token");
+
+        merged!.Single(m => m.Value == ModelConstants.Flux.Klein4b).Display
+            .Should().Be("FLUX.2 [klein] 4B");
+    }
+
+    [Fact]
+    public async Task RefreshAsync_UniformProviderEntries_AreNeverMarked()
+    {
+        // Not descriptor gaps: Pollinations speaks one uniform API for every id it lists, and a
+        // ComfyUI entry is the user's own workflow. Marking them would teach the user to ignore it.
+        _pollinationsCatalogService.Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ModelOption("flux-schnell", "pollinations/flux-schnell", ProviderConstants.Pollinations)]);
+        _comfyCatalogService.Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([ComfyEntry()]);
+        _catalogService.Setup(x => x.FetchAsync("token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ModelOption("Some New Model", "some-owner/some-new-model", ProviderConstants.Replicate)]);
+
+        var merged = await _sut.RefreshAsync("token");
+
+        merged!.Single(m => m.Value == "pollinations/flux-schnell").Display.Should().Be("flux-schnell");
+        merged!.Single(m => m.Value == "comfyui/Ideogram workflow_MR").Display.Should().NotEndWith(" · may not work");
+        merged!.Single(m => m.Value == "some-owner/some-new-model").Display.Should().EndWith(" · may not work");
+    }
+
+    [Fact]
+    public async Task RefreshAsync_SavesTheCleanName_MarkingHappensOnTheWayOutOnly()
+    {
+        IReadOnlyList<ModelOption>? saved = null;
+        _catalogService.Setup(x => x.SaveCachedAsync(It.IsAny<IReadOnlyList<ModelOption>>(), It.IsAny<CancellationToken>()))
+            .Callback<IReadOnlyList<ModelOption>, CancellationToken>((list, _) => saved = list)
+            .Returns(Task.CompletedTask);
+        _catalogService.Setup(x => x.FetchAsync("token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ModelOption("Some New Model", "some-owner/some-new-model", ProviderConstants.Replicate)]);
+
+        await _sut.RefreshAsync("token");
+
+        // The cache stores what Replicate called the model, so the mark can never reach disk and
+        // stack up across reloads.
+        saved!.Single(m => m.Value == "some-owner/some-new-model").Display.Should().Be("Some New Model");
+    }
+
+    [Fact]
+    public async Task LoadCachedAsync_MarkedEntriesFromALoad_DoNotStackTheMark()
+    {
+        // Feeding the previous result back as the store is the only way a mark could compound —
+        // a cache written from marked data, or a catalog that echoes what it was given.
+        _catalogService.Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ModelOption("Some New Model", "some-owner/some-new-model", ProviderConstants.Replicate)]);
+        var once = await _sut.LoadCachedAsync();
+        _catalogService.Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(once!);
+
+        var twice = await _sut.LoadCachedAsync();
+
+        twice!.Single(m => m.Value == "some-owner/some-new-model").Display.Should().Be("Some New Model · may not work");
+    }
+
+    [Fact]
+    public async Task LoadCachedAsync_SeededModels_AreNeverMarked()
+    {
+        // Seeds are the models this build ships descriptors for; the suffix must never reach them.
+        _catalogService.Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ModelOption("Some New Model", "some-owner/some-new-model", ProviderConstants.Replicate)]);
+
+        var merged = await _sut.LoadCachedAsync();
+
+        merged!.Where(m => m.Value != "some-owner/some-new-model").Should().NotBeEmpty()
+            .And.NotContain(m => m.Display.EndsWith(" · may not work", StringComparison.Ordinal));
+    }
 }

@@ -64,10 +64,24 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
     /// we've explicitly added to the codebase still appear even when the cached catalog is
     /// stale or Replicate's curated collection hasn't picked them up yet. Incoming entries win
     /// on duplicates (their Display/Provider reflect live data).
+    ///
+    /// Live entries this build has no field list for are marked. They stay in the picker — Replicate
+    /// answers for them and the prompt alone is often enough to make a picture — but "it is listed"
+    /// has never meant "the app knows how to drive it", and finding that out costs a generation and
+    /// 30-odd seconds. Marked on the way out only: the disk cache keeps the provider's clean name,
+    /// and the guard below keeps a reload from stacking a second suffix on the same entry.
     /// </summary>
     private IReadOnlyList<ModelOption> MergeWithSeeds(IReadOnlyList<ModelOption> live)
     {
         var seen = new HashSet<string>(live.Select(m => m.Value), StringComparer.OrdinalIgnoreCase);
-        return [.. live, .. _registry.Seeds.Where(m => seen.Add(m.Value))];
+        var marked = live.Select(m => MarkIfUnknown(m));
+        return [.. marked, .. _registry.Seeds.Where(m => seen.Add(m.Value))];
     }
+
+    private const string UnknownModelSuffix = " · may not work";
+
+    private ModelOption MarkIfUnknown(ModelOption option)
+        => _registry.IsSchemaKnown(option.Value)
+            || option.Display.EndsWith(UnknownModelSuffix, StringComparison.Ordinal) ? option
+            : option with { Display = option.Display + UnknownModelSuffix };
 }

@@ -90,14 +90,18 @@ public class FallbackReplicateDescriptorTests
     }
 
     [Fact]
-    public void Capabilities_KeepTheAspectRatioListNonEmpty_EvenThoughItIsNotShown()
+    public void Capabilities_HideTheAspectRatioPicker_ButKeepAListWideEnoughToBeLeftAlone()
     {
-        // GeneratorViewModel.RefreshCapabilities does `caps.AspectRatios[0]` unconditionally, before
-        // consulting the AspectRatio visibility flag. An empty list here is a crash on every model
-        // switch to an unknown model, not a hidden picker.
+        // Three things pull on this list at once, and only one of them is about aspect ratios:
+        // the Output block hides on AspectRatio false, so nothing here is ever displayed;
+        // GeneratorViewModel.RefreshCapabilities reads AspectRatios[0] before consulting that flag;
+        // and the aspect-ratio Picker is two-way bound to Parameters.AspectRatio, so an ItemsSource
+        // swap that drops the current value pushes null into it and persists that. Hence a broad
+        // list: switching to a model that sends no ratio at all must not rewrite the user's saved
+        // ratio to something else.
         var caps = _descriptor.Capabilities;
 
         caps.AspectRatio.Should().BeFalse();
-        caps.AspectRatios.Should().NotBeEmpty();
+        caps.AspectRatios.Should().Contain(["1:1", "16:9", "9:16"]);
     }
 }

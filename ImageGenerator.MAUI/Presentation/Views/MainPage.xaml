@@ -67,6 +67,14 @@
                                 </Picker>
                             </Grid>
 
+                            <!-- Replicate lists every model of an owner the app allow-lists, so a model
+                                 can be reachable and generation-attemptable while this build knows none
+                                 of its fields. Say so where the choice is made: the request then carries
+                                 the prompt alone. Collapsed for every model with a descriptor. -->
+                            <Label Text="{Binding ModelFieldsNote}"
+                                   Style="{StaticResource HelperText}"
+                                   IsVisible="{Binding ModelFieldsNote, Converter={StaticResource NonEmptyStringToBool}}" />
+
                             <Button Text="Refresh Models"
                                     Style="{StaticResource SecondaryButton}"
                                     Command="{Binding RefreshModelsCommand}"

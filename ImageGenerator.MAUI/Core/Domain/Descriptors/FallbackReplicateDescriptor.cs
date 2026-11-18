@@ -29,10 +29,15 @@ namespace ImageGenerator.MAUI.Core.Domain.Descriptors;
 /// </summary>
 public sealed class FallbackReplicateDescriptor : IPayloadBuilder, ICapabilityProvider
 {
-    // The UI hides the aspect-ratio picker for these models (AspectRatio: false), but
-    // GeneratorViewModel.RefreshCapabilities indexes AspectRatios[0] before it consults that flag,
-    // so the list must stay non-empty. Same reason Ideogram carries a 1:1 it never shows.
-    private static readonly string[] NotShownButIndexed = ["1:1"];
+    // Never shown: AspectRatio is false below, which hides the whole aspect-ratio block.
+    // It still has to be a plausible list, because the aspect-ratio Picker is two-way bound straight
+    // to Parameters.AspectRatio and swapping ItemsSource pushes null into that source whenever the
+    // current value is missing from the new list — and RefreshCapabilities reads AspectRatios[0]
+    // before that flag is consulted. Broad rather than one dummy value so that switching TO an
+    // unknown model leaves the user's saved ratio alone: this payload sends no ratio at all, so it
+    // has no opinion worth persisting.
+    private static readonly string[] AspectRatios =
+        ["1:1", "16:9", "9:16", "21:9", "9:21", "3:2", "2:3", "4:3", "3:4", "4:5", "5:4"];
 
     // Sentinel — the registry never indexes the fallback by id; it's invoked when a lookup misses.
     public string ModelId => "_fallback";
@@ -43,7 +48,7 @@ public sealed class FallbackReplicateDescriptor : IPayloadBuilder, ICapabilityPr
         // lie. Output format stays selectable because the app transcodes on save — that choice is
         // honoured without asking the model.
         AspectRatio: false, CustomDimensions: false, Seed: false, ImagePrompt: true,
-        AspectRatioLabel: "Aspect ratio", AspectRatios: NotShownButIndexed,
+        AspectRatioLabel: "Aspect ratio", AspectRatios: AspectRatios,
         MaxImageInputs: 1);
 
     public object Build(ImageGenerationParameters p)

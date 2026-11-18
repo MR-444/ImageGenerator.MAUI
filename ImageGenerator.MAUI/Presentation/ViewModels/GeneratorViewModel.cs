@@ -127,6 +127,19 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             ? $"{ProviderFilter.SelectedProvider} · {model.Display}"
             : ProviderFilter.SelectedProvider;
 
+    /// <summary>
+    /// Note for the model picker when the selected model has no field list in this build: the
+    /// request carries the prompt (and an attached image) and nothing else, so it may well not do
+    /// what was asked. Null for every model this build can describe, which collapses the Label.
+    ///
+    /// Derived from IsSchemaKnown rather than from an "is this Replicate" test, because a model this
+    /// build cannot describe can only be a Replicate owner/name path: Pollinations speaks one uniform
+    /// API for every id it lists, and a ComfyUI entry is the user's own workflow.
+    /// </summary>
+    public string? ModelFieldsNote => _registry.IsSchemaKnown(Parameters.Model)
+        ? null
+        : $"{Parameters.Model} has no field list in this build — only the prompt is sent, so this may not work.";
+
     // IInputImageTarget: lets the gallery detail page's "Use as input" refuse on the spot when
     // the current model can't take a reference image (the Input Image card is hidden then, so a
     // silent navigation looks like a dead button). SelectedModelSummary above completes the
@@ -926,6 +939,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             {
                 OnPropertyChanged(nameof(SelectedModelSummary));
                 OnPropertyChanged(nameof(WorkspaceSummary));
+                OnPropertyChanged(nameof(ModelFieldsNote));
             }
         };
 
@@ -1602,7 +1616,14 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         // The catalog can change which ComfyUI workflows exist, so re-probe the LoRA catalog
         // (the one workflow probe worth awaiting here — it is the only one with a round-trip).
         await ComfyUi.RefreshLorasForCurrentModelAsync(Parameters.Model);
-        SetStatus($"Loaded {merged.Count} models.", StatusKind.Success);
+        // Say what the catalog actually produced for this build. An owner we allow-list is enough for
+        // a model to appear here, and appearing has never meant the app knows its fields — without
+        // this number, 128 entries read as 128 working models.
+        var unknown = merged.Count(m => !_registry.IsSchemaKnown(m.Value));
+        SetStatus(unknown > 0
+            ? $"Loaded {merged.Count} models ({merged.Count - unknown} with their fields in this build; the other {unknown} get the prompt alone)."
+            : $"Loaded {merged.Count} models.",
+            StatusKind.Success);
     }
 
     /// <summary>
