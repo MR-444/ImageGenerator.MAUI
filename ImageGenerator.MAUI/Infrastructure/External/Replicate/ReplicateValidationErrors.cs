@@ -84,11 +84,25 @@ public static class ReplicateValidationErrors
             text.Append(string.Join("; ", parts));
 
             var surfaced = text.ToString();
-            message = surfaced.Length > MaxSurfacedLength
-                ? string.Concat(surfaced[..MaxSurfacedLength], "…")
-                : surfaced;
+            message = surfaced.Length > MaxSurfacedLength ? TruncateAtBoundary(surfaced) : surfaced;
             return message.Length > 0;
         }
+    }
+
+    /// <summary>
+    /// Cuts at the last separator that still fits, so the label ends on a whole value instead of
+    /// inside one. These bodies are long comma lists (must be one of the following: "1:1", ...); a
+    /// label ending in 1: is not something the user can act on, and that is where a flat character
+    /// cut lands.
+    /// </summary>
+    private static string TruncateAtBoundary(string surfaced)
+    {
+        // Cutting further back than this leaves nothing recognisable, which is worse than a cut
+        // mid-value — the field name and the start of the list are the useful half.
+        const int shortestUsefulCut = MaxSurfacedLength / 2;
+        var cut = surfaced.LastIndexOfAny([',', ';', ' '], MaxSurfacedLength);
+        if (cut < shortestUsefulCut) cut = MaxSurfacedLength;
+        return string.Concat(surfaced[..cut].TrimEnd(' ', ',', ';'), "…");
     }
 
     /// <summary>Field name first, then the most specific reason available.</summary>

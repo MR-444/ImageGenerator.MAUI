@@ -94,6 +94,9 @@ public class ReplicateValidationErrorsTests
         message.Should().EndWith("…");
         message!.Length.Should().BeLessThan(600, "a status label is one or two lines");
         message.Should().Contain("aspect_ratio");
+        // And the cut lands on a value boundary, not inside one: an enum list chopped to "0x" tells
+        // the user nothing, so the ellipsis has to follow a completed quoted value.
+        message[^2].Should().Be('"');
     }
 
     [Theory]
