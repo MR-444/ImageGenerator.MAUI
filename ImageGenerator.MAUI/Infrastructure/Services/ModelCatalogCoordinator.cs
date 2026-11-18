@@ -65,11 +65,12 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
     /// stale or Replicate's curated collection hasn't picked them up yet. Incoming entries win
     /// on duplicates (their Display/Provider reflect live data).
     ///
-    /// Live entries this build has no field list for are marked. They stay in the picker — Replicate
-    /// answers for them and the prompt alone is often enough to make a picture — but "it is listed"
-    /// has never meant "the app knows how to drive it", and finding that out costs a generation and
-    /// 30-odd seconds. Marked on the way out only: the disk cache keeps the provider's clean name,
-    /// and the guard below keeps a reload from stacking a second suffix on the same entry.
+    /// Live entries this build has no field list for are marked, and stay in the list: seeing a
+    /// model is how its owner decides whether it is worth a descriptor, and an invisible model
+    /// cannot be evaluated. Marked on the way out only — the disk cache keeps the provider's clean
+    /// name, because a cached suffix would outlive its own truth: the build that finally adds flare's
+    /// descriptor would still read "· not supported" off disk. The EndsWith guard keeps a reload
+    /// from stacking a second suffix on the same entry.
     /// </summary>
     private IReadOnlyList<ModelOption> MergeWithSeeds(IReadOnlyList<ModelOption> live)
     {
@@ -78,7 +79,9 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
         return [.. marked, .. _registry.Seeds.Where(m => seen.Add(m.Value))];
     }
 
-    private const string UnknownModelSuffix = " · may not work";
+    // Same shape as PollinationsCatalogService.PaidSuffix: the picker binds ModelOption.Display
+    // directly, so this is the whole mechanism behind "not supported".
+    private const string UnknownModelSuffix = " · not supported";
 
     private ModelOption MarkIfUnknown(ModelOption option)
         => _registry.IsSchemaKnown(option.Value)

@@ -74,6 +74,53 @@ public class ReplicateImageGenerationServiceTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task GenerateImageAsync_ModelWithoutADescriptor_SendsNothing()
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = "stability-ai/some-new-model",
+            Prompt = "A test image",
+            ApiToken = "test-token"
+        };
+
+        var result = await _service.GenerateImageAsync(parameters);
+
+        // What this rule protects is money, so it is asserted on the API mock rather than on the
+        // message: no prediction call exists, therefore nothing was billed. The old behaviour was to
+        // send the prompt alone and let the model answer at its own defaults.
+        _mockReplicateApi.Verify(x => x.CreatePredictionAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ReplicatePredictionRequest>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+        result.ImageData.Should().BeNull();
+        result.Message.Should().Contain("stability-ai/some-new-model");
+    }
+
+    [Fact]
+    public async Task GenerateImageAsync_ValueTheSelectedModelDoesNotDeclare_SendsNothing()
+    {
+        // A descriptor is a hand-written claim about a model that keeps moving underneath it, and a
+        // value outside the declared enum is a billed 422. The picker snaps on selection, so this
+        // only arrives through restored settings, a cloned run, or drift — which is exactly why it
+        // needs catching here rather than in the view model.
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.OpenAI.GptImage15OnReplicate,
+            Prompt = "A test image",
+            AspectRatio = "21:9",
+            ApiToken = "test-token"
+        };
+
+        var result = await _service.GenerateImageAsync(parameters);
+
+        _mockReplicateApi.Verify(x => x.CreatePredictionAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ReplicatePredictionRequest>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+        result.Message.Should().Contain("21:9");
+    }
+
     /// <summary>
     /// A rejected payload is the one failure whose fix Replicate writes down, and it writes it in
     /// the response body. The label has to carry the field and the accepted values, not the JSON.
@@ -145,7 +192,7 @@ public class ReplicateImageGenerationServiceTests
     {
         var dict = (Dictionary<string, object?>)req.Input;
         var images = dict["images"] as string[];
-        return images != null && images.Length == 1 && images[0] == uri;
+        return images is { Length: 1 } && images[0] == uri;
     }
 
     private static bool HasNullImages(ReplicatePredictionRequest req)

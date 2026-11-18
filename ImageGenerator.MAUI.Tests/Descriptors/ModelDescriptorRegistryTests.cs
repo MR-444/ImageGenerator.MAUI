@@ -11,12 +11,14 @@ public class ModelDescriptorRegistryTests
     private readonly IModelDescriptorRegistry _registry = ModelDescriptorRegistry.Default();
 
     [Fact]
-    public void PayloadFor_UnknownReplicatePath_ReturnsFallback()
+    public void PayloadFor_UnknownReplicatePath_Throws()
     {
-        var result = _registry.PayloadFor("stability-ai/some-new-model");
+        var act = () => _registry.PayloadFor("stability-ai/some-new-model");
 
-        // FallbackReplicateDescriptor declares the sentinel ModelId "_fallback".
-        result.ModelId.Should().Be("_fallback");
+        // There is no fallback payload any more: this build does not build requests for models it
+        // cannot describe. ReplicateImageGenerationService refuses them earlier so nothing is
+        // billed; this is the same rule for a caller that forgot it.
+        act.Should().Throw<ArgumentException>().WithMessage("*stability-ai/some-new-model*");
     }
 
     [Fact]
@@ -32,13 +34,13 @@ public class ModelDescriptorRegistryTests
     {
         var caps = _registry.CapabilitiesFor("stability-ai/whatever").Capabilities;
 
-        // Conservative defaults from FallbackReplicateDescriptor: nothing is offered that the
-        // fallback payload does not actually send. Model-specific detail lives in
+        // Conservative defaults from FallbackReplicateDescriptor: nothing is offered that this build
+        // could not send — which, for a model with no descriptor, is nothing at all. Detail lives in
         // FallbackReplicateDescriptorTests.
         caps.SafetyTolerance.Should().BeFalse();
         caps.PromptUpsampling.Should().BeFalse();
-        caps.Seed.Should().BeFalse("the fallback sends no seed, so the field would be decorative");
-        caps.AspectRatio.Should().BeFalse("the fallback sends no aspect_ratio");
+        caps.Seed.Should().BeFalse("no seed is sent, so the field would be decorative");
+        caps.AspectRatio.Should().BeFalse("no aspect_ratio is sent");
         caps.MaxImageInputs.Should().Be(1);
     }
 
@@ -168,7 +170,7 @@ public class ModelDescriptorRegistryTests
     {
         // The predicate must never disagree with registration: every id this build ships a
         // descriptor for is known by definition. If a rename or a registration split ever makes
-        // the two diverge, the UI starts labelling a supported model "may not work" — and this
+        // the two diverge, the UI starts labelling a supported model "not supported" — and this
         // three-line guard is what catches it.
         var production = ModelDescriptorRegistry.ProductionDescriptors();
         // Default() builds its dictionaries with OfType<IPayloadBuilder>(), so an entry that

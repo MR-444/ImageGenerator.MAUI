@@ -40,9 +40,14 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
         // and the service would reject the payload.
         : ModelConstants.Pollinations.IsId(modelId) ? _pollinationsFallback
         : ModelConstants.ComfyUi.IsId(modelId) ? _comfyUiFallback
-        : LooksLikeReplicatePath(modelId) ? _replicateFallback
-        : throw new ArgumentException($"Unknown model type: {modelId}");
+        // A Replicate id with no descriptor is a model this build cannot describe, and there is no
+        // longer any object that could build a request for it. ReplicateImageGenerationService
+        // refuses such models before it spends anything; this is the same rule one layer down, for
+        // any caller that forgot it.
+        : throw new ArgumentException($"No descriptor for model: {modelId}");
 
+    // The only remaining user of the Replicate fallback: capabilities are what the pickers need to
+    // stay honest about a model this build will not call.
     public ICapabilityProvider CapabilitiesFor(string modelId) =>
         _capabilities.TryGetValue(modelId, out var c) ? c
         : ModelConstants.Pollinations.IsId(modelId) ? _pollinationsFallback
@@ -69,17 +74,6 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
         || ModelConstants.ComfyUi.IsId(modelId);
 
     public IReadOnlyList<ModelOption> Seeds { get; }
-
-    /// <summary>
-    /// Only payload-build for ids that look like an owner/name path. Anything else throws so
-    /// misconfigured models fail loud at generation time instead of silently shipping the
-    /// conservative dict shape.
-    /// </summary>
-    private static bool LooksLikeReplicatePath(string modelName)
-    {
-        var slash = modelName.IndexOf('/');
-        return slash > 0 && slash < modelName.Length - 1;
-    }
 
     /// <summary>
     /// Constructs a registry pre-populated with the production descriptor set. Used by tests,

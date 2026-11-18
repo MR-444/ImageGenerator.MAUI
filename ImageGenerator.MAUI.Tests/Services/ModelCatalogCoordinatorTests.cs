@@ -72,7 +72,7 @@ public class ModelCatalogCoordinatorTests
         var merged = await _sut.LoadCachedAsync();
 
         merged.Should().NotBeNull();
-        merged!.Select(m => m.Value).Should()
+        merged.Select(m => m.Value).Should()
             .Contain("openai/gpt-image-2")
             .And.Contain("black-forest-labs/flux-2-pro");
     }
@@ -123,7 +123,7 @@ public class ModelCatalogCoordinatorTests
         var merged = await _sut.RefreshAsync("token");
 
         merged.Should().NotBeNull();
-        merged!.Select(m => m.Value).Should()
+        merged.Select(m => m.Value).Should()
             .Contain("black-forest-labs/flux-2")
             .And.Contain(ModelConstants.OpenAI.GptImage15OnReplicate);  // from seed merge
 
@@ -152,7 +152,7 @@ public class ModelCatalogCoordinatorTests
         var merged = await _sut.LoadCachedAsync();
 
         merged.Should().NotBeNull();
-        merged!.Select(m => m.Value).Should().Contain("comfyui/Ideogram workflow_MR");
+        merged.Select(m => m.Value).Should().Contain("comfyui/Ideogram workflow_MR");
     }
 
     [Fact]
@@ -203,58 +203,47 @@ public class ModelCatalogCoordinatorTests
         var merged = await _sut.RefreshAsync("token");
 
         merged.Should().NotBeNull();
-        merged!.Select(m => m.Value).Should().Contain("comfyui/Ideogram workflow_MR");
+        merged.Select(m => m.Value).Should().Contain("comfyui/Ideogram workflow_MR");
         _catalogService.Verify(
             x => x.SaveCachedAsync(It.IsAny<IReadOnlyList<ModelOption>>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
     // --- entries this build has no field list for -------------------------------
-    // Replicate answers for any model of an allow-listed owner, so being listed has never meant the
-    // app knows how to drive the model. They stay in the picker — the prompt alone often works — but
-    // the entry says which ones are a guess. See IModelDescriptorRegistry.IsSchemaKnown.
+    // Any model of an allow-listed owner appears in the catalog, so being listed has never meant the
+    // app knows how to drive the model — and since this build refuses to call those models, the entry
+    // has to say so. The refusal itself is tested in ReplicateImageGenerationServiceTests; these two
+    // properties are about where the mark goes and, more importantly, where it must never go: disk.
+    // See IModelDescriptorRegistry.IsSchemaKnown.
+
+    private const string Marked = " · not supported";
 
     [Fact]
-    public async Task RefreshAsync_ReplicateModelWithoutADescriptor_IsMarked()
+    public async Task RefreshAsync_MarksTheModelsThisBuildCannotDriveAndLeavesTheOthersAlone()
     {
         _catalogService.Setup(x => x.FetchAsync("token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new ModelOption("Some New Model", "some-owner/some-new-model", ProviderConstants.Replicate)]);
-
-        var merged = await _sut.RefreshAsync("token");
-
-        merged!.Single(m => m.Value == "some-owner/some-new-model").Display
-            .Should().Be("Some New Model · may not work");
-    }
-
-    [Fact]
-    public async Task RefreshAsync_ModelWithADescriptor_KeepsTheProvidersNameExactly()
-    {
-        _catalogService.Setup(x => x.FetchAsync("token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new ModelOption("FLUX.2 [klein] 4B", ModelConstants.Flux.Klein4b, ProviderConstants.Replicate)]);
-
-        var merged = await _sut.RefreshAsync("token");
-
-        merged!.Single(m => m.Value == ModelConstants.Flux.Klein4b).Display
-            .Should().Be("FLUX.2 [klein] 4B");
-    }
-
-    [Fact]
-    public async Task RefreshAsync_UniformProviderEntries_AreNeverMarked()
-    {
-        // Not descriptor gaps: Pollinations speaks one uniform API for every id it lists, and a
-        // ComfyUI entry is the user's own workflow. Marking them would teach the user to ignore it.
+            .ReturnsAsync(
+            [
+                new ModelOption("Some New Model", "some-owner/some-new-model", ProviderConstants.Replicate),
+                new ModelOption("FLUX.2 [klein] 4B", ModelConstants.Flux.Klein4b, ProviderConstants.Replicate)
+            ]);
+        // The two uniform providers are fetched separately, as they are in production.
         _pollinationsCatalogService.Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync([new ModelOption("flux-schnell", "pollinations/flux-schnell", ProviderConstants.Pollinations)]);
         _comfyCatalogService.Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync([ComfyEntry()]);
-        _catalogService.Setup(x => x.FetchAsync("token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new ModelOption("Some New Model", "some-owner/some-new-model", ProviderConstants.Replicate)]);
 
         var merged = await _sut.RefreshAsync("token");
 
+        merged!.Single(m => m.Value == "some-owner/some-new-model").Display.Should().Be("Some New Model" + Marked);
+        merged!.Single(m => m.Value == ModelConstants.Flux.Klein4b).Display.Should().Be("FLUX.2 [klein] 4B");
         merged!.Single(m => m.Value == "pollinations/flux-schnell").Display.Should().Be("flux-schnell");
-        merged!.Single(m => m.Value == "comfyui/Ideogram workflow_MR").Display.Should().NotEndWith(" · may not work");
-        merged!.Single(m => m.Value == "some-owner/some-new-model").Display.Should().EndWith(" · may not work");
+        // Not descriptor gaps: Pollinations speaks one uniform API for every id it lists, and a
+        // ComfyUI entry is the user's own workflow. Marking them would teach the user to ignore the
+        // mark, which is the opposite of what it is for.
+        merged!.Single(m => m.Value == "comfyui/Ideogram workflow_MR").Display.Should().NotEndWith(Marked);
+        // Seeds are the models this build ships descriptors for; the suffix must never reach one.
+        merged!.Where(m => m.Value != "some-owner/some-new-model").Should().NotContain(m => m.Display.EndsWith(Marked, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -269,36 +258,9 @@ public class ModelCatalogCoordinatorTests
 
         await _sut.RefreshAsync("token");
 
-        // The cache stores what Replicate called the model, so the mark can never reach disk and
-        // stack up across reloads.
+        // The cache stores what Replicate called the model. A mark that reached disk would outlive
+        // its own truth: the build that finally adds a descriptor for this id would read a cached
+        // "· not supported" straight back out and refuse a model it can now drive.
         saved!.Single(m => m.Value == "some-owner/some-new-model").Display.Should().Be("Some New Model");
-    }
-
-    [Fact]
-    public async Task LoadCachedAsync_MarkedEntriesFromALoad_DoNotStackTheMark()
-    {
-        // Feeding the previous result back as the store is the only way a mark could compound —
-        // a cache written from marked data, or a catalog that echoes what it was given.
-        _catalogService.Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new ModelOption("Some New Model", "some-owner/some-new-model", ProviderConstants.Replicate)]);
-        var once = await _sut.LoadCachedAsync();
-        _catalogService.Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(once!);
-
-        var twice = await _sut.LoadCachedAsync();
-
-        twice!.Single(m => m.Value == "some-owner/some-new-model").Display.Should().Be("Some New Model · may not work");
-    }
-
-    [Fact]
-    public async Task LoadCachedAsync_SeededModels_AreNeverMarked()
-    {
-        // Seeds are the models this build ships descriptors for; the suffix must never reach them.
-        _catalogService.Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new ModelOption("Some New Model", "some-owner/some-new-model", ProviderConstants.Replicate)]);
-
-        var merged = await _sut.LoadCachedAsync();
-
-        merged!.Where(m => m.Value != "some-owner/some-new-model").Should().NotBeEmpty()
-            .And.NotContain(m => m.Display.EndsWith(" · may not work", StringComparison.Ordinal));
     }
 }

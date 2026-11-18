@@ -85,7 +85,8 @@ public class GptImageOnReplicateDescriptorTests
     [Fact]
     public void GptImage26Sunburst_IsTheOnlyOneOfTheThreeDeclaringComplexity()
     {
-        Build(GptImage26Sunburst, Params(GptImage26Sunburst))["complexity"].Should().Be("high");
+        // Presence is the whole contract here; the value is whatever the app defaults the knob to.
+        Build(GptImage26Sunburst, Params(GptImage26Sunburst)).Should().ContainKey("complexity");
         Build(GptImage15, Params(GptImage15)).Should().NotContainKey("complexity");
         Build(GptImage2, Params(GptImage2)).Should().NotContainKey("complexity");
     }

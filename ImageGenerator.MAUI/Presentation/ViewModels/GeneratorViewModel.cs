@@ -128,9 +128,9 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             : ProviderFilter.SelectedProvider;
 
     /// <summary>
-    /// Note for the model picker when the selected model has no field list in this build: the
-    /// request carries the prompt (and an attached image) and nothing else, so it may well not do
-    /// what was asked. Null for every model this build can describe, which collapses the Label.
+    /// Note under the model picker when the selected model has no field list in this build: the app
+    /// will not call it, so no request goes out and nothing is billed. Null for every model this
+    /// build can describe, which collapses the Label.
     ///
     /// Derived from IsSchemaKnown rather than from an "is this Replicate" test, because a model this
     /// build cannot describe can only be a Replicate owner/name path: Pollinations speaks one uniform
@@ -138,7 +138,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     /// </summary>
     public string? ModelFieldsNote => _registry.IsSchemaKnown(Parameters.Model)
         ? null
-        : $"{Parameters.Model} has no field list in this build — only the prompt is sent, so this may not work.";
+        : $"{Parameters.Model} is not supported: this build has no field list for it, so generating is refused.";
 
     // IInputImageTarget: lets the gallery detail page's "Use as input" refuse on the spot when
     // the current model can't take a reference image (the Input Image card is hidden then, so a
@@ -663,26 +663,39 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         // that gpt-image-1.5 does not declare. Carrying a selection across that boundary ships a
         // value the new model rejects, which comes back as a 422 naming a field the picker can no
         // longer even display. So: whenever a model offers a list and the current value is not in
-        // it, snap to that model's first option (its own declared default). This was quality-only;
-        // background/moderation/input-fidelity had no guard and could carry a rejected value in.
-        static void SnapToModelOption(List<string> options, string current, Action<string> select)
+        // it, fall back — to this app's own starting value where the new model offers one, and only
+        // then to the model's first option.
+        //
+        // "First option" is not a default. It is the first value in the vendor's enum, and for
+        // quality and moderation those lists open with "auto" — for quality, the priced end. That
+        // is not hypothetical: SelectedItem is bound two-way to these knobs, so switching to a model
+        // with no gpt knobs at all (empty ItemsSource) writes null into them, and coming back found
+        // null rather than a choice — which read as "the app defaults to auto" however often the
+        // default was moved.
+        static void SnapToModelOption(List<string> options, string? current, string appDefault, Action<string> select)
         {
-            if (options.Count > 0 && !options.Contains(current)) select(options[0]);
+            if (options.Count == 0 || options.Contains(current)) return;
+            select(options.Contains(appDefault, StringComparer.Ordinal) ? appDefault : options[0]);
         }
 
         GptQualityOptions = caps.GptQualityOptions?.ToList() ?? [];
         // The quality enum differs per host: Replicate offers auto/low/medium/high, Pollinations
         // low/medium/high/hd. Carrying a selection across that boundary would leave the picker
-        // blank on a value the new model rejects, so snap to the model's own first option.
-        SnapToModelOption(GptQualityOptions, Parameters.GptQuality, v => Parameters.GptQuality = v);
+        // blank on a value the new model rejects, so snap it to something both can send.
+        SnapToModelOption(GptQualityOptions, Parameters.GptQuality,
+            ImageGenerationParameters.DefaultGptQuality, v => Parameters.GptQuality = v);
         GptBackgroundOptions = caps.GptBackgroundOptions?.ToList() ?? [];
-        SnapToModelOption(GptBackgroundOptions, Parameters.GptBackground, v => Parameters.GptBackground = v);
+        SnapToModelOption(GptBackgroundOptions, Parameters.GptBackground,
+            ImageGenerationParameters.DefaultGptBackground, v => Parameters.GptBackground = v);
         GptModerationOptions = caps.GptModerationOptions?.ToList() ?? [];
-        SnapToModelOption(GptModerationOptions, Parameters.GptModeration, v => Parameters.GptModeration = v);
+        SnapToModelOption(GptModerationOptions, Parameters.GptModeration,
+            ImageGenerationParameters.DefaultGptModeration, v => Parameters.GptModeration = v);
         GptInputFidelityOptions = caps.GptInputFidelityOptions?.ToList() ?? [];
-        SnapToModelOption(GptInputFidelityOptions, Parameters.GptInputFidelity, v => Parameters.GptInputFidelity = v);
+        SnapToModelOption(GptInputFidelityOptions, Parameters.GptInputFidelity,
+            ImageGenerationParameters.DefaultGptInputFidelity, v => Parameters.GptInputFidelity = v);
         GptComplexityOptions = caps.GptComplexityOptions?.ToList() ?? [];
-        SnapToModelOption(GptComplexityOptions, Parameters.GptComplexity, v => Parameters.GptComplexity = v);
+        SnapToModelOption(GptComplexityOptions, Parameters.GptComplexity,
+            ImageGenerationParameters.DefaultGptComplexity, v => Parameters.GptComplexity = v);
 
         // Truncate attached images to the new model's cap so users don't silently lose excess
         // images at generation time. The coordinator's CollectionChanged handler raises
@@ -881,25 +894,22 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
         Jobs.CollectionChanged += OnJobsCollectionChanged;
 
-        // Hydrate capabilities + AR options from the registry. The model catalog itself lives
-        // on ProviderFilterCoordinator (constructed below).
-        _capabilities = _registry.CapabilitiesFor(ModelConstants.Flux.Pro11).Capabilities;
-        _aspectRatioOptions = [.. _capabilities.AspectRatios];
-
+        // Defaults live on ImageGenerationParameters and nowhere else, pinned by
+        // ImageGenerationParametersDefaultsTests. The only thing added here is the seed the session
+        // starts on: it is random per launch rather than a default, and RandomizeSeed regenerates it
+        // per run anyway.
         _parameters = new ImageGenerationParameters
         {
-            ApiToken = "",
-            Model = ModelConstants.OpenAI.GptImage15OnReplicate,
-            AspectRatio = "16:9",
-            Width = 1920,
-            Height = 1080,
-            OutputFormat = ImageOutputFormat.Png,
-            OutputQuality = ValidationConstants.OutputQualityMax,
-            SafetyTolerance = ValidationConstants.SafetyMax,
-            PromptUpsampling = false,
-            Seed = Random.Shared.NextInt64(0, ValidationConstants.SeedMaxValue),
-            RandomizeSeed = true
+            Seed = Random.Shared.NextInt64(0, ValidationConstants.SeedMaxValue)
         };
+
+        // Seeded from the model this instance actually starts on. Something hardcoded here used to
+        // name a different model than the one started on; the parameter hooks sync the picker
+        // selection later in this constructor, which refreshes capabilities either way, so the value
+        // only has to be sane for whatever is constructed in between — but "a different model's
+        // capabilities" is not sane, it is the bug waiting for that refresh to move earlier.
+        _capabilities = _registry.CapabilitiesFor(_parameters.Model).Capabilities;
+        _aspectRatioOptions = [.. _capabilities.AspectRatios];
 
         // Seed the preferred AR with the constructor default so first-launch model swaps
         // already prefer "16:9" instead of slamming to caps.AspectRatios[0].
@@ -1616,12 +1626,12 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         // The catalog can change which ComfyUI workflows exist, so re-probe the LoRA catalog
         // (the one workflow probe worth awaiting here — it is the only one with a round-trip).
         await ComfyUi.RefreshLorasForCurrentModelAsync(Parameters.Model);
-        // Say what the catalog actually produced for this build. An owner we allow-list is enough for
-        // a model to appear here, and appearing has never meant the app knows its fields — without
-        // this number, 128 entries read as 128 working models.
-        var unknown = merged.Count(m => !_registry.IsSchemaKnown(m.Value));
-        SetStatus(unknown > 0
-            ? $"Loaded {merged.Count} models ({merged.Count - unknown} with their fields in this build; the other {unknown} get the prompt alone)."
+        // Say what the catalog actually produced for this build. Being allow-listed by owner is enough
+        // for a model to appear here, and appearing has never meant the app knows its fields — without
+        // this number, 90 entries read as 90 working models.
+        var unsupported = merged.Count(m => !_registry.IsSchemaKnown(m.Value));
+        SetStatus(unsupported > 0
+            ? $"Loaded {merged.Count} models ({merged.Count - unsupported} this build can drive; the other {unsupported} are marked and will not run)."
             : $"Loaded {merged.Count} models.",
             StatusKind.Success);
     }

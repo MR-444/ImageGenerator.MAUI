@@ -101,7 +101,7 @@ public class ImageModelFactoryTests
 
         var act = () => Build(parameters);
 
-        act.Should().Throw<ArgumentException>().WithMessage("Unknown model type: not-a-path");
+        act.Should().Throw<ArgumentException>().WithMessage("No descriptor for model: not-a-path");
     }
 
     [Theory]
@@ -276,28 +276,6 @@ public class ImageModelFactoryTests
         dict["output_format"].Should().Be("jpg");
     }
 
-    [Fact]
-    public void CreateImageModel_UnknownReplicatePath_BuildsFallbackDictionary()
-    {
-        // Every knob the caller had set is deliberately ignored: none of these fields is something
-        // this build can claim the model declares. FallbackReplicateDescriptorTests owns the detail.
-        var parameters = new ImageGenerationParameters
-        {
-            Model = "stability-ai/some-new-model",
-            Prompt = "fallback test",
-            Seed = 7,
-            AspectRatio = "1:1",
-            OutputFormat = ImageOutputFormat.Webp,
-            OutputQuality = 80
-        };
-
-        var result = Build(parameters);
-
-        var dict = result.Should().BeOfType<Dictionary<string, object?>>().Subject;
-        dict.Keys.Should().BeEquivalentTo(["prompt"]);
-        dict["prompt"].Should().Be("fallback test");
-    }
-
     // --- Multi-image payload shape ---
 
     [Fact]
@@ -307,7 +285,7 @@ public class ImageModelFactoryTests
         parameters.ImagePrompts.Add("first");
         parameters.ImagePrompts.Add("second");
 
-        var result = (Flux11Pro)Build(parameters)!;
+        var result = (Flux11Pro)Build(parameters);
 
         result.ImagePrompt.Should().Be("first");
     }

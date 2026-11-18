@@ -7,6 +7,7 @@ using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation;
 using ImageGenerator.MAUI.Infrastructure.Services;
+using ImageGenerator.MAUI.Shared.Constants;
 using ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
@@ -39,12 +40,15 @@ public class ImageFileServiceTests : IDisposable
         }
     }
 
+    // A model this build ships a descriptor for: the metadata writer only claims the request fields
+    // the descriptor advertises, so the round-trip tests below need a model that really sends a seed.
     private static ImageGenerationParameters SampleParameters() => new()
     {
         ApiToken = "t",
-        Model = "black-forest-labs/flux-dev",
+        Model = ModelConstants.Flux.Pro11,
         Prompt = "a cat",
         Seed = 42,
+        AspectRatio = "1:1",
         OutputFormat = ImageOutputFormat.Png,
         OutputQuality = 90
     };
@@ -55,7 +59,7 @@ public class ImageFileServiceTests : IDisposable
         var name = _sut.BuildFileName(SampleParameters());
 
         name.Should().EndWith("_a_cat_42.png");
-        Path.GetInvalidFileNameChars().Any(c => name.Contains(c)).Should().BeFalse();
+        Path.GetInvalidFileNameChars().Any(name.Contains).Should().BeFalse();
     }
 
     [Fact]
@@ -238,7 +242,7 @@ public class ImageFileServiceTests : IDisposable
 
         var meta = await new GalleryService().ReadMetadataAsync(path);
         meta.Should().NotBeNull();
-        meta!["Prompt"].Should().Be(caption);
+        meta["Prompt"].Should().Be(caption);
 
         // Structured equivalence: both sides parse to the same canonical compact serialization.
         V4JsonPromptSerializer.Serialize(V4JsonPromptSerializer.Deserialize(meta["Prompt"]))
@@ -334,5 +338,40 @@ public class ImageFileServiceTests : IDisposable
         Path.GetFileNameWithoutExtension(second).Should().EndWith("_1");
         Path.GetFileNameWithoutExtension(third).Should().EndWith("_2");
         Path.GetFileNameWithoutExtension(fourth).Should().EndWith("_3");
+    }
+
+    // --- what the saved file may claim about the request ------------------------------
+    // Seed and AspectRatio describe fields that were SENT. A model this build has no field list for
+    // sends neither, and a file reading "AspectRatio: 9:16" above a square image leaves the reader
+    // with two claims and no way to tell which one the provider ever saw.
+
+    [Fact]
+    public async Task SaveImageWithMetadataAsync_ModelThatSendsNeitherField_OmitsBothLines()
+    {
+        var parameters = SampleParameters();
+        parameters.Model = "some-owner/some-new-model";
+
+        var path = _sut.GetUniqueSavePath(_tempDir, parameters);
+        await _sut.SaveImageWithMetadataAsync(path, Build1x1Image(ImageOutputFormat.Png), parameters);
+
+        using var saved = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(path);
+        var comment = saved.Metadata.GetPngMetadata().TextData.Single(t => t.Keyword == "Comment").Value;
+
+        comment.Should().Contain("Prompt: a cat");
+        comment.Should().NotContain("Seed:").And.NotContain("AspectRatio:");
+    }
+
+    [Fact]
+    public async Task SaveImageWithMetadataAsync_ModelThatSendsThem_WritesBothLines()
+    {
+        var parameters = SampleParameters();
+
+        var path = _sut.GetUniqueSavePath(_tempDir, parameters);
+        await _sut.SaveImageWithMetadataAsync(path, Build1x1Image(ImageOutputFormat.Png), parameters);
+
+        using var saved = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(path);
+        var comment = saved.Metadata.GetPngMetadata().TextData.Single(t => t.Keyword == "Comment").Value;
+
+        comment.Should().Contain("Seed: 42").And.Contain("AspectRatio: 1:1");
     }
 }

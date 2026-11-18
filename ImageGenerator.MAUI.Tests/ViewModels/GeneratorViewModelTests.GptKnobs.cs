@@ -58,9 +58,34 @@ public partial class GeneratorViewModelTests
         SelectModel(ModelConstants.OpenAI.GptImage15OnReplicate);
 
         // Both values exist only on 2.6. Carrying them into gpt-image-1.5 is a 422 on a field the
-        // picker no longer even shows.
-        _viewModel.Parameters.GptQuality.Should().Be("auto");
+        // picker no longer even shows. The value it lands on is this app's own starting value, not
+        // gpt-image-1.5's first enum value — that one is "auto", and "auto" is the priced end.
+        _viewModel.Parameters.GptQuality.Should().Be(ImageGenerationParameters.DefaultGptQuality);
         _viewModel.Parameters.AspectRatio.Should().Be("1:1");
+    }
+
+    [Fact]
+    public void SwitchingAwayAndBack_ReturnsTheGptKnobsToTheAppsStartingValues()
+    {
+        // SelectedItem is bound two-way to these knobs (MainPage), and a Picker reacts to its
+        // ItemsSource being replaced by writing null into the bound value — the same hazard that
+        // made FallbackReplicateDescriptor keep a broad aspect-ratio list. So visiting any model
+        // with no gpt knobs clears them; the snap on the way back then had to choose something, and
+        // choosing the schema's first enum value chose "auto" for quality and moderation both.
+        // The nulls are written by hand because no Picker runs in a unit test.
+        SelectModel(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
+        _viewModel.Parameters.GptQuality = "high";
+
+        SelectModel(ModelConstants.Flux.Klein4b);
+        _viewModel.Parameters.GptQuality = null!;
+        _viewModel.Parameters.GptModeration = null!;
+        _viewModel.Parameters.GptComplexity = null!;
+
+        SelectModel(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
+
+        _viewModel.Parameters.GptQuality.Should().Be(ImageGenerationParameters.DefaultGptQuality);
+        _viewModel.Parameters.GptModeration.Should().Be(ImageGenerationParameters.DefaultGptModeration);
+        _viewModel.Parameters.GptComplexity.Should().Be(ImageGenerationParameters.DefaultGptComplexity);
     }
 
     [Fact]
@@ -80,8 +105,10 @@ public partial class GeneratorViewModelTests
         _viewModel.Parameters.GptBackground.Should().Be("transparent");
         _viewModel.Parameters.GptModeration.Should().Be("low");
         _viewModel.Parameters.AspectRatio.Should().Be("3:2");
-        // …and the knob that only exists here lands on the model's own default.
-        _viewModel.Parameters.GptComplexity.Should().Be("high");
+        // …and the knob that exists only here stays on the value the app starts it at — deliberately
+        // not that model's server default, which is "high": slower, and free to change parts of the
+        // image nobody mentioned.
+        _viewModel.Parameters.GptComplexity.Should().Be("low");
     }
 
     [Fact]

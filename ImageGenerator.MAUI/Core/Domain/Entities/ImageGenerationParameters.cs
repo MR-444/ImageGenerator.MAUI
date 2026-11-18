@@ -15,8 +15,10 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private string _apiToken = string.Empty;
 
+    // The starting model, named once. It used to be repeated here as a raw string and again in
+    // GeneratorViewModel's constructor, so a change here moved the default for nobody.
     [ObservableProperty]
-    private string _model = "openai/gpt-image-1.5";
+    private string _model = ModelConstants.OpenAI.GptImage15OnReplicate;
 
     [ObservableProperty]
     private string _prompt = string.Empty;
@@ -32,11 +34,15 @@ public partial class ImageGenerationParameters : ObservableObject
 
     public ObservableCollection<string> ImagePrompts { get; } = [];
 
+    // Only meaningful for models with custom dimensions; preset models ignore them and render at
+    // whatever their selected aspect ratio means. They are the app's real starting values, which
+    // until now lived in GeneratorViewModel on top of these — two defaults for one field, disagreeing
+    // (half the slider's range is square, contradicting the 16:9 ratio set above). One place now.
     [ObservableProperty]
-    private int _width = ValidationConstants.ImageWidthMax / 2;
+    private int _width = 1920;
 
     [ObservableProperty]
-    private int _height = ValidationConstants.ImageHeightMax / 2;
+    private int _height = 1080;
 
     partial void OnWidthChanged(int value)
     {
@@ -73,24 +79,44 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private string _resolution = "1K";
 
-    // openai/gpt-image-1.5 advanced knobs. Defaults match the API defaults so
-    // silence on other models stays equivalent to not sending the field.
+    // Starting values for the gpt-image knobs, named because the view model has to be able to return
+    // to them. A Picker whose ItemsSource is swapped writes null into whatever SelectedItem is bound
+    // to, so a knob the current model does not offer loses its value on the way to the next one; the
+    // snap that follows must land on what this app chose, not on the schema's first enum value — for
+    // quality and moderation that first value is "auto", which is the priced end.
+    public const string DefaultGptQuality = "medium";
+    public const string DefaultGptBackground = "auto";
+    public const string DefaultGptModeration = "low";
+    public const string DefaultGptInputFidelity = "low";
+    public const string DefaultGptComplexity = "low";
+
+    // openai/gpt-image advanced knobs. These deliberately do NOT mirror the API defaults: the
+    // server's defaults are the model owner's quality choice (complexity "high", quality "auto",
+    // and "auto" may resolve to "max"). Only quality is priced — the models' own pages say "The
+    // quality setting controls rendering detail and price", and "Complexity doesn't change the
+    // price" — but every one of them is a decision the app should make on its user's behalf.
+    // All the values below appear in every hosted gpt-image schema, so the picker never has to snap
+    // them elsewhere; the comment in GptImageSchema records where each vocabulary came from.
     [ObservableProperty]
-    private string _gptQuality = "auto";
+    private string _gptQuality = DefaultGptQuality;
 
     [ObservableProperty]
-    private string _gptBackground = "auto";
+    private string _gptBackground = DefaultGptBackground;
+
+    // "low" filters less. Not a price knob: nothing in the model docs prices moderation. The app
+    // starts here on the owner's instruction; "auto" is the server default.
+    [ObservableProperty]
+    private string _gptModeration = DefaultGptModeration;
 
     [ObservableProperty]
-    private string _gptModeration = "auto";
+    private string _gptInputFidelity = DefaultGptInputFidelity;
 
+    // openai/gpt-image-2.6 only. The field does not exist on gpt-image-1.5 / -2, so the descriptor
+    // omits it there. Cheap end rather than the server's "high": higher complexity plans more
+    // before it renders, so it answers slower and "can change parts of the image you didn't ask
+    // about". It costs nothing extra.
     [ObservableProperty]
-    private string _gptInputFidelity = "low";
-
-    // openai/gpt-image-2.6-sunburst only. The field does not exist on gpt-image-1.5 / -2, so the
-    // descriptor omits it there; the default is that model's own server default ("high").
-    [ObservableProperty]
-    private string _gptComplexity = "high";
+    private string _gptComplexity = DefaultGptComplexity;
 
     // Pollinations-specific. Token stored on parameters so PollinationsImageGenerationService
     // can read it directly without taking a SecureStorage dependency, mirroring how ApiToken

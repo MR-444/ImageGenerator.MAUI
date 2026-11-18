@@ -29,6 +29,14 @@ public sealed class ReplicateImageGenerationService : IImageGenerationService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    // A model this build ships no descriptor for is not a model this build can drive: its field set,
+    // its vocabularies and its price are all unknown, and the only way to learn them is a billed
+    // prediction. So the call is refused here, before anything leaves the machine. (Until now this
+    // path sent a prompt and nothing else, which Replicate happily answered at its own defaults.)
+    //
+    // The check belongs at the one site that builds a Replicate request rather than inside the
+    // registry: describing a model and calling it are different permissions, and the narrow
+    // capabilities the picker needs for an unknown model stay exactly as they are.
     // progress is unused: the Replicate create→poll flow has no step-level signal worth showing.
     public async Task<GeneratedImage> GenerateImageAsync(
         ImageGenerationParameters parameters,
@@ -37,6 +45,15 @@ public sealed class ReplicateImageGenerationService : IImageGenerationService
     {
         try
         {
+            if (!_registry.IsSchemaKnown(parameters.Model))
+                return Refused(parameters.Model, "this build has no field list for it, so it is not supported");
+
+            var caps = _registry.CapabilitiesFor(parameters.Model).Capabilities;
+            // A descriptor is a hand-written claim about a model that keeps changing underneath it,
+            // and this is the only thing standing between a stale claim and money spent on a 422.
+            if (ValueOutsideTheModelVocabulary(parameters, caps) is { } offVocabulary)
+                return Refused(parameters.Model, $"it does not accept {offVocabulary}");
+
             var imageModel = _registry.PayloadFor(parameters.Model).Build(parameters);
 
             var finalResponse = await CallReplicateModelAsync(parameters, imageModel, cancellationToken);
@@ -97,6 +114,40 @@ public sealed class ReplicateImageGenerationService : IImageGenerationService
             };
         }
     }
+
+    /// <summary>
+    /// A call that was stopped before it reached the network, so nothing was billed. Returned rather
+    /// than thrown so the reason lands on the job card where the failed generation would have been.
+    /// </summary>
+    private GeneratedImage Refused(string modelId, string because)
+    {
+        var message = $"{modelId}: {because}. No request was sent, so nothing was billed.";
+        _logger.LogWarning("Refused Replicate call: {Message}", message);
+        return new GeneratedImage { Message = message, ImageData = null };
+    }
+
+    /// <summary>
+    /// The name of the first request value the resolved descriptor does not declare, or null. The
+    /// picker cannot produce an off-vocabulary value — <c>RefreshCapabilities</c> snaps every knob to
+    /// the selected model on change — but restored settings, a cloned run, or a descriptor that has
+    /// drifted from its model all can, and each of those currently costs a prediction to discover.
+    ///
+    /// A field with no declared vocabulary is skipped rather than refused: it is a knob this build
+    /// does not offer, and the descriptor does not send it either.
+    /// </summary>
+    private static string? ValueOutsideTheModelVocabulary(ImageGenerationParameters p, ModelCapabilities caps) =>
+        caps.AspectRatio && caps.AspectRatios.Count > 0 && !caps.AspectRatios.Contains(p.AspectRatio, StringComparer.Ordinal)
+            ? $"aspect ratio {p.AspectRatio}" // "custom" is legal here: descriptors that take it list it.
+            : Outside(p.GptQuality, caps.GptQualityOptions, "quality")
+            ?? Outside(p.GptModeration, caps.GptModerationOptions, "moderation")
+            ?? Outside(p.GptComplexity, caps.GptComplexityOptions, "complexity")
+            ?? Outside(p.GptBackground, caps.GptBackgroundOptions, "background")
+            ?? Outside(p.GptInputFidelity, caps.GptInputFidelityOptions, "input fidelity");
+
+    private static string? Outside(string? value, IReadOnlyList<string>? vocabulary, string field) =>
+        vocabulary is { Count: > 0 } && value is not null && !vocabulary.Contains(value, StringComparer.Ordinal)
+            ? $"{field} {value}"
+            : null;
 
     private string FormatError(Exception ex, string apiToken)
     {

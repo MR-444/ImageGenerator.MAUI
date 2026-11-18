@@ -72,22 +72,24 @@ public static class RefitServiceExtensions
     public static IHttpClientBuilder AddRefitClient<T>(
         this IServiceCollection services,
         string baseAddress,
-        TimeSpan? retryDelay = null) where T : class
+        TimeSpan? retryDelay = null,
+        bool logRequestBody = false) where T : class
     {
         return services
             .AddRefitGeneratedClient<T>(SharedRefitSettings)
             .ConfigureHttpClient(client => client.BaseAddress = new Uri(baseAddress))
             .ConfigureStandardResilience(RefitPerAttemptTimeout, RefitTotalRequestTimeout, retryDelay)
-            .AddRemoteHttpLogging(typeof(T).Name);
+            .AddRemoteHttpLogging(typeof(T).Name, logRequestBody);
     }
 
     extension(IHttpClientBuilder builder)
     {
-        public IHttpClientBuilder AddRemoteHttpLogging(string clientName) =>
+        public IHttpClientBuilder AddRemoteHttpLogging(string clientName, bool logRequestBody = false) =>
             builder.AddHttpMessageHandler(sp =>
                 new RemoteHttpLoggingHandler(
                     sp.GetRequiredService<ILogger<RemoteHttpLoggingHandler>>(),
-                    clientName));
+                    clientName,
+                    logRequestBody));
 
         /// <summary>
         /// Apply the project's standard outbound-HTTP pipeline to a named or typed client:

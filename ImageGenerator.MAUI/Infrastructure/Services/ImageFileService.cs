@@ -53,9 +53,10 @@ public sealed class ImageFileService : IImageFileService
         // buffer isn't held until the next GC2 (matters under the concurrent queue).
         using var ms = new MemoryStream(imageBytes);
         Image<Rgba32>? image = null;
-        int width, height;
         try
         {
+            int width;
+            int height;
             if (isPngFastPath)
             {
                 var info = await SixLabors.ImageSharp.Image.IdentifyAsync(ms);
@@ -71,16 +72,27 @@ public sealed class ImageFileService : IImageFileService
             // that size via explicit width/height (Flux with custom dimensions). For aspect_ratio
             // models (gpt-image-*, nano-banana, Flux presets) they reflect the UI control, not the
             // produced image, and would be misleading.
+            //
+            // Seed and AspectRatio describe REQUEST fields, so they are only written when the
+            // descriptor advertises them. A model this build has no field list for sends neither,
+            // and stamping them anyway makes the saved file claim a control the provider never
+            // received — the aspect ratio then contradicts the square pixels next to it, and the
+            // reader has no way to tell which one was real. CivitaiMetaBuilder reads these lines
+            // back with null checks, so an absent line simply goes unreported.
+            var caps = _registry.CapabilitiesFor(model).Capabilities;
             var lines = new List<string>
             {
                 $"Prompt: {prompt}",
                 $"ModelName: {model}",
-                $"Seed: {seed}",
-                $"AspectRatio: {aspectRatio}",
+            };
+            if (caps.Seed) lines.Add($"Seed: {seed}");
+            if (caps.AspectRatio) lines.Add($"AspectRatio: {aspectRatio}");
+            lines.AddRange(
+            [
                 $"Dimensions: {width}x{height}",
                 $"Format: {outputFormat}",
                 $"Quality: {outputQuality}",
-            };
+            ]);
 
             // Per-model metadata extras (Upsampling for Flux Pro, Raw/ImagePromptStrength for
             // Ultra, GPT knobs, NanoBanana resolution, ...) come from each model's IMetadataDescriber.

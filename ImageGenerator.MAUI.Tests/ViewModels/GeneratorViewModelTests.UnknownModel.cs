@@ -1,5 +1,4 @@
 using FluentAssertions;
-using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Shared.Constants;
 using ImageGenerator.MAUI.Presentation.ViewModels;
@@ -8,11 +7,9 @@ namespace ImageGenerator.MAUI.Tests.ViewModels;
 
 /// <summary>
 /// What the user is told when a Replicate model reaches the picker without a field list in this
-/// build. Replicate answers for these models and the prompt alone often makes a picture, so the
-/// answer is a sentence, not a lockout — but "listed" has never meant "known", and the difference
-/// is otherwise only discoverable by generating.
-///
-/// Part of <see cref="GeneratorViewModelTests"/> to reuse its mocks.
+/// build. This build will not call such a model, so the note is a lockout with a reason — and the
+/// reason has to name the model, because "not supported" without one reads as an insult to whoever
+/// made it. Part of <see cref="GeneratorViewModelTests"/> to reuse its mocks.
 /// </summary>
 public partial class GeneratorViewModelTests
 {
@@ -27,14 +24,16 @@ public partial class GeneratorViewModelTests
     }
 
     [Fact]
-    public void ModelFieldsNote_UnknownReplicatePath_NamesTheModelAndTheRisk()
+    public void ModelFieldsNote_UnknownReplicatePath_NamesTheModelAndSaysItWillNotRun()
     {
         _viewModel.Parameters.Model = "stability-ai/some-new-model";
 
+        // Deliberately not a full sentence match: this is the user's copy, and a test that freezes it
+        // turns every wording pass into a test failure. What matters is that the note names which
+        // model it means and states that nothing will be sent.
         _viewModel.ModelFieldsNote.Should().NotBeNull()
             .And.Contain("stability-ai/some-new-model")
-            .And.Contain("only the prompt is sent")
-            .And.Contain("may not work");
+            .And.Contain("not supported");
     }
 
     [Theory]
@@ -73,11 +72,11 @@ public partial class GeneratorViewModelTests
     [Fact]
     public void SelectModel_WithoutFieldList_LeavesTheSavedAspectRatioAlone()
     {
-        // The fallback offers no aspect ratio and sends none, so it has no opinion worth writing into
-        // persisted state — yet switching models runs the capability refresh, which snaps the current
-        // ratio to the new model's first option whenever the list no longer contains it. A single
-        // dummy value in FallbackReplicateDescriptor would silently reset 16:9 to 1:1 here, and the
-        // user would meet that ratio on their next model too.
+        // A model this build refuses to call offers no aspect ratio and sends no aspect ratio, so it
+        // has no opinion worth writing into persisted state — yet switching models runs the capability
+        // refresh, which snaps the current ratio to the new model's first option whenever the list no
+        // longer contains it. A single dummy value in FallbackReplicateDescriptor would silently reset
+        // 16:9 to 1:1 here, and the user would meet that ratio on their next model too.
         _viewModel.ProviderFilter.ApplyCatalog(
             [new ModelOption("Some New Model", "stability-ai/some-new-model", ProviderConstants.Replicate)]);
         _viewModel.Parameters.AspectRatio = "16:9";

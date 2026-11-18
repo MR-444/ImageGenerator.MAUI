@@ -67,8 +67,13 @@ public static class MauiProgram
         // default filter (Information) would drop LogDebug calls before NLog sees them —
         // the NLog rules, not MEL, are the intended filtering layer.
         builder.Logging.ClearProviders().SetMinimumLevel(LogLevel.Trace).AddNLog();
-        // 1) Add the Refit client
-        builder.Services.AddRefitClient<IReplicateApi>("https://api.replicate.com");
+        // 1) Add the Refit client. logRequestBody: a Replicate call's behavior and its price are both
+        //    decided by which input fields went out, and neither the URL nor the status code records
+        //    that — every "what did we actually send" question has ended in reading descriptor source.
+        //    Inline images and token values are stripped before the line is written.
+        builder.Services.AddRefitClient<IReplicateApi>(
+            "https://api.replicate.com",
+            logRequestBody: true);
 
         // 1a) Named HttpClients for the non-Refit outbound paths. Both reuse the project's
         //     standard resilience pipeline (retry on 5xx/408/429, Polly-owned timeouts) so the

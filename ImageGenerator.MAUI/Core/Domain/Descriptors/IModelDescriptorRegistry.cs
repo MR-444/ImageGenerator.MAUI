@@ -21,12 +21,12 @@ public interface IModelDescriptorRegistry
     /// <summary>
     /// Whether this app build knows the model's field set: a dedicated descriptor exists, or the
     /// provider's API is uniform enough that none is needed (every <c>pollinations/*</c> id rides
-    /// one wire API; every <c>comfyui/*</c> id is the user's own workflow file). False means the
-    /// lookups above answer with the conservative Replicate fallback — the request is a guess, so
-    /// the UI says so instead of showing knobs whose fields that guess may not include.
+    /// one wire API; every <c>comfyui/*</c> id is the user's own workflow file).
     ///
-    /// This reports the absence of knowledge; it never changes what a lookup returns. Making
-    /// PayloadFor throw on an unknown id would turn "usually works" into "never works".
+    /// False is a permission and not only a label. ReplicateImageGenerationService will not call such
+    /// a model — no request is built, so nothing is billed — and the picker marks the entry rather
+    /// than offering knobs for fields nobody has checked. <see cref="CapabilitiesFor"/> still answers,
+    /// with the narrow set that keeps those pickers honest; <see cref="PayloadFor"/> throws.
     /// </summary>
     bool IsSchemaKnown(string modelId);
 
