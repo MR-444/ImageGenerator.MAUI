@@ -18,7 +18,7 @@ public class ReplicateHelperTests
     [Fact]
     public async Task PollForOutput_TerminalSucceeded_ReturnsPrediction()
     {
-        var pred = new ReplicatePredictionResponse { Status = "succeeded", Output = new[] { "url" } };
+        var pred = new ReplicatePredictionResponse { Status = "succeeded", Output = ["url"] };
         _api.Setup(x => x.GetPredictionAsync(Token, PredictionId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(pred);
 

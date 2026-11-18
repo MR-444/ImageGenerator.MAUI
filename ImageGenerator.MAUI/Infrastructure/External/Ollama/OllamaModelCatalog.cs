@@ -27,7 +27,7 @@ public sealed class OllamaModelCatalog : IOllamaModelCatalog
     public async Task<IReadOnlyList<string>> ListModelsAsync(string baseUrl, CancellationToken ct = default)
     {
         var infos = await ListModelInfosAsync(baseUrl, ct);
-        return infos.Select(i => i.Name).ToArray();
+        return [.. infos.Select(i => i.Name)];
     }
 
     public async Task<IReadOnlyList<OllamaModelInfo>> ListModelInfosAsync(string baseUrl, CancellationToken ct = default)

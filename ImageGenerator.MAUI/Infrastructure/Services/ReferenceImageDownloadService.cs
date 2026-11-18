@@ -7,10 +7,11 @@ public sealed class ReferenceImageDownloadService : IReferenceImageDownloadServi
 {
     public const string HttpClientName = "reference-image-import";
 
-    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
+    private static readonly HashSet<string> ImageExtensions =
+    [
+        with(StringComparer.OrdinalIgnoreCase),
         ".png", ".jpg", ".jpeg", ".webp", ".gif"
-    };
+    ];
 
     private readonly IHttpClientFactory _httpClientFactory;
 

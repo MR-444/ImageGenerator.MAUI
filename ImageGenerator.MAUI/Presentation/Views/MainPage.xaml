@@ -435,16 +435,18 @@
                         </VerticalStackLayout>
                     </Border>
 
-                    <!-- CARD: GPT Image 1.5 advanced options (only visible when that model is selected) -->
+                    <!-- CARD: GPT Image advanced options (only for hosted gpt-image models; the
+                         per-knob visibility is per MODEL — see SupportsGptInputFidelity /
+                         SupportsGptComplexity, which is why the rows hide individually). -->
                     <Border Style="{StaticResource Card}"
                             VerticalOptions="Start"
                             IsVisible="{Binding SupportsGptQuality}">
                         <VerticalStackLayout Spacing="12">
-                            <Label Text="GPT Image 1.5 options" Style="{StaticResource CardTitle}" />
-                            <Label Text="Fine-grained knobs the Replicate-hosted gpt-image-1.5 schema accepts."
+                            <Label Text="GPT Image options" Style="{StaticResource CardTitle}" />
+                            <Label Text="Fine-grained knobs of the selected hosted gpt-image model. Which ones appear depends on the model's own schema."
                                    Style="{StaticResource HelperText}" />
 
-                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto" RowSpacing="12">
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
                                 <VerticalStackLayout Grid.Row="0" Grid.Column="0" Spacing="4">
                                     <Label Text="Quality" Style="{StaticResource FieldLabel}" />
                                     <Picker ItemsSource="{Binding GptQualityOptions}"
@@ -463,11 +465,19 @@
                                             SelectedItem="{Binding Parameters.GptModeration}"
                                             AutomationId="GptModerationPicker" />
                                 </VerticalStackLayout>
-                                <VerticalStackLayout Grid.Row="1" Grid.Column="1" Spacing="4">
+                                <VerticalStackLayout Grid.Row="1" Grid.Column="1" Spacing="4"
+                                                     IsVisible="{Binding SupportsGptInputFidelity}">
                                     <Label Text="Input fidelity" Style="{StaticResource FieldLabel}" />
                                     <Picker ItemsSource="{Binding GptInputFidelityOptions}"
                                             SelectedItem="{Binding Parameters.GptInputFidelity}"
                                             AutomationId="GptInputFidelityPicker" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Row="2" Grid.Column="0" Spacing="4"
+                                                     IsVisible="{Binding SupportsGptComplexity}">
+                                    <Label Text="Complexity" Style="{StaticResource FieldLabel}" />
+                                    <Picker ItemsSource="{Binding GptComplexityOptions}"
+                                            SelectedItem="{Binding Parameters.GptComplexity}"
+                                            AutomationId="GptComplexityPicker" />
                                 </VerticalStackLayout>
                             </Grid>
                         </VerticalStackLayout>

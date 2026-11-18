@@ -74,10 +74,11 @@ public partial class MainPage
         }
     }
 
-    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
+    private static readonly HashSet<string> ImageExtensions =
+    [
+        with(StringComparer.OrdinalIgnoreCase),
         ".png", ".jpg", ".jpeg", ".webp", ".gif"
-    };
+    ];
 
     public MainPage(GeneratorViewModel viewModel, ILogger<MainPage> logger)
     {

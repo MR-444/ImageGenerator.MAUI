@@ -18,7 +18,7 @@ public class InputImagesCoordinatorTests
         Seed: true,
         ImagePrompt: true,
         AspectRatioLabel: "Aspect ratio",
-        AspectRatios: new[] { "match_input_image", "16:9", "1:1" },
+        AspectRatios: ["match_input_image", "16:9", "1:1"],
         ImagePromptStrength: true,
         MaxImageInputs: 10);
 
@@ -95,7 +95,7 @@ public class InputImagesCoordinatorTests
         // seed the collection so the dedup branch fires before that line. Verifies the
         // rejection contract — that's the part the coordinator actually owns.
         var tempFile = Path.GetTempFileName();
-        await File.WriteAllBytesAsync(tempFile, new byte[] { 1, 2, 3, 4 });
+        await File.WriteAllBytesAsync(tempFile, [1, 2, 3, 4]);
         try
         {
             var statusMessages = new List<(string Msg, StatusKind Kind)>();
@@ -120,7 +120,7 @@ public class InputImagesCoordinatorTests
         // check rejects the new add before the ImageSource line.
         var capOne = DefaultCaps with { MaxImageInputs = 1 };
         var tempFile = Path.GetTempFileName();
-        await File.WriteAllBytesAsync(tempFile, new byte[] { 4, 5, 6 });
+        await File.WriteAllBytesAsync(tempFile, [4, 5, 6]);
         try
         {
             var statusMessages = new List<(string Msg, StatusKind Kind)>();

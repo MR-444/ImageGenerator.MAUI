@@ -108,8 +108,10 @@ public class ModelDescriptorRegistryTests
         // 6 originals (GPT 1.5, GPT 2, Flux Pro, Flux Pro Ultra, Klein4b, NanoBanana2)
         // + 3 pinned Ideogram V4 (balanced/turbo/quality)
         // + 3 Pollinations (flux/zimage/qwen-image)
-        // + 3 Pollinations gptimage family, seeded for their `quality` capability = 15.
-        _registry.Seeds.Should().HaveCount(15);
+        // + 3 Pollinations gptimage family, seeded for their `quality` capability
+        // + GPT Image 2.6 Sunburst (registered because its schema differs from the other two
+        //   hosted gpt-image models, and seeded so it is usable before the first Refresh) = 16.
+        _registry.Seeds.Should().HaveCount(16);
     }
 
     [Fact]

@@ -87,6 +87,80 @@ public class ReplicateImageGenerationServiceTests
         return dict["images"] == null;
     }
 
+    private static Dictionary<string, object?> InputOf(ReplicatePredictionRequest req) =>
+        (Dictionary<string, object?>)req.Input;
+
+    /// <summary>
+    /// The bug, end to end. openai/gpt-image-2.6-sunburst reaches the picker through the catalog
+    /// owner allow-list; with no descriptor of its own it fell through to the generic Replicate
+    /// payload, which sent it "images"/"output_quality"/"seed" — three fields it never declared,
+    /// silently dropped since replicate/cog#2943 — plus an aspect_ratio from a list it rejects,
+    /// which is the HTTP 422 on input.aspect_ratio in documents/HTTP Logs.
+    /// </summary>
+    [Fact]
+    public async Task GenerateImageAsync_GptImage26Sunburst_SendsItsOwnSchemaFieldSet()
+    {
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.OpenAI.GptImage26SunburstOnReplicate,
+            Prompt = "A test image",
+            ApiToken = "test-token",
+            AspectRatio = "1024x1024",
+            GptQuality = "xhigh",
+            GptComplexity = "low"
+        };
+        parameters.ImagePrompts.Add("test-base64-data");
+
+        StubHappyPath();
+
+        await _service.GenerateImageAsync(parameters);
+
+        _mockReplicateApi.Verify(x => x.CreatePredictionAsync(
+            "Bearer test-token",
+            parameters.Model,
+            It.Is<ReplicatePredictionRequest>(req => HasGptImage26Input(InputOf(req))),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    private static bool HasGptImage26Input(Dictionary<string, object?> input)
+        => input["aspect_ratio"] as string == "1024x1024"
+            && input["quality"] as string == "xhigh"
+            && input["complexity"] as string == "low"
+            // The name this model actually declares, unlike the fallback's "images"…
+            && (input["input_images"] as string[])?.Length == 1
+            // …and three it never had.
+            && !input.ContainsKey("images")
+            && !input.ContainsKey("output_quality")
+            && !input.ContainsKey("seed")
+            && !input.ContainsKey("input_fidelity");
+
+    [Fact]
+    public async Task GenerateImageAsync_GptImage15_KeepsInputFidelityAndSendsNoComplexity()
+    {
+        // The other half of the per-model profile: the new field must not leak back into the model
+        // that has shipped with this exact payload all along.
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.OpenAI.GptImage15OnReplicate,
+            Prompt = "A test image",
+            ApiToken = "test-token",
+            AspectRatio = "1:1",
+            GptInputFidelity = "high"
+        };
+
+        StubHappyPath();
+
+        await _service.GenerateImageAsync(parameters);
+
+        _mockReplicateApi.Verify(x => x.CreatePredictionAsync(
+            "Bearer test-token",
+            parameters.Model,
+            It.Is<ReplicatePredictionRequest>(req =>
+                InputOf(req)["input_fidelity"] as string == "high"
+                && !InputOf(req).ContainsKey("complexity")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     [Fact]
     public async Task GenerateImageAsync_WhenApiCallFails_ShouldReturnErrorResult()
     {
@@ -289,7 +363,7 @@ public class ReplicateImageGenerationServiceTests
         var finalResponse = new ReplicatePredictionResponse
         {
             Status = "succeeded",
-            Output = new[] { "https://example.com/image.jpg" }
+            Output = ["https://example.com/image.jpg"]
         };
 
         _mockReplicateApi.Setup(x => x.CreatePredictionAsync(

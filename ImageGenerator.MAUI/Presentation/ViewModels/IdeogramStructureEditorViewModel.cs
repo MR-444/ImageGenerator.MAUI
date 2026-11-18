@@ -60,7 +60,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         IsAspectRatioMode = generator is not null
                             && Shared.Constants.ModelConstants.ComfyUi.IsId(generator.Parameters.Model);
         ResolutionOptions = IsAspectRatioMode
-            ? generator!.AspectRatioOptions.ToList()
+            ? [.. generator!.AspectRatioOptions]
             : IdeogramV4Descriptor.AllResolutions;
         if (IsAspectRatioMode && ResolutionOptions.Count > 0)
         {
@@ -482,7 +482,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         CompositionalDeconstruction = new CompositionalDeconstruction
         {
             Background = Background.Trim(),
-            Elements = Elements.Select(e => e.ToElement()).ToList()
+            Elements = [.. Elements.Select(e => e.ToElement())]
         }
     };
 
@@ -490,14 +490,15 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
 
     /// <summary>Snapshot for the drawable; pulled on every draw via the BoxesProvider hook.</summary>
     public IReadOnlyList<CanvasBox> BuildCanvasBoxes() =>
-        Elements
+    [
+        .. Elements
             .Where(e => e.HasBbox)
             .Select(e => new CanvasBox(
                 [e.YMin, e.XMin, e.YMax, e.XMax],
                 e.Summary,
                 e.IsText,
                 ReferenceEquals(e, SelectedElement)))
-            .ToList();
+    ];
 
     // --- Canvas gestures (Phase 2: drag-move + corner-resize) ------------------------------
     // The page maps GraphicsView Start/Drag/End/CancelInteraction onto these three methods;

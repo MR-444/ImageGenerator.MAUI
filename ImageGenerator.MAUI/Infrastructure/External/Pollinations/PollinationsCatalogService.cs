@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
@@ -33,19 +32,21 @@ public sealed class PollinationsCatalogService : IPollinationsCatalogService
             var entries = await httpClient.GetFromJsonAsync<List<PollinationsModelEntry>>(ModelsEndpoint, ct);
             if (entries is null) return [];
 
-            return entries
-                .Where(e => !string.IsNullOrWhiteSpace(e.Name)
-                            && e.OutputModalities?.Contains("image", StringComparer.OrdinalIgnoreCase) == true
-                            // Community models are alpha, unmonitored, and — per the docs — run on
-                            // the owner's own backend rather than Pollinations infrastructure, so
-                            // prompts would leave to a third party. Excluded on privacy grounds.
-                            && e.Community != true
-                            && e.Alpha != true)
-                .Select(e => new ModelOption(
-                    Display: ToDisplayName(e),
-                    Value: ModelConstants.Pollinations.PrefixSlash + e.Name!,
-                    Provider: ProviderConstants.Pollinations))
-                .ToList();
+            return
+            [
+                .. entries
+                    .Where(e => !string.IsNullOrWhiteSpace(e.Name)
+                                && e.OutputModalities?.Contains("image", StringComparer.OrdinalIgnoreCase) == true
+                                // Community models are alpha, unmonitored, and — per the docs — run on
+                                // the owner's own backend rather than Pollinations infrastructure, so
+                                // prompts would leave to a third party. Excluded on privacy grounds.
+                                && e.Community != true
+                                && e.Alpha != true)
+                    .Select(e => new ModelOption(
+                        Display: ToDisplayName(e),
+                        Value: ModelConstants.Pollinations.PrefixSlash + e.Name!,
+                        Provider: ProviderConstants.Pollinations))
+            ];
         }
         catch (Exception ex)
         {

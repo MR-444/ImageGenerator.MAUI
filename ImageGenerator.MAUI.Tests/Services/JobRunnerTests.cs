@@ -50,7 +50,7 @@ public class JobRunnerTests : IDisposable
         var parameters = SampleParameters();
         var expectedPath = PathInTempDir();
         _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
-            .ReturnsAsync(new GeneratedImage { ImageData = new byte[] { 1, 2, 3 }, Message = "ok" });
+            .ReturnsAsync(new GeneratedImage { ImageData = [1, 2, 3], Message = "ok" });
         _imageFileService.Setup(f => f.GetUniqueSavePath(It.IsAny<string>(), parameters))
             .Returns(expectedPath);
         _imageFileService.Setup(f => f.SaveImageWithMetadataAsync(expectedPath, It.IsAny<byte[]>(), parameters))
@@ -85,7 +85,7 @@ public class JobRunnerTests : IDisposable
     {
         var parameters = SampleParameters();
         _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
-            .ReturnsAsync(new GeneratedImage { ImageData = Array.Empty<byte>(), Message = "empty" });
+            .ReturnsAsync(new GeneratedImage { ImageData = [], Message = "empty" });
 
         var outcome = await _sut.RunAsync(parameters, CancellationToken.None);
 
@@ -131,14 +131,14 @@ public class JobRunnerTests : IDisposable
         var parameters = SampleParameters();
         var partialPath = PathInTempDir("partial.png");
         _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
-            .ReturnsAsync(new GeneratedImage { ImageData = new byte[] { 1, 2, 3 }, Message = "ok" });
+            .ReturnsAsync(new GeneratedImage { ImageData = [1, 2, 3], Message = "ok" });
         _imageFileService.Setup(f => f.GetUniqueSavePath(It.IsAny<string>(), parameters))
             .Returns(partialPath);
         _imageFileService.Setup(f => f.SaveImageWithMetadataAsync(partialPath, It.IsAny<byte[]>(), parameters))
             .Returns(async () =>
             {
                 // Simulate the partial-write scenario: bytes hit disk, then the writer dies.
-                await File.WriteAllBytesAsync(partialPath, new byte[] { 1, 2, 3 });
+                await File.WriteAllBytesAsync(partialPath, [1, 2, 3]);
                 throw new IOException("simulated AV lock");
             });
 
@@ -294,7 +294,7 @@ public class JobRunnerTests : IDisposable
         var parameters = SampleParameters();
         var targetPath = PathInTempDir("never-written.png");
         _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
-            .ReturnsAsync(new GeneratedImage { ImageData = new byte[] { 1, 2, 3 }, Message = "ok" });
+            .ReturnsAsync(new GeneratedImage { ImageData = [1, 2, 3], Message = "ok" });
         _imageFileService.Setup(f => f.GetUniqueSavePath(It.IsAny<string>(), parameters))
             .Returns(targetPath);
         _imageFileService.Setup(f => f.SaveImageWithMetadataAsync(targetPath, It.IsAny<byte[]>(), parameters))

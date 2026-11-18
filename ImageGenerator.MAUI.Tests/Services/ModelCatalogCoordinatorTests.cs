@@ -22,10 +22,10 @@ public class ModelCatalogCoordinatorTests
         // exercise the merges can override these setups.
         _pollinationsCatalogService
             .Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<ModelOption>());
+            .ReturnsAsync([]);
         _comfyCatalogService
             .Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<ModelOption>());
+            .ReturnsAsync([]);
 
         _sut = new ModelCatalogCoordinator(
             _catalogService.Object,
@@ -49,7 +49,7 @@ public class ModelCatalogCoordinatorTests
     public async Task LoadCachedAsync_EmptyCache_ReturnsNull()
     {
         _catalogService.Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<ModelOption>());
+            .ReturnsAsync([]);
 
         var result = await _sut.LoadCachedAsync();
 
@@ -100,7 +100,7 @@ public class ModelCatalogCoordinatorTests
     public async Task RefreshAsync_EmptyResult_ReturnsNull_AndDoesNotSave()
     {
         _catalogService.Setup(x => x.FetchAsync("token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<ModelOption>());
+            .ReturnsAsync([]);
 
         var result = await _sut.RefreshAsync("token");
 
@@ -196,7 +196,7 @@ public class ModelCatalogCoordinatorTests
     public async Task RefreshAsync_OnlyComfyEntries_ReturnsThemWithoutSaving()
     {
         _catalogService.Setup(x => x.FetchAsync("token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<ModelOption>());
+            .ReturnsAsync([]);
         _comfyCatalogService.Setup(x => x.FetchAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync([ComfyEntry()]);
 

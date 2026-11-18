@@ -22,8 +22,8 @@ public class ImageGenerationDispatcherTests
     private readonly Mock<HttpMessageHandler> _pollinationsHandler = new(MockBehavior.Strict);
     private readonly Mock<HttpMessageHandler> _replicateHandler = new(MockBehavior.Strict);
     private readonly Mock<HttpMessageHandler> _comfyHandler = new(MockBehavior.Loose);
-    private readonly List<HttpRequestMessage> _pollinationsRequests = new();
-    private readonly List<HttpRequestMessage> _comfyRequests = new();
+    private readonly List<HttpRequestMessage> _pollinationsRequests = [];
+    private readonly List<HttpRequestMessage> _comfyRequests = [];
     private readonly ImageGenerationDispatcher _dispatcher;
 
     public ImageGenerationDispatcherTests()
@@ -193,7 +193,7 @@ public class ImageGenerationDispatcherTests
             .ReturnsAsync(new ReplicatePredictionResponse
             {
                 Status = "succeeded",
-                Output = new[] { "https://example.com/image.jpg" }
+                Output = ["https://example.com/image.jpg"]
             });
 
         _replicateHandler

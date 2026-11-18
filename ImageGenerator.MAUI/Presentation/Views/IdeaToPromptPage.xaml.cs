@@ -17,10 +17,11 @@ public partial class IdeaToPromptPage
 
     private enum WorkspaceLayoutMode { Wide, Narrow }
 
-    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
+    private static readonly HashSet<string> ImageExtensions =
+    [
+        with(StringComparer.OrdinalIgnoreCase),
         ".png", ".jpg", ".jpeg", ".webp", ".gif"
-    };
+    ];
     private const long MaxReferenceImageBytes = 128L * 1024 * 1024; // 128 MB
 
     public IdeaToPromptPage(IdeaToPromptViewModel viewModel)

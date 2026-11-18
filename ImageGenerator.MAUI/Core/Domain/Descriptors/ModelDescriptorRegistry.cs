@@ -24,7 +24,7 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
         _payloads = payloads.ToDictionary(p => p.ModelId, StringComparer.Ordinal);
         _capabilities = capabilities.ToDictionary(c => c.ModelId, StringComparer.Ordinal);
         _metadata = metadata.ToDictionary(m => m.ModelId, StringComparer.Ordinal);
-        Seeds = seeds.Select(s => s.Seed).ToList();
+        Seeds = [.. seeds.Select(s => s.Seed)];
         // Held internally rather than DI-registered so neither fallback ever appears in the
         // IEnumerables above (and neither contributes a seed entry to the picker).
         _replicateFallback = new FallbackReplicateDescriptor();
@@ -70,8 +70,12 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
     }
 
     /// <summary>
-    /// Constructs a registry pre-populated with the production descriptor set. Used by tests
-    /// (and by the registry's DI registration could call this if it wants a no-DI shortcut).
+    /// Constructs a registry pre-populated with the production descriptor set. Used by tests,
+    /// and by <c>MauiProgram</c>, which registers exactly this list — the two sets are one list
+    /// on purpose. They used to be written out twice and drifted once (the typed Pollinations
+    /// descriptors were missing from <see cref="Default()"/>, so the tests ran a different
+    /// production set than the app shipped; see
+    /// ModelDescriptorRegistryTests.Default_RegistersPollinationsDescriptors).
     /// </summary>
     public static ModelDescriptorRegistry Default()
     {
@@ -83,7 +87,12 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
             descriptors.OfType<ICatalogSeedEntry>());
     }
 
-    private static IReadOnlyList<object> ProductionDescriptors() =>
+    /// <summary>
+    /// The one production descriptor set: every model with a hand-written descriptor, in picker
+    /// order. <see cref="Default()"/> wraps it for tests; <c>MauiProgram</c> registers it with DI.
+    /// Adding a model = one descriptor class + one line here.
+    /// </summary>
+    public static IReadOnlyList<object> ProductionDescriptors() =>
     [
         new Flux11ProDescriptor(),
         new Flux11ProUltraDescriptor(),
@@ -93,6 +102,7 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
         new Flux2Max2Descriptor(),
         new GptImage15Descriptor(),
         new GptImage2Descriptor(),
+        new GptImage26SunburstDescriptor(),
         new NanoBanana2Descriptor(),
         new IdeogramV4BalancedDescriptor(),
         new IdeogramV4TurboDescriptor(),

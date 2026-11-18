@@ -21,10 +21,12 @@ public static partial class PaletteSwatches
         var entries = ElementItemViewModel.ParsePalette(paletteText);
         if (entries is null) return [];
 
-        return entries
-            .Where(hex => HexColorRegex().IsMatch(hex))
-            .Select(hex => new PaletteSwatch(hex, Color.FromArgb(hex)))
-            .ToList();
+        return
+        [
+            .. entries
+                .Where(hex => HexColorRegex().IsMatch(hex))
+                .Select(hex => new PaletteSwatch(hex, Color.FromArgb(hex)))
+        ];
     }
 
     /// <summary>Schema-exact formatting: uppercase #RRGGBB.</summary>

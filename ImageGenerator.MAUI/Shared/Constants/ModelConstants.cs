@@ -6,6 +6,7 @@ public static class ModelConstants
     {
         public const string GptImage15OnReplicate = "openai/gpt-image-1.5";
         public const string GptImage2OnReplicate = "openai/gpt-image-2";
+        public const string GptImage26SunburstOnReplicate = "openai/gpt-image-2.6-sunburst";
     }
 
     public static class Flux

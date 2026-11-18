@@ -176,16 +176,16 @@ public class UiMarkupContractTests
     /// <see cref="DeclaredViewModel"/> assert is what stops an existing page from quietly dropping
     /// out of scope by losing its x:DataType.
     /// </summary>
-    public static TheoryData<string> PagesWithADeclaredViewModel() => new()
-    {
+    public static TheoryData<string> PagesWithADeclaredViewModel() =>
+    [
         "MainPage.xaml",
         "SettingsPage.xaml",
         "IdeaToPromptPage.xaml",
         "MutationEnginePage.xaml",
         "IdeogramStructureEditorPage.xaml",
         "GalleryPage.xaml",
-        "GalleryItemDetailPage.xaml",
-    };
+        "GalleryItemDetailPage.xaml"
+    ];
 
     /// <summary>Returns the first thing wrong with the path, or null when all of it resolves.</summary>
     private static string? UnresolvedSegment(Type root, string path)

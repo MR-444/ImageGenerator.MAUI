@@ -207,7 +207,7 @@ public partial class GalleryItemDetailViewModel : ObservableObject
         {
             if (string.IsNullOrEmpty(FilePath)) return;
 
-            var styleName = name?.Trim() ?? string.Empty;
+            var styleName = name.Trim() ?? string.Empty;
             if (styleName.Length == 0)
             {
                 _ = FlashAsync("Enter a name for the style.");

@@ -20,7 +20,7 @@ public sealed partial class ProviderFilterCoordinator : ObservableObject
     private List<ModelOption> _allModels = [];
 
     [ObservableProperty]
-    private List<string> _providers = new() { AllProvidersLabel };
+    private List<string> _providers = [AllProvidersLabel];
 
     [ObservableProperty]
     private string _selectedProvider = AllProvidersLabel;
@@ -47,7 +47,7 @@ public sealed partial class ProviderFilterCoordinator : ObservableObject
         _setParametersModel = setParametersModel ?? throw new ArgumentNullException(nameof(setParametersModel));
         _refreshCapabilities = refreshCapabilities ?? throw new ArgumentNullException(nameof(refreshCapabilities));
 
-        _allModels = initialSeeds.ToList();
+        _allModels = [.. initialSeeds];
         _providers = BuildProvidersFrom(initialSeeds);
         RecomputeFilteredModels();
     }
@@ -73,7 +73,7 @@ public sealed partial class ProviderFilterCoordinator : ObservableObject
         SuppressModelPersist = true;
         try
         {
-            AllModels = mergedModels.ToList();
+            AllModels = [.. mergedModels];
             Providers = BuildProvidersFrom(mergedModels);
             RecomputeFilteredModels();
         }
@@ -146,8 +146,11 @@ public sealed partial class ProviderFilterCoordinator : ObservableObject
 
     private static List<string> BuildProvidersFrom(IEnumerable<ModelOption> models)
     {
-        var list = new List<string> { AllProvidersLabel };
-        list.AddRange(models.Select(m => m.Provider).Distinct().OrderBy(p => p));
+        List<string> list =
+        [
+            AllProvidersLabel,
+            .. models.Select(m => m.Provider).Distinct().OrderBy(p => p)
+        ];
         return list;
     }
 }

@@ -9,10 +9,10 @@ namespace ImageGenerator.MAUI.Tests.ViewModels;
 public class ProviderFilterCoordinatorTests
 {
     private static readonly ModelOption[] Seeds =
-    {
+    [
         new("Flux 1.1 Pro", "black-forest-labs/flux-1.1-pro", "Black Forest Labs"),
-        new("Pollinations Flux", "pollinations/flux", "Pollinations"),
-    };
+        new("Pollinations Flux", "pollinations/flux", "Pollinations")
+    ];
 
     private static ProviderFilterCoordinator Build(
         IReadOnlyList<ModelOption>? seeds = null,

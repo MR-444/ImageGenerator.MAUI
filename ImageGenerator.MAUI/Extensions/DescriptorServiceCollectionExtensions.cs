@@ -11,9 +11,12 @@ public static class DescriptorServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddModelDescriptor<T>(this IServiceCollection services)
         where T : class
+        => services.AddModelDescriptor(typeof(T));
+
+    /// <inheritdoc cref="AddModelDescriptor{T}"/>
+    public static IServiceCollection AddModelDescriptor(this IServiceCollection services, Type t)
     {
-        services.AddSingleton<T>();
-        var t = typeof(T);
+        services.AddSingleton(t);
 
         if (typeof(IPayloadBuilder).IsAssignableFrom(t))
             services.AddSingleton<IPayloadBuilder>(sp => (IPayloadBuilder)sp.GetRequiredService(t));

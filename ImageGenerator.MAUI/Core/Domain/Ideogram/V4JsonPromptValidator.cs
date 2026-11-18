@@ -91,8 +91,7 @@ public static partial class V4JsonPromptValidator
         if (palette.Count > maxColors)
             errors.Add($"{label}: at most {maxColors} colors allowed (got {palette.Count}).");
 
-        foreach (var color in palette.Where(c => !HexColorRegex().IsMatch(c)))
-            errors.Add($"{label}: '{color}' is not an uppercase #RRGGBB hex color.");
+        errors.AddRange(palette.Where(c => !HexColorRegex().IsMatch(c)).Select(color => $"{label}: '{color}' is not an uppercase #RRGGBB hex color."));
     }
 
     /// <summary>

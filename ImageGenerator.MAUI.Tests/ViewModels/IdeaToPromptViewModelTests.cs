@@ -3,13 +3,11 @@ using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
-using ImageGenerator.MAUI.Presentation.Views;
 using ImageGenerator.MAUI.Presentation.ViewModels;
 using ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using SixLabors.ImageSharp;
-using System.Xml.Linq;
 using ImageGenerator.MAUI.Infrastructure.Imaging;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;

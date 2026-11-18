@@ -1,3 +1,4 @@
+using System.Globalization;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Infrastructure.Imaging;
@@ -31,7 +32,7 @@ public sealed class ImageFileService : IImageFileService
         // model-specific extras come from registry.MetadataFor(...).Lines(parameters), which
         // captures everything else internally.
         var prompt = parameters.Prompt;
-        var model = parameters.Model ?? string.Empty;
+        var model = parameters.Model;
         var seed = parameters.Seed;
         var aspectRatio = parameters.AspectRatio;
         var outputFormat = parameters.OutputFormat;
@@ -126,7 +127,7 @@ public sealed class ImageFileService : IImageFileService
 
     public string BuildFileName(ImageGenerationParameters parameters)
     {
-        var timestamp = _clock().ToString("yyyyMMdd_HHmmss");
+        var timestamp = _clock().ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
         var invalidChars = Path.GetInvalidFileNameChars();
         var safePrompt = new string(parameters.Prompt.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray())
             .Replace(" ", "_")

@@ -1,4 +1,3 @@
-using CommunityToolkit.Mvvm.Input;
 using FluentAssertions;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
@@ -70,7 +69,7 @@ public class GalleryViewModelTests
             .Returns(AsAsync(items));
 
         var sut = CreateSut();
-        await ((IAsyncRelayCommand)sut.RefreshCommand).ExecuteAsync(null);
+        await sut.RefreshCommand.ExecuteAsync(null);
 
         sut.Items.Should().HaveCount(3);
         sut.Items.Select(i => i.FileName).Should().ContainInOrder("c.png", "b.png", "a.png");
@@ -83,10 +82,10 @@ public class GalleryViewModelTests
     {
         _galleryService
             .Setup(s => s.EnumerateAsync(It.IsAny<CancellationToken>()))
-            .Returns(AsAsync(Array.Empty<GalleryItem>()));
+            .Returns(AsAsync([]));
 
         var sut = CreateSut();
-        await ((IAsyncRelayCommand)sut.RefreshCommand).ExecuteAsync(null);
+        await sut.RefreshCommand.ExecuteAsync(null);
 
         sut.Items.Should().BeEmpty();
         sut.IsEmpty.Should().BeTrue();
@@ -109,8 +108,8 @@ public class GalleryViewModelTests
             .Returns(AsAsync(second));
 
         var sut = CreateSut();
-        await ((IAsyncRelayCommand)sut.RefreshCommand).ExecuteAsync(null);
-        await ((IAsyncRelayCommand)sut.RefreshCommand).ExecuteAsync(null);
+        await sut.RefreshCommand.ExecuteAsync(null);
+        await sut.RefreshCommand.ExecuteAsync(null);
 
         sut.Items.Should().HaveCount(2);
         // Default sort is Newest first (CreationTime desc) — c is newer than b.
@@ -160,7 +159,7 @@ public class GalleryViewModelTests
         var sut = CreateSut();
         sut.IsEmpty.Should().BeTrue("nothing has been loaded yet");
 
-        await ((IAsyncRelayCommand)sut.RefreshCommand).ExecuteAsync(null);
+        await sut.RefreshCommand.ExecuteAsync(null);
 
         sut.IsEmpty.Should().BeFalse();
     }
@@ -182,7 +181,7 @@ public class GalleryViewModelTests
             .Returns(AsAsync(items));
 
         var sut = CreateSut();
-        await ((IAsyncRelayCommand)sut.RefreshCommand).ExecuteAsync(null);
+        await sut.RefreshCommand.ExecuteAsync(null);
 
         sut.Items.Select(i => i.FileName).Should().ContainInOrder("a.png", "b.png", "c.png");
     }
@@ -203,7 +202,7 @@ public class GalleryViewModelTests
 
         var sut = CreateSut();
         sut.SelectedSortMode = GalleryViewModel.SortOldestFirst;
-        await ((IAsyncRelayCommand)sut.RefreshCommand).ExecuteAsync(null);
+        await sut.RefreshCommand.ExecuteAsync(null);
 
         sut.Items.Select(i => i.FileName).Should().ContainInOrder("c.png", "b.png", "a.png");
     }
@@ -218,7 +217,7 @@ public class GalleryViewModelTests
             .Returns(AsAsync(items));
 
         var sut = CreateSut();
-        await ((IAsyncRelayCommand)sut.RefreshCommand).ExecuteAsync(null);
+        await sut.RefreshCommand.ExecuteAsync(null);
 
         sut.SelectedSortMode = GalleryViewModel.SortLargestFirst;
 
@@ -236,7 +235,7 @@ public class GalleryViewModelTests
 
         var sut = CreateSut();
         sut.SelectedSortMode = GalleryViewModel.SortSmallestFirst;
-        await ((IAsyncRelayCommand)sut.RefreshCommand).ExecuteAsync(null);
+        await sut.RefreshCommand.ExecuteAsync(null);
 
         sut.Items.Select(i => i.FileName).Should().ContainInOrder("b.png", "c.png", "a.png");
     }
@@ -255,7 +254,7 @@ public class GalleryViewModelTests
     {
         var sut = CreateSut();
 
-        var act = () => sut.Dispose();
+        var act = sut.Dispose;
 
         act.Should().NotThrow();
     }
@@ -310,17 +309,17 @@ public class GalleryViewModelTests
     {
         var sut = CreateSut();
 
-        ((IAsyncRelayCommand)sut.PostSelectedAsOnePostCommand).CanExecute(null).Should().BeFalse();
+        sut.PostSelectedAsOnePostCommand.CanExecute(null).Should().BeFalse();
     }
 
     [Fact]
     public void CanBreedSelected_TracksSelection()
     {
         var sut = CreateSut();
-        ((IAsyncRelayCommand)sut.BreedSelectedCommand).CanExecute(null).Should().BeFalse();
+        sut.BreedSelectedCommand.CanExecute(null).Should().BeFalse();
 
         sut.SelectedItems.Add(MakeItem("a.png"));
-        ((IAsyncRelayCommand)sut.BreedSelectedCommand).CanExecute(null).Should().BeTrue();
+        sut.BreedSelectedCommand.CanExecute(null).Should().BeTrue();
     }
 
     [Fact]
@@ -337,7 +336,7 @@ public class GalleryViewModelTests
 
         // Shell.Current is null in the test harness, so navigation no-ops; the stash (which happens
         // first) is the observable effect we assert.
-        await ((IAsyncRelayCommand)sut.BreedSelectedCommand).ExecuteAsync(null);
+        await sut.BreedSelectedCommand.ExecuteAsync(null);
 
         _generator.PendingBreedSet.Should().NotBeNull();
         _generator.PendingBreedSet!.Should().HaveCount(2);
@@ -353,7 +352,7 @@ public class GalleryViewModelTests
         var sut = CreateSut();
         sut.SelectedItems.Add(MakeItem("a.png"));
 
-        await ((IAsyncRelayCommand)sut.BreedSelectedCommand).ExecuteAsync(null);
+        await sut.BreedSelectedCommand.ExecuteAsync(null);
 
         _generator.PendingBreedSet.Should().BeNull();
         sut.BreedStatusMessage.Should().Contain("structured");
@@ -371,7 +370,7 @@ public class GalleryViewModelTests
         sut.SelectedItems.Add(MakeItem("a.png"));
         sut.SelectedItems.Add(MakeItem("b.png"));
 
-        await ((IAsyncRelayCommand)sut.PostSelectedAsOnePostCommand).ExecuteAsync(null);
+        await sut.PostSelectedAsOnePostCommand.ExecuteAsync(null);
 
         // Exactly one service call (one post), with both images and publish:false (draft).
         _civitaiPostingService.Verify(s => s.PostImagesAsync(
@@ -401,7 +400,7 @@ public class GalleryViewModelTests
         sut.CivitaiIncludeMeta = false;
         sut.SelectedItems.Add(MakeItem("a.png"));
 
-        await ((IAsyncRelayCommand)sut.PostSelectedAsOnePostCommand).ExecuteAsync(null);
+        await sut.PostSelectedAsOnePostCommand.ExecuteAsync(null);
 
         captured.Images.Should().ContainSingle();
         captured.Images[0].Meta.Should().BeNull("generation data is opt-out per batch");
@@ -419,7 +418,7 @@ public class GalleryViewModelTests
         sut.CivitaiModelRef = "https://civitai.com/models/123?modelVersionId=3005491";
         sut.SelectedItems.Add(MakeItem("a.png"));
 
-        await ((IAsyncRelayCommand)sut.PostSelectedAsOnePostCommand).ExecuteAsync(null);
+        await sut.PostSelectedAsOnePostCommand.ExecuteAsync(null);
 
         captured.ModelVersionId.Should().Be(3005491);
     }
@@ -440,7 +439,7 @@ public class GalleryViewModelTests
         _uiStateStore.Setup(u => u.LoadCivitaiModelRef()).Returns("999");
         _galleryService
             .Setup(s => s.EnumerateAsync(It.IsAny<CancellationToken>()))
-            .Returns(AsAsync(Array.Empty<GalleryItem>()));
+            .Returns(AsAsync([]));
 
         var sut = CreateSut();
         await sut.OnAppearingAsync();
@@ -459,7 +458,7 @@ public class GalleryViewModelTests
             .Setup(s => s.ReadMetadataAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyDictionary<string, string>?)null);
         sut.SelectedItems.Add(MakeItem("a.png"));
-        await ((IAsyncRelayCommand)sut.PostSelectedAsOnePostCommand).ExecuteAsync(null);
+        await sut.PostSelectedAsOnePostCommand.ExecuteAsync(null);
 
         sut.OpenLastPostCommand.Execute(null);
 

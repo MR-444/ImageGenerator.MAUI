@@ -20,7 +20,7 @@ public static class ImageDataUriEncoder
     public static string[]? BuildDataUris(IReadOnlyCollection<string> prompts, int maxCount)
         => prompts.Count == 0
             ? null
-            : prompts.Take(maxCount).Select(BuildDataUri).ToArray();
+            : [.. prompts.Take(maxCount).Select(BuildDataUri)];
 
     public static string DetectImageMimeType(string base64Data)
     {

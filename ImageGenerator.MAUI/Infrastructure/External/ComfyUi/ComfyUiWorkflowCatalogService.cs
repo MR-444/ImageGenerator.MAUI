@@ -26,15 +26,17 @@ public sealed class ComfyUiWorkflowCatalogService : IComfyUiWorkflowCatalogServi
             // even before the first workflow.
             Directory.CreateDirectory(_directory);
 
-            IReadOnlyList<ModelOption> options = Directory.EnumerateFiles(_directory, "*.json")
-                .Select(Path.GetFileNameWithoutExtension)
-                .Where(stem => !string.IsNullOrWhiteSpace(stem))
-                .OrderBy(stem => stem, StringComparer.OrdinalIgnoreCase)
-                .Select(stem => new ModelOption(
-                    $"{stem} (ComfyUI)",
-                    ModelConstants.ComfyUi.PrefixSlash + stem,
-                    ProviderConstants.ComfyUi))
-                .ToList();
+            IReadOnlyList<ModelOption> options =
+            [
+                .. Directory.EnumerateFiles(_directory, "*.json")
+                    .Select(Path.GetFileNameWithoutExtension)
+                    .Where(stem => !string.IsNullOrWhiteSpace(stem))
+                    .OrderBy(stem => stem, StringComparer.OrdinalIgnoreCase)
+                    .Select(stem => new ModelOption(
+                        $"{stem} (ComfyUI)",
+                        ModelConstants.ComfyUi.PrefixSlash + stem,
+                        ProviderConstants.ComfyUi))
+            ];
             return Task.FromResult(options);
         }
         catch (Exception ex)

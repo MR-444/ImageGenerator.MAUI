@@ -1,7 +1,4 @@
 using FluentAssertions;
-using ImageGenerator.MAUI.Presentation.ViewModels;
-using Moq;
-using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.ComfyUi;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
@@ -9,8 +6,10 @@ using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
+using ImageGenerator.MAUI.Presentation.ViewModels;
 using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
 
@@ -54,25 +53,33 @@ public partial class GeneratorViewModelTests
         _mockFolderPicker = new Mock<IFolderPicker>();
         _mockOpenRouterModelCatalog = new Mock<IOpenRouterModelCatalog>();
 
-        _viewModel = new GeneratorViewModel(
-            _mockJobRunner.Object,
-            _mockTokenStore.Object,
-            _mockPollinationsTokenStore.Object,
-            _mockComfyUiAuthStore.Object,
-            _mockCivitaiTokenStore.Object,
-            _mockAnthropicTokenStore.Object,
-            _mockCivitaiPostingService.Object,
-            _mockUiStateStore.Object,
-            _mockCatalogCoordinator.Object,
-            ModelDescriptorRegistry.Default(),
-            _mockPromptBatchParser.Object,
-            _mockCheckpointService.Object,
-            _mockGalleryService.Object,
-            _mockFolderPicker.Object,
-            NullLogger<GeneratorViewModel>.Instance,
-            openRouterModelCatalog: _mockOpenRouterModelCatalog.Object,
-            comfyUiLoraService: _mockLoraService.Object);
+        _viewModel = CreateViewModel(ModelDescriptorRegistry.Default());
     }
+
+    /// <summary>
+    /// Builds a VM over an arbitrary descriptor registry: the production one for most tests, a stub
+    /// one where a test needs a capability combination no shipped model has (see
+    /// GeneratorViewModelTests.GptKnobs). The mocks are shared with the fixture's VM — they are
+    /// verify-only, so a second consumer cannot make assertions ambiguous for the first.
+    /// </summary>
+    private GeneratorViewModel CreateViewModel(IModelDescriptorRegistry registry) => new(
+        _mockJobRunner.Object,
+        _mockTokenStore.Object,
+        _mockPollinationsTokenStore.Object,
+        _mockComfyUiAuthStore.Object,
+        _mockCivitaiTokenStore.Object,
+        _mockAnthropicTokenStore.Object,
+        _mockCivitaiPostingService.Object,
+        _mockUiStateStore.Object,
+        _mockCatalogCoordinator.Object,
+        registry,
+        _mockPromptBatchParser.Object,
+        _mockCheckpointService.Object,
+        _mockGalleryService.Object,
+        _mockFolderPicker.Object,
+        NullLogger<GeneratorViewModel>.Instance,
+        openRouterModelCatalog: _mockOpenRouterModelCatalog.Object,
+        comfyUiLoraService: _mockLoraService.Object);
 
     [Fact]
     public void AllModels_ShouldContainExpectedSeed()
@@ -177,7 +184,7 @@ public partial class GeneratorViewModelTests
     public void Providers_ShouldIncludeAllAndDistinctProviders()
     {
         // Default() now mirrors the DI set (audit fix), so the seeds span both hosted providers.
-        _viewModel.ProviderFilter.Providers.Should().BeEquivalentTo(["All providers", "Replicate", "Pollinations"]);
+        _viewModel.ProviderFilter.Providers.Should().BeEquivalentTo("All providers", "Replicate", "Pollinations");
     }
 
     [Fact]
@@ -186,7 +193,7 @@ public partial class GeneratorViewModelTests
         // Put two providers in play so selecting one is observably narrowing.
         _viewModel.ProviderFilter.ApplyCatalog(
         [
-            new ModelOption("Flux 1.1 Pro", ModelConstants.Flux.Pro11, "Replicate"),
+            new("Flux 1.1 Pro", ModelConstants.Flux.Pro11, "Replicate"),
             new ModelOption("Pollinations Flux", ModelConstants.Pollinations.Flux, "Pollinations"),
         ]);
 
@@ -243,7 +250,7 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
 
-        await ((IAsyncRelayCommand)vm.GenerateImageCommand).ExecuteAsync(null);
+        await vm.GenerateImageCommand.ExecuteAsync(null);
 
         gate.Acquired.Should().Be(1, "the render must hold the local GPU while it runs");
         gate.Released.Should().Be(1, "the gate is released after the post-render VRAM free");
@@ -264,7 +271,7 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
 
-        await ((IAsyncRelayCommand)vm.GenerateImageCommand).ExecuteAsync(null);
+        await vm.GenerateImageCommand.ExecuteAsync(null);
 
         gate.Acquired.Should().Be(0, "cloud providers don't contend for the local GPU");
     }
@@ -297,7 +304,7 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
 
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
         _viewModel.Jobs.Should().HaveCount(1);
         _viewModel.Jobs[0].StatusMessage.Should().StartWith("Saved to ");
@@ -315,7 +322,7 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
 
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
         // Drives the featured (large uncropped) queue card on the main page.
         _viewModel.LatestCompletedJob.Should().BeSameAs(_viewModel.Jobs[0]);
@@ -330,7 +337,7 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
 
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
         _viewModel.Jobs[0].IsFeatured.Should().BeTrue();
     }
@@ -344,8 +351,8 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
 
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await _viewModel.GenerateImageCommand.ExecuteAsync(null);
+        await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
         // Newest is Jobs[0]; the previous newest (now Jobs[1]) must lose the crown so exactly
         // one card renders the large preview.
@@ -362,7 +369,7 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Failed, null, "boom"));
 
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
         // A failed/canceled job must never become the featured image.
         _viewModel.LatestCompletedJob.Should().BeNull();
@@ -374,7 +381,7 @@ public partial class GeneratorViewModelTests
         _viewModel.Parameters.ApiToken = "";
         _viewModel.Parameters.Prompt = "";
 
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
         _viewModel.StatusMessage.Should().Contain("API Token");
         _viewModel.StatusMessage.Should().Contain("Prompt");
@@ -462,7 +469,7 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ThrowsAsync(new Exception("Test error"));
 
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
         _viewModel.Jobs.Should().HaveCount(1);
         _viewModel.Jobs[0].StatusMessage.Should().Be("Error: Test error");
@@ -547,7 +554,7 @@ public partial class GeneratorViewModelTests
     {
         var caps = ModelDescriptorRegistry.Default().CapabilitiesFor(ModelConstants.OpenAI.GptImage15OnReplicate).Capabilities;
 
-        caps.AspectRatios.Should().BeEquivalentTo(["1:1", "3:2", "2:3"]);
+        caps.AspectRatios.Should().BeEquivalentTo("1:1", "3:2", "2:3");
         caps.AspectRatioLabel.Should().Be("Aspect ratio");
         caps.Seed.Should().BeFalse();
         caps.ImagePrompt.Should().BeTrue();
@@ -594,7 +601,7 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RefreshAsync("valid-token", It.IsAny<CancellationToken>()))
             .ReturnsAsync(merged);
 
-        await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
+        await _viewModel.RefreshModelsCommand.ExecuteAsync(null);
 
         _viewModel.ProviderFilter.AllModels.Select(m => m.Value)
             .Should().Contain("black-forest-labs/flux-2")
@@ -668,7 +675,7 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RefreshAsync("valid-token", It.IsAny<CancellationToken>()))
             .ReturnsAsync(merged);
 
-        await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
+        await _viewModel.RefreshModelsCommand.ExecuteAsync(null);
 
         // Regression: FilteredModels must reflect freshly-applied AllModels, not be stuck on the
         // pre-refresh list.
@@ -694,7 +701,7 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RefreshAsync("", It.IsAny<CancellationToken>()))
             .ReturnsAsync(pollinationsOnly);
 
-        await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
+        await _viewModel.RefreshModelsCommand.ExecuteAsync(null);
 
         _mockCatalogCoordinator.Verify(x => x.RefreshAsync("", It.IsAny<CancellationToken>()), Times.Once);
         _viewModel.StatusKind.Should().Be(StatusKind.Success);
@@ -710,7 +717,7 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RefreshAsync("valid-token", It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<ModelOption>?)null);
 
-        await ((IAsyncRelayCommand)_viewModel.RefreshModelsCommand).ExecuteAsync(null);
+        await _viewModel.RefreshModelsCommand.ExecuteAsync(null);
 
         _viewModel.ProviderFilter.AllModels.Should().BeEquivalentTo(originalModels);
         _viewModel.StatusKind.Should().Be(StatusKind.Error);
@@ -725,7 +732,7 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Failed, null, "Image generation was canceled."));
 
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
         _viewModel.Jobs.Should().HaveCount(1);
         _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Canceled);
@@ -902,7 +909,7 @@ public partial class GeneratorViewModelTests
         _viewModel.InputImages.SelectedImages.Add(FakeImage("a"));
 
         _viewModel.InputImages.CanAddImage.Should().BeFalse();
-        await ((IAsyncRelayCommand)_viewModel.InputImages.AddImageCommand).ExecuteAsync(null);
+        await _viewModel.InputImages.AddImageCommand.ExecuteAsync(null);
 
         _viewModel.StatusKind.Should().Be(StatusKind.Error);
         _viewModel.StatusMessage.Should().Contain("Maximum");
@@ -999,10 +1006,10 @@ public partial class GeneratorViewModelTests
             .Returns(() => Interlocked.Increment(ref call) == 1 ? gate1.Task : gate2.Task);
 
         _viewModel.Parameters.Prompt = "PROMPT_A";
-        var run1 = ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        var run1 = _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
         _viewModel.Parameters.Prompt = "PROMPT_B";
-        var run2 = ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        var run2 = _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
         // Both jobs must already be in the collection with frozen prompt snapshots,
         // before either runner call has completed.
@@ -1328,7 +1335,7 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
 
-        await _viewModel.Batch.RunBatchAsync(new[] { "P1", "P2", "P3" });
+        await _viewModel.Batch.RunBatchAsync(["P1", "P2", "P3"]);
 
         _viewModel.Jobs.Should().HaveCount(3);
         _viewModel.Jobs[0].Prompt.Should().Be("P1");
@@ -1359,7 +1366,7 @@ public partial class GeneratorViewModelTests
                     : new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}");
             });
 
-        await _viewModel.Batch.RunBatchAsync(new[] { "A", "B", "C" });
+        await _viewModel.Batch.RunBatchAsync(["A", "B", "C"]);
 
         _viewModel.Jobs.Should().HaveCount(3);
         _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Success); // A
@@ -1386,7 +1393,7 @@ public partial class GeneratorViewModelTests
                 return new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, "ok");
             });
 
-        await _viewModel.Batch.RunBatchAsync(new[] { "p1", "p2", "p3" });
+        await _viewModel.Batch.RunBatchAsync(["p1", "p2", "p3"]);
 
         capturedSeeds.Should().HaveCount(3);
         capturedSeeds.Distinct().Should().HaveCount(3,
@@ -1398,7 +1405,7 @@ public partial class GeneratorViewModelTests
     {
         _viewModel.Parameters.ApiToken = "valid-token";
 
-        await _viewModel.Batch.RunBatchAsync(Array.Empty<string>());
+        await _viewModel.Batch.RunBatchAsync([]);
 
         _viewModel.Jobs.Should().BeEmpty();
         _viewModel.Batch.IsBatchRunning.Should().BeFalse();
@@ -1417,7 +1424,7 @@ public partial class GeneratorViewModelTests
         var runAsyncCalls = 0;
         _mockJobRunner
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
-            .Returns((ImageGenerationParameters _, CancellationToken __, IProgress<JobProgress>? ___) =>
+            .Returns((ImageGenerationParameters _, CancellationToken _, IProgress<JobProgress>? _) =>
             {
                 if (Interlocked.Increment(ref runAsyncCalls) == 1)
                 {
@@ -1429,7 +1436,7 @@ public partial class GeneratorViewModelTests
                 throw new InvalidOperationException("Runner should not be called for canceled-queued jobs.");
             });
 
-        var batchTask = _viewModel.Batch.RunBatchAsync(new[] { "first", "second", "third" });
+        var batchTask = _viewModel.Batch.RunBatchAsync(["first", "second", "third"]);
 
         await firstJobStarted.Task; // wait until the first job is actually running
         _viewModel.Batch.CancelBatchCommand.Execute(null);
@@ -1612,7 +1619,7 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
 
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
         _viewModel.Jobs.Should().HaveCount(1, "the missing-token gate must exempt comfyui/* models");
         _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Success);
@@ -1927,13 +1934,9 @@ public partial class GeneratorViewModelTests
         // pick must ALSO reach the generator immediately so leaving via back navigation
         // doesn't discard it.
         SelectIdeogramTurbo();
-        var editor = new IdeogramStructureEditorViewModel(
-            Mock.Of<IJsonPromptFileService>(),
-            Mock.Of<IFileLauncher>(),
-            NullLogger<IdeogramStructureEditorViewModel>.Instance,
-            _viewModel);
+        var editor = CreateEditor();
 
-        editor.SelectedResolution = "1440x2880";
+        editor.SelectedResolution = "1440x2880"; // deliberately NO ApplyToGenerator call
 
         _viewModel.Parameters.Resolution.Should().Be("1440x2880");
         _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880", It.IsAny<string?>()), Times.Once);
@@ -2128,7 +2131,7 @@ public partial class GeneratorViewModelTests
                 return gate.Task;
             });
 
-        var run = ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        var run = _viewModel.GenerateImageCommand.ExecuteAsync(null);
         await started.Task;
         var job = _viewModel.Jobs[0];
 
@@ -2164,7 +2167,7 @@ public partial class GeneratorViewModelTests
                 return Task.FromResult(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
             });
 
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await _viewModel.GenerateImageCommand.ExecuteAsync(null);
         var job = _viewModel.Jobs[0];
         job.IsRunning.Should().BeFalse();
 
@@ -2629,7 +2632,7 @@ public partial class GeneratorViewModelTests
             .ReturnsAsync(new CivitaiPostResult(true, 1, "https://civitai.com/posts/1", "Posted to CivitAI (draft)."))
             .Callback(() => posted.TrySetResult());
 
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await _viewModel.GenerateImageCommand.ExecuteAsync(null);
         // The posting hook is fire-and-forget by design; wait for the service call to land.
         await posted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
@@ -2648,7 +2651,7 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
 
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
         _mockCivitaiPostingService.Verify(
             s => s.PostImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()),
@@ -2783,7 +2786,7 @@ public partial class GeneratorViewModelTests
             .Setup(s => s.TestConnectionAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CivitaiConnectionResult(true, "Connected as Silmas."));
 
-        await ((IAsyncRelayCommand)_viewModel.TestCivitaiConnectionCommand).ExecuteAsync(null);
+        await _viewModel.TestCivitaiConnectionCommand.ExecuteAsync(null);
 
         _viewModel.CivitaiConnectionStatus.Should().Be("Connected as Silmas.");
     }
@@ -2917,7 +2920,7 @@ public partial class GeneratorViewModelTests
             .Callback<ImageGenerationParameters, CancellationToken, IProgress<JobProgress>?>((p, _, _) => captured = p)
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, "ok"));
 
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
         captured.Should().NotBeNull();
         captured!.Seed.Should().Be(123456);
@@ -2953,7 +2956,7 @@ public partial class GeneratorViewModelTests
         _mockJobRunner
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, "ok"));
-        await ((IAsyncRelayCommand)_viewModel.GenerateImageCommand).ExecuteAsync(null);
+        await _viewModel.GenerateImageCommand.ExecuteAsync(null);
         _viewModel.LatestCompletedJob.Should().NotBeNull();
 
         _viewModel.ClearFinishedJobsCommand.Execute(null);

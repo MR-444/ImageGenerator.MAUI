@@ -166,7 +166,7 @@ public class MutationEngineViewModelTests
             sut.Count = 8;
             sut.Seed = seed;
             return new MutationRunVariantCaptions(
-                sut.Run(MutationTestData.Library()).Variants.Select(v => v.Caption).ToList());
+                [.. sut.Run(MutationTestData.Library()).Variants.Select(v => v.Caption)]);
         }
 
         Run(777).Captions.Should().Equal(Run(777).Captions);

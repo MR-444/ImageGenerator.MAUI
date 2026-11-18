@@ -223,7 +223,7 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
         var sut = CreateSut(KeyStore("sk-ant"),
             (_, _, _, _, _, _, _, _) => { called = true; return Task.FromResult(ValidJson); });
 
-        var result = await sut.BreedAsync(Array.Empty<V4JsonPrompt>(), "x", 0, ModelTier.Sonnet);
+        var result = await sut.BreedAsync([], "x", 0, ModelTier.Sonnet);
 
         result.Success.Should().BeFalse();
         called.Should().BeFalse();
@@ -236,7 +236,7 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
         var sut = CreateSut(KeyStore("sk-ant"),
             (_, _, _, _, _, messages, _, _) => { captured = messages[0].Content; return Task.FromResult(ValidJson); });
 
-        var result = await sut.BreedAsync(new[] { Base, Base }, "blend them", 0, ModelTier.Sonnet);
+        var result = await sut.BreedAsync([Base, Base], "blend them", 0, ModelTier.Sonnet);
 
         result.Success.Should().BeTrue();
         captured.Should().Contain("PARENT CAPTIONS").And.Contain("[2]").And.Contain("offspring #1");

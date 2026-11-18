@@ -37,7 +37,7 @@ public class BatchCoordinatorTests
             promptBatchParser: new Mock<IPromptBatchParser>().Object,
             parametersAccessor: () => parameters,
             enqueueJob: enqueueJob ?? (_ => { }),
-            runJob: runJob ?? (j => Task.CompletedTask),
+            runJob: runJob ?? (_ => Task.CompletedTask),
             setStatus: (_, _) => { },
             addAsInputAsync: _ => Task.CompletedTask,
             mutateFromImageAsync: _ => Task.CompletedTask);
@@ -49,7 +49,7 @@ public class BatchCoordinatorTests
         var ran = false;
         var coord = Build(runJob: _ => { ran = true; return Task.CompletedTask; });
 
-        await coord.RunBatchAsync(Array.Empty<string>());
+        await coord.RunBatchAsync([]);
 
         ran.Should().BeFalse();
         coord.IsBatchRunning.Should().BeFalse();
@@ -64,7 +64,7 @@ public class BatchCoordinatorTests
             return Task.CompletedTask;
         });
 
-        await coord.RunBatchAsync(new[] { "a", "b" });
+        await coord.RunBatchAsync(["a", "b"]);
 
         coord.IsBatchRunning.Should().BeFalse("finally block clears the flag");
     }
@@ -83,11 +83,11 @@ public class BatchCoordinatorTests
             j.StatusKind = StatusKind.Success;
         });
 
-        var firstBatch = coord.RunBatchAsync(new[] { "one" });
+        var firstBatch = coord.RunBatchAsync(["one"]);
         await firstStarted.Task;
 
         // Second call while first is in-flight should be rejected by the IsBatchRunning guard.
-        await coord.RunBatchAsync(new[] { "two", "three" });
+        await coord.RunBatchAsync(["two", "three"]);
         calls.Should().Be(1, "second batch must not start while the first is running");
 
         firstCanFinish.SetResult();
@@ -102,7 +102,7 @@ public class BatchCoordinatorTests
             runJob: j => { j.StatusKind = StatusKind.Success; return Task.CompletedTask; },
             enqueueJob: enqueued.Add);
 
-        await coord.RunBatchAsync(new[] { "first", "second", "third" });
+        await coord.RunBatchAsync(["first", "second", "third"]);
 
         // Insert is reversed by the coordinator so the host's Insert(0, …) places the FIRST
         // prompt at the top. Verify by checking the prompts on the captured-at-enqueue order
@@ -130,7 +130,7 @@ public class BatchCoordinatorTests
             j.StatusKind = StatusKind.Success;
         });
 
-        var batchTask = coord.RunBatchAsync(new[] { "first", "second", "third" });
+        var batchTask = coord.RunBatchAsync(["first", "second", "third"]);
         await firstStarted.Task;
 
         coord.CancelBatchCommand.Execute(null);

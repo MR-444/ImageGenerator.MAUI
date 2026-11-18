@@ -66,8 +66,11 @@ public static class DescBudget
         if (keptIndices.Count == 0)
             return baseDesc.Length == 0 ? null : baseDesc;
 
-        var segments = new List<string> { baseDesc.TrimEnd('.', ' ') };
-        segments.AddRange(keptIndices.Select(i => candidates[i].Text.Trim()));
+        List<string> segments =
+        [
+            baseDesc.TrimEnd('.', ' '),
+            .. keptIndices.Select(i => candidates[i].Text.Trim())
+        ];
         return string.Join(", ", segments);
     }
 }

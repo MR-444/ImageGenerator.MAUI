@@ -60,10 +60,12 @@ public sealed class ComfyUiLoraService : IComfyUiLoraService
             throw new InvalidOperationException("ComfyUI returned an invalid LoRA catalog.", ex);
         }
 
-        return (names ?? [])
+        return
+        [
+            .. (names ?? [])
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        ];
     }
 }

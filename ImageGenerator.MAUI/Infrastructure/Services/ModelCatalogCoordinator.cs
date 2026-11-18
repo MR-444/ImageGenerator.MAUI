@@ -56,7 +56,7 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
         // Load-time merge keeps any freshly-added seed entries surfacing even when the cache
         // was written before they existed.
         if (fetched.Count > 0) await _catalogService.SaveCachedAsync(fetched, ct);
-        return MergeWithSeeds(fetched.Concat(comfy).ToList());
+        return MergeWithSeeds([.. fetched, .. comfy]);
     }
 
     /// <summary>
@@ -68,6 +68,6 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
     private IReadOnlyList<ModelOption> MergeWithSeeds(IReadOnlyList<ModelOption> live)
     {
         var seen = new HashSet<string>(live.Select(m => m.Value), StringComparer.OrdinalIgnoreCase);
-        return live.Concat(_registry.Seeds.Where(m => seen.Add(m.Value))).ToList();
+        return [.. live, .. _registry.Seeds.Where(m => seen.Add(m.Value))];
     }
 }

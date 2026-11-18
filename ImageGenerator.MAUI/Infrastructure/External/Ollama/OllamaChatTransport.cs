@@ -54,8 +54,11 @@ internal static class OllamaChatTransport
         JsonElement? schema,
         CancellationToken ct)
     {
-        var allTurns = new List<object> { new { role = "system", content = systemPrompt } };
-        allTurns.AddRange(messages.Select(m => new { role = m.Role, content = m.Content }));
+        List<object> allTurns =
+        [
+            new { role = "system", content = systemPrompt },
+            .. messages.Select(m => new { role = m.Role, content = m.Content })
+        ];
 
         var body = new
         {

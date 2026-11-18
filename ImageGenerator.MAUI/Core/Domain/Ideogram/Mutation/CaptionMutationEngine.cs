@@ -82,7 +82,7 @@ public sealed class CaptionMutationEngine
         // becomes exactly the chosen style (SwapStyle reads the pinned name from the context). Identical
         // swaps collapse to one at the dispatch dedup — "apply this style" is a single transformation.
         if (config.Axis == MutationAxis.Look && !string.IsNullOrWhiteSpace(config.PinnedStyleName))
-            axisOperators = axisOperators.Where(o => o.Name == "SwapStyle").ToList();
+            axisOperators = [.. axisOperators.Where(o => o.Name == "SwapStyle")];
         var count = Math.Clamp(config.Count, MinCount, MaxCount);
         var master = new Random(config.Seed);
 

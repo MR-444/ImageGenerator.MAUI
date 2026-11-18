@@ -19,7 +19,7 @@ public class PollinationsImageGenerationServiceTests
     // unconfigured Dispose call and surface as a generic error in result.Message, masking
     // every real assertion.
     private readonly Mock<HttpMessageHandler> _handler = new(MockBehavior.Loose);
-    private readonly List<HttpRequestMessage> _requests = new();
+    private readonly List<HttpRequestMessage> _requests = [];
     private readonly PollinationsImageGenerationService _service;
 
     // Per-test response factory. Default is a happy-path 200 with 2048 bytes (matches the

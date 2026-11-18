@@ -441,7 +441,7 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
                     _upscaleFactorOwnsRender = ownFactor is not null;
                     var factors = new List<double> { bakedFactor.Value };
                     factors.AddRange(CommonUpscaleFactors.Where(f => !factors.Contains(f)));
-                    UpscaleFactorOptions = factors.Select(FormatUpscaleFactor).ToList();
+                    UpscaleFactorOptions = [.. factors.Select(FormatUpscaleFactor)];
                     // Restore a previous explicit pick for THIS workflow — but only when it's
                     // still on offer; never invent a selection.
                     var saved = ParseUpscaleFactor(_uiStateStore.LoadComfyUiUpscaleFactor(factorWorkflow));

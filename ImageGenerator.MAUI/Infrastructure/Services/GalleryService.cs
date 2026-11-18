@@ -14,10 +14,11 @@ namespace ImageGenerator.MAUI.Infrastructure.Services;
 
 public sealed class GalleryService : IGalleryService
 {
-    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
+    private static readonly HashSet<string> ImageExtensions =
+    [
+        with(StringComparer.OrdinalIgnoreCase),
         ".png", ".jpg", ".jpeg", ".webp"
-    };
+    ];
 
     // 2 s in-flight guard. SaveImageWithMetadataAsync writes via image.SaveAsync() — not an
     // atomic temp+rename — so a recently-written file may still be partial. Skipping freshly-
@@ -128,7 +129,7 @@ public sealed class GalleryService : IGalleryService
         var exif = info.Metadata.ExifProfile;
         if (exif is null) return null;
         return exif.TryGetValue(ExifTag.UserComment, out var value)
-            ? value?.Value.Text
+            ? value.Value.Text
             : null;
     }
 

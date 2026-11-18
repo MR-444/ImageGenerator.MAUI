@@ -11,7 +11,7 @@ public sealed class ModelCatalogService : IModelCatalogService
 {
     private const string CacheFileName = "model-catalog.json";
     private static readonly HashSet<string> ReplicateOwnerAllowlist =
-        new(StringComparer.OrdinalIgnoreCase) { "black-forest-labs", "openai", "google" };
+        [with(StringComparer.OrdinalIgnoreCase), "black-forest-labs", "openai", "google"];
 
     // Single options instance for both save and load — keeps the disk format pinned so
     // adding `Web` defaults or a converter on one path can't silently desync the other.
@@ -49,12 +49,14 @@ public sealed class ModelCatalogService : IModelCatalogService
             // collection hosts many other owners (stability-ai, bytedance, etc.) that this app
             // doesn't support — including them clutters the picker. Every surviving owner is
             // grouped under the single "Replicate" provider (the creator shows in the name).
-            return coll.Models
-                .Where(m => !string.IsNullOrWhiteSpace(m.Owner)
-                            && !string.IsNullOrWhiteSpace(m.Name)
-                            && ReplicateOwnerAllowlist.Contains(m.Owner!))
-                .Select(m => new ModelOption(m.Name!, $"{m.Owner}/{m.Name}", ProviderConstants.Replicate))
-                .ToList();
+            return
+            [
+                .. coll.Models
+                    .Where(m => !string.IsNullOrWhiteSpace(m.Owner)
+                                && !string.IsNullOrWhiteSpace(m.Name)
+                                && ReplicateOwnerAllowlist.Contains(m.Owner!))
+                    .Select(m => new ModelOption(m.Name!, $"{m.Owner}/{m.Name}", ProviderConstants.Replicate))
+            ];
         }
         catch (Exception ex)
         {

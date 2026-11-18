@@ -108,7 +108,7 @@ public class V4JsonPromptValidatorTests
     public void Validate_StylePaletteOverSixteen_Fails()
     {
         var model = ValidModel();
-        model.StyleDescription!.ColorPalette = Enumerable.Repeat("#112233", 17).ToList();
+        model.StyleDescription!.ColorPalette = [.. Enumerable.Repeat("#112233", 17)];
 
         V4JsonPromptValidator.Validate(model).Should().ContainSingle(e => e.Contains("at most 16"));
     }
@@ -117,7 +117,7 @@ public class V4JsonPromptValidatorTests
     public void Validate_ElementPaletteOverFive_Fails()
     {
         var model = ValidModel();
-        model.CompositionalDeconstruction.Elements[0].ColorPalette = Enumerable.Repeat("#112233", 6).ToList();
+        model.CompositionalDeconstruction.Elements[0].ColorPalette = [.. Enumerable.Repeat("#112233", 6)];
 
         V4JsonPromptValidator.Validate(model).Should().ContainSingle(e => e.Contains("at most 5"));
     }

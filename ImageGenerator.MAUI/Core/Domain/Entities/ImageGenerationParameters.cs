@@ -87,6 +87,11 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private string _gptInputFidelity = "low";
 
+    // openai/gpt-image-2.6-sunburst only. The field does not exist on gpt-image-1.5 / -2, so the
+    // descriptor omits it there; the default is that model's own server default ("high").
+    [ObservableProperty]
+    private string _gptComplexity = "high";
+
     // Pollinations-specific. Token stored on parameters so PollinationsImageGenerationService
     // can read it directly without taking a SecureStorage dependency, mirroring how ApiToken
     // works for Replicate. VM keeps both fields synced with their respective stores.
@@ -196,6 +201,7 @@ public partial class ImageGenerationParameters : ObservableObject
             GptBackground    = GptBackground,
             GptModeration    = GptModeration,
             GptInputFidelity = GptInputFidelity,
+            GptComplexity    = GptComplexity,
             PollinationsApiToken = PollinationsApiToken,
             Safe             = Safe,
             UseJsonPrompt    = UseJsonPrompt,

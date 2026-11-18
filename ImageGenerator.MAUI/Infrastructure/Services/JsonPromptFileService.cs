@@ -1,3 +1,4 @@
+using System.Globalization;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
 
@@ -27,7 +28,7 @@ public sealed class JsonPromptFileService : IJsonPromptFileService
 
     private string BuildFileName(string description)
     {
-        var timestamp = _clock().ToString("yyyyMMdd_HHmmss");
+        var timestamp = _clock().ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
         var invalidChars = Path.GetInvalidFileNameChars();
         var safeName = new string(description.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray())
             .Replace(" ", "_")

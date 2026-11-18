@@ -169,10 +169,11 @@ public class ImageModelFactoryTests
     }
 
     [Fact]
-    public void CreateImageModel_GptImage2OnReplicate_BuildsSameDictionaryShapeAsImage15()
+    public void CreateImageModel_GptImage2OnReplicate_BuildsImage15ShapeMinusInputFidelity()
     {
-        // GPT Image 1.5 and 2 share a factory branch — pin 2 explicitly so the M2 refactor
-        // doesn't accidentally diverge their wire payload.
+        // These two shared a factory branch and one descriptor base until the schema audit showed
+        // gpt-image-2 does NOT declare input_fidelity (documents/gpt-image-2_input_schema.txt).
+        // Everything else stays identical — that identity is what this test is for now.
         var parameters = new ImageGenerationParameters
         {
             Model = ModelConstants.OpenAI.GptImage2OnReplicate,
@@ -196,8 +197,38 @@ public class ImageModelFactoryTests
         dict.Should().ContainKey("quality").WhoseValue.Should().Be("high");
         dict.Should().ContainKey("background").WhoseValue.Should().Be("auto");
         dict.Should().ContainKey("moderation").WhoseValue.Should().Be("auto");
-        dict.Should().ContainKey("input_fidelity").WhoseValue.Should().Be("low");
         dict.Should().ContainKey("input_images");
+        // Cog silently drops inputs the model never declared, so sending input_fidelity here was
+        // never an error — just a picker that did nothing. It is gone with the per-model profile.
+        dict.Should().NotContainKey("input_fidelity");
+        dict.Should().NotContainKey("complexity");
+    }
+
+    [Fact]
+    public void CreateImageModel_GptImage26SunburstOnReplicate_SendsComplexityNotInputFidelity()
+    {
+        // The model that started this: it declares complexity, and rejects everything else's
+        // aspect-ratio list. Pinning the field set here is what keeps the 422 from coming back.
+        var parameters = new ImageGenerationParameters
+        {
+            Model = ModelConstants.OpenAI.GptImage26SunburstOnReplicate,
+            Prompt = "hello",
+            AspectRatio = "1024x1024",
+            OutputFormat = ImageOutputFormat.Jpg,
+            OutputQuality = 90,
+            GptQuality = "xhigh",
+            GptComplexity = "low"
+        };
+
+        var dict = Build(parameters).Should().BeOfType<Dictionary<string, object?>>().Subject;
+
+        dict["aspect_ratio"].Should().Be("1024x1024");
+        dict["output_format"].Should().Be("jpeg");
+        dict["quality"].Should().Be("xhigh");
+        dict["complexity"].Should().Be("low");
+        dict.Should().NotContainKey("input_fidelity");
+        dict.Should().NotContainKey("seed");
+        dict.Should().NotContainKey("images");
     }
 
     [Fact]

@@ -90,7 +90,7 @@ public class ReplicateOutputConverterTests
     [Fact]
     public void Write_List_EmitsJsonArray()
     {
-        var json = JsonSerializer.Serialize<IReadOnlyList<string>?>(new[] { "a", "b" }, Options);
+        var json = JsonSerializer.Serialize<IReadOnlyList<string>?>(["a", "b"], Options);
 
         json.Should().Be("[\"a\",\"b\"]");
     }

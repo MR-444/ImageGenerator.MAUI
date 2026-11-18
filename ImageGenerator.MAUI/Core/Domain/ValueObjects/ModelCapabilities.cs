@@ -20,6 +20,9 @@ public readonly record struct ModelCapabilities(
     IReadOnlyList<string>? GptBackgroundOptions = null,
     IReadOnlyList<string>? GptModerationOptions = null,
     IReadOnlyList<string>? GptInputFidelityOptions = null,
+    // openai/gpt-image-2.6-sunburst only: the `complexity` knob. Null for every hosted gpt-image
+    // model that does not declare the field, which is what hides its picker.
+    IReadOnlyList<string>? GptComplexityOptions = null,
     bool ImagePromptStrength = false,
     int MaxImageInputs = 0,
     bool Safe = false,

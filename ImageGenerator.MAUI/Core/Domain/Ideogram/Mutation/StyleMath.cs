@@ -79,9 +79,11 @@ public static class StyleMath
         if (combined.Count == 0)
             return null;
 
-        return combined
-            .OrderByDescending(ColorMath.Saturation)   // OrderBy is stable: ties keep union order
-            .Take(maxColors)
-            .ToList();
+        return
+        [
+            .. combined
+                .OrderByDescending(ColorMath.Saturation) // OrderBy is stable: ties keep union order
+                .Take(maxColors)
+        ];
     }
 }

@@ -156,6 +156,10 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     private List<string> _gptInputFidelityOptions = [];
 
+    // gpt-image-2.6-sunburst only; the list is empty (picker hidden) on every other model.
+    [ObservableProperty]
+    private List<string> _gptComplexityOptions = [];
+
     [ObservableProperty]
     private List<string> _outputFormats = [nameof(ImageOutputFormat.Png).ToLowerInvariant(), nameof(ImageOutputFormat.Jpg).ToLowerInvariant(), nameof(ImageOutputFormat.Webp).ToLowerInvariant()];
 
@@ -480,6 +484,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [NotifyPropertyChangedFor(nameof(SupportsCustomDimensions))]
     [NotifyPropertyChangedFor(nameof(SupportsResolution))]
     [NotifyPropertyChangedFor(nameof(SupportsGptQuality))]
+    [NotifyPropertyChangedFor(nameof(SupportsGptInputFidelity))]
+    [NotifyPropertyChangedFor(nameof(SupportsGptComplexity))]
     [NotifyPropertyChangedFor(nameof(SupportsIdeogramOptions))]
     [NotifyPropertyChangedFor(nameof(SupportsJsonPromptEditor))]
     [NotifyPropertyChangedFor(nameof(SupportsInputImage))]
@@ -525,6 +531,12 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     public bool SupportsCustomDimensions => Capabilities.CustomDimensions && IsCustomAspectRatio;
     public bool SupportsResolution => Capabilities.Resolutions is not null;
     public bool SupportsGptQuality => Capabilities.GptQualityOptions is not null;
+    // Per-knob visibility for the GPT options card. Each hosted gpt-image model declares its own
+    // field set, so "the card is showing" is not enough: gpt-image-2.6-sunburst has no
+    // input_fidelity, gpt-image-1.5/-2 have no complexity. Without these the grid renders a
+    // labelled Picker bound to an empty list — a control that can only ever be wrong.
+    public bool SupportsGptInputFidelity => Capabilities.GptInputFidelityOptions is not null;
+    public bool SupportsGptComplexity => Capabilities.GptComplexityOptions is not null;
     public bool SupportsIdeogramOptions => Capabilities.IdeogramOptions;
     // Structured-JSON checkbox + "Edit structure…" button: Ideogram V4 and ComfyUI workflow
     // models (whose graphs consume the caption JSON) both set this.
@@ -570,7 +582,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         _suppressAspectRatioPersist = true;
         try
         {
-            AspectRatioOptions = caps.AspectRatios.ToList();
+            AspectRatioOptions = [.. caps.AspectRatios];
             // Sticky AR: prefer the user's last explicit pick if the new model supports it,
             // otherwise keep the current AR if still valid (covers initial-state edge cases),
             // otherwise fall back to the model's first AR.
@@ -633,17 +645,31 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             finally { _suppressJsonPromptPersist = false; }
         }
 
+        // Every knob below is an enum the HOST defines, and the enums differ per model —
+        // gpt-image-2.6-sunburst adds quality "xhigh"/"max" and a whole extra field (complexity)
+        // that gpt-image-1.5 does not declare. Carrying a selection across that boundary ships a
+        // value the new model rejects, which comes back as a 422 naming a field the picker can no
+        // longer even display. So: whenever a model offers a list and the current value is not in
+        // it, snap to that model's first option (its own declared default). This was quality-only;
+        // background/moderation/input-fidelity had no guard and could carry a rejected value in.
+        static void SnapToModelOption(List<string> options, string current, Action<string> select)
+        {
+            if (options.Count > 0 && !options.Contains(current)) select(options[0]);
+        }
+
         GptQualityOptions = caps.GptQualityOptions?.ToList() ?? [];
         // The quality enum differs per host: Replicate offers auto/low/medium/high, Pollinations
         // low/medium/high/hd. Carrying a selection across that boundary would leave the picker
         // blank on a value the new model rejects, so snap to the model's own first option.
-        if (GptQualityOptions.Count > 0 && !GptQualityOptions.Contains(Parameters.GptQuality))
-        {
-            Parameters.GptQuality = GptQualityOptions[0];
-        }
+        SnapToModelOption(GptQualityOptions, Parameters.GptQuality, v => Parameters.GptQuality = v);
         GptBackgroundOptions = caps.GptBackgroundOptions?.ToList() ?? [];
+        SnapToModelOption(GptBackgroundOptions, Parameters.GptBackground, v => Parameters.GptBackground = v);
         GptModerationOptions = caps.GptModerationOptions?.ToList() ?? [];
+        SnapToModelOption(GptModerationOptions, Parameters.GptModeration, v => Parameters.GptModeration = v);
         GptInputFidelityOptions = caps.GptInputFidelityOptions?.ToList() ?? [];
+        SnapToModelOption(GptInputFidelityOptions, Parameters.GptInputFidelity, v => Parameters.GptInputFidelity = v);
+        GptComplexityOptions = caps.GptComplexityOptions?.ToList() ?? [];
+        SnapToModelOption(GptComplexityOptions, Parameters.GptComplexity, v => Parameters.GptComplexity = v);
 
         // Truncate attached images to the new model's cap so users don't silently lose excess
         // images at generation time. The coordinator's CollectionChanged handler raises
@@ -845,7 +871,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         // Hydrate capabilities + AR options from the registry. The model catalog itself lives
         // on ProviderFilterCoordinator (constructed below).
         _capabilities = _registry.CapabilitiesFor(ModelConstants.Flux.Pro11).Capabilities;
-        _aspectRatioOptions = _capabilities.AspectRatios.ToList();
+        _aspectRatioOptions = [.. _capabilities.AspectRatios];
 
         _parameters = new ImageGenerationParameters
         {

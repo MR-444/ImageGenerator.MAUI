@@ -35,12 +35,11 @@ public class ResiliencePolicyTests
     [Fact]
     public async Task ResiliencePipeline_StopsRetryingOnceSuccessResponseReturns()
     {
-        var handler = new CountingHandler(new Queue<HttpStatusCode>(new[]
-        {
+        var handler = new CountingHandler(new Queue<HttpStatusCode>([
             HttpStatusCode.ServiceUnavailable,
             HttpStatusCode.ServiceUnavailable,
             HttpStatusCode.OK
-        }));
+        ]));
         var services = BuildServices(handler);
         var api = services.GetRequiredService<ITestApi>();
 

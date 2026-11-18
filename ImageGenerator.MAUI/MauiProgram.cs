@@ -1,7 +1,6 @@
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Application.Services;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
-using ImageGenerator.MAUI.Core.Domain.Descriptors.Pollinations;
 using ImageGenerator.MAUI.Extensions;
 using ImageGenerator.MAUI.Infrastructure.Diagnostics;
 using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
@@ -152,27 +151,12 @@ public static class MauiProgram
                 totalTimeout: TimeSpan.FromMinutes(10));
 
         // 2) Per-model descriptors. Each registers as itself + every narrow interface it
-        //    implements, forwarded to the same singleton instance. Adding a new model is now
-        //    a single-line edit here plus one new descriptor file.
-        builder.Services
-            .AddModelDescriptor<Flux11ProDescriptor>()
-            .AddModelDescriptor<Flux11ProUltraDescriptor>()
-            .AddModelDescriptor<Flux2Klein4bDescriptor>()
-            .AddModelDescriptor<Flux2Flex2Descriptor>()
-            .AddModelDescriptor<Flux2Pro2Descriptor>()
-            .AddModelDescriptor<Flux2Max2Descriptor>()
-            .AddModelDescriptor<GptImage15Descriptor>()
-            .AddModelDescriptor<GptImage2Descriptor>()
-            .AddModelDescriptor<NanoBanana2Descriptor>()
-            .AddModelDescriptor<IdeogramV4BalancedDescriptor>()
-            .AddModelDescriptor<IdeogramV4TurboDescriptor>()
-            .AddModelDescriptor<IdeogramV4QualityDescriptor>()
-            .AddModelDescriptor<PollinationsFluxDescriptor>()
-            .AddModelDescriptor<PollinationsZimageDescriptor>()
-            .AddModelDescriptor<PollinationsQwenImageDescriptor>()
-            .AddModelDescriptor<PollinationsGptImageDescriptor1Mini>()
-            .AddModelDescriptor<PollinationsGptImageLargeDescriptor>()
-            .AddModelDescriptor<PollinationsGptImage2Descriptor>();
+        //    implements, forwarded to the same singleton instance. The set comes from the one
+        //    list the tests build their registry from, so app and tests cannot diverge — see
+        //    ModelDescriptorRegistry.ProductionDescriptors. Adding a model is one descriptor
+        //    file plus one line in that list.
+        foreach (var descriptor in ModelDescriptorRegistry.ProductionDescriptors())
+            builder.Services.AddModelDescriptor(descriptor.GetType());
 
         builder.Services.AddSingleton<IModelDescriptorRegistry, ModelDescriptorRegistry>();
 

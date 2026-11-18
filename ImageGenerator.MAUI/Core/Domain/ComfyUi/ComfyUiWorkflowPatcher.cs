@@ -83,7 +83,7 @@ public static class ComfyUiWorkflowPatcher
         var dateNote = PatchFilenamePrefixDates(nodes, now ?? DateTimeOffset.Now);
         var sage = useSageAttention
             ? PatchSageAttention(root, nodes)
-            : (NodeIds: new List<string>(), LoaderIds: new List<string>());
+            : (NodeIds: [], LoaderIds: []);
         var sageNote = useSageAttention
             ? $"; SageAttention on {sage.LoaderIds.Count} model loader(s)"
             : string.Empty;
@@ -227,10 +227,11 @@ public static class ComfyUiWorkflowPatcher
 
     private static List<(string Id, string ClassType, JsonObject Inputs)> LiteralUpscaleNodes(
         List<(string Id, string ClassType, JsonObject Inputs)> nodes) =>
-        nodes
+    [
+        .. nodes
             .Where(n => n.ClassType == UltimateUpscaleClass
                         && n.Inputs["upscale_by"]?.GetValueKind() == JsonValueKind.Number)
-            .ToList();
+    ];
 
     private static string PatchUpscaleFactor(
         List<(string Id, string ClassType, JsonObject Inputs)> nodes, double? factor)
@@ -394,10 +395,11 @@ public static class ComfyUiWorkflowPatcher
 
     private static List<(string Id, string ClassType, JsonObject Inputs)> LiteralLoaders(
         List<(string Id, string ClassType, JsonObject Inputs)> nodes, string classType, string inputKey) =>
-        nodes
+    [
+        .. nodes
             .Where(n => n.ClassType == classType
                         && n.Inputs[inputKey]?.GetValueKind() == JsonValueKind.String)
-            .ToList();
+    ];
 
     /// <summary>
     /// The workflow's quality-preset slot: EXACTLY ONE <c>CustomCombo</c> node (counting all
@@ -420,7 +422,7 @@ public static class ComfyUiWorkflowPatcher
             // implementation detail of the index computation in PatchQualityPreset.
             return new ComfyUiQualityPresetSlot(
                 combo.Value.Baked,
-                combo.Value.Options.Where(o => !string.IsNullOrEmpty(o)).ToList());
+                [.. combo.Value.Options.Where(o => !string.IsNullOrEmpty(o))]);
         }
         catch (JsonException)
         {
@@ -494,10 +496,12 @@ public static class ComfyUiWorkflowPatcher
             }
         }
         // Deterministic "first node" rule: numeric ids ascending, non-numeric after, ordinal.
-        return nodes
-            .OrderBy(n => int.TryParse(n.Item1, out var numeric) ? numeric : int.MaxValue)
-            .ThenBy(n => n.Item1, StringComparer.Ordinal)
-            .ToList();
+        return
+        [
+            .. nodes
+                .OrderBy(n => int.TryParse(n.Item1, out var numeric) ? numeric : int.MaxValue)
+                .ThenBy(n => n.Item1, StringComparer.Ordinal)
+        ];
     }
 
     private static string PatchJsonPrompt(

@@ -107,10 +107,11 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
     /// <summary>Read-only echo of which operators a run on the pinned axis will draw from, in
     /// plain-English "what it does" form (the raw operator names are engine-internal jargon).</summary>
     public IReadOnlyList<string> OperatorsForAxis =>
-        CaptionMutationEngine.DefaultOperators
+    [
+        .. CaptionMutationEngine.DefaultOperators
             .Where(o => o.Axis == SelectedAxis)
             .Select(o => CaptionDiff.OperatorBlurb(o.Name))
-            .ToList();
+    ];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CostEstimate))]
@@ -292,7 +293,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         // resets breed state (no stale winners). Breeding is an AI-only path; we seed the base from
         // the first winner so HasBase (the run gate) and the target-frame derivation still work.
         var breed = _generator?.PendingBreedSet;
-        if (_generator is not null) _generator.PendingBreedSet = null;
+        _generator?.PendingBreedSet = null;
         _breedSet = breed is { Count: > 0 } ? breed : null;
         IsBreedMode = _breedSet is not null;
         // Breeding is an AI-only path and forces the LLM engine on; an ordinary visit restores the user's
@@ -304,7 +305,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
             BreedSummary = $"Breeding from {_breedSet!.Count} winner(s) — set a steer + model, then run.";
 
         var pending = _breedSet?[0] ?? _generator?.PendingMutationBase;
-        if (_generator is not null) _generator.PendingMutationBase = null;
+        _generator?.PendingMutationBase = null;
 
         var promptJson = _generator?.Parameters.Prompt ?? string.Empty;
         var resolution = _generator?.Parameters.Resolution ?? string.Empty;

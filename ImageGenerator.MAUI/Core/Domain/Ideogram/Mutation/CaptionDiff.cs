@@ -189,10 +189,13 @@ public static class CaptionDiff
 
     // ── Text helpers ────────────────────────────────────────────────────────────────────────────────
 
-    private static readonly HashSet<string> Articles = new(StringComparer.OrdinalIgnoreCase) { "a", "an", "the" };
+    private static readonly HashSet<string> Articles = [with(StringComparer.OrdinalIgnoreCase), "a", "an", "the"];
 
-    private static readonly HashSet<string> Stop = new(StringComparer.OrdinalIgnoreCase)
-    { "a", "an", "the", "with", "and", "of", "in", "on", "at", "to", "for", "by" };
+    private static readonly HashSet<string> Stop =
+    [
+        with(StringComparer.OrdinalIgnoreCase), "a", "an", "the", "with", "and", "of", "in", "on", "at", "to", "for",
+        "by"
+    ];
 
     /// <summary>First <paramref name="maxWords"/> words of <paramref name="s"/> (one leading article
     /// dropped), with an ellipsis when more follow. "(none)" for empty.</summary>

@@ -67,11 +67,13 @@ public sealed class OpenRouterModelCatalog : IOpenRouterModelCatalog
             result.Add(new OpenRouterModelInfo(id, name, isFree));
         }
 
-        return result
-            .OrderByDescending(m => m.IsFree)
-            .ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(m => m.Id, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        return
+        [
+            .. result
+                .OrderByDescending(m => m.IsFree)
+                .ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(m => m.Id, StringComparer.OrdinalIgnoreCase)
+        ];
     }
 
     private static bool SupportsModality(JsonElement model, string propertyName, string modality)
