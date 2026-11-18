@@ -32,10 +32,13 @@ public class ModelDescriptorRegistryTests
     {
         var caps = _registry.CapabilitiesFor("stability-ai/whatever").Capabilities;
 
-        // Conservative defaults from FallbackReplicateDescriptor.
+        // Conservative defaults from FallbackReplicateDescriptor: nothing is offered that the
+        // fallback payload does not actually send. Model-specific detail lives in
+        // FallbackReplicateDescriptorTests.
         caps.SafetyTolerance.Should().BeFalse();
         caps.PromptUpsampling.Should().BeFalse();
-        caps.Seed.Should().BeTrue();
+        caps.Seed.Should().BeFalse("the fallback sends no seed, so the field would be decorative");
+        caps.AspectRatio.Should().BeFalse("the fallback sends no aspect_ratio");
         caps.MaxImageInputs.Should().Be(1);
     }
 

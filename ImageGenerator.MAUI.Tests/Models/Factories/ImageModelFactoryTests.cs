@@ -279,6 +279,8 @@ public class ImageModelFactoryTests
     [Fact]
     public void CreateImageModel_UnknownReplicatePath_BuildsFallbackDictionary()
     {
+        // Every knob the caller had set is deliberately ignored: none of these fields is something
+        // this build can claim the model declares. FallbackReplicateDescriptorTests owns the detail.
         var parameters = new ImageGenerationParameters
         {
             Model = "stability-ai/some-new-model",
@@ -292,8 +294,8 @@ public class ImageModelFactoryTests
         var result = Build(parameters);
 
         var dict = result.Should().BeOfType<Dictionary<string, object?>>().Subject;
-        dict.Keys.Should().BeEquivalentTo(["prompt", "seed", "aspect_ratio", "output_format", "output_quality", "images"]);
-        dict["images"].Should().BeNull();
+        dict.Keys.Should().BeEquivalentTo(["prompt"]);
+        dict["prompt"].Should().Be("fallback test");
     }
 
     // --- Multi-image payload shape ---
