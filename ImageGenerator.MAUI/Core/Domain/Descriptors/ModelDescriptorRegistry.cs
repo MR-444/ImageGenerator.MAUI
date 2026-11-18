@@ -56,6 +56,18 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
         : ModelConstants.ComfyUi.IsId(modelId) ? _comfyUiFallback
         : null;
 
+    /// <inheritdoc/>
+    public bool IsSchemaKnown(string modelId) =>
+        // A registered descriptor is what "known" means, and _payloads is the dictionary the
+        // generation path consults, so it is the one to trust.
+        _payloads.ContainsKey(modelId)
+        // The two providers whose fallback is complete rather than a guess: Pollinations takes any
+        // model name over one uniform API, and a ComfyUI "model" is a workflow file whose fields
+        // come from the user's own export. Neither is a gap in this build, so neither is reported
+        // as one — same order of checks as PayloadFor above.
+        || ModelConstants.Pollinations.IsId(modelId)
+        || ModelConstants.ComfyUi.IsId(modelId);
+
     public IReadOnlyList<ModelOption> Seeds { get; }
 
     /// <summary>

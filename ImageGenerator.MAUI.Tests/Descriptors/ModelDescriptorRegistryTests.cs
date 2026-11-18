@@ -1,5 +1,6 @@
 using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
+using ImageGenerator.MAUI.Core.Domain.Descriptors.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Shared.Constants;
 
@@ -157,5 +158,52 @@ public class ModelDescriptorRegistryTests
             .ToList();
 
         lines.Should().Contain("Workflow: My Workflow");
+    }
+
+    [Fact]
+    public void IsSchemaKnown_EveryProductionDescriptorId_ReportsKnown()
+    {
+        // The predicate must never disagree with registration: every id this build ships a
+        // descriptor for is known by definition. If a rename or a registration split ever makes
+        // the two diverge, the UI starts labelling a supported model "may not work" — and this
+        // three-line guard is what catches it.
+        var production = ModelDescriptorRegistry.ProductionDescriptors();
+        // Default() builds its dictionaries with OfType<IPayloadBuilder>(), so an entry that
+        // doesn't implement it disappears in silence. Check that before trusting the loop below.
+        production.Should().OnlyContain(d => d is IPayloadBuilder);
+
+        foreach (var descriptor in production.OfType<IPayloadBuilder>())
+            _registry.IsSchemaKnown(descriptor.ModelId).Should().BeTrue($"{descriptor.ModelId} ships a descriptor");
+    }
+
+    [Theory]
+    [InlineData("stability-ai/generative")]
+    [InlineData("bytedance/seedream-4")]
+    // The new gpt-image model of 2026-11-18: allow-listed owner, no descriptor. The bug this
+    // predicate exists to make visible.
+    [InlineData("openai/gpt-image-3-turbo")]
+    public void IsSchemaKnown_UnknownReplicatePath_ReportsUnknown(string modelId) =>
+        _registry.IsSchemaKnown(modelId).Should().BeFalse();
+
+    [Theory]
+    // A seeded Pollinations id has a descriptor...
+    [InlineData(ModelConstants.Pollinations.Flux)]
+    // ...and an unseeded one rides the uniform Pollinations API. Both are known, because neither
+    // is the app guessing at a field set.
+    [InlineData("pollinations/some-model-shipped-tomorrow")]
+    [InlineData("comfyui/Ideogram workflow_MR")]
+    public void IsSchemaKnown_UniformProviders_ReportKnownRegardlessOfSeeding(string modelId) =>
+        _registry.IsSchemaKnown(modelId).Should().BeTrue();
+
+    [Theory]
+    // Internal sentinels are lookup results, never model ids a catalog can contain.
+    [InlineData("_fallback")]
+    [InlineData("_fallback_comfyui")]
+    // And an id PayloadFor refuses outright must not make the predicate throw: the UI calls it on
+    // every model switch, including on ids that came from a stale cache.
+    [InlineData("not-a-path")]
+    public void IsSchemaKnown_ReportedUnknownWithoutThrowing_ForAnythingThatIsNotAModelWeKnow(string modelId)
+    {
+        _registry.IsSchemaKnown(modelId).Should().BeFalse();
     }
 }
