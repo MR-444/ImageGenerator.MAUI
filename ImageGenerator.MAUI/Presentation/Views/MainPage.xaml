@@ -161,11 +161,19 @@
                             <Label Text="Optional reference image(s). Max count and payload field vary by model."
                                    Style="{StaticResource HelperText}" />
 
-                            <CollectionView ItemsSource="{Binding InputImages.SelectedImages}"
-                                            ItemsLayout="HorizontalList"
-                                            HeightRequest="140"
-                                            IsVisible="{Binding InputImages.InputImageCount, Converter={StaticResource IntGreaterThanZero}}">
-                                <CollectionView.ItemTemplate>
+                            <!-- Thumbnails WRAP instead of scrolling sideways. This used to be a
+                                 CollectionView with ItemsLayout="HorizontalList" in a card about two
+                                 tiles wide: item 4 existed and was simply off-screen with no
+                                 scrollbar, no chevron and no wheel-scroll on Windows, so it read as
+                                 "the 4th image is not shown at all". The count is bounded by the
+                                 descriptor (MaxImageInputs, 14 at most), so nothing needs
+                                 virtualising here — a wrapping FlexLayout shows every tile and grows
+                                 a row when it has to. -->
+                            <FlexLayout Direction="Row"
+                                        Wrap="Wrap"
+                                        BindableLayout.ItemsSource="{Binding InputImages.SelectedImages}"
+                                        IsVisible="{Binding InputImages.InputImageCount, Converter={StaticResource IntGreaterThanZero}}">
+                                <BindableLayout.ItemTemplate>
                                     <DataTemplate x:DataType="vm:InputImagesCoordinator+InputImageItem">
                                         <Grid Padding="4" WidthRequest="140" HeightRequest="140">
                                             <Image Source="{Binding Preview}" Aspect="AspectFill"
@@ -182,8 +190,8 @@
                                                     AutomationId="RemoveImageButton" />
                                         </Grid>
                                     </DataTemplate>
-                                </CollectionView.ItemTemplate>
-                            </CollectionView>
+                                </BindableLayout.ItemTemplate>
+                            </FlexLayout>
 
                             <HorizontalStackLayout Spacing="8">
                                 <Button Text="Add image"
