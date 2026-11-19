@@ -37,16 +37,17 @@ public sealed class CaptionMutationEngine
     /// change which operator a given seed picks.
     /// </summary>
     public static IReadOnlyList<ICaptionOperator> DefaultOperators { get; } =
-    [
-        new SwapStyleOperator(),
-        new BlendStyleOperator(),
-        new ApplyOrnamentKitOperator(),
-        new MutateBboxOperator(),
-        new MutatePaletteOperator(),
-        new RemoveElementOperator(),
-        new AddElementOperator(),
-        new SwapElementDescOperator()
-    ];
+        Array.AsReadOnly<ICaptionOperator>(
+        [
+            new SwapStyleOperator(),
+            new BlendStyleOperator(),
+            new ApplyOrnamentKitOperator(),
+            new MutateBboxOperator(),
+            new MutatePaletteOperator(),
+            new RemoveElementOperator(),
+            new AddElementOperator(),
+            new SwapElementDescOperator()
+        ]);
 
     /// <summary>
     /// Produces the run's variants. When <see cref="MutationRunConfig.IncludeBaseAsReference"/> is set, the

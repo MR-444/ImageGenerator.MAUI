@@ -312,24 +312,24 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         ["photograph", "illustration", "3d_render", "painting", "graphic_design"];
 
     public IReadOnlyList<string> ArtStyleSuggestions { get; } =
-        ["flat vector illustration, bold outlines",
+        (string[])["flat vector illustration, bold outlines",
          "flat vector design, generous whitespace, sans-serif typography",
          "oil painting"];
 
     public IReadOnlyList<string> PhotoStyleSuggestions { get; } =
-        ["35mm, f/1.4, bokeh",
+        (string[])["35mm, f/1.4, bokeh",
          "shallow depth of field, sharp focus, eye-level, telephoto",
          "wide angle, f/8, long exposure"];
 
     public IReadOnlyList<string> LightingSuggestions { get; } =
-        ["golden hour, rim light, dramatic shadows",
+        (string[])["golden hour, rim light, dramatic shadows",
          "golden hour backlighting, warm atmospheric haze",
          "overcast daylight, diffused, soft subtle shadows",
          "low-key, deep shadows",
          "soft natural window light"];
 
     public IReadOnlyList<string> AestheticsSuggestions { get; } =
-        ["moody, cinematic, desaturated",
+        (string[])["moody, cinematic, desaturated",
          "saturated primary colors, rule of thirds, joyful and triumphant",
          "serene, warm, golden hour",
          "minimal, professional, geometric",
@@ -437,7 +437,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         {
             var model = V4JsonPromptSerializer.Deserialize(json);
             HighLevelDescription = model.HighLevelDescription;
-            Background = model.CompositionalDeconstruction.Background ?? string.Empty;
+            Background = model.CompositionalDeconstruction.Background;
 
             if (model.StyleDescription is { } style)
             {
@@ -451,7 +451,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
                 StylePaletteText = style.ColorPalette is { Count: > 0 } ? string.Join(", ", style.ColorPalette) : string.Empty;
             }
 
-            foreach (var element in model.CompositionalDeconstruction?.Elements ?? [])
+            foreach (var element in model.CompositionalDeconstruction.Elements)
                 Elements.Add(ElementItemViewModel.FromElement(element));
 
             SelectedElement = Elements.FirstOrDefault();
@@ -490,7 +490,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
 
     /// <summary>Snapshot for the drawable; pulled on every draw via the BoxesProvider hook.</summary>
     public IReadOnlyList<CanvasBox> BuildCanvasBoxes() =>
-    [
+    (CanvasBox[])[
         .. Elements
             .Where(e => e.HasBbox)
             .Select(e => new CanvasBox(
@@ -783,7 +783,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
     [RelayCommand]
     private void AcceptEnrich()
     {
-        if (_enrichCandidate?.CompositionalDeconstruction?.Elements is not { } enriched) return;
+        if (_enrichCandidate?.CompositionalDeconstruction.Elements is not { } enriched) return;
 
         var count = Math.Min(Elements.Count, enriched.Count);
         for (var i = 0; i < count; i++)

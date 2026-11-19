@@ -104,7 +104,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
     partial void OnBuildJsonChanged(bool value) => _uiStateStore?.PersistIdeaBuildJson(value);
 
     public IReadOnlyList<VisionObservationProvider> VisionProviderOptions { get; } =
-        [VisionObservationProvider.LocalOllama, VisionObservationProvider.OpenRouter];
+        (VisionObservationProvider[])[VisionObservationProvider.LocalOllama, VisionObservationProvider.OpenRouter];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLocalVisionProvider))]

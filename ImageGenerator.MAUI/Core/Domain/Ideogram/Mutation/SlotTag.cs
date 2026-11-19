@@ -48,7 +48,7 @@ public static class SlotTag
 
     /// <summary>Every defined slot tag, for UI pickers and inference fallbacks.</summary>
     public static readonly IReadOnlyList<string> All =
-    [
+        (string[])[
         Subject.Identity, Subject.Garment, Subject.Props,
         Prop.Charms, Prop.Instrument,
         Scene.Flora,

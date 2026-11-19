@@ -257,14 +257,14 @@ public partial class GeneratorViewModelTests
     public void LoadSavedUiState_SeedsThePickersFromTheCachedList()
     {
         _mockUiStateStore.Setup(s => s.LoadOllamaModels(It.IsAny<string>()))
-            .Returns(["llama3.1", "gemma3:27b"]);
+            .Returns((string[])["llama3.1", "gemma3:27b"]);
         _mockUiStateStore.Setup(s => s.LoadOllamaVisionModels(It.IsAny<string>()))
-            .Returns(["gemma3:27b"]);
+            .Returns((string[])["gemma3:27b"]);
         _mockUiStateStore.Setup(s => s.LoadOllamaModel()).Returns("llama3.1");
 
         _viewModel.LoadSavedUiState();
 
-        _viewModel.OllamaModels.Should().BeEquivalentTo(["llama3.1", "gemma3:27b"],
+        _viewModel.OllamaModels.Should().BeEquivalentTo((string[])["llama3.1", "gemma3:27b"],
             "the picker is usable at launch, and for the whole session if the server is down");
         _viewModel.OllamaVisionModels.Should().BeEquivalentTo(["gemma3:27b"]);
         _viewModel.OllamaModel.Should().Be("llama3.1");

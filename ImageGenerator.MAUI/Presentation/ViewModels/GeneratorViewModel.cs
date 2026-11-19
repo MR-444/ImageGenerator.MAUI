@@ -209,7 +209,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     private string _comfyUiBaseUrl = ModelConstants.ComfyUi.DefaultBaseUrl;
 
-    partial void OnComfyUiBaseUrlChanged(string? value) =>
+    partial void OnComfyUiBaseUrlChanged(string value) =>
         _uiStateStore.PersistComfyUiBaseUrl(value ?? string.Empty);
 
     // Runtime-only ComfyUI optimization. Default off because the KJNodes patch node and the
@@ -256,7 +256,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     private string _ollamaBaseUrl = ModelConstants.Ollama.DefaultBaseUrl;
 
-    partial void OnOllamaBaseUrlChanged(string? value) =>
+    partial void OnOllamaBaseUrlChanged(string value) =>
         _uiStateStore.PersistOllamaBaseUrl(value ?? string.Empty);
 
     // No compile-time default model: which models exist is per-server, so the old hardcoded
@@ -279,7 +279,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     private string _ollamaVisionModel = string.Empty;
 
-    partial void OnOllamaVisionModelChanged(string? value)
+    partial void OnOllamaVisionModelChanged(string value)
     {
         if (_suppressOllamaModelPersist) return;
         _uiStateStore.PersistOllamaVisionModel(value ?? string.Empty);
@@ -291,7 +291,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     private string _openRouterVisionModel = string.Empty;
 
-    partial void OnOpenRouterVisionModelChanged(string? value)
+    partial void OnOpenRouterVisionModelChanged(string value)
     {
         if (_suppressOpenRouterVisionModelPersist) return;
         _uiStateStore.PersistOpenRouterVisionModel(value ?? string.Empty);
@@ -470,7 +470,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     private string _outputFolder = OutputPaths.DefaultRootDirectory;
 
-    partial void OnOutputFolderChanged(string? value)
+    partial void OnOutputFolderChanged(string value)
     {
         var trimmed = value?.Trim();
         _uiStateStore.PersistOutputFolder(trimmed ?? string.Empty);
@@ -674,7 +674,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         // default was moved.
         static void SnapToModelOption(List<string> options, string? current, string appDefault, Action<string> select)
         {
-            if (options.Count == 0 || options.Contains(current)) return;
+            if (options.Count == 0 || (current is not null && options.Contains(current))) return;
             select(options.Contains(appDefault, StringComparer.Ordinal) ? appDefault : options[0]);
         }
 

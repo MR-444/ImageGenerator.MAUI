@@ -92,18 +92,18 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
     // prefix == newest first).
     public const string SortNewestFirst = "Newest first";
     public const string SortOldestFirst = "Oldest first";
-    public const string SortNameAscending = "Name (A→Z)";
-    public const string SortNameDescending = "Name (Z→A)";
+    private const string SortNameAscending = "Name (A→Z)";
+    private const string SortNameDescending = "Name (Z→A)";
     public const string SortLargestFirst = "Largest first";
     public const string SortSmallestFirst = "Smallest first";
 
     public IReadOnlyList<string> SortModes { get; } =
-    [
-        SortNewestFirst, SortOldestFirst,
-        SortNameAscending, SortNameDescending,
-        SortLargestFirst, SortSmallestFirst
-    ];
-
+        (string[])[
+            SortNewestFirst, SortOldestFirst,
+            SortNameAscending, SortNameDescending,
+            SortLargestFirst, SortSmallestFirst
+        ];
+    
     [ObservableProperty]
     private string _selectedSortMode = SortNewestFirst;
 
