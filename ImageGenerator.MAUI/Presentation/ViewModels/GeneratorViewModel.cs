@@ -608,10 +608,16 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             // otherwise keep the current AR if still valid (covers initial-state edge cases),
             // otherwise fall back to the model's first AR.
             var current = Parameters.AspectRatio;
+            // A descriptor that declares no aspect ratios has no first option to fall back to, and
+            // inventing one would send a size this model never offered. Keeping the current value is
+            // the same choice the resolution block below makes with its Count guard; until now the
+            // rule lived only in the two descriptors that keep their list non-empty "because
+            // RefreshCapabilities reads AspectRatios[0]", and ModelCapabilities cannot say it.
+            var fallback = caps.AspectRatios.Count > 0 ? caps.AspectRatios[0] : current;
             var target =
                 (InputImages.PreferredAspectRatio is { } pref && caps.AspectRatios.Contains(pref)) ? pref :
                 caps.AspectRatios.Contains(current) ? current :
-                caps.AspectRatios[0];
+                fallback;
             if (!string.Equals(target, current, StringComparison.Ordinal))
             {
                 SetAspectRatioProgrammatically(target);
