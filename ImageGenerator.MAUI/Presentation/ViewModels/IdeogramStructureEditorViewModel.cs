@@ -860,9 +860,6 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         }
     }
 
-    [RelayCommand]
-    private void SelectElement(ElementItemViewModel item) => SelectedElement = item;
-
     private bool ReportValidation(V4JsonPrompt model)
     {
         var errors = V4JsonPromptValidator.Validate(model);

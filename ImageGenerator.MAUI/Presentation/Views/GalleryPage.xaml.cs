@@ -60,19 +60,7 @@ public partial class GalleryPage
             _logger.LogError(ex, "GalleryPage.{Op}", "OnOpenTileClicked");
         }
     }
-
-    private async void OnBackClicked(object? sender, EventArgs e)
-    {
-        try
-        {
-            await Shell.Current.GoToAsync("..");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GalleryPage.{Op}", "OnBackClicked");
-        }
-    }
-
+    
     private async void OnPostToCivitaiClicked(object? sender, EventArgs e)
     {
         try

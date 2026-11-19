@@ -377,8 +377,7 @@
                             AutomationId="ProseResultCard">
                         <VerticalStackLayout Spacing="8">
                             <Label Text="Prose prompt" Style="{StaticResource CardTitle}" />
-                            <Editor x:Name="ProseResultEditor" 
-                                    Text="{Binding Prose, Mode=TwoWay}"
+                            <Editor Text="{Binding Prose, Mode=TwoWay}"
                                     TextChanged="OnProseTextChanged"
                                     AutoSize="Disabled"
                                     HeightRequest="260"

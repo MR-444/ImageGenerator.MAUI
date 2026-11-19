@@ -8,9 +8,6 @@ namespace ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library;
 public sealed class MutationLibrary
 {
     private readonly Dictionary<string, StyleFragment> _fragmentsByName;
-    private readonly Dictionary<string, OrnamentKit> _kitsByName;
-    private readonly Dictionary<string, SceneElement> _sceneElementsByName;
-    private readonly Dictionary<string, AnchorPreset> _presetsByName;
 
     public MutationLibrary(
         IReadOnlyList<StyleFragment> styleFragments,
@@ -25,9 +22,6 @@ public sealed class MutationLibrary
         SceneElements = sceneElements is null ? [] : (SceneElement[])[.. sceneElements];
         AnchorPresets = anchorPresets is null ? [] : (AnchorPreset[])[.. anchorPresets];
         _fragmentsByName = StyleFragments.ToDictionary(f => f.Name, StringComparer.Ordinal);
-        _kitsByName = OrnamentKits.ToDictionary(k => k.Name, StringComparer.Ordinal);
-        _sceneElementsByName = SceneElements.ToDictionary(e => e.Name, StringComparer.Ordinal);
-        _presetsByName = AnchorPresets.ToDictionary(p => p.Name, StringComparer.Ordinal);
     }
 
     /// <summary>An empty library — operators that need entries return <c>null</c> against it.</summary>
@@ -44,15 +38,8 @@ public sealed class MutationLibrary
     /// deterministic operators).</summary>
     public IReadOnlyList<AnchorPreset> AnchorPresets { get; }
 
+    /// <summary>Fragments are the only entries anything looks up by name; operators iterate
+    /// <see cref="OrnamentKits"/>, <see cref="SceneElements"/> and <see cref="AnchorPresets"/>.</summary>
     public StyleFragment? FragmentByName(string name) =>
         _fragmentsByName.GetValueOrDefault(name);
-
-    public OrnamentKit? KitByName(string name) =>
-        _kitsByName.GetValueOrDefault(name);
-
-    public SceneElement? SceneElementByName(string name) =>
-        _sceneElementsByName.GetValueOrDefault(name);
-
-    public AnchorPreset? PresetByName(string name) =>
-        _presetsByName.GetValueOrDefault(name);
 }
