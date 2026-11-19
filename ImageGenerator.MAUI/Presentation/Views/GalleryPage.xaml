@@ -4,7 +4,6 @@
              xmlns:converters="clr-namespace:ImageGenerator.MAUI.Presentation.Converters"
              xmlns:entities="clr-namespace:ImageGenerator.MAUI.Core.Domain.Entities"
              xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
-             x:Name="Root"
              x:Class="ImageGenerator.MAUI.Presentation.Views.GalleryPage"
              x:DataType="vm:GalleryViewModel"
              Title="Gallery"
@@ -64,8 +63,7 @@
                HorizontalOptions="Center"
                Padding="0,8" />
 
-        <!-- CivitAI batch-post action bar — appears only with a selection. Posts all selected
-             images into ONE draft post; the warning dialog (code-behind) precedes the upload. -->
+        <!-- CivitAI batch-post action bar -->
         <Border Grid.Row="2"
                 Style="{StaticResource Card}"
                 Padding="10"
@@ -102,6 +100,7 @@
                         ItemsSource="{Binding Items}"
                         SelectionMode="Multiple"
                         SelectedItems="{Binding SelectedItems}"
+                        HandlerChanged="OnGalleryHandlerChanged"
                         SizeChanged="OnGallerySizeChanged"
                         AutomationId="GalleryCollection">
             <CollectionView.ItemsLayout>
@@ -112,12 +111,10 @@
             </CollectionView.ItemsLayout>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="entities:GalleryItem">
-                    <!-- The Border is the item root, so the CollectionView drives its Selected
-                         visual state. Tapping a tile toggles selection (multi-select); Open and
-                         Show metadata are explicit buttons (code-behind handlers, because
-                         RelativeSource lookups don't reliably cross the DataTemplate scope). -->
                     <Border Style="{StaticResource Card}"
-                            Padding="8">
+                            StrokeShape="RoundRectangle 10"
+                            Padding="8"
+                            Margin="0">
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="CommonStates">
                                 <VisualState x:Name="Normal" />
@@ -129,33 +126,40 @@
                                 </VisualState>
                             </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
-                        <VerticalStackLayout Spacing="6">
-                            <Image Source="{Binding FilePath, Converter={StaticResource ShellThumbnail}}"
+
+                        <Grid RowDefinitions="*,Auto,Auto" RowSpacing="6">
+                            <Image Grid.Row="0"
+                                   Source="{Binding FilePath, Converter={StaticResource ShellThumbnail}}"
                                    Aspect="AspectFit"
-                                   HeightRequest="200"
-                                   WidthRequest="200"
                                    HorizontalOptions="Center"
+                                   VerticalOptions="Center"
                                    SemanticProperties.Description="{Binding FileName}" />
-                            <Label Text="{Binding FileName}"
+                            <Label Grid.Row="1"
+                                   Text="{Binding FileName}"
                                    Style="{StaticResource HelperText}"
                                    LineBreakMode="TailTruncation"
                                    MaxLines="1"
-                                   HorizontalOptions="Fill"
                                    HorizontalTextAlignment="Center"
                                    ToolTipProperties.Text="{Binding FileName}" />
-                            <HorizontalStackLayout Spacing="6" HorizontalOptions="Center">
-                                <Button Text="View"
+                            <Grid Grid.Row="2" ColumnDefinitions="*,*" ColumnSpacing="6">
+                                <Button Grid.Column="0"
+                                        Text="View"
                                         Style="{StaticResource SecondaryButton}"
+                                        Padding="8,4"
+                                        MinimumWidthRequest="0"
                                         CommandParameter="{Binding .}"
                                         Clicked="OnOpenTileClicked"
                                         AutomationId="GalleryOpenTileButton" />
-                                <Button Text="Details"
+                                <Button Grid.Column="1"
+                                        Text="Details"
                                         Style="{StaticResource SecondaryButton}"
+                                        Padding="8,4"
+                                        MinimumWidthRequest="0"
                                         CommandParameter="{Binding .}"
                                         Clicked="OnShowMetadataClicked"
                                         AutomationId="GalleryShowMetadataButton" />
-                            </HorizontalStackLayout>
-                        </VerticalStackLayout>
+                            </Grid>
+                        </Grid>
                     </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>

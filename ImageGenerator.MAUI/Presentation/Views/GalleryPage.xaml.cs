@@ -17,19 +17,10 @@ public partial class GalleryPage
         BindingContext = viewModel;
     }
 
-    protected override async void OnAppearing()
+    protected override void OnAppearing()
     {
         base.OnAppearing();
-        try
-        {
-            await _viewModel.OnAppearingAsync();
-        }
-        catch (Exception ex)
-        {
-            // async void: any escape here would crash the dispatcher with no managed
-            // exception entry on disk. Log explicitly.
-            _logger.LogError(ex, "GalleryPage.{Op}", "OnAppearing");
-        }
+        _ = LoadOnAppearingAsync();
     }
 
     protected override void OnDisappearing()
@@ -60,7 +51,7 @@ public partial class GalleryPage
             _logger.LogError(ex, "GalleryPage.{Op}", "OnOpenTileClicked");
         }
     }
-    
+
     private async void OnPostToCivitaiClicked(object? sender, EventArgs e)
     {
         try
@@ -68,8 +59,6 @@ public partial class GalleryPage
             var count = _viewModel.SelectedItems.Count;
             if (count == 0) return;
 
-            // Posting publishes immediately at generation time, but the Gallery batch drafts —
-            // spell out exactly what happens so the user reviews before any upload runs.
             var confirmed = await DisplayAlertAsync(
                 "Post to CivitAI?",
                 $"This uploads the {count} selected image(s) into ONE draft post on your CivitAI " +
@@ -88,9 +77,24 @@ public partial class GalleryPage
         }
     }
 
+    private void OnGalleryHandlerChanged(object? sender, EventArgs e)
+    {
+        if (sender is CollectionView view)
+            ApplyGalleryGridLayout(view);
+    }
+
     private void OnGallerySizeChanged(object? sender, EventArgs e)
     {
-        if (sender is not CollectionView { Width: > 0, ItemsLayout: GridItemsLayout layout } view) return;
+        if (sender is CollectionView view)
+            ApplyGalleryGridLayout(view);
+    }
+
+    private void ApplyGalleryGridLayout(CollectionView view)
+    {
+        if (view.Width <= 0 || view.ItemsLayout is not GridItemsLayout layout) return;
+
+        const double spacing = 12;
+        const double scrollbarAndRoundingGuard = 18;
 
         var span = view.Width switch
         {
@@ -99,17 +103,67 @@ public partial class GalleryPage
             < 1280 => 4,
             _ => 5
         };
+
         if (layout.Span != span)
             layout.Span = span;
 
-        // Tested both shapes on the .NET 11 ItemsRepeater handler (csproj: UseWindowsCollectionView2
-        // Handler): mutating Span here, and handing the view a brand new GridItemsLayout instead. Both
-        // laid the grid out wrong at 3 and 4 columns (tiles in the right-hand columns jumping while
-        // scrolling), both were correct on the old handler this switch selects, which is why this method
-        // mutates again: that is the pairing actually verified on device. Do not re-try the replace
-        // shape against the new handler hoping for a different answer; the full test matrix is in
-        // documents/audit-phase2-wiring-races.md.
+        var tileWidth = Math.Floor((view.Width - (span - 1) * spacing - scrollbarAndRoundingGuard) / span);
+        if (tileWidth < 80) tileWidth = 80;
+
+        var imageHeight = Math.Min(tileWidth - 16, 200);
+        var tileHeight = Math.Max(180, imageHeight + 92);
+
+#if WINDOWS
+        ApplyWindowsUniformGridLayout(view, span, tileWidth, tileHeight, spacing);
+#endif
     }
+
+#if WINDOWS
+    private void ApplyWindowsUniformGridLayout(
+        CollectionView view,
+        int span,
+        double tileWidth,
+        double tileHeight,
+        double spacing)
+    {
+        var platformView = view.Handler?.PlatformView as Microsoft.UI.Xaml.DependencyObject;
+        if (platformView is null) return;
+
+        Microsoft.UI.Xaml.Controls.UniformGridLayout? uniformGrid = null;
+
+        if (platformView is Microsoft.UI.Xaml.Controls.ItemsView itemsView)
+        {
+            uniformGrid = itemsView.Layout as Microsoft.UI.Xaml.Controls.UniformGridLayout;
+        }
+        else if (FindDescendant<Microsoft.UI.Xaml.Controls.ItemsRepeater>(platformView) is { } repeater)
+        {
+            uniformGrid = repeater.Layout as Microsoft.UI.Xaml.Controls.UniformGridLayout;
+        }
+
+        if (uniformGrid is null) return;
+
+        uniformGrid.MaximumRowsOrColumns = span;
+        uniformGrid.MinItemWidth = tileWidth;
+        uniformGrid.MinItemHeight = tileHeight;
+        uniformGrid.MinColumnSpacing = spacing;
+        uniformGrid.MinRowSpacing = spacing;
+        uniformGrid.ItemsJustification = Microsoft.UI.Xaml.Controls.UniformGridLayoutItemsJustification.Start;
+        uniformGrid.ItemsStretch = Microsoft.UI.Xaml.Controls.UniformGridLayoutItemsStretch.None;
+    }
+
+    private static T? FindDescendant<T>(Microsoft.UI.Xaml.DependencyObject root)
+        where T : Microsoft.UI.Xaml.DependencyObject
+    {
+        var count = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is T match) return match;
+            if (FindDescendant<T>(child) is { } nested) return nested;
+        }
+        return null;
+    }
+#endif
 
     private async void OnShowMetadataClicked(object? sender, EventArgs e)
     {
@@ -117,8 +171,6 @@ public partial class GalleryPage
         {
             if (sender is Button { CommandParameter: GalleryItem item })
             {
-                // Navigate to the detail page with the file path as a Shell route parameter.
-                // The page's [QueryProperty(NavPath, "path")] receives it on appearing.
                 var encoded = Uri.EscapeDataString(item.FilePath);
                 await Shell.Current.GoToAsync($"detail?path={encoded}");
             }
@@ -126,6 +178,18 @@ public partial class GalleryPage
         catch (Exception ex)
         {
             _logger.LogError(ex, "GalleryPage.{Op}", "OnShowMetadataClicked");
+        }
+    }
+    
+    private async Task LoadOnAppearingAsync()
+    {
+        try
+        {
+            await _viewModel.OnAppearingAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GalleryPage.{Op}", nameof(OnAppearing));
         }
     }
 }
