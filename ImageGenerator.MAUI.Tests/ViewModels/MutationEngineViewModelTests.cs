@@ -16,7 +16,8 @@ namespace ImageGenerator.MAUI.Tests.ViewModels;
 /// <summary>
 /// Phase-5 VM seam: the page only configures a run and hands the engine's variants to the existing
 /// batch. These tests pin the Shell-free seam — base resolution, slot-tag write-through, axis→operator
-/// mapping, Count clamp, and determinism — without constructing a generator or touching Shell.
+/// mapping, Count clamp, and determinism — without touching Shell. Only the last two tests hand the
+/// engine a generator, and they need it because that is where the render model lives.
 /// </summary>
 public class MutationEngineViewModelTests
 {
@@ -722,6 +723,64 @@ public class MutationEngineViewModelTests
             return Task.FromResult(LlmVariantResult.Ok(MutationTestData.BaseCaption(), $"b{index}"));
         }
     }
+
+    private static MutationEngineViewModel CreateSut(GeneratorViewModel generator) =>
+        new(new StubLibraryService(),
+            new CaptionMutationEngine(),
+            NullLogger<MutationEngineViewModel>.Instance,
+            generator);
+
+    /// <summary>
+    /// The engine renders through the generator's batch queue, so the model it will use is whatever that
+    /// VM currently holds. It has no model picker of its own — only <c>SettingsEcho</c> naming it — so a
+    /// model this build refuses to call has to be caught here, or the run produces a grid of refused jobs
+    /// and one error log line each. Bare mocks plus the production registry: the rule under test is the
+    /// registry's answer about the selected model, and a mocked registry would test the mock.
+    /// </summary>
+    [Fact]
+    public void GenerateCommand_RefusesAModelThisBuildCannotDrive()
+    {
+        var generator = BuildBareGenerator();
+        var sut = CreateSut(generator);
+        sut.SetBaseForTest(MutationTestData.BaseCaption());
+
+        generator.Parameters.Model = "stability-ai/some-new-model";
+
+        sut.GenerateCommand.CanExecute(null).Should().BeFalse();
+
+        // And back again: the gate belongs to the model, not to the loaded base or to this page's session.
+        generator.Parameters.Model = ModelConstants.OpenAI.GptImage26SunburstOnReplicate;
+
+        sut.GenerateCommand.CanExecute(null).Should().BeTrue();
+    }
+
+    [Fact]
+    public void GenerateCommand_StandAloneEngineHasNoModelToRefuse()
+    {
+        // Every other test here builds the VM without a generator. A null generator means the engine has
+        // no opinion about the model, not an unsupported one — otherwise the run gate would be false for
+        // the whole file and each of those tests would pass on a button that can never execute.
+        var sut = WithBase();
+
+        sut.GenerateCommand.CanExecute(null).Should().BeTrue();
+    }
+
+    private static GeneratorViewModel BuildBareGenerator() =>
+        new(new Mock<IJobRunner>().Object,
+            new Mock<IApiTokenStore>().Object,
+            new Mock<IPollinationsTokenStore>().Object,
+            new Mock<IComfyUiAuthStore>().Object,
+            new Mock<ICivitaiTokenStore>().Object,
+            new Mock<IAnthropicTokenStore>().Object,
+            new Mock<ICivitaiPostingService>().Object,
+            new Mock<IUiStateStore>().Object,
+            new Mock<IModelCatalogCoordinator>().Object,
+            ModelDescriptorRegistry.Default(),
+            new Mock<IPromptBatchParser>().Object,
+            new Mock<IComfyUiCheckpointService>().Object,
+            new Mock<IGalleryService>().Object,
+            new Mock<IFolderPicker>().Object,
+            NullLogger<GeneratorViewModel>.Instance);
 
     private sealed record MutationRunVariantCaptions(IReadOnlyList<string> Captions);
 

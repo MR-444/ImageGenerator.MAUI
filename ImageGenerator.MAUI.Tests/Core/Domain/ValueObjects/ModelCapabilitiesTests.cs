@@ -35,7 +35,9 @@ public class ModelCapabilitiesTests
     [InlineData(ModelConstants.Flux.Max2,                    1)]
     [InlineData(ModelConstants.OpenAI.GptImage15OnReplicate, 10)]
     [InlineData(ModelConstants.Google.NanoBanana2,           14)]
-    [InlineData("stability-ai/unknown-dynamic",              1)]
+    // Zero for the unknown model is not a guessed schema cap: this build refuses to call such a
+    // model at all, so the app takes no reference image for it.
+    [InlineData("stability-ai/unknown-dynamic",              0)]
     public void MaxImageInputs_MatchesSchemaCaps(string model, int expected)
     {
         For(model).MaxImageInputs.Should().Be(expected);

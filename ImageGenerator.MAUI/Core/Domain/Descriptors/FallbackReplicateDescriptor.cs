@@ -38,10 +38,11 @@ public sealed class FallbackReplicateDescriptor : ICapabilityProvider
 
     public ModelCapabilities Capabilities => new(
         SafetyTolerance: false, PromptUpsampling: false, OutputQuality: false,
-        // No AR, no seed, no quality: nothing goes to this model at all, so showing them would be a
-        // lie. Output format stays selectable because the app transcodes on save — that choice is
-        // honoured without asking the model.
-        AspectRatio: false, CustomDimensions: false, Seed: false, ImagePrompt: true,
+        // No AR, no seed, no quality, no reference image: nothing goes to this model at all, so
+        // showing any of them would be a lie — and an expensive-looking one, since accepting a
+        // reference image is how a user comes to expect an edit. Output format stays selectable
+        // because the app transcodes on save; that choice is honoured without asking the model.
+        AspectRatio: false, CustomDimensions: false, Seed: false, ImagePrompt: false,
         AspectRatioLabel: "Aspect ratio", AspectRatios: AspectRatios,
-        MaxImageInputs: 1);
+        MaxImageInputs: 0);
 }

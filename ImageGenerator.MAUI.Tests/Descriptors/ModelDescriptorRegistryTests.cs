@@ -41,7 +41,8 @@ public class ModelDescriptorRegistryTests
         caps.PromptUpsampling.Should().BeFalse();
         caps.Seed.Should().BeFalse("no seed is sent, so the field would be decorative");
         caps.AspectRatio.Should().BeFalse("no aspect_ratio is sent");
-        caps.MaxImageInputs.Should().Be(1);
+        caps.MaxImageInputs.Should().Be(0);
+        caps.ImagePrompt.Should().BeFalse("accepting a reference image promises an edit this build cannot make");
     }
 
     [Fact]

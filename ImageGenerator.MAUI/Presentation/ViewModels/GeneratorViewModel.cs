@@ -128,6 +128,14 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             : ProviderFilter.SelectedProvider;
 
     /// <summary>
+    /// Whether this build can drive the selected model at all: false for a Replicate model with no
+    /// field list, true for every described model and for the two uniform providers. Anything that
+    /// starts work should consult this rather than re-deriving it, because the service refuses such a
+    /// model before any HTTP — a caller that proceeds is not taking a risk, it is queueing a failure.
+    /// </summary>
+    public bool ModelIsSupported => _registry.IsSchemaKnown(Parameters.Model);
+
+    /// <summary>
     /// Note under the model picker when the selected model has no field list in this build: the app
     /// will not call it, so no request goes out and nothing is billed. Null for every model this
     /// build can describe, which collapses the Label.
@@ -136,7 +144,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     /// build cannot describe can only be a Replicate owner/name path: Pollinations speaks one uniform
     /// API for every id it lists, and a ComfyUI entry is the user's own workflow.
     /// </summary>
-    public string? ModelFieldsNote => _registry.IsSchemaKnown(Parameters.Model)
+    public string? ModelFieldsNote => ModelIsSupported
         ? null
         : $"{Parameters.Model} is not supported: this build has no field list for it, so generating is refused.";
 
@@ -757,7 +765,11 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         JsonPromptStateText = jsonModeActive
             ? jsonError is null ? "Structured JSON: valid ✓" : $"Structured JSON: not valid — {jsonError}"
             : null;
-        IsValid = tokenOk && !string.IsNullOrWhiteSpace(Parameters.Prompt) && jsonOk;
+        // A model this build has no field list for is refused by the service before any HTTP, so a
+        // tap here could only ever produce a failed job. ModelFieldsNote says so in words under the
+        // picker; this is the same sentence in the one place the user is about to act. MainPage's
+        // Ctrl+Enter handler reads this same flag, so the button and the hotkey close together.
+        IsValid = ModelIsSupported && tokenOk && !string.IsNullOrWhiteSpace(Parameters.Prompt) && jsonOk;
     }
 
     private static bool TokenlessModel(string? model) =>

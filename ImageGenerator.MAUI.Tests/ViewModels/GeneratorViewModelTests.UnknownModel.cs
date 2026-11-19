@@ -106,4 +106,44 @@ public partial class GeneratorViewModelTests
 
         _viewModel.Parameters.AspectRatio.Should().Be("16:9");
     }
+
+    /// <summary>
+    /// The note under the picker is not a warning the user can choose to ignore, because the service
+    /// refuses such a model before any HTTP — so leaving Generate enabled offers an action that can
+    /// only produce a failed job, and a batch of N such models produces N failures and N error log
+    /// lines for a decision the app had already made. This is that lockout; the button's IsEnabled and
+    /// MainPage's Ctrl+Enter handler both read the flag asserted here.
+    /// </summary>
+    [Fact]
+    public void UnsupportedModel_TakesTheGenerateActionAway()
+    {
+        _viewModel.Parameters.Model = "stability-ai/some-new-model";
+        _viewModel.Parameters.ApiToken = "valid-token";
+        _viewModel.Parameters.Prompt = "a cat on a sofa";
+
+        _viewModel.IsValid.Should().BeFalse(
+            "nothing can be generated with a model this build has no field list for, so the action " +
+            "should not look available");
+
+        // And back again: the lockout belongs to the model, not to the session. Selecting a model this
+        // build can drive has to hand the action back without a restart.
+        _viewModel.Parameters.Model = ModelConstants.OpenAI.GptImage26SunburstOnReplicate;
+
+        _viewModel.IsValid.Should().BeTrue();
+    }
+
+    [Theory]
+    // The lockout must not reach the two providers whose completeness is not a guess: Pollinations
+    // speaks one uniform API for every id and works without a token, and a ComfyUI entry is the user's
+    // own workflow. Locking either out would refuse work the app does every day.
+    [InlineData(ModelConstants.Pollinations.PrefixSlash + "flux")]
+    [InlineData(ModelConstants.ComfyUi.PrefixSlash + "sdXL-workflow.json")]
+    public void UniformProviders_KeepBeingGeneratableWithoutAToken(string modelId)
+    {
+        _viewModel.Parameters.Model = modelId;
+        _viewModel.Parameters.ApiToken = "";
+        _viewModel.Parameters.Prompt = "a cat on a sofa";
+
+        _viewModel.IsValid.Should().BeTrue();
+    }
 }

@@ -92,7 +92,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
 
     // --- Run configuration (bound to the page) ---------------------------------------------------
 
-    public IReadOnlyList<MutationAxis> AxisOptions { get; } = [MutationAxis.Look, MutationAxis.Scene];
+    public IReadOnlyList<MutationAxis> AxisOptions { get; } = (MutationAxis[])[MutationAxis.Look, MutationAxis.Scene];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsScene))]
@@ -107,7 +107,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
     /// <summary>Read-only echo of which operators a run on the pinned axis will draw from, in
     /// plain-English "what it does" form (the raw operator names are engine-internal jargon).</summary>
     public IReadOnlyList<string> OperatorsForAxis =>
-    [
+    (string[])[
         .. CaptionMutationEngine.DefaultOperators
             .Where(o => o.Axis == SelectedAxis)
             .Select(o => CaptionDiff.OperatorBlurb(o.Name))
@@ -124,7 +124,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
     }
 
     public IReadOnlyList<MutationStrength> StrengthOptions { get; } =
-        [MutationStrength.Subtle, MutationStrength.Moderate, MutationStrength.Bold];
+        (MutationStrength[])[MutationStrength.Subtle, MutationStrength.Moderate, MutationStrength.Bold];
 
     [ObservableProperty]
     private MutationStrength _selectedStrength = MutationStrength.Moderate;
@@ -235,7 +235,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         if (value is not null && !ReferenceEquals(value, NoPreset)) Steer = value.Steer;
     }
 
-    public IReadOnlyList<ModelTier> ModelTierOptions { get; } = [ModelTier.Sonnet, ModelTier.Opus, ModelTier.Local];
+    public IReadOnlyList<ModelTier> ModelTierOptions { get; } = (ModelTier[])[ModelTier.Sonnet, ModelTier.Opus, ModelTier.Local];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CostEstimate))]
@@ -403,7 +403,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         }
 
         var tags = SlotTagger.Resolve(_base);
-        foreach (var element in _base.CompositionalDeconstruction.Elements ?? [])
+        foreach (var element in _base.CompositionalDeconstruction.Elements)
         {
             // Pre-select the picker on the inferred tag's FRIENDLY label (or Auto when nothing
             // inferred), so each row visibly shows what the app guessed for that element.
@@ -481,7 +481,11 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         await _clipboard.SetTextAsync(Seed.ToString(CultureInfo.InvariantCulture));
     }
 
-    private bool CanGenerate() => HasBase && !IsMutating;
+    // Variants are rendered by the generator's own batch pipeline, so a model this build has no field
+    // list for would fill the queue with refused jobs and an empty grid. A missing generator (the
+    // stand-alone tests) means no opinion, not a lockout.
+    private bool CanGenerate() =>
+        HasBase && !IsMutating && (_generator is null || _generator.ModelIsSupported);
 
     [RelayCommand(CanExecute = nameof(CanGenerate))]
     private async Task GenerateAsync()

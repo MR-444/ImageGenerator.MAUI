@@ -32,9 +32,11 @@ public class FallbackReplicateDescriptorTests
         caps.JsonPromptEditor.Should().BeFalse();
         caps.GptQualityOptions.Should().BeNull();
         caps.GptComplexityOptions.Should().BeNull();
-
-        caps.ImagePrompt.Should().BeTrue();
-        caps.MaxImageInputs.Should().Be(1);
+        // A reference image is the knob worth naming, because accepting one promises an edit: the
+        // Input Image card and the gallery's "use as input image" both read ImagePrompt, so offering
+        // it here would have the user attach a picture to a model this build refuses to call.
+        caps.ImagePrompt.Should().BeFalse();
+        caps.MaxImageInputs.Should().Be(0);
         // Output format is honoured by the app's own transcode on save, so offering it asks the
         // model nothing — the only knob that stays live for a model we will not call.
         caps.OutputFormatSelectable.Should().BeTrue();
