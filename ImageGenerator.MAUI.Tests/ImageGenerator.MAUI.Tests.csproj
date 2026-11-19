@@ -5,6 +5,13 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
+        <!-- CsWinRT1032 is a WinRT projection/AOT diagnostic, and this compilation can never be
+             affected by it: a plain xunit host, never WinRT-projected, never trimmed, never
+             AOT-published. The app project does NOT suppress it — every one of its 34 sites carries
+             an explicit array cast instead, which is the better answer where WinRT is real. Here the
+             diagnostic itself is the mistake, so it is silenced rather than the test code being
+             rewritten ~99 times to satisfy a projection this assembly does not use. -->
+        <NoWarn Condition="'$(PublishAot)' != 'true' and '$(PublishTrimmed)' != 'true'">$(NoWarn);CsWinRT1032</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
