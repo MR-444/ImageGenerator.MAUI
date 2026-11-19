@@ -122,6 +122,32 @@ public class ReplicateImageGenerationServiceTests
     }
 
     /// <summary>
+    /// The refusal above is worth having, and it has a sharp edge: anything that builds parameters by
+    /// hand — a later feature, an agent tool, a helper — is now refused locally when its values fall
+    /// outside the selected model's vocabulary, and the message blames the model rather than the
+    /// caller. The entity's starting values and the starting model's descriptor are written and
+    /// maintained apart, so the pair is pinned here through the production guard instead of a
+    /// re-implementation of it: the app's own untouched starting parameters have to reach Replicate.
+    /// </summary>
+    [Fact]
+    public async Task GenerateImageAsync_AppsOwnStartingParameters_AreNotRefused()
+    {
+        StubHappyPath();
+        var parameters = new ImageGenerationParameters { Prompt = "A test image", ApiToken = "test-token" };
+
+        var result = await _service.GenerateImageAsync(parameters);
+
+        result.ImageData.Should().NotBeNull(
+            $"the app starts on {parameters.Model} at aspect ratio {parameters.AspectRatio}, and an " +
+            "app that refuses its own default call cannot be rescued by the picker, which snaps knobs " +
+            "only when the user moves them");
+        _mockReplicateApi.Verify(x => x.CreatePredictionAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ReplicatePredictionRequest>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    /// <summary>
     /// A rejected payload is the one failure whose fix Replicate writes down, and it writes it in
     /// the response body. The label has to carry the field and the accepted values, not the JSON.
     /// </summary>

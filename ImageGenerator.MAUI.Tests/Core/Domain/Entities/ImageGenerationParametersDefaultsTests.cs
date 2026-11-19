@@ -34,18 +34,18 @@ public class ImageGenerationParametersDefaultsTests
     /// <summary>
     /// The rest of what a fresh run looks like. This object used to be started twice: the entity
     /// initialized these fields and GeneratorViewModel's constructor overwrote them with its own
-    /// copy — ten lines of restated default, one of them contradicting the entity (half the width
-    /// slider is 1024×1024, which is not 16:9, while the aspect-ratio default is 16:9). This is the
-    /// assertion that fails when someone puts the second copy back.
+    /// copy — ten lines of restated default, one of them contradicting the entity (a 1024×1024 pair
+    /// under an aspect-ratio default of 16:9). This is the assertion that fails when someone puts the
+    /// second copy back.
     /// </summary>
     [Fact]
     public void FreshParameters_StartAtTheShapeTheAppWasBuiltAround()
     {
         var p = new ImageGenerationParameters();
 
-        p.Model.Should().Be(ModelConstants.OpenAI.GptImage15OnReplicate);
-        p.AspectRatio.Should().Be("16:9");
-        p.Width.Should().Be(1920);
+        p.Model.Should().Be(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
+        p.AspectRatio.Should().Be("1:1");
+        p.Width.Should().Be(1080);
         p.Height.Should().Be(1080);
         p.OutputFormat.Should().Be(ImageOutputFormat.Png);
         p.RandomizeSeed.Should().BeTrue();
@@ -60,7 +60,41 @@ public class ImageGenerationParametersDefaultsTests
 
         // The pair has to mean the ratio it names, or the first custom-dimension model opens on a
         // picture that is not the aspect ratio the rest of the UI says was chosen.
-        ((double)p.Width / p.Height).Should().Be(16.0 / 9.0);
+        ((double)p.Width / p.Height).Should().Be(1.0);
+    }
+
+    /// <summary>
+    /// The starting values have to be values the starting model accepts, because
+    /// ReplicateImageGenerationService refuses to send a value the selected model does not declare.
+    /// Until recently the app started on 16:9 while its starting model listed 1:1, 3:2 and 2:3 —
+    /// invisible through the UI, which snaps every knob on a model change, and fatal to the caller
+    /// who does the obvious thing and builds the parameters by hand: refused by its own app, with a
+    /// message blaming the model.
+    ///
+    /// Also asserts the starting model is offered in the picker before the catalog has been fetched.
+    /// A default the picker cannot select is a UI whose model list and generation disagree.
+    /// </summary>
+    [Fact]
+    public void StartingValues_AreValuesTheStartingModelActuallyAccepts()
+    {
+        var p = new ImageGenerationParameters();
+        var caps = ModelDescriptorRegistry.ProductionDescriptors()
+            .OfType<ICapabilityProvider>()
+            .Single(d => d.ModelId == p.Model)
+            .Capabilities;
+
+        caps.AspectRatios.Should().Contain(p.AspectRatio,
+            $"{p.Model} is what the app starts on and the service refuses an aspect ratio its model " +
+            "does not declare, so a starting ratio outside that list is an app that refuses its own " +
+            "first call");
+
+        if (caps.Resolutions is { Count: > 0 })
+            caps.Resolutions.Should().Contain(p.Resolution,
+                "the same refusal covers the resolution knob on a model that has one");
+
+        ModelDescriptorRegistry.Default().Seeds
+            .Should().Contain(s => s.Value == p.Model,
+                "the starting model has to be selectable before the first catalog refresh");
     }
 
     [Theory]

@@ -17,8 +17,13 @@ public partial class ImageGenerationParameters : ObservableObject
 
     // The starting model, named once. It used to be repeated here as a raw string and again in
     // GeneratorViewModel's constructor, so a change here moved the default for nobody.
+    //
+    // It is also the model the rest of these starting values have to suit: ReplicateImageGenerationService
+    // refuses to send a value the selected model's descriptor does not declare, so a starting value
+    // outside the starting model's vocabulary is an app that refuses its own first call. Pinned by
+    // ImageGenerationParametersDefaultsTests and by the service's starting-parameters test.
     [ObservableProperty]
-    private string _model = ModelConstants.OpenAI.GptImage15OnReplicate;
+    private string _model = ModelConstants.OpenAI.GptImage26SunburstOnReplicate;
 
     [ObservableProperty]
     private string _prompt = string.Empty;
@@ -29,17 +34,22 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private bool _randomizeSeed = true;
 
+    // Square, because that is a value every model family in this app offers — the three gpt-image
+    // hosts, both Flux generations, nano-banana and Pollinations all list 1:1, and Ideogram, which
+    // lists none, is handed a starting value it ignores. 16:9 was not: the starting model's own list
+    // excluded it until this line moved.
     [ObservableProperty]
-    private string _aspectRatio = "16:9";
+    private string _aspectRatio = "1:1";
 
     public ObservableCollection<string> ImagePrompts { get; } = [];
 
     // Only meaningful for models with custom dimensions; preset models ignore them and render at
     // whatever their selected aspect ratio means. They are the app's real starting values, which
-    // until now lived in GeneratorViewModel on top of these — two defaults for one field, disagreeing
-    // (half the slider's range is square, contradicting the 16:9 ratio set above). One place now.
+    // until now lived in GeneratorViewModel on top of these — two defaults for one field, disagreeing.
+    // Square so the pair means the ratio the app starts on: the first custom-dimension model opens at
+    // the shape the rest of the UI just said was chosen.
     [ObservableProperty]
-    private int _width = 1920;
+    private int _width = 1080;
 
     [ObservableProperty]
     private int _height = 1080;

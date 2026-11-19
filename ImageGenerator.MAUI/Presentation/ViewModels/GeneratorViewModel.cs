@@ -209,7 +209,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     private string _comfyUiBaseUrl = ModelConstants.ComfyUi.DefaultBaseUrl;
 
-    partial void OnComfyUiBaseUrlChanged(string value) =>
+    partial void OnComfyUiBaseUrlChanged(string? value) =>
         _uiStateStore.PersistComfyUiBaseUrl(value ?? string.Empty);
 
     // Runtime-only ComfyUI optimization. Default off because the KJNodes patch node and the
@@ -257,7 +257,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     private string _ollamaBaseUrl = ModelConstants.Ollama.DefaultBaseUrl;
 
     partial void OnOllamaBaseUrlChanged(string value) =>
-        _uiStateStore.PersistOllamaBaseUrl(value ?? string.Empty);
+        _uiStateStore.PersistOllamaBaseUrl(value);
 
     // No compile-time default model: which models exist is per-server, so the old hardcoded
     // "qwen2.5" was wrong on most hosts and failed as an opaque Ollama 404. Empty means
@@ -282,7 +282,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     partial void OnOllamaVisionModelChanged(string value)
     {
         if (_suppressOllamaModelPersist) return;
-        _uiStateStore.PersistOllamaVisionModel(value ?? string.Empty);
+        _uiStateStore.PersistOllamaVisionModel(value);
     }
 
     // One flag covers both pickers: they are always rebuilt together by the same refresh.
@@ -294,7 +294,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     partial void OnOpenRouterVisionModelChanged(string value)
     {
         if (_suppressOpenRouterVisionModelPersist) return;
-        _uiStateStore.PersistOpenRouterVisionModel(value ?? string.Empty);
+        _uiStateStore.PersistOpenRouterVisionModel(value);
     }
 
     // Same Picker-clears-its-selection hazard as _suppressOllamaModelPersist above.
@@ -472,8 +472,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
     partial void OnOutputFolderChanged(string value)
     {
-        var trimmed = value?.Trim();
-        _uiStateStore.PersistOutputFolder(trimmed ?? string.Empty);
+        var trimmed = value.Trim();
+        _uiStateStore.PersistOutputFolder(trimmed);
         OutputPaths.SetRootOverride(trimmed);
     }
 
@@ -911,8 +911,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         _capabilities = _registry.CapabilitiesFor(_parameters.Model).Capabilities;
         _aspectRatioOptions = [.. _capabilities.AspectRatios];
 
-        // Seed the preferred AR with the constructor default so first-launch model swaps
-        // already prefer "16:9" instead of slamming to caps.AspectRatios[0].
+        // Seed the preferred AR with the app's starting ratio so first-launch model swaps already
+        // prefer the shape the app was built around instead of slamming to caps.AspectRatios[0].
         InputImages = new InputImagesCoordinator(
             capsAccessor: () => Capabilities,
             setAspectRatioProgrammatically: SetAspectRatioProgrammatically,
@@ -1134,6 +1134,12 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
                 // and toggles the Pollinations-only UI sections.
                 ValidateParameters();
                 OnPropertyChanged(nameof(IsPollinationsSelected));
+                // The note is computed from Parameters.Model. The ProviderFilter hook that also
+                // raises it only fires when the selection object actually changes, and a model the
+                // catalog does not contain cannot become the selection — so without this line the
+                // note keeps naming the model before the change, in the one message whose whole job
+                // is naming the model.
+                OnPropertyChanged(nameof(ModelFieldsNote));
                 break;
         }
     }

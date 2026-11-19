@@ -70,6 +70,26 @@ public partial class GeneratorViewModelTests
     }
 
     [Fact]
+    public void ModelFieldsNote_RaisesWhenParametersModelChangesAndThePickerCannotFollow()
+    {
+        // The other test covers the picker moving. This covers the only way it cannot: a model id the
+        // catalog does not contain never becomes SelectedModel, so the ProviderFilter hook that the
+        // note also hangs off stays silent, and a stale note would go on naming the previous model.
+        // Remix-from-an-unknown-model and any future parameter-driven entry land here.
+        var raised = 0;
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(GeneratorViewModel.ModelFieldsNote)) raised++;
+        };
+
+        _viewModel.Parameters.Model = "stability-ai/some-new-model";
+
+        raised.Should().BeGreaterThan(0,
+            "the note names the selected model, so it has to be re-read whenever Parameters.Model changes");
+        _viewModel.ModelFieldsNote.Should().NotBeNull();
+    }
+
+    [Fact]
     public void SelectModel_WithoutFieldList_LeavesTheSavedAspectRatioAlone()
     {
         // A model this build refuses to call offers no aspect ratio and sends no aspect ratio, so it
