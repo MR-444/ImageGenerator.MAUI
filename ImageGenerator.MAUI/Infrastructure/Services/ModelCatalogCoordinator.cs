@@ -2,6 +2,7 @@ using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace ImageGenerator.MAUI.Infrastructure.Services;
 
@@ -11,17 +12,20 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
     private readonly IPollinationsCatalogService _pollinationsCatalogService;
     private readonly IComfyUiWorkflowCatalogService _comfyUiWorkflowCatalogService;
     private readonly IModelDescriptorRegistry _registry;
+    private readonly ILogger<ModelCatalogCoordinator> _logger;
 
     public ModelCatalogCoordinator(
         IModelCatalogService catalogService,
         IPollinationsCatalogService pollinationsCatalogService,
         IComfyUiWorkflowCatalogService comfyUiWorkflowCatalogService,
-        IModelDescriptorRegistry registry)
+        IModelDescriptorRegistry registry,
+        ILogger<ModelCatalogCoordinator> logger)
     {
         _catalogService = catalogService;
         _pollinationsCatalogService = pollinationsCatalogService;
         _comfyUiWorkflowCatalogService = comfyUiWorkflowCatalogService;
         _registry = registry;
+        _logger = logger;
     }
 
     public async Task<IReadOnlyList<ModelOption>?> LoadCachedAsync(CancellationToken ct = default)
@@ -74,6 +78,7 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
     /// </summary>
     private IReadOnlyList<ModelOption> MergeWithSeeds(IReadOnlyList<ModelOption> live)
     {
+        LogDescriptorCoverage(live);
         var seen = new HashSet<string>(live.Select(m => m.Value), StringComparer.OrdinalIgnoreCase);
         var marked = live.Select(m => MarkIfUnknown(m));
         return [.. marked, .. _registry.Seeds.Where(m => seen.Add(m.Value))];
@@ -87,4 +92,56 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
         => _registry.IsSchemaKnown(option.Value)
             || option.Display.EndsWith(UnknownModelSuffix, StringComparison.Ordinal) ? option
             : option with { Display = option.Display + UnknownModelSuffix };
+
+    /// <summary>
+    /// Says out loud, in app.log, where the field lists this build ships and the catalog it was just given
+    /// stop agreeing. The two lists have to agree and nothing else notices: a catalog entry spelled
+    /// differently than its descriptor is reported to the user as a model this build cannot drive, and a
+    /// descriptor the catalog stopped offering is either unreachable code or a model that no longer exists.
+    /// Nothing here changes what the app does — it marks, refuses and generates exactly as before, because
+    /// auto-matching a rename is how the next rename would come to look fine.
+    ///
+    /// Compared against <paramref name="live"/>, never the merged list: seeds are the descriptor ids
+    /// themselves unioned back in, so matching against the merge would let every descriptor find its own
+    /// seed entry and pass forever.
+    /// </summary>
+    private void LogDescriptorCoverage(IReadOnlyList<ModelOption> live)
+    {
+        var exact = new HashSet<string>(live.Select(m => m.Value), StringComparer.Ordinal);
+        var anyCase = new HashSet<string>(live.Select(m => m.Value), StringComparer.OrdinalIgnoreCase);
+        var seeded = new HashSet<string>(_registry.Seeds.Select(m => m.Value), StringComparer.Ordinal);
+
+        foreach (var id in _registry.DescribedModelIds)
+        {
+            if (exact.Contains(id)) continue;
+
+            // Same model, two spellings. Reported to the user as the opposite of the truth: the entry is
+            // suffixed, the note claims there is no field list, and generating is refused for a model this
+            // build can drive. That is worth a warning rather than a note.
+            if (anyCase.Contains(id))
+            {
+                var catalogId = live
+                    .First(m => string.Equals(m.Value, id, StringComparison.OrdinalIgnoreCase)).Value;
+                _logger.LogWarning(
+                    "The field list for {DescriptorId} does not line up with the catalog spelling of the same model ({CatalogId}): known-ness is case-sensitive, so a model this build can drive is marked unsupported",
+                    id, catalogId);
+                continue;
+            }
+
+            if (seeded.Contains(id))
+            {
+                // Benign by design — a seed entry is what makes a model added in code usable before the
+                // curated list carries it. Not benign forever: if upstream retired the model, the seed keeps
+                // it selectable and every generation against it fails at request time.
+                _logger.LogInformation(
+                    "The catalog has no entry for {DescriptorId}; the app still offers it from its own seed entry, so check the model still exists upstream",
+                    id);
+                continue;
+            }
+
+            _logger.LogWarning(
+                "No catalog entry offers {DescriptorId} and it has no seed entry: this build ships a field list nobody can select",
+                id);
+        }
+    }
 }

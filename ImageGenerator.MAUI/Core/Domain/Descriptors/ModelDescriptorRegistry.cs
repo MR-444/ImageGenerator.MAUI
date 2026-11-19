@@ -75,6 +75,11 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
 
     public IReadOnlyList<ModelOption> Seeds { get; }
 
+    /// <inheritdoc/>
+    // The key collection, not a copy: nothing here can change what is registered, and the coverage check
+    // that reads it runs on every catalog load.
+    public IReadOnlyCollection<string> DescribedModelIds => _payloads.Keys;
+
     /// <summary>
     /// Constructs a registry pre-populated with the production descriptor set. Used by tests,
     /// and by <c>MauiProgram</c>, which registers exactly this list — the two sets are one list

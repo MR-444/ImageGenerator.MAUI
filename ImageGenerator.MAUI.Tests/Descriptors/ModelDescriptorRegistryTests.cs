@@ -212,4 +212,20 @@ public class ModelDescriptorRegistryTests
     {
         _registry.IsSchemaKnown(modelId).Should().BeFalse();
     }
+
+    /// <summary>
+    /// The coverage check in <c>ModelCatalogCoordinator</c> reports a descriptor no catalog entry offers, so
+    /// its input has to be exactly the set of real descriptors: the payload builders DI was given, and none
+    /// of the three fallbacks. A fallback id in here would make that warning permanently true and therefore
+    /// worthless, since fallbacks exist precisely to answer for models nobody described.
+    /// </summary>
+    [Fact]
+    public void DescribedModelIds_AreThePayloadBuildersAndNeverTheFallbacks()
+    {
+        var builders = ModelDescriptorRegistry.ProductionDescriptors()
+            .OfType<IPayloadBuilder>().Select(b => b.ModelId);
+
+        _registry.DescribedModelIds.Should().BeEquivalentTo(builders);
+        _registry.DescribedModelIds.Should().OnlyContain(id => !id.Contains("_fallback", StringComparison.Ordinal));
+    }
 }

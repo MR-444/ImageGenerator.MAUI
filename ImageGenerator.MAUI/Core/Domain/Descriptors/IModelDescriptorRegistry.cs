@@ -32,4 +32,14 @@ public interface IModelDescriptorRegistry
 
     /// <summary>The hardcoded seed list shown before Refresh Models hydrates the catalog.</summary>
     IReadOnlyList<ModelOption> Seeds { get; }
+
+    /// <summary>
+    /// The model ids this build ships a field list for — the same keys <see cref="PayloadFor"/> and
+    /// <see cref="IsSchemaKnown"/> consult.
+    ///
+    /// It deliberately excludes the three fallbacks: they answer for models nobody described, so counting
+    /// them here would make every "a descriptor no catalog entry offers" check permanently, unfalsifiably
+    /// true.
+    /// </summary>
+    IReadOnlyCollection<string> DescribedModelIds { get; }
 }

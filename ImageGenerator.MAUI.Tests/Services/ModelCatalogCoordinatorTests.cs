@@ -4,6 +4,7 @@ using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.Services;
 using ImageGenerator.MAUI.Shared.Constants;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace ImageGenerator.MAUI.Tests.Services;
@@ -13,6 +14,8 @@ public class ModelCatalogCoordinatorTests
     private readonly Mock<IModelCatalogService> _catalogService = new();
     private readonly Mock<IPollinationsCatalogService> _pollinationsCatalogService = new();
     private readonly Mock<IComfyUiWorkflowCatalogService> _comfyCatalogService = new();
+    private readonly ModelDescriptorRegistry _registry = ModelDescriptorRegistry.Default();
+    private readonly RecordingLogger _logger = new();
     private readonly ModelCatalogCoordinator _sut;
 
     public ModelCatalogCoordinatorTests()
@@ -31,7 +34,8 @@ public class ModelCatalogCoordinatorTests
             _catalogService.Object,
             _pollinationsCatalogService.Object,
             _comfyCatalogService.Object,
-            ModelDescriptorRegistry.Default());
+            _registry,
+            _logger);
     }
 
     [Fact]
@@ -262,5 +266,104 @@ public class ModelCatalogCoordinatorTests
         // its own truth: the build that finally adds a descriptor for this id would read a cached
         // "· not supported" straight back out and refuse a model it can now drive.
         saved!.Single(m => m.Value == "some-owner/some-new-model").Display.Should().Be("Some New Model");
+    }
+
+    // --------------------------------------------------------------------------- F2: descriptor coverage
+    // These three tests are the whole product of LogDescriptorCoverage: the shipped set of field lists
+    // stays in step with whatever the catalog offers, and app.log says when it doesn't. Nothing here can
+    // catch a disagreement that has already happened, so each one pins a log line that would have been the
+    // only warning available at the time.
+
+    /// <summary>
+    /// "Known" is decided case-sensitively, so a catalog entry spelled differently than its descriptor is
+    /// marked <c>· not supported</c> and refused — a model this build can drive, reported to the user as one
+    /// it cannot. The log line names both spellings because the fix is to compare them by hand.
+    /// </summary>
+    [Fact]
+    public async Task LoadCachedAsync_CatalogSpellsADescribedModelDifferently_WarnsWithBothSpellings()
+    {
+        var drifted = new ModelOption("GPT Image 2.6 Sunburst", "OpenAI/GPT-Image-2.6-Sunburst",
+            ProviderConstants.Replicate);
+        var live = CatalogCoveringEveryDescriptorExcept(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
+        live.Add(drifted);
+        _catalogService.Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(live);
+
+        var result = await _sut.LoadCachedAsync();
+
+        _logger.Messages(LogLevel.Warning).Should().ContainSingle().Which
+            .Should().Contain(ModelConstants.OpenAI.GptImage26SunburstOnReplicate)
+            .And.Contain(drifted.Value);
+        // Asserted from the user's side too: the warning exists because of this, and a change that stopped
+        // marking the entry would make the log line describe a problem that no longer exists.
+        result!.Single(m => m.Value == drifted.Value).Display.Should().EndWith(" · not supported");
+    }
+
+    /// <summary>
+    /// The noise guard. Catalogs are fetched on every launch, so a check that fires for a descriptor the
+    /// catalog legitimately does not list would fill app.log forever. On a catalog that covers every field
+    /// list this build ships, the coordinator says nothing at all.
+    /// </summary>
+    [Fact]
+    public async Task LoadCachedAsync_CatalogCoversEveryDescriptor_LogsNothingAtAll()
+    {
+        _catalogService.Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CatalogCoveringEveryDescriptorExcept());
+
+        await _sut.LoadCachedAsync();
+
+        _logger.Entries.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Two described models are missing from the catalog and only one of them is still selectable: a seed
+    /// entry keeps its model in the picker (so the question is whether upstream still serves it), while a
+    /// model that appears only because the catalog lists it has become a field list nobody can reach.
+    /// </summary>
+    [Fact]
+    public async Task LoadCachedAsync_DescribedModelMissing_ReportsByWhetherASeedCoversIt()
+    {
+        var live = CatalogCoveringEveryDescriptorExcept(
+            ModelConstants.OpenAI.GptImage15OnReplicate,   // ships a seed entry
+            ModelConstants.Flux.Pro2);                     // does not
+        _catalogService.Setup(x => x.LoadCachedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(live);
+
+        await _sut.LoadCachedAsync();
+
+        _logger.Messages(LogLevel.Information).Should().ContainSingle().Which
+            .Should().Contain(ModelConstants.OpenAI.GptImage15OnReplicate);
+        _logger.Messages(LogLevel.Warning).Should().ContainSingle().Which
+            .Should().Contain(ModelConstants.Flux.Pro2)
+            .And.NotContain(ModelConstants.OpenAI.GptImage15OnReplicate);
+    }
+
+    /// <summary>
+    /// A catalog that matches every descriptor this build ships, minus <paramref name="except"/>. Built from
+    /// the registry rather than written out, so adding a descriptor cannot quietly turn these tests into
+    /// "everything but one warning is fine".
+    /// </summary>
+    private List<ModelOption> CatalogCoveringEveryDescriptorExcept(params string[] except) =>
+        [.. _registry.DescribedModelIds
+            .Where(id => !except.Contains(id, StringComparer.Ordinal))
+            .Select(id => new ModelOption(id, id, ProviderConstants.Replicate))];
+
+    /// <summary>
+    /// Records instead of writing anywhere. A hand-written double rather than a mock because asserting on a
+    /// log <em>message</em> through Moq means matching <c>It.IsAnyType</c> state plus the formatter delegate,
+    /// which hides what is actually being asserted.
+    /// </summary>
+    private sealed class RecordingLogger : ILogger<ModelCatalogCoordinator>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public string[] Messages(LogLevel level) =>
+            [.. Entries.Where(e => e.Level == level).Select(e => e.Message)];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, formatter(state, exception)));
     }
 }
