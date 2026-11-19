@@ -16,6 +16,23 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<MauiEnableXamlCBindingWithSourceCompilation>true</MauiEnableXamlCBindingWithSourceCompilation>
+
+		<!-- PIN, load-bearing: do not remove as cleanup. The ItemsRepeater-based Windows CollectionView
+		     handler that .NET 11 turned on by default cannot lay the gallery out: at 3 and 4 columns the
+		     tiles in the right-hand columns jump while scrolling, and at the narrow end a tile gets
+		     stretched across a whole row with its image clipped by the panel above it. Verified on device
+		     2026-11-19 in three combinations, so this is not an assumption:
+		         old handler  + mutate GridItemsLayout.Span   correct, tiles follow the window resize
+		         new handler  + mutate GridItemsLayout.Span   jumping / stale rows
+		         new handler  + replace GridItemsLayout      still jumping at 3 and 4 columns
+		     So the trigger is not our layout-changing code and there is nothing here for us to fix; the
+		     handler itself is the defect. Re-testing it is a device job (scroll the gallery, then
+		     drag-resize across the 2/3/4 column thresholds) on every MAUI release, the same rule as a
+		     _suppress* flag. Verified correct on the old handler at 2, 3 and 5 columns. Nearest upstream reports: #35102 (open, items not filling width with a gap
+		     that appears on resize), #30425 (open, grid columns not shrinking), #24345 (replacing
+		     ItemsLayout breaks span changes), #23266, #10144, #8387. -->
+		<UseWindowsCollectionView2Handler>false</UseWindowsCollectionView2Handler>
+
 		<NoWarn>MVVMTK0045</NoWarn>
 
 		<!-- Emberforge identity: display name (Start menu / taskbar / manifest DisplayName), the

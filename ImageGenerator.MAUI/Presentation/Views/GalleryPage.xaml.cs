@@ -113,6 +113,14 @@ public partial class GalleryPage
         };
         if (layout.Span != span)
             layout.Span = span;
+
+        // Tested both shapes on the .NET 11 ItemsRepeater handler (csproj: UseWindowsCollectionView2
+        // Handler): mutating Span here, and handing the view a brand new GridItemsLayout instead. Both
+        // laid the grid out wrong at 3 and 4 columns (tiles in the right-hand columns jumping while
+        // scrolling), both were correct on the old handler this switch selects, which is why this method
+        // mutates again: that is the pairing actually verified on device. Do not re-try the replace
+        // shape against the new handler hoping for a different answer; the full test matrix is in
+        // documents/audit-phase2-wiring-races.md.
     }
 
     private async void OnShowMetadataClicked(object? sender, EventArgs e)
