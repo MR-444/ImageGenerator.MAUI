@@ -1,36 +1,53 @@
 # Produces the single-file, self-contained Windows x64 build that ships with each
-# GitHub release. Matches the command used for v0.2.0-preview.
+# GitHub release.
 #
 # Usage (PowerShell 7+ or Windows PowerShell 5.1):
 #   pwsh ./publish.ps1                # clean Release publish (PowerShell 7+)
-#   powershell -File ./publish.ps1    # Windows PowerShell 5.1 — ships with Windows
+#   powershell -File ./publish.ps1    # Windows PowerShell 5.1 - ships with Windows
 #   pwsh ./publish.ps1 -SkipClean     # faster rebuild on top of the existing output
 #
-# From Git Bash on Windows, `pwsh` is not on PATH by default; use `powershell -File …`
+# From Git Bash on Windows, `pwsh` is not on PATH by default; use `powershell -File ...`
 # or install PowerShell 7.
 #
 # Output:
 #   ImageGenerator.MAUI/bin/Release/net11.0-windows10.0.22621.0/win-x64/publish/Emberforge.exe
 #   (the project folder/csproj stay ImageGenerator.MAUI; only the binary is Emberforge.exe via AssemblyName)
-#
-# Close the running app first — MSBuild can't overwrite a locked .exe.
 
 param(
     [switch]$SkipClean
 )
 
 $ErrorActionPreference = 'Stop'
-$repoRoot = $PSScriptRoot
-$project  = Join-Path $repoRoot 'ImageGenerator.MAUI\ImageGenerator.MAUI.csproj'
-$tfm      = 'net11.0-windows10.0.22621.0'
-$rid      = 'win-x64'
+$repoRoot   = $PSScriptRoot
+$project    = Join-Path $repoRoot 'ImageGenerator.MAUI\ImageGenerator.MAUI.csproj'
+$tfm        = 'net11.0-windows10.0.22621.0'
+$rid        = 'win-x64'
+$publishDir = Join-Path $repoRoot "ImageGenerator.MAUI\bin\Release\$tfm\$rid\publish"
+$exe        = Join-Path $publishDir 'Emberforge.exe'
 
-if (-not $SkipClean) {
-    Write-Host 'Cleaning Release output…' -ForegroundColor Cyan
-    dotnet clean $project -c Release -f $tfm -r $rid | Out-Null
+# Fail fast if the app is running and locking Emberforge.exe
+if (Get-Process -Name 'Emberforge' -ErrorAction SilentlyContinue) {
+    throw 'Emberforge is currently running. Close it before publishing.'
 }
 
-Write-Host 'Publishing self-contained single-file exe…' -ForegroundColor Cyan
+# Catch TFM drift between publish.ps1 and the csproj early
+$csprojText = Get-Content $project -Raw
+if ($csprojText -notmatch [regex]::Escape($tfm)) {
+    throw "TFM '$tfm' was not found in $project. Update `$tfm in publish.ps1 to match <TargetFrameworks>."
+}
+
+if (-not $SkipClean) {
+    Write-Host 'Cleaning Release output...' -ForegroundColor Cyan
+    dotnet clean $project -c Release -f $tfm -r $rid -p:WindowsPackageType=None | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "dotnet clean failed with exit code $LASTEXITCODE"
+    }
+    if (Test-Path $publishDir) {
+        Remove-Item $publishDir -Recurse -Force
+    }
+}
+
+Write-Host 'Publishing self-contained single-file exe...' -ForegroundColor Cyan
 dotnet publish $project `
     -c Release `
     -f $tfm `
@@ -46,9 +63,17 @@ if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE"
 }
 
-$exe = Join-Path $repoRoot "ImageGenerator.MAUI\bin\Release\$tfm\$rid\publish\Emberforge.exe"
 if (-not (Test-Path $exe)) {
     throw "Expected exe not found at $exe"
+}
+
+# Warn if any non-exe/non-pdb assets were emitted beside Emberforge.exe
+$extraFiles = Get-ChildItem $publishDir -Recurse -File | Where-Object {
+    $_.FullName -ne $exe -and $_.Extension -ne '.pdb'
+}
+if ($extraFiles) {
+    Write-Warning "Found $($extraFiles.Count) extra file(s) in publish\; test running Emberforge.exe from an empty temp folder before shipping only the .exe:"
+    $extraFiles | ForEach-Object { Write-Warning ("  " + $_.FullName.Substring($publishDir.Length + 1)) }
 }
 
 $sizeMb = [math]::Round((Get-Item $exe).Length / 1MB, 1)
@@ -56,6 +81,6 @@ Write-Host ""
 Write-Host "Published: $exe" -ForegroundColor Green
 Write-Host "Size:      $sizeMb MB" -ForegroundColor Green
 Write-Host ""
-Write-Host 'Next: gh release create vX.Y.Z-preview "' -NoNewline
+Write-Host 'Next: gh release create vX.Y.Z "' -NoNewline
 Write-Host $exe -NoNewline -ForegroundColor Yellow
-Write-Host '" --prerelease --target master --title "…" --notes "…"'
+Write-Host '" --target master --title "..." --notes "..."'
