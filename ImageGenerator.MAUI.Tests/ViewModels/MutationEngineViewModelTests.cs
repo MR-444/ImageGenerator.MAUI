@@ -765,6 +765,35 @@ public class MutationEngineViewModelTests
         sut.GenerateCommand.CanExecute(null).Should().BeTrue();
     }
 
+    /// <summary>
+    /// The paid half of the pair. <c>MutateWithAi</c> pays for the captions first and renders afterwards,
+    /// so a model this build refuses to call buys N Sonnet calls (Sonnet is the default tier) and shows an
+    /// empty grid. Reaching it takes no odd setup: "Mutate from this" on an Ideogram image loads a base
+    /// while keeping whatever model is currently selected, and the engine opens for any model.
+    /// </summary>
+    [Fact]
+    public void MutateWithAiCommand_DoesNotPayForCaptionsThatCannotRender()
+    {
+        var generator = BuildBareGenerator();
+        var sut = CreateSutWithLlm(generator);
+        sut.SetBaseForTest(MutationTestData.BaseCaption());
+
+        // Asserted enabled first: the gate must come from the model, not from a condition that is simply
+        // never true here, which would make the assertion below pass for the wrong reason.
+        sut.MutateWithAiCommand.CanExecute(null).Should().BeTrue();
+
+        generator.Parameters.Model = "stability-ai/some-new-model";
+
+        sut.MutateWithAiCommand.CanExecute(null).Should().BeFalse();
+    }
+
+    private static MutationEngineViewModel CreateSutWithLlm(GeneratorViewModel generator) =>
+        new(new StubLibraryService(),
+            new CaptionMutationEngine(),
+            NullLogger<MutationEngineViewModel>.Instance,
+            generator,
+            mutationLlm: new StubMutationLlm());
+
     private static GeneratorViewModel BuildBareGenerator() =>
         new(new Mock<IJobRunner>().Object,
             new Mock<IApiTokenStore>().Object,

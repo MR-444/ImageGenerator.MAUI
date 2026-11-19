@@ -547,7 +547,13 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         }
     }
 
-    private bool CanMutateWithAi() => HasBase && _mutationLlm is not null && !IsMutating;
+    // Same gate as Generate, and the more important half of the pair: this path pays for the LLM calls
+    // first and renders afterwards (DispatchAiResultsAsync hands the captions to the batch at the end),
+    // so a model this build refuses to call buys N Sonnet/Opus captions and then renders none of them.
+    // Checking the batch pipeline instead would be too late — the money is already gone by then.
+    private bool CanMutateWithAi() =>
+        HasBase && _mutationLlm is not null && !IsMutating
+        && (_generator is null || _generator.ModelIsSupported);
 
     /// <summary>
     /// AI path: fan out N independent LLM calls (one validated variant each, bounded concurrency), then
