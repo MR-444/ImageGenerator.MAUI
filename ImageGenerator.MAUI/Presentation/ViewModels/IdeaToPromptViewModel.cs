@@ -83,7 +83,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
     [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
     private string _idea = string.Empty;
 
-    public IReadOnlyList<IdeaSourceMode> SourceModeOptions { get; } = [IdeaSourceMode.Text, IdeaSourceMode.Image];
+    public IReadOnlyList<IdeaSourceMode> SourceModeOptions { get; } = (IdeaSourceMode[])[IdeaSourceMode.Text, IdeaSourceMode.Image];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsTextSource))]
@@ -191,7 +191,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
     [ObservableProperty]
     private bool _buildJson;
 
-    public IReadOnlyList<ModelTier> ModelTierOptions { get; } = [ModelTier.Local, ModelTier.Sonnet, ModelTier.Opus];
+    public IReadOnlyList<ModelTier> ModelTierOptions { get; } = (ModelTier[])[ModelTier.Local, ModelTier.Sonnet, ModelTier.Opus];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLocalTier))]

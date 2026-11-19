@@ -60,7 +60,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         IsAspectRatioMode = generator is not null
                             && Shared.Constants.ModelConstants.ComfyUi.IsId(generator.Parameters.Model);
         ResolutionOptions = IsAspectRatioMode
-            ? [.. generator!.AspectRatioOptions]
+            ? (string[])[.. generator!.AspectRatioOptions]
             : IdeogramV4Descriptor.AllResolutions;
         if (IsAspectRatioMode && ResolutionOptions.Count > 0)
         {
@@ -163,7 +163,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
     // ONLY the descs onto the live elements (bbox/text/palette/selection untouched).
 
     /// <summary>Model tiers offered for enrichment (Sonnet default; Local = free round-trip).</summary>
-    public IReadOnlyList<ModelTier> EnrichTierOptions { get; } = [ModelTier.Sonnet, ModelTier.Opus, ModelTier.Local];
+    public IReadOnlyList<ModelTier> EnrichTierOptions { get; } = (ModelTier[])[ModelTier.Sonnet, ModelTier.Opus, ModelTier.Local];
 
     [ObservableProperty]
     private ModelTier _enrichTier = ModelTier.Sonnet;
@@ -309,7 +309,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
     // phrases — the pickers INSERT into the Entries, they never constrain them.
 
     public IReadOnlyList<string> MediumSuggestions { get; } =
-        ["photograph", "illustration", "3d_render", "painting", "graphic_design"];
+        (string[])["photograph", "illustration", "3d_render", "painting", "graphic_design"];
 
     public IReadOnlyList<string> ArtStyleSuggestions { get; } =
         (string[])["flat vector illustration, bold outlines",

@@ -50,7 +50,7 @@ public sealed class ModelCatalogService : IModelCatalogService
             // doesn't support — including them clutters the picker. Every surviving owner is
             // grouped under the single "Replicate" provider (the creator shows in the name).
             return
-            [
+            (ModelOption[])[
                 .. coll.Models
                     .Where(m => !string.IsNullOrWhiteSpace(m.Owner)
                                 && !string.IsNullOrWhiteSpace(m.Name)

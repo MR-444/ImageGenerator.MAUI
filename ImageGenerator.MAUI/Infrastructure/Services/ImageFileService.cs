@@ -88,7 +88,7 @@ public sealed class ImageFileService : IImageFileService
             if (caps.Seed) lines.Add($"Seed: {seed}");
             if (caps.AspectRatio) lines.Add($"AspectRatio: {aspectRatio}");
             lines.AddRange(
-            [
+            (string[])[
                 $"Dimensions: {width}x{height}",
                 $"Format: {outputFormat}",
                 $"Quality: {outputQuality}",

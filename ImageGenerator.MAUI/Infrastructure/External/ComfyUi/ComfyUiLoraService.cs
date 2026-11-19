@@ -61,7 +61,7 @@ public sealed class ComfyUiLoraService : IComfyUiLoraService
         }
 
         return
-        [
+        (string[])[
             .. (names ?? [])
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.OrdinalIgnoreCase)

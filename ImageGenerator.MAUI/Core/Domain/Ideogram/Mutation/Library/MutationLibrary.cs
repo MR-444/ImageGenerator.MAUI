@@ -20,10 +20,10 @@ public sealed class MutationLibrary
     {
         // Defensive copies: snapshot the caller's collections so a later mutation of the original lists
         // can't alter library state. The entries themselves are immutable records, so a shallow copy is enough.
-        StyleFragments = [.. styleFragments];
-        OrnamentKits = [.. ornamentKits];
-        SceneElements = sceneElements is null ? [] : [.. sceneElements];
-        AnchorPresets = anchorPresets is null ? [] : [.. anchorPresets];
+        StyleFragments = (StyleFragment[])[.. styleFragments];
+        OrnamentKits = (OrnamentKit[])[.. ornamentKits];
+        SceneElements = sceneElements is null ? [] : (SceneElement[])[.. sceneElements];
+        AnchorPresets = anchorPresets is null ? [] : (AnchorPreset[])[.. anchorPresets];
         _fragmentsByName = StyleFragments.ToDictionary(f => f.Name, StringComparer.Ordinal);
         _kitsByName = OrnamentKits.ToDictionary(k => k.Name, StringComparer.Ordinal);
         _sceneElementsByName = SceneElements.ToDictionary(e => e.Name, StringComparer.Ordinal);

@@ -76,7 +76,7 @@ public abstract class IdeogramV4Descriptor : IPayloadBuilder, ICapabilityProvide
     }
 
     public IEnumerable<string> Lines(ImageGenerationParameters p) =>
-    [
+    (string[])[
         $"Resolution: {p.Resolution}",
         $"JsonPrompt: {p.UseJsonPrompt}",
         $"CopyrightDetection: {p.EnableCopyrightDetection}"

@@ -64,7 +64,7 @@ public partial class GalleryItemDetailPage
 
     // Prompting for the style name is a View concern (DisplayPromptAsync belongs to the Page); the VM
     // does the load/extract/save once a name is supplied. Mirrors GalleryPage.OnPostToCivitaiClicked.
-    private async void OnSaveStyleClicked(object sender, EventArgs e)
+    private async void OnSaveStyleClicked(object? sender, EventArgs e)
     {
         try
         {

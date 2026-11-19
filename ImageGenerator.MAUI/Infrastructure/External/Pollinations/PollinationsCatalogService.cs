@@ -41,7 +41,7 @@ public sealed class PollinationsCatalogService : IPollinationsCatalogService
             if (entries is null) return [];
 
             return
-            [
+            (ModelOption[])[
                 .. entries
                     .Where(e => !string.IsNullOrWhiteSpace(e.Name)
                                 && e.OutputModalities?.Contains("image", StringComparer.OrdinalIgnoreCase) == true

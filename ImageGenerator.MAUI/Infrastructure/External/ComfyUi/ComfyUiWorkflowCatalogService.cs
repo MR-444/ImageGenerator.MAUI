@@ -27,7 +27,7 @@ public sealed class ComfyUiWorkflowCatalogService : IComfyUiWorkflowCatalogServi
             Directory.CreateDirectory(_directory);
 
             IReadOnlyList<ModelOption> options =
-            [
+            (ModelOption[])[
                 .. Directory.EnumerateFiles(_directory, "*.json")
                     .Select(Path.GetFileNameWithoutExtension)
                     .Where(stem => !string.IsNullOrWhiteSpace(stem))

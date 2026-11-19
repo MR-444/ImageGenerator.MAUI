@@ -36,7 +36,7 @@ public sealed class Flux11ProUltraDescriptor : IPayloadBuilder, ICapabilityProvi
     };
 
     public IEnumerable<string> Lines(ImageGenerationParameters p) =>
-    [
+    (string[])[
         $"Raw: {p.Raw}",
         // Invariant culture so the value is portable: a German-locale machine would otherwise
         // write "0,5" and the invariant-culture reader (Remix) couldn't parse it back.

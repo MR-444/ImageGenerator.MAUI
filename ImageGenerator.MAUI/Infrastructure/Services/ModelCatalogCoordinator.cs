@@ -60,7 +60,7 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
         // Load-time merge keeps any freshly-added seed entries surfacing even when the cache
         // was written before they existed.
         if (fetched.Count > 0) await _catalogService.SaveCachedAsync(fetched, ct);
-        return MergeWithSeeds([.. fetched, .. comfy]);
+        return MergeWithSeeds((ModelOption[])[.. fetched, .. comfy]);
     }
 
     /// <summary>
@@ -81,7 +81,7 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
         LogDescriptorCoverage(live);
         var seen = new HashSet<string>(live.Select(m => m.Value), StringComparer.OrdinalIgnoreCase);
         var marked = live.Select(m => MarkIfUnknown(m));
-        return [.. marked, .. _registry.Seeds.Where(m => seen.Add(m.Value))];
+        return (ModelOption[])[.. marked, .. _registry.Seeds.Where(m => seen.Add(m.Value))];
     }
 
     // Same shape as PollinationsCatalogService.PaidSuffix: the picker binds ModelOption.Display

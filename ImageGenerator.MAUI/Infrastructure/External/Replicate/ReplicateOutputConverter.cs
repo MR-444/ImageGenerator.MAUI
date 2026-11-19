@@ -17,7 +17,7 @@ public sealed class ReplicateOutputConverter : JsonConverter<IReadOnlyList<strin
                 return null;
 
             case JsonTokenType.String:
-                return [reader.GetString()!];
+                return (string[])[reader.GetString()!];
 
             case JsonTokenType.StartArray:
                 var list = new List<string>();

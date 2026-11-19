@@ -422,7 +422,7 @@ public static class ComfyUiWorkflowPatcher
             // implementation detail of the index computation in PatchQualityPreset.
             return new ComfyUiQualityPresetSlot(
                 combo.Value.Baked,
-                [.. combo.Value.Options.Where(o => !string.IsNullOrEmpty(o))]);
+                (string[])[.. combo.Value.Options.Where(o => !string.IsNullOrEmpty(o))]);
         }
         catch (JsonException)
         {

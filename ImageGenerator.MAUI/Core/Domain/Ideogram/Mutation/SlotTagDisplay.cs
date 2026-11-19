@@ -23,7 +23,7 @@ public static class SlotTagDisplay
     ];
 
     /// <summary>Picker options in display order: Auto first, then each tag's friendly label.</summary>
-    public static IReadOnlyList<string> Options { get; } = [Auto, .. Map.Select(m => m.Friendly)];
+    public static IReadOnlyList<string> Options { get; } = (string[])[Auto, .. Map.Select(m => m.Friendly)];
 
     /// <summary>Friendly label for a raw tag; <see cref="Auto"/> for null/unknown.</summary>
     public static string ToFriendly(string? raw)

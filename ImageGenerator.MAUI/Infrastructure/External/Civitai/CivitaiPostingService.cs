@@ -69,7 +69,7 @@ public sealed class CivitaiPostingService : ICivitaiPostingService
         CancellationToken cancellationToken = default)
         // The generation-time path: one image, published one-step (user decision 2026-06-13).
         => PostImagesAsync(
-            [new CivitaiImagePost(filePath, meta)], title, modelVersionId,
+            (CivitaiImagePost[])[new CivitaiImagePost(filePath, meta)], title, modelVersionId,
             publish: true, cancellationToken);
 
     public async Task<CivitaiPostResult> PostImagesAsync(

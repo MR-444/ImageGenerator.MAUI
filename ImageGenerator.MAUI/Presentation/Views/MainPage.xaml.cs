@@ -229,7 +229,7 @@ public partial class MainPage
 
     // Code-behind because RelativeSource lookups inside a CollectionView.ItemTemplate
     // don't reliably cross the DataTemplate scope under MAUI's compiled bindings.
-    private void OnRemoveImageClicked(object sender, EventArgs e)
+    private void OnRemoveImageClicked(object? sender, EventArgs e)
     {
         if (sender is Button { CommandParameter: InputImagesCoordinator.InputImageItem item })
         {
@@ -240,7 +240,7 @@ public partial class MainPage
     // Batch-from-textfile entry point. Code-behind orchestrates because DisplayAlertAsync
     // belongs to the Page (the VM owns the FilePicker call and the parser, both of which
     // are independently testable).
-    private async void OnImportPromptsClicked(object sender, EventArgs e)
+    private async void OnImportPromptsClicked(object? sender, EventArgs e)
     {
         try
         {

@@ -22,7 +22,7 @@ public static partial class PaletteSwatches
         if (entries is null) return [];
 
         return
-        [
+        (PaletteSwatch[])[
             .. entries
                 .Where(hex => HexColorRegex().IsMatch(hex))
                 .Select(hex => new PaletteSwatch(hex, Color.FromArgb(hex)))

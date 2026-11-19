@@ -79,7 +79,7 @@ public abstract class PollinationsDescriptorBase : IPayloadBuilder, ICapabilityP
     }
 
     public virtual IEnumerable<string> Lines(ImageGenerationParameters p) =>
-        [$"Safe: {p.Safe}"];
+        (string[])[$"Safe: {p.Safe}"];
 
     public virtual void Apply(ImageGenerationParameters p, IReadOnlyDictionary<string, string> meta) =>
         meta.ApplyBool("Safe", v => p.Safe = v);

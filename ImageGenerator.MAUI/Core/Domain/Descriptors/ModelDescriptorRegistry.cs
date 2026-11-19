@@ -24,7 +24,7 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
         _payloads = payloads.ToDictionary(p => p.ModelId, StringComparer.Ordinal);
         _capabilities = capabilities.ToDictionary(c => c.ModelId, StringComparer.Ordinal);
         _metadata = metadata.ToDictionary(m => m.ModelId, StringComparer.Ordinal);
-        Seeds = [.. seeds.Select(s => s.Seed)];
+        Seeds = (ModelOption[])[.. seeds.Select(s => s.Seed)];
         // Held internally rather than DI-registered so neither fallback ever appears in the
         // IEnumerables above (and neither contributes a seed entry to the picker).
         _replicateFallback = new FallbackReplicateDescriptor();
@@ -104,7 +104,7 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
     /// Adding a model = one descriptor class + one line here.
     /// </summary>
     public static IReadOnlyList<object> ProductionDescriptors() =>
-    [
+    (object[])[
         new Flux11ProDescriptor(),
         new Flux11ProUltraDescriptor(),
         new Flux2Klein4bDescriptor(),

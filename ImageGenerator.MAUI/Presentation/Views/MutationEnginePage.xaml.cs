@@ -27,7 +27,7 @@ public partial class MutationEnginePage
         if (_viewModel.Generator is { } generator) _ = generator.EnsureOllamaModelsLoadedAsync();
     }
 
-    private async void OnBackClicked(object sender, EventArgs e)
+    private async void OnBackClicked(object? sender, EventArgs e)
     {
         try
         {

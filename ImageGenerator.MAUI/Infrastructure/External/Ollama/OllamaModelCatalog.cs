@@ -27,7 +27,7 @@ public sealed class OllamaModelCatalog : IOllamaModelCatalog
     public async Task<IReadOnlyList<string>> ListModelsAsync(string baseUrl, CancellationToken ct = default)
     {
         var infos = await ListModelInfosAsync(baseUrl, ct);
-        return [.. infos.Select(i => i.Name)];
+        return (string[])[.. infos.Select(i => i.Name)];
     }
 
     public async Task<IReadOnlyList<OllamaModelInfo>> ListModelInfosAsync(string baseUrl, CancellationToken ct = default)
@@ -111,7 +111,7 @@ public sealed class OllamaModelCatalog : IOllamaModelCatalog
                     && caps.EnumerateArray().Any(c =>
                         string.Equals(c.GetString(), "vision", StringComparison.OrdinalIgnoreCase)))
                 {
-                    return info with { Capabilities = [.. info.Capabilities, "vision"] };
+                    return info with { Capabilities = (string[])[.. info.Capabilities, "vision"] };
                 }
 
                 return info;

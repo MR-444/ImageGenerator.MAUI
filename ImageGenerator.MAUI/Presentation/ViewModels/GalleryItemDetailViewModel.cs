@@ -246,7 +246,7 @@ public partial class GalleryItemDetailViewModel : ObservableObject
             }
 
             var updated = new MutationLibrary(
-                [.. library.StyleFragments, new StyleFragment(styleName, parsed.StyleDescription)],
+                (StyleFragment[])[.. library.StyleFragments, new StyleFragment(styleName, parsed.StyleDescription)],
                 library.OrnamentKits,
                 library.SceneElements,
                 library.AnchorPresets);

@@ -68,7 +68,7 @@ public sealed class OpenRouterModelCatalog : IOpenRouterModelCatalog
         }
 
         return
-        [
+        (OpenRouterModelInfo[])[
             .. result
                 .OrderByDescending(m => m.IsFree)
                 .ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase)

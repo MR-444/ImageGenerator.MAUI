@@ -80,7 +80,7 @@ public sealed partial class BatchCoordinator : ObservableObject
                 PickerTitle = "Pick a prompt textfile",
                 FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
                 {
-                    { DevicePlatform.WinUI, [".txt"] },
+                    { DevicePlatform.WinUI, (string[])[".txt"] },
                 }),
             });
         }

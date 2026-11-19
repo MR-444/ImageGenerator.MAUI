@@ -33,7 +33,7 @@ public abstract class PollinationsGptImageDescriptor : PollinationsDescriptorBas
         QualityOptions.Contains(p.GptQuality) ? p.GptQuality : DefaultQuality;
 
     public override IEnumerable<string> Lines(ImageGenerationParameters p) =>
-        [.. base.Lines(p), $"GptQuality: {ResolveQuality(p)}"];
+        (string[])[.. base.Lines(p), $"GptQuality: {ResolveQuality(p)}"];
 
     public override void Apply(ImageGenerationParameters p, IReadOnlyDictionary<string, string> meta)
     {
