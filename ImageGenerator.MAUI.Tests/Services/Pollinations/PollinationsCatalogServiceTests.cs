@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using FluentAssertions;
+using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Infrastructure.External.Pollinations;
 using ImageGenerator.MAUI.Shared.Constants;
 using ImageGenerator.MAUI.Tests.TestSupport;
@@ -35,7 +36,8 @@ public class PollinationsCatalogServiceTests
 
         _service = new PollinationsCatalogService(
             new StubHttpClientFactory(new HttpClient(_handler.Object)),
-            NullLogger<PollinationsCatalogService>.Instance);
+            NullLogger<PollinationsCatalogService>.Instance,
+            ModelDescriptorRegistry.Default());
     }
 
     [Fact]
@@ -53,6 +55,63 @@ public class PollinationsCatalogServiceTests
         result[0].Display.Should().Be("FLUX.1 Schnell (Pollinations)");
         result[0].Value.Should().Be("pollinations/flux");
         result[0].Provider.Should().Be(ProviderConstants.Pollinations);
+    }
+
+    /// <summary>
+    /// The catalog moved to <c>publisher/model</c> names and kept the old slugs as aliases, which the docs
+    /// say stay valid in requests. Answering with the id this build describes — rather than the name the
+    /// feed leads with — is what keeps the descriptor's knobs, the user's saved selection and the app's own
+    /// seed entry attached to one model, instead of opening a second, description-less row beside it.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_DescribedModelRenamedUpstream_KeepsTheDescribedId()
+    {
+        _nextResponse = () => JsonResponse("""
+            [
+              {"name":"black-forest-labs/flux.1-schnell","aliases":["flux"],"title":"FLUX.1 Schnell","output_modalities":["image"],"paid_only":false}
+            ]
+            """);
+
+        var result = await _service.FetchAsync();
+
+        result.Should().ContainSingle().Which.Value.Should().Be(ModelConstants.Pollinations.Flux);
+        // Display still comes from the feed: it is what carries the paid tag, and a seed label cannot.
+        result[0].Display.Should().Be("FLUX.1 Schnell (Pollinations)");
+    }
+
+    [Fact]
+    public async Task FetchAsync_ModelNobodyDescribed_KeepsTheCanonicalId()
+    {
+        _nextResponse = () => JsonResponse("""
+            [
+              {"name":"microsoft/mai-image-2.7","aliases":[],"title":"MAI Image 2.7","output_modalities":["image"],"paid_only":false}
+            ]
+            """);
+
+        var result = await _service.FetchAsync();
+
+        // A model added upstream after this build shipped is still reachable: the Pollinations fallback
+        // descriptor derives the request name from the id, and the canonical id is what the feed calls it.
+        result[0].Value.Should().Be("pollinations/microsoft/mai-image-2.7");
+    }
+
+    /// <summary>
+    /// Alias matching can land two feed entries on one row. One of them is dropped, so the value the picker
+    /// binds never repeats — and the row that survives is the one the feed listed first.
+    /// </summary>
+    [Fact]
+    public async Task FetchAsync_TwoEntriesMapToTheSameId_YieldsOneRow()
+    {
+        _nextResponse = () => JsonResponse("""
+            [
+              {"name":"openai/gpt-image-1.5","aliases":["gptimage-large"],"title":"GPT Image 1.5","output_modalities":["image"],"paid_only":true},
+              {"name":"gptimage-large","aliases":[],"title":"GPT Image Large","output_modalities":["image"],"paid_only":true}
+            ]
+            """);
+
+        var result = await _service.FetchAsync();
+
+        result.Should().ContainSingle().Which.Value.Should().Be(ModelConstants.Pollinations.GptImageLarge);
     }
 
     [Fact]

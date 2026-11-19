@@ -48,11 +48,16 @@ public partial class ImageGenerationParameters : ObservableObject
     // until now lived in GeneratorViewModel on top of these — two defaults for one field, disagreeing.
     // Square so the pair means the ratio the app starts on: the first custom-dimension model opens at
     // the shape the rest of the UI just said was chosen.
+    //
+    // 1024 and not 1080: these two are transmitted raw the moment the ratio is "custom", and the FLUX.2
+    // and MAI families on Pollinations answer an off-step size with HTTP 400 "requires width and height to
+    // be multiples of 16px". No descriptor can warn about that rule, so the pair the app hands out has to
+    // satisfy it — 1080 was not, and 1024 is also what Pollinations' own 1:1 preset sends.
     [ObservableProperty]
-    private int _width = 1080;
+    private int _width = 1024;
 
     [ObservableProperty]
-    private int _height = 1080;
+    private int _height = 1024;
 
     partial void OnWidthChanged(int value)
     {

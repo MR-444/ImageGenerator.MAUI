@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
+using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
@@ -17,11 +18,18 @@ public sealed class PollinationsCatalogService : IPollinationsCatalogService
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<PollinationsCatalogService> _logger;
+    private readonly HashSet<string> _describedModelIds;
 
-    public PollinationsCatalogService(IHttpClientFactory httpClientFactory, ILogger<PollinationsCatalogService> logger)
+    public PollinationsCatalogService(
+        IHttpClientFactory httpClientFactory,
+        ILogger<PollinationsCatalogService> logger,
+        IModelDescriptorRegistry registry)
     {
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        // Copied rather than queried per entry: the registry hands back a key collection, and membership
+        // is tested once per catalog row.
+        _describedModelIds = [.. registry.DescribedModelIds];
     }
 
     public async Task<IReadOnlyList<ModelOption>> FetchAsync(CancellationToken ct = default)
@@ -44,8 +52,12 @@ public sealed class PollinationsCatalogService : IPollinationsCatalogService
                                 && e.Alpha != true)
                     .Select(e => new ModelOption(
                         Display: ToDisplayName(e),
-                        Value: ModelConstants.Pollinations.PrefixSlash + e.Name!,
+                        Value: ToValue(e),
                         Provider: ProviderConstants.Pollinations))
+                    // Mapping a live entry back onto a described id can put two entries on the same row —
+                    // the feed can carry the canonical model and another entry listing the same alias —
+                    // and nothing downstream de-duplicates rows that came from the live side.
+                    .DistinctBy(o => o.Value, StringComparer.OrdinalIgnoreCase)
             ];
         }
         catch (Exception ex)
@@ -61,6 +73,36 @@ public sealed class PollinationsCatalogService : IPollinationsCatalogService
     // the distinction is whether the key has pollen credits, not whether the model is reachable.
     // A short suffix keeps that visible in the picker, which binds ModelOption.Display directly.
     private const string PaidSuffix = " · paid";
+
+    /// <summary>
+    /// The id this app generates with. The catalog moved to <c>publisher/model</c> names and kept the old
+    /// slugs as aliases, which the docs say stay valid in requests — so a live entry can be the same model
+    /// this build already describes under a different name. Answering with the described id when an alias
+    /// matches is what keeps the descriptor's knobs, the user's saved selection and the app's own seed entry
+    /// attached to that model, and it stops the picker offering one model twice: once with a descriptor and
+    /// once through the fallback.
+    /// </summary>
+    private string ToValue(PollinationsModelEntry entry)
+    {
+        foreach (var slug in Spellings(entry))
+        {
+            var candidate = ModelConstants.Pollinations.PrefixSlash + slug;
+            if (_describedModelIds.Contains(candidate)) return candidate;
+        }
+
+        return ModelConstants.Pollinations.PrefixSlash + entry.Name!;
+    }
+
+    // Canonical name first, then the feed's own alias order: when more than one spelling is described, the
+    // one the catalog leads with wins.
+    private static IEnumerable<string> Spellings(PollinationsModelEntry entry)
+    {
+        if (!string.IsNullOrWhiteSpace(entry.Name)) yield return entry.Name!;
+        foreach (var alias in entry.Aliases ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(alias)) yield return alias;
+        }
+    }
 
     private static string ToDisplayName(PollinationsModelEntry entry)
     {
@@ -89,6 +131,7 @@ public sealed class PollinationsCatalogService : IPollinationsCatalogService
     private sealed class PollinationsModelEntry
     {
         [JsonPropertyName("name")] public string? Name { get; set; }
+        [JsonPropertyName("aliases")] public List<string>? Aliases { get; set; }
         [JsonPropertyName("title")] public string? Title { get; set; }
         [JsonPropertyName("output_modalities")] public List<string>? OutputModalities { get; set; }
         [JsonPropertyName("paid_only")] public bool? PaidOnly { get; set; }

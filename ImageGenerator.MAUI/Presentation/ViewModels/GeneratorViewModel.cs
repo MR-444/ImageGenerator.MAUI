@@ -217,7 +217,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     private string _comfyUiBaseUrl = ModelConstants.ComfyUi.DefaultBaseUrl;
 
-    partial void OnComfyUiBaseUrlChanged(string? value) =>
+    partial void OnComfyUiBaseUrlChanged(string value) =>
         _uiStateStore.PersistComfyUiBaseUrl(value ?? string.Empty);
 
     // Runtime-only ComfyUI optimization. Default off because the KJNodes patch node and the

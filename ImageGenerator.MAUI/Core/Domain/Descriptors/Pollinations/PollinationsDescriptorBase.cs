@@ -14,8 +14,12 @@ namespace ImageGenerator.MAUI.Core.Domain.Descriptors.Pollinations;
 public abstract class PollinationsDescriptorBase : IPayloadBuilder, ICapabilityProvider, IMetadataDescriber, ICatalogSeedEntry
 {
     // Curated AR set with clean integer translations to width/height. "custom" falls through
-    // to parameters.Width/Height untouched. Pollinations accepts arbitrary pixel sizes, so
-    // this list is purely a UX convenience — not a server constraint.
+    // to parameters.Width/Height untouched. The presets being multiples of 16 is not only tidiness:
+    // that step is a server rule on the newer models — FLUX.2 and MAI refuse an off-step size with
+    // HTTP 400 "requires width and height to be multiples of 16px" — and the older ones simply never
+    // complained, which is how the belief that Pollinations takes any size got written down here.
+    // Nothing can validate a typed size: the live catalog publishes no step rule per model. What the
+    // app controls is its own starting pair, and that stays on the step.
     private static readonly string[] AspectRatios =
         ["1:1", "16:9", "9:16", "4:3", "3:4", "custom"];
 

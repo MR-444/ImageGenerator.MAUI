@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Entities;
@@ -105,11 +106,13 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
                     Redact(url, parameters.PollinationsApiToken),
                     Redact(fullBody, parameters.PollinationsApiToken));
 
-                var shortBody = fullBody.Length > 500 ? fullBody[..500] + "…" : fullBody;
                 return new GeneratedImage
                 {
+                    // The full body, not a truncation of it: the remedy for a refusal is carried inside
+                    // the JSON error envelope, and cutting the body at 500 characters can cut that
+                    // envelope apart. Truncation happens where the text is turned into a job-row label.
                     Message = Redact(
-                        DescribeFailure(response.StatusCode, shortBody),
+                        DescribeFailure(response.StatusCode, fullBody),
                         parameters.PollinationsApiToken),
                     ImageData = null
                 };
@@ -174,18 +177,73 @@ public sealed class PollinationsImageGenerationService : IImageGenerationService
         return $"{PromptBaseUrl}{encodedPrompt}?{query}";
     }
 
-    // Pollinations moved to mandatory auth: anonymous generation now 401s, and paid-only models
-    // 402 when the key is out of pollen. Both arrive as a JSON error envelope that reads poorly
-    // in a job-row label, so translate the two actionable codes into plain instructions and let
-    // everything else fall through to the raw (truncated) body.
-    private static string DescribeFailure(HttpStatusCode statusCode, string body) => statusCode switch
+    // Pollinations answers every failure with the same JSON envelope:
+    //   { "status": 402, "success": false, "error": { "code": "KEY_BUDGET_EXHAUSTED", "message": "…" } }
+    // The code is the only field that says what actually happened. 402 is documented as covering three
+    // causes — INSUFFICIENT_BALANCE, KEY_BUDGET_EXHAUSTED, QUEST_POLLEN_ONLY — and two of them describe
+    // the account or the key rather than the model, so a message naming the model without reading the
+    // code is wrong about as often as it is right. An unrecognised code, a body that is not the
+    // envelope, and every other status all fall through to quoting upstream, one rule for all of them.
+    private static string DescribeFailure(HttpStatusCode statusCode, string fullBody)
     {
-        HttpStatusCode.Unauthorized =>
-            "Pollinations requires an API key — add one in Settings (get one at enter.pollinations.ai/keys).",
-        HttpStatusCode.PaymentRequired =>
-            "Insufficient pollen balance for this paid Pollinations model — top up at enter.pollinations.ai, or pick a model without the “paid” tag.",
-        _ => $"Pollinations HTTP {(int)statusCode} {statusCode}: {body}"
-    };
+        var (code, message) = ReadErrorEnvelope(fullBody);
+        var trimmed = fullBody.Length > 500 ? fullBody[..500] + "…" : fullBody;
+
+        // 401 means "missing or invalid API key" whatever the code says, so the status alone is enough
+        // to say something useful; the upstream sentence still rides along because it is what
+        // distinguishes the two, and a pk_ app key is refused since 2026-11-01.
+        if (statusCode == HttpStatusCode.Unauthorized)
+            return QuotingUpstream(
+                "Pollinations refused an unauthenticated request — add a secret (sk_) API key in Settings (get one at enter.pollinations.ai/keys). A publishable app key (pk_) only identifies an app and is refused on its own.",
+                message, trimmed);
+
+        if (statusCode == HttpStatusCode.PaymentRequired)
+        {
+            var sentence = code switch
+            {
+                "INSUFFICIENT_BALANCE" =>
+                    "Pollinations: the account behind this key is out of pollen. Top up at enter.pollinations.ai — this is the account's balance, not a price tag on the model.",
+                "KEY_BUDGET_EXHAUSTED" =>
+                    "Pollinations: this API key has spent the budget set on it. Raise that budget at enter.pollinations.ai/keys or use another key — the model was never the problem.",
+                "QUEST_POLLEN_ONLY" =>
+                    "Pollinations: this request needs pollen this key may not spend — the account may hold only Quest Pollen. That is a limit on the account, not proof that the model is marked paid.",
+                _ => null,
+            };
+            if (sentence is not null) return QuotingUpstream(sentence, message, trimmed);
+        }
+
+        return $"Pollinations HTTP {(int)statusCode} {statusCode}: {trimmed}";
+    }
+
+    // The upstream sentence is the only thing naming the balance, budget or model it complained about, so
+    // it survives the translation instead of being replaced by it.
+    private static string QuotingUpstream(string sentence, string? message, string trimmedBody) =>
+        $"{sentence} Pollinations said: {(string.IsNullOrWhiteSpace(message) ? trimmedBody : message)}";
+
+    private static (string? Code, string? Message) ReadErrorEnvelope(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object
+                || !doc.RootElement.TryGetProperty("error", out var error)
+                || error.ValueKind != JsonValueKind.Object)
+                return (null, null);
+
+            return (ReadString(error, "code"), ReadString(error, "message"));
+        }
+        catch (JsonException)
+        {
+            // A gateway in front of the API can answer in HTML, and an error page is not an envelope.
+            // No code to read means no claim to make, which the caller handles by quoting the body.
+            return (null, null);
+        }
+    }
+
+    private static string? ReadString(JsonElement obj, string name) =>
+        obj.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     private static void Append(StringBuilder sb, string key, string value)
     {

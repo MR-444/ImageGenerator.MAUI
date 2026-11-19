@@ -45,8 +45,8 @@ public class ImageGenerationParametersDefaultsTests
 
         p.Model.Should().Be(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
         p.AspectRatio.Should().Be("1:1");
-        p.Width.Should().Be(1080);
-        p.Height.Should().Be(1080);
+        p.Width.Should().Be(1024);
+        p.Height.Should().Be(1024);
         p.OutputFormat.Should().Be(ImageOutputFormat.Png);
         p.RandomizeSeed.Should().BeTrue();
         p.PromptUpsampling.Should().BeFalse();
@@ -61,6 +61,31 @@ public class ImageGenerationParametersDefaultsTests
         // The pair has to mean the ratio it names, or the first custom-dimension model opens on a
         // picture that is not the aspect ratio the rest of the UI says was chosen.
         ((double)p.Width / p.Height).Should().Be(1.0);
+    }
+
+    /// <summary>
+    /// A size is only transmitted when the ratio is "custom", and then Pollinations sends it raw — while
+    /// the FLUX.2 and MAI families answer anything off the 16 px step with HTTP 400, naming the rule
+    /// ("MAI Image 2.7 requires width and height to be multiples of 16px"). No descriptor can warn about
+    /// that: the live catalog publishes no step rule per model. So the pair the app hands out has to
+    /// satisfy the strictest rule any reachable model is known to enforce, because the app cannot refuse a
+    /// typed one. 1080 did not, and the first generation on those models was refused by its own defaults.
+    /// </summary>
+    [Fact]
+    public void StartingDimensions_SatisfyTheStepRulesOfTheModelsTheyCanReach()
+    {
+        const int step = 16;
+        var p = new ImageGenerationParameters();
+
+        // The assertion would be vacuous if no shipped model took typed pixels, so pin that too.
+        ModelDescriptorRegistry.ProductionDescriptors()
+            .OfType<ICapabilityProvider>()
+            .Where(d => d.Capabilities.CustomDimensions)
+            .Select(d => d.ModelId)
+            .Should().NotBeEmpty();
+
+        (p.Width % step).Should().Be(0, $"{p.Width} is refused by a model that sizes on a {step} px step");
+        (p.Height % step).Should().Be(0, $"{p.Height} is refused by a model that sizes on a {step} px step");
     }
 
     /// <summary>

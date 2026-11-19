@@ -286,31 +286,102 @@ public class PollinationsImageGenerationServiceTests
         result.Message.Should().Contain("API key");
         result.Message.Should().Contain("enter.pollinations.ai");
         result.Message.Should().NotContain("UNAUTHORIZED");
+        // 401 covers "missing" and "invalid" alike; the upstream sentence is what tells them apart, so
+        // translating must not throw it away.
+        result.Message.Should().Contain("Authentication required");
     }
 
     [Fact]
-    public async Task GenerateImageAsync_Http402_ReturnsPollenBalanceGuidance()
+    public async Task GenerateImageAsync_Http402InsufficientBalance_NamesTheAccountAndNotTheModel()
     {
-        // 402 is the documented "insufficient pollen balance" code — what a paid-tagged model
-        // returns when the key has no credits. Distinct remedy from 401, so distinct message.
+        var result = await FailureAsync(HttpStatusCode.PaymentRequired, ModelConstants.Pollinations.QwenImage,
+            """{"status":402,"success":false,"error":{"code":"INSUFFICIENT_BALANCE","message":"Insufficient balance"}}""");
+
+        result.Message.Should().Contain("out of pollen").And.Contain("enter.pollinations.ai");
+        result.Message.Should().Contain("Insufficient balance");
+    }
+
+    [Fact]
+    public async Task GenerateImageAsync_Http402KeyBudgetExhausted_BlamesTheKeyAndNotTheModel()
+    {
+        var result = await FailureAsync(HttpStatusCode.PaymentRequired, ModelConstants.Pollinations.QwenImage,
+            """{"status":402,"success":false,"error":{"code":"KEY_BUDGET_EXHAUSTED","message":"Key budget exhausted"}}""");
+
+        result.Message.Should().Contain("budget").And.Contain("enter.pollinations.ai/keys");
+        result.Message.Should().Contain("Key budget exhausted");
+    }
+
+    /// <summary>
+    /// The reported bug: a model the catalog does not mark paid, refused with a 402, answered by a message
+    /// claiming it was a paid model. The documented code says the account cannot pay for the request, so
+    /// the message has to say that and leave the model alone.
+    /// </summary>
+    [Fact]
+    public async Task GenerateImageAsync_Http402QuestPollenOnly_OnAModelNotMarkedPaid_DoesNotCallItPaid()
+    {
+        var result = await FailureAsync(HttpStatusCode.PaymentRequired, ModelConstants.Pollinations.Flux,
+            """{"status":402,"success":false,"error":{"code":"QUEST_POLLEN_ONLY","message":"Quest pollen only"}}""");
+
+        result.Message.Should().Contain("Quest");
+        result.Message.Should().Contain("not proof that the model is marked paid");
+        result.Message.Should().Contain("Quest pollen only");
+    }
+
+    /// <summary>
+    /// A code this build has not been told about is not evidence about anything, so nothing is concluded:
+    /// the status and whatever upstream wrote are shown, exactly as for every other status.
+    /// </summary>
+    [Fact]
+    public async Task GenerateImageAsync_Http402WithAnUnknownCode_QuotesUpstreamInsteadOfGuessing()
+    {
+        var result = await FailureAsync(HttpStatusCode.PaymentRequired, ModelConstants.Pollinations.Flux,
+            """{"status":402,"success":false,"error":{"code":"PAYMENT_REQUIRED","message":"Insufficient balance"}}""");
+
+        result.Message.Should().Contain("HTTP 402").And.Contain("Insufficient balance");
+        result.Message.Should().NotContain("top up");
+    }
+
+    [Fact]
+    public async Task GenerateImageAsync_Http402FromAGatewayPage_QuotesTheBody()
+    {
+        var result = await FailureAsync(HttpStatusCode.PaymentRequired, ModelConstants.Pollinations.Flux,
+            "<html><body>Payment Required</body></html>");
+
+        result.Message.Should().Contain("HTTP 402").And.Contain("Payment Required");
+    }
+
+    /// <summary>
+    /// The body used to be cut to 500 characters before it reached the translator, which can cut the error
+    /// envelope in half — and half an envelope is what makes a refusal look unexplained. Truncation belongs
+    /// to the job-row label, not to the parse.
+    /// </summary>
+    [Fact]
+    public async Task GenerateImageAsync_Http402WithALongBody_StillReadsTheCode()
+    {
+        var padding = new string('x', 900);
+        var body = "{\"status\":402,\"success\":false,\"error\":{\"code\":\"KEY_BUDGET_EXHAUSTED\"," +
+            "\"message\":\"budget gone " + padding + "\"}}";
+        var result = await FailureAsync(HttpStatusCode.PaymentRequired, ModelConstants.Pollinations.QwenImage,
+            body);
+
+        // Asserted on the translated sentence: the raw body says "budget" too, so quoting it back would
+        // look like a pass while the code went unread.
+        result.Message.Should().Contain("has spent the budget set on it").And.Contain("budget gone");
+    }
+
+    private async Task<GeneratedImage> FailureAsync(HttpStatusCode status, string model, string body)
+    {
         _nextResponse = () => new HttpResponseMessage
         {
-            StatusCode = HttpStatusCode.PaymentRequired,
-            Content = new StringContent(
-                """{"success":false,"error":{"message":"Insufficient balance","code":"PAYMENT_REQUIRED"},"status":402}""")
+            StatusCode = status,
+            Content = new StringContent(body)
         };
 
-        var parameters = new ImageGenerationParameters
+        return await _service.GenerateImageAsync(new ImageGenerationParameters
         {
-            Model = ModelConstants.Pollinations.QwenImage,
+            Model = model,
             Prompt = "a cat"
-        };
-
-        var result = await _service.GenerateImageAsync(parameters);
-
-        result.ImageData.Should().BeNull();
-        result.Message.Should().Contain("pollen balance");
-        result.Message.Should().Contain("enter.pollinations.ai");
+        });
     }
 
     [Fact]
