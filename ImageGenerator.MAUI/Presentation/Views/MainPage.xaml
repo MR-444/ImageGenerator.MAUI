@@ -5,7 +5,6 @@
              xmlns:converters="clr-namespace:ImageGenerator.MAUI.Presentation.Converters"
              xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
              xmlns:vo="clr-namespace:ImageGenerator.MAUI.Core.Domain.ValueObjects"
-             x:Name="Root"
              x:Class="ImageGenerator.MAUI.Presentation.Views.MainPage"
              x:DataType="vm:GeneratorViewModel"
              Shell.NavBarIsVisible="False"
@@ -35,11 +34,14 @@
             <!-- SETTINGS PANE: two columns of cards stacking independently,
                  so a tall Prompt card in col 0 doesn't leave a gap below API Token in col 1. -->
             <ScrollView x:Name="MainSettingsPane" Grid.Column="0">
-                <Grid ColumnDefinitions="*,*"
+                <Grid x:Name="SettingsCardsGrid"
+                      ColumnDefinitions="*,*"
+                      RowDefinitions="Auto"
                       ColumnSpacing="16"
+                      RowSpacing="16"
                       Padding="0,0,12,16">
 
-                    <VerticalStackLayout Grid.Column="0" Spacing="16">
+                    <VerticalStackLayout x:Name="SettingsCol0" Grid.Row="0" Grid.Column="0" Spacing="16">
 
                     <!-- CARD: Prompt & Model -->
                     <Border Style="{StaticResource Card}"
@@ -89,8 +91,8 @@
                                  explicit TextChanged handler. The default TwoWay binding intermittently
                                  stopped pushing paste/clear/paste sequences into Parameters.Prompt on
                                  Windows, leaving validation (and generation!) on a stale prompt. -->
-                            <Editor x:Name="PromptEditor"
-                                    Text="{Binding Parameters.Prompt, Mode=OneWay}"
+                            <Editor
+                                Text="{Binding Parameters.Prompt, Mode=OneWay}"
                                     TextChanged="OnPromptTextChanged"
                                     Placeholder="Describe the image you want to generate…"
                                     AutoSize="TextChanges"
@@ -218,7 +220,7 @@
 
                     </VerticalStackLayout>
 
-                    <VerticalStackLayout Grid.Column="1" Spacing="16">
+                    <VerticalStackLayout x:Name="SettingsCol1" Grid.Row="0" Grid.Column="1" Spacing="16">
 
                     <!-- CARD: Output (aspect, resolution, format, quality, safety, seed) -->
                     <Border Style="{StaticResource Card}"
@@ -515,14 +517,11 @@
 
             <!-- QUEUE / RESULTS PANE -->
             <ScrollView x:Name="MainResultsPane" Grid.Column="1">
-                <VerticalStackLayout Spacing="12" Padding="0,0,12,16">
+                <VerticalStackLayout IsVisible="{Binding HasJobs}" Spacing="12" Padding="0,0,12,16">
 
-                    <!-- Queue header: title + a right-aligned "Clear finished" control. The whole
-                         row hides until there are jobs; the button's CanExecute (HasFinishedJobs)
-                         keeps it disabled while only running/queued jobs remain. -->
+                    <!-- Queue header -->
                     <Grid ColumnDefinitions="*,Auto"
-                          ColumnSpacing="8"
-                          IsVisible="{Binding HasJobs}">
+                          ColumnSpacing="8">
                         <Label Grid.Column="0"
                                Text="Generation Queue"
                                Style="{StaticResource CardTitle}"

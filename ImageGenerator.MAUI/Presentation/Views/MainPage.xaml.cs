@@ -23,7 +23,9 @@ public partial class MainPage
 {
     private readonly GeneratorViewModel _viewModel;
     private readonly ILogger<MainPage> _logger;
-    private bool _mainWorkspaceIsNarrow;
+    private MainWorkspaceMode _workspaceMode = MainWorkspaceMode.Wide;
+
+    private enum MainWorkspaceMode { Wide, Medium, Narrow }
 
     /// <summary>
     /// Set by Shell when the user navigates back from the gallery detail page via the
@@ -35,41 +37,30 @@ public partial class MainPage
         set
         {
             if (string.IsNullOrEmpty(value)) return;
-            // Fire-and-forget: AddAsInputAsync sets a status message internally and never
-            // throws past its own catch. Awaiting from a property setter isn't possible.
             _ = _viewModel.InputImages.AddAsInputAsync(value);
         }
     }
 
     /// <summary>
-    /// Set by Shell when the user hits "Remix" on the gallery detail page. Single-use
-    /// ShellNavigationQueryParameters (raw value, no URL decoding) — same rationale as
-    /// AddInputPath: a string query suffix would be re-applied on every later back navigation
-    /// to MainPage, re-loading the recipe and stomping any edits the user made since.
+    /// Set by Shell when the user hits "Remix" on the gallery detail page.
     /// </summary>
     public string? RemixFromPath
     {
         set
         {
             if (string.IsNullOrEmpty(value)) return;
-            // Fire-and-forget: RemixFromImageAsync owns its own status/error handling and never
-            // throws past its catch. Awaiting from a property setter isn't possible.
             _ = _viewModel.RemixFromImageAsync(value);
         }
     }
 
     /// <summary>
-    /// Set by Shell when the user hits "Mutate from this" on the gallery detail page. Single-use
-    /// ShellNavigationQueryParameters (same rationale as RemixFromPath). MutateFromImageAsync
-    /// restores the image's recipe then navigates on to the mutation engine; its first await
-    /// (metadata read) yields, letting this "//MainPage" transaction settle before that push.
+    /// Set by Shell when the user hits "Mutate from this" on the gallery detail page.
     /// </summary>
     public string? MutateFromPath
     {
         set
         {
             if (string.IsNullOrEmpty(value)) return;
-            // Fire-and-forget: MutateFromImageAsync owns its own status/error handling.
             _ = _viewModel.MutateFromImageAsync(value);
         }
     }
@@ -87,9 +78,6 @@ public partial class MainPage
         _logger = logger;
         BindingContext = viewModel;
 
-        // Activation forensics: a generation once started without any conscious click
-        // (app.log 2026-06-10 22:51:38). These platform hooks classify every "Generate
-        // activated" line as pointer vs keyboard vs neither (= programmatic).
         _generatePointerPressedHandler = new Microsoft.UI.Xaml.Input.PointerEventHandler(OnGenerateButtonPointerPressed);
         GenerateButton.HandlerChanged += OnGenerateButtonHandlerChanged;
         HandlerChanged += OnPageHandlerChanged;
@@ -98,29 +86,113 @@ public partial class MainPage
     private void OnMainWorkspaceSizeChanged(object? sender, EventArgs e)
     {
         if (MainWorkspaceGrid.Width <= 0) return;
-        var narrow = MainWorkspaceGrid.Width < 1050;
-        if (narrow == _mainWorkspaceIsNarrow) return;
-        _mainWorkspaceIsNarrow = narrow;
 
-        MainWorkspaceGrid.ColumnDefinitions.Clear();
-        MainWorkspaceGrid.RowDefinitions.Clear();
-        if (narrow)
+        var mode = MainWorkspaceGrid.Width >= 1150
+            ? MainWorkspaceMode.Wide
+            : MainWorkspaceGrid.Width >= 700
+                ? MainWorkspaceMode.Medium
+                : MainWorkspaceMode.Narrow;
+
+        if (mode == _workspaceMode) return;
+        _workspaceMode = mode;
+
+        switch (mode)
         {
-            MainWorkspaceGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
-            MainWorkspaceGrid.RowDefinitions.Add(new RowDefinition(GridLength.Star));
-            MainWorkspaceGrid.RowDefinitions.Add(new RowDefinition(GridLength.Star));
-            MainWorkspaceGrid.ColumnSpacing = 0;
-            Grid.SetRow(MainSettingsPane, 0); Grid.SetColumn(MainSettingsPane, 0);
-            Grid.SetRow(MainResultsPane, 1); Grid.SetColumn(MainResultsPane, 0);
+            case MainWorkspaceMode.Wide:
+                ApplyWideWorkspace();
+                break;
+            case MainWorkspaceMode.Medium:
+                ApplyMediumWorkspace();
+                break;
+            case MainWorkspaceMode.Narrow:
+                ApplyNarrowWorkspace();
+                break;
+        }
+    }
+
+    private void ApplyWideWorkspace()
+    {
+        SetWorkspaceGrid(
+            columns: [new GridLength(3, GridUnitType.Star), new GridLength(2, GridUnitType.Star)],
+            rows: [GridLength.Star],
+            columnSpacing: 16);
+
+        Grid.SetRow(MainSettingsPane, 0); Grid.SetColumn(MainSettingsPane, 0);
+        Grid.SetRow(MainResultsPane, 0); Grid.SetColumn(MainResultsPane, 1);
+        MainResultsPane.MaximumHeightRequest = double.PositiveInfinity;
+
+        SetSettingsColumns(twoColumns: true);
+    }
+
+    private void ApplyMediumWorkspace()
+    {
+        // Keep the Results / preview pane visible on the right side by collapsing the
+        // Settings pane from 2 card columns down to 1 scrollable column.
+        SetWorkspaceGrid(
+            columns: [new GridLength(1.15, GridUnitType.Star), new GridLength(1, GridUnitType.Star)],
+            rows: [GridLength.Star],
+            columnSpacing: 16);
+
+        Grid.SetRow(MainSettingsPane, 0); Grid.SetColumn(MainSettingsPane, 0);
+        Grid.SetRow(MainResultsPane, 0); Grid.SetColumn(MainResultsPane, 1);
+        MainResultsPane.MaximumHeightRequest = double.PositiveInfinity;
+
+        SetSettingsColumns(twoColumns: false);
+    }
+
+    private void ApplyNarrowWorkspace()
+    {
+        // Row 1 is Auto (0px when HasJobs is false, capped at 360px when jobs exist) so
+        // Settings never gets squeezed into 50% height above an empty black void.
+        SetWorkspaceGrid(
+            columns: [GridLength.Star],
+            rows: [GridLength.Star, GridLength.Auto],
+            columnSpacing: 0);
+
+        Grid.SetRow(MainSettingsPane, 0); Grid.SetColumn(MainSettingsPane, 0);
+        Grid.SetRow(MainResultsPane, 1); Grid.SetColumn(MainResultsPane, 0);
+        MainResultsPane.MaximumHeightRequest = 360;
+
+        SetSettingsColumns(twoColumns: false);
+    }
+
+    private void SetWorkspaceGrid(GridLength[] columns, GridLength[] rows, double columnSpacing)
+    {
+        MainWorkspaceGrid.ColumnDefinitions.Clear();
+        foreach (var col in columns)
+            MainWorkspaceGrid.ColumnDefinitions.Add(new ColumnDefinition(col));
+
+        MainWorkspaceGrid.RowDefinitions.Clear();
+        foreach (var row in rows)
+            MainWorkspaceGrid.RowDefinitions.Add(new RowDefinition(row));
+
+        MainWorkspaceGrid.ColumnSpacing = columnSpacing;
+    }
+
+    private void SetSettingsColumns(bool twoColumns)
+    {
+        SettingsCardsGrid.ColumnDefinitions.Clear();
+        SettingsCardsGrid.RowDefinitions.Clear();
+
+        if (twoColumns)
+        {
+            SettingsCardsGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            SettingsCardsGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            SettingsCardsGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            SettingsCardsGrid.ColumnSpacing = 16;
+
+            Grid.SetRow(SettingsCol0, 0); Grid.SetColumn(SettingsCol0, 0);
+            Grid.SetRow(SettingsCol1, 0); Grid.SetColumn(SettingsCol1, 1);
         }
         else
         {
-            MainWorkspaceGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(3, GridUnitType.Star)));
-            MainWorkspaceGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(2, GridUnitType.Star)));
-            MainWorkspaceGrid.RowDefinitions.Add(new RowDefinition(GridLength.Star));
-            MainWorkspaceGrid.ColumnSpacing = 16;
-            Grid.SetRow(MainSettingsPane, 0); Grid.SetColumn(MainSettingsPane, 0);
-            Grid.SetRow(MainResultsPane, 0); Grid.SetColumn(MainResultsPane, 1);
+            SettingsCardsGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            SettingsCardsGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            SettingsCardsGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            SettingsCardsGrid.ColumnSpacing = 0;
+
+            Grid.SetRow(SettingsCol0, 0); Grid.SetColumn(SettingsCol0, 0);
+            Grid.SetRow(SettingsCol1, 1); Grid.SetColumn(SettingsCol1, 0);
         }
     }
 
@@ -128,11 +200,6 @@ public partial class MainPage
 
     private Microsoft.UI.Xaml.UIElement? _pageRoot;
 
-    // Page-scoped: fires only while focus is inside MainPage (ContentDialogs have their own
-    // XAML root, so the About/batch-confirm dialogs never reach this handler). PreviewKeyDown
-    // TUNNELS from the root before the focused element sees the key. A KeyboardAccelerator on
-    // the Generate button was tried first and provably never fired (zero Invoked log lines)
-    // while the raw Enter invoked whatever control had focus — don't reintroduce it.
     private void OnPageHandlerChanged(object? sender, EventArgs e)
     {
         if (_pageRoot is not null)
@@ -153,11 +220,8 @@ public partial class MainPage
         var ctrl = Microsoft.UI.Input.InputKeyboardSource
             .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
             .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-        if (!ctrl) return;        // plain Enter stays with the focused control (Editor newline)
-        e.Handled = true;         // no newline, no focused-button invoke
-        // The IsValid gate is mandatory: GenerateImageCommand declares no CanExecute (only the
-        // button's IsEnabled binding gates it). Activation forensics: this path raises no
-        // PointerPressed/PreviewKeyDown on the button, so this log line classifies it.
+        if (!ctrl) return;
+        e.Handled = true;
         _logger.LogInformation("Generate hotkey Ctrl+Enter IsValid={IsValid}", _viewModel.IsValid);
         if (!_viewModel.IsValid) return;
         _viewModel.GenerateImageCommand.Execute(null);
@@ -170,7 +234,6 @@ public partial class MainPage
 
     private void OnGenerateButtonHandlerChanged(object? sender, EventArgs e)
     {
-        // Detach from any previous platform button on handler swaps so logs never double.
         if (_generatePlatformButton is not null)
         {
             _generatePlatformButton.RemoveHandler(
@@ -182,8 +245,6 @@ public partial class MainPage
 
         if (GenerateButton.Handler?.PlatformView is not Microsoft.UI.Xaml.Controls.Button platform) return;
         _generatePlatformButton = platform;
-        // WinUI's Button marks PointerPressed as handled internally — only
-        // handledEventsToo:true ever sees it; a plain += never fires.
         platform.AddHandler(
             Microsoft.UI.Xaml.UIElement.PointerPressedEvent, _generatePointerPressedHandler, handledEventsToo: true);
         platform.PreviewKeyDown += OnGenerateButtonPreviewKeyDown;
@@ -202,11 +263,7 @@ public partial class MainPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        // Fire-and-forget: a decorative header counter must never delay real startup work or
-        // block on walking a large output folder.
         _ = _viewModel.LoadTotalImagesGeneratedAsync();
-        // async void: callees swallow internally today, but a future refactor that lets one
-        // through would crash via SynchronizationContext. Keep a defensive net here.
         try
         {
             await _viewModel.LoadAllTokensAsync();
@@ -219,16 +276,11 @@ public partial class MainPage
         }
     }
 
-    // The view->VM half of the prompt Editor's split binding (see the XAML comment). Pushing
-    // the platform text explicitly survives the WinUI TwoWay-binding dropout seen after
-    // paste/clear/paste; the [ObservableProperty] equality check suppresses echo loops.
     private void OnPromptTextChanged(object? sender, TextChangedEventArgs e)
     {
         _viewModel.Parameters.Prompt = e.NewTextValue ?? string.Empty;
     }
 
-    // Code-behind because RelativeSource lookups inside a CollectionView.ItemTemplate
-    // don't reliably cross the DataTemplate scope under MAUI's compiled bindings.
     private void OnRemoveImageClicked(object? sender, EventArgs e)
     {
         if (sender is Button { CommandParameter: InputImagesCoordinator.InputImageItem item })
@@ -237,9 +289,6 @@ public partial class MainPage
         }
     }
 
-    // Batch-from-textfile entry point. Code-behind orchestrates because DisplayAlertAsync
-    // belongs to the Page (the VM owns the FilePicker call and the parser, both of which
-    // are independently testable).
     private async void OnImportPromptsClicked(object? sender, EventArgs e)
     {
         try
@@ -264,9 +313,6 @@ public partial class MainPage
         }
     }
 
-    // Drag-and-drop for image-prompt input. MAUI's cross-platform DropGestureRecognizer
-    // surfaces the gesture, but file paths require the WinUI DragEventArgs.DataView seen
-    // through DropEventArgs.PlatformArgs.
     private void OnImageDragOver(object? sender, DragEventArgs e)
     {
         var winArgs = e.PlatformArgs?.DragEventArgs;
