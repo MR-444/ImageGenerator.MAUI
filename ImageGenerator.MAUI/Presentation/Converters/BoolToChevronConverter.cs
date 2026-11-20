@@ -10,7 +10,7 @@ namespace ImageGenerator.MAUI.Presentation.Converters;
 public sealed class BoolToChevronConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => value is bool b && b ? "▾" : "▸";
+        => value is bool and true ? "▾" : "▸";
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();

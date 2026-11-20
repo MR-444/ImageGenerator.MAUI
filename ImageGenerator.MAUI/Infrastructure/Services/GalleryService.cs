@@ -27,18 +27,17 @@ public sealed class GalleryService : IGalleryService
     private static readonly TimeSpan InFlightGuard = TimeSpan.FromSeconds(2);
 
     private readonly Func<DateTime> _clock;
-    private readonly string? _rootDirectoryOverride;
 
     public GalleryService(string? rootDirectory = null, Func<DateTime>? clock = null)
     {
         // Tests pin an explicit directory; production passes null and resolves the configurable
         // output folder LIVE per enumeration (below) so this singleton follows a setting change
         // without a restart.
-        _rootDirectoryOverride = rootDirectory;
+        RootDirectory = rootDirectory;
         _clock = clock ?? (() => DateTime.Now);
     }
 
-    private string RootDirectory => _rootDirectoryOverride ?? OutputPaths.GeneratedImagesDirectory;
+    private string RootDirectory => field ?? OutputPaths.GeneratedImagesDirectory;
 
     public async IAsyncEnumerable<GalleryItem> EnumerateAsync([EnumeratorCancellation] CancellationToken ct = default)
     {

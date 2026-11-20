@@ -182,7 +182,7 @@ public class PollinationsImageGenerationServiceTests
         _requests.Should().ContainSingle();
         var auth = _requests[0].Headers.Authorization;
         auth.Should().NotBeNull();
-        auth!.Scheme.Should().Be("Bearer");
+        auth.Scheme.Should().Be("Bearer");
         auth.Parameter.Should().Be("tok-abc-123");
     }
 
@@ -470,7 +470,7 @@ public class PollinationsImageGenerationServiceTests
     {
         var seed = ExtractQueryParam("seed");
         seed.Should().NotBeNull("captured Pollinations URL must contain a seed= query param");
-        return long.Parse(seed!, System.Globalization.CultureInfo.InvariantCulture);
+        return long.Parse(seed, System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private string? ExtractQueryParam(string key)

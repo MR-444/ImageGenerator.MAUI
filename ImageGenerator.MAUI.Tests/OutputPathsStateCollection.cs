@@ -5,4 +5,4 @@ namespace ImageGenerator.MAUI.Tests;
 // one class's override could leak into another's enumeration mid-run. No other test reads
 // OutputPaths, so serialising just these classes is sufficient.
 [CollectionDefinition("OutputPathsState")]
-public sealed class OutputPathsStateCollection { }
+public sealed class OutputPathsStateCollection;

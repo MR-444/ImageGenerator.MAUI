@@ -176,7 +176,7 @@ public class GalleryItemDetailViewModelTests
         saved.Should().NotBeNull();
         var fragment = saved!.FragmentByName("my_look");
         fragment.Should().NotBeNull();
-        fragment!.Style.ArtStyle.Should().Be(caption.StyleDescription!.ArtStyle);
+        fragment.Style.ArtStyle.Should().Be(caption.StyleDescription!.ArtStyle);
     }
 
     [Fact]

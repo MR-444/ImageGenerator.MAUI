@@ -6,6 +6,4 @@ namespace ImageGenerator.MAUI.Infrastructure.Interfaces;
 /// tokens identically; kept as a separate interface (and a separate SecureStorage key) so
 /// the providers' tokens never collide.
 /// </summary>
-public interface ICivitaiTokenStore : ITokenStore
-{
-}
+public interface ICivitaiTokenStore : ITokenStore;

@@ -37,7 +37,7 @@ public class ReplicateHelperTests
         var result = await ReplicateHelper.PollForOutputAsync(_api.Object, Token, PredictionId, pollInterval: FastPoll);
 
         result.Should().NotBeNull();
-        result!.Status.Should().Be("failed");
+        result.Status.Should().Be("failed");
         result.Error.Should().Be("model error");
     }
 
@@ -51,7 +51,7 @@ public class ReplicateHelperTests
         var result = await ReplicateHelper.PollForOutputAsync(_api.Object, Token, PredictionId, pollInterval: FastPoll);
 
         result.Should().NotBeNull();
-        result!.Status.Should().Be("canceled");
+        result.Status.Should().Be("canceled");
     }
 
     [Fact]

@@ -128,7 +128,7 @@ public sealed class MutateBboxOperator : ICaptionOperator
     }
 
     private static string? Tag(MutationContext context, Element element) =>
-        context.Tags.TryGetValue(element, out var tag) ? tag : null;
+        context.Tags.GetValueOrDefault(element);
 
     private static bool IsSubject(string? tag) =>
         tag is not null && tag.StartsWith("subject.", StringComparison.Ordinal);

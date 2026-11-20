@@ -89,7 +89,7 @@ public sealed class ComfyUiCheckpointServiceTests : IDisposable
         var slot = await _service.GetWorkflowQualityPresetSlotAsync("Combo Workflow");
 
         slot.Should().NotBeNull();
-        slot!.BakedChoice.Should().Be("Default");
+        slot.BakedChoice.Should().Be("Default");
         slot.Options.Should().Equal("Quality", "Default", "Turbo");
     }
 

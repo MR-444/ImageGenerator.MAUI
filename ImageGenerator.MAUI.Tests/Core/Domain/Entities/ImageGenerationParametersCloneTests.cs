@@ -15,7 +15,7 @@ public class ImageGenerationParametersCloneTests
         // and forgets to update Clone(), this test fails.
         var props = typeof(ImageGenerationParameters)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanRead && p.CanWrite)
+            .Where(p => p is { CanRead: true, CanWrite: true })
             .ToList();
 
         var original = new ImageGenerationParameters();

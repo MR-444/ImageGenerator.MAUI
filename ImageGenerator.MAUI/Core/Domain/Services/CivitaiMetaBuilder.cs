@@ -66,5 +66,5 @@ public static class CivitaiMetaBuilder
     // ReadMetadataAsync builds the dictionary with StringComparer.Ordinal, so keys are
     // case-sensitive — match the exact casing ImageFileService writes.
     private static string? Get(IReadOnlyDictionary<string, string> meta, string key)
-        => meta.TryGetValue(key, out var value) ? value : null;
+        => meta.GetValueOrDefault(key);
 }

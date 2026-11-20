@@ -270,21 +270,21 @@ public class UiMarkupContractTests
             $"{asset} must declare x:DataType on its root element: compiled bindings need it, and " +
             "this test reads the binding root from it");
 
-        var colon = declared!.IndexOf(':');
+        var colon = declared.IndexOf(':');
         var (prefix, name) = colon < 0 ? (null, declared) : (declared[..colon], declared[(colon + 1)..]);
         var xmlns = prefix is null
             ? (string?)document.Root.Attribute("xmlns")
             : (string?)document.Root.Attribute(XNamespace.Xmlns + prefix);
         xmlns.Should().NotBeNull($"{asset} declares x:DataType \"{declared}\" with no matching xmlns");
 
-        var clrNamespace = xmlns!
+        var clrNamespace = xmlns
             .Split(';')[0]
             .Replace("clr-namespace:", string.Empty, StringComparison.Ordinal)
             .Replace("using:", string.Empty, StringComparison.Ordinal);
         var type = typeof(GeneratorViewModel).Assembly.GetType($"{clrNamespace}.{name}");
         type.Should().NotBeNull(
             $"{asset}'s x:DataType \"{declared}\" ({clrNamespace}.{name}) is not a type of the app assembly");
-        return type!;
+        return type;
     }
 
     private static IEnumerable<(string Site, int Line, string Path)> PageLevelBindingPaths(XDocument document)

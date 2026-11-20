@@ -172,7 +172,7 @@ public static class ReplicateValidationErrors
                 ? ShortenField(string.Join(".", loc.EnumerateArray()
                     .Where(e => e.ValueKind == JsonValueKind.String)
                     .Select(e => e.GetString())
-                    .Where(s => !string.IsNullOrEmpty(s) && !s!.Equals("body", StringComparison.Ordinal))))
+                    .Where(s => !string.IsNullOrEmpty(s) && !s.Equals("body", StringComparison.Ordinal))))
                 : null;
             var msg = ReadString(item, "msg");
             var type = ReadString(item, "type");

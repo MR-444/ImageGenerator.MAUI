@@ -6,6 +6,4 @@ namespace ImageGenerator.MAUI.Infrastructure.Interfaces;
 /// as a separate interface (and a separate SecureStorage key) so the two providers' tokens
 /// never collide.
 /// </summary>
-public interface IPollinationsTokenStore : ITokenStore
-{
-}
+public interface IPollinationsTokenStore : ITokenStore;

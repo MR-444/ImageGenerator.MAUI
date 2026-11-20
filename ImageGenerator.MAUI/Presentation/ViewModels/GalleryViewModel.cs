@@ -84,7 +84,7 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
 
     private bool CanBreedSelected => HasSelection;
 
-    partial void OnCivitaiModelRefChanged(string value) => _uiStateStore.PersistCivitaiModelRef(value ?? string.Empty);
+    partial void OnCivitaiModelRefChanged(string value) => _uiStateStore.PersistCivitaiModelRef(value);
 
     // Sort modes the user can pick. Display strings double as the SelectedSortMode value —
     // simpler than an enum + IValueConverter when the UI already uses a Picker bound to a

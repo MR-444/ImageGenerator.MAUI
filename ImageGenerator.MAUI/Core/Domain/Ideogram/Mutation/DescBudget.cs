@@ -38,7 +38,7 @@ public static class DescBudget
         IReadOnlyList<OrnamentPhrase> candidates,
         int maxWords = MaxWords)
     {
-        var baseDesc = (protectedDesc ?? string.Empty).Trim();
+        var baseDesc = (protectedDesc).Trim();
         var used = CountWords(baseDesc);
         if (used > maxWords)
             return null;

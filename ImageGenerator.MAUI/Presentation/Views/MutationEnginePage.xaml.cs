@@ -47,7 +47,7 @@ public partial class MutationEnginePage
 
     private void OnSelectDeterministicMode(object? sender, EventArgs e)
     {
-        if (!_viewModel.IsMutating && !_viewModel.IsBreedMode) _viewModel.IsAiMode = false;
+        if (_viewModel is { IsMutating: false, IsBreedMode: false }) _viewModel.IsAiMode = false;
         ApplyModeButtonVisuals();
     }
 

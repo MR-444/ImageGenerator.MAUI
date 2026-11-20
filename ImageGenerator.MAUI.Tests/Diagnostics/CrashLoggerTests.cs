@@ -114,4 +114,4 @@ public class CrashLoggerTests : IDisposable
 }
 
 [CollectionDefinition(nameof(CrashLoggerCollection), DisableParallelization = true)]
-public class CrashLoggerCollection { }
+public class CrashLoggerCollection;

@@ -54,7 +54,7 @@ public class NullSkippingDictionaryConverterTests
         var restored = JsonSerializer.Deserialize<Dictionary<string, object?>>(json, Options);
 
         restored.Should().NotBeNull();
-        restored!.Should().ContainKey("prompt");
+        restored.Should().ContainKey("prompt");
         restored.Should().ContainKey("seed");
     }
 

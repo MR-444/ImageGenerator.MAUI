@@ -110,7 +110,7 @@ public class ModelCatalogServiceTests : IDisposable
         var loaded = await _sut.LoadCachedAsync();
 
         loaded.Should().NotBeNull();
-        loaded!.Should().BeEquivalentTo(models);
+        loaded.Should().BeEquivalentTo(models);
     }
 
     [Fact]
@@ -147,6 +147,6 @@ public class ModelCatalogServiceTests : IDisposable
         var loaded = await _sut.LoadCachedAsync();
 
         loaded.Should().NotBeNull();
-        loaded!.Should().BeEquivalentTo(second);
+        loaded.Should().BeEquivalentTo(second);
     }
 }

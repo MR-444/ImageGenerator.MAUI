@@ -58,11 +58,11 @@ public sealed class AddElementOperator : ICaptionOperator
 
     private static bool OverlapsSubject(MutationContext context, IReadOnlyList<Element> elements, int[] box)
     {
-        for (var i = 0; i < elements.Count; i++)
+        foreach (var t in elements)
         {
-            if (elements[i].Bbox is not { Length: 4 } other)
+            if (t.Bbox is not { Length: 4 } other)
                 continue;
-            if (!context.Tags.TryGetValue(elements[i], out var tag) ||
+            if (!context.Tags.TryGetValue(t, out var tag) ||
                 !tag.StartsWith("subject.", StringComparison.Ordinal))
                 continue;
             if (BboxMath.IoU(box, other) > SubjectOverlapThreshold)

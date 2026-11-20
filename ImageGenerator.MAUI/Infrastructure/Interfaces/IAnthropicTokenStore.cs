@@ -6,6 +6,4 @@ namespace ImageGenerator.MAUI.Infrastructure.Interfaces;
 /// identically; kept as a separate interface (and a separate SecureStorage key) so the
 /// providers' tokens never collide. Used by Claude tiers in the prompt builder and AI caption tools.
 /// </summary>
-public interface IAnthropicTokenStore : ITokenStore
-{
-}
+public interface IAnthropicTokenStore : ITokenStore;

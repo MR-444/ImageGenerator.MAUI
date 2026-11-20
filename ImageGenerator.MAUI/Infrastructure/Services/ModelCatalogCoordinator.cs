@@ -80,7 +80,7 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
     {
         LogDescriptorCoverage(live);
         var seen = new HashSet<string>(live.Select(m => m.Value), StringComparer.OrdinalIgnoreCase);
-        var marked = live.Select(m => MarkIfUnknown(m));
+        var marked = live.Select(MarkIfUnknown);
         return (ModelOption[])[.. marked, .. _registry.Seeds.Where(m => seen.Add(m.Value))];
     }
 

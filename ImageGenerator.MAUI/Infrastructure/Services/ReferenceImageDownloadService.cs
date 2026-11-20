@@ -88,11 +88,7 @@ public sealed class ReferenceImageDownloadService : IReferenceImageDownloadServi
             && bytes[11] == (byte)'P')
             return ".webp";
 
-        if (bytes.Length >= 6
-            && bytes[0] == (byte)'G'
-            && bytes[1] == (byte)'I'
-            && bytes[2] == (byte)'F'
-            && bytes[3] == (byte)'8'
+        if (bytes is [(byte)'G', (byte)'I', (byte)'F', (byte)'8', _, _, ..]
             && (bytes[4] == (byte)'7' || bytes[4] == (byte)'9')
             && bytes[5] == (byte)'a')
             return ".gif";

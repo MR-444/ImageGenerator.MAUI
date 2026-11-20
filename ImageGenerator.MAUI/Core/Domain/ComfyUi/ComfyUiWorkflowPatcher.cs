@@ -657,7 +657,7 @@ public static class ComfyUiWorkflowPatcher
                 pos = afterDate + 1;
             }
             else if (afterDate < text.Length && text[afterDate] == ':'
-                     && text.IndexOf('%', afterDate + 1) is var specEnd && specEnd >= 0)
+                                             && text.IndexOf('%', afterDate + 1) is var specEnd and >= 0)
             {
                 result.Append(FormatDateSpec(text[(afterDate + 1)..specEnd], now));
                 pos = specEnd + 1;

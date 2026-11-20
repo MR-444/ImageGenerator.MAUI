@@ -72,7 +72,7 @@ public static class V4JsonPromptSerializer
                 writer.WriteEndArray();
             }
 
-            if (value.Type == Element.TextType && value.Text is not null)
+            if (value is { Type: Element.TextType, Text: not null })
                 writer.WriteString("text", value.Text);
 
             if (value.Desc is not null)

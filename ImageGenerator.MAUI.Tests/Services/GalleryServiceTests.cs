@@ -133,7 +133,7 @@ public class GalleryServiceTests : IDisposable
         var meta = await sut.ReadMetadataAsync(path);
 
         meta.Should().NotBeNull();
-        meta!["Prompt"].Should().Be("a round-trip cat");
+        meta["Prompt"].Should().Be("a round-trip cat");
         meta["ModelName"].Should().Be(p.Model);
         meta["Seed"].Should().Be("42");
         meta["AspectRatio"].Should().Be("16:9");
@@ -149,7 +149,7 @@ public class GalleryServiceTests : IDisposable
         var meta = await sut.ReadMetadataAsync(path);
 
         meta.Should().NotBeNull();
-        meta!["Prompt"].Should().Be("jpeg cat");
+        meta["Prompt"].Should().Be("jpeg cat");
         meta["Seed"].Should().Be("99");
     }
 
@@ -164,7 +164,7 @@ public class GalleryServiceTests : IDisposable
 
         meta.Should().NotBeNull();
         // Regression: a naive Split(':') would chop the prompt at the embedded "12:00".
-        meta!["Prompt"].Should().Be("at 12:00 a cat appears");
+        meta["Prompt"].Should().Be("at 12:00 a cat appears");
     }
 
     [Fact]

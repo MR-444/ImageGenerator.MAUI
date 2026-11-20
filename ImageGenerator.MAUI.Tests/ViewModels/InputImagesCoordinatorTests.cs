@@ -60,7 +60,7 @@ public class InputImagesCoordinatorTests
         var dropped = coord.TruncateToMaxInputs(1);
 
         dropped.Should().BeTrue();
-        coord.SelectedImages.Should().HaveCount(1);
+        coord.SelectedImages.Should().ContainSingle();
         coord.SelectedImages[0].Base64.Should().Be("a", "truncation removes from the end");
     }
 
@@ -73,7 +73,7 @@ public class InputImagesCoordinatorTests
         var dropped = coord.TruncateToMaxInputs(5);
 
         dropped.Should().BeFalse();
-        coord.SelectedImages.Should().HaveCount(1);
+        coord.SelectedImages.Should().ContainSingle();
     }
 
     [Fact]
@@ -104,7 +104,7 @@ public class InputImagesCoordinatorTests
 
             await coord.AddAsInputAsync(tempFile);
 
-            coord.SelectedImages.Should().HaveCount(1, "second add of the same path is deduped");
+            coord.SelectedImages.Should().ContainSingle("second add of the same path is deduped");
             statusMessages.Should().Contain(x => x.Kind == StatusKind.Warning && x.Msg.Contains("already in the list"));
         }
         finally
@@ -129,7 +129,7 @@ public class InputImagesCoordinatorTests
 
             await coord.AddAsInputAsync(tempFile);
 
-            coord.SelectedImages.Should().HaveCount(1, "cap is reached; new add is rejected");
+            coord.SelectedImages.Should().ContainSingle("cap is reached; new add is rejected");
             statusMessages.Should().Contain(x => x.Kind == StatusKind.Error && x.Msg.Contains("Maximum"));
         }
         finally

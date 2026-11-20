@@ -67,7 +67,7 @@ public class CivitaiMetaBuilderTests
         var meta = CivitaiMetaBuilder.BuildFromFileMetadata(fileMeta);
 
         meta.Should().NotBeNull();
-        meta!["prompt"].Should().Be("a red fox");
+        meta["prompt"].Should().Be("a red fox");
         meta["seed"].Should().Be(1234567890123L, "a numeric seed is parsed to long");
         meta["sampler"].Should().Be("gpt-image-2");
         meta["Model"].Should().Be("openai/gpt-image-2");

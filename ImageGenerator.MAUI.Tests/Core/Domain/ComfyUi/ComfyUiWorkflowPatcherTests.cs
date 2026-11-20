@@ -663,7 +663,7 @@ public class ComfyUiWorkflowPatcherTests
         var slot = ComfyUiWorkflowPatcher.FindQualityPresetSlot(ComboTemplate);
 
         slot.Should().NotBeNull();
-        slot!.BakedChoice.Should().Be("Default");
+        slot.BakedChoice.Should().Be("Default");
         slot.Options.Should().Equal("Quality", "Default", "Turbo");
     }
 
