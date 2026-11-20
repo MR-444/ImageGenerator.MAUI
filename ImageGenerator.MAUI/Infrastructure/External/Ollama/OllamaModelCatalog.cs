@@ -43,13 +43,47 @@ public sealed class OllamaModelCatalog : IOllamaModelCatalog
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogWarning("Ollama /api/tags HTTP {StatusCode} Url={Url}", (int)response.StatusCode, endpoint);
-            throw new InvalidOperationException($"Ollama returned HTTP {(int)response.StatusCode} listing models.");
+            // Reachable and refusing is a different diagnosis from unreachable, and the caller has to
+            // be able to tell them apart — hence the type rather than another InvalidOperationException.
+            throw new OllamaEndpointException(endpoint, (int)response.StatusCode);
         }
 
-        using var doc = JsonDocument.Parse(body);
-        var infos = new List<OllamaModelInfo>();
-        if (doc.RootElement.TryGetProperty("models", out var models) && models.ValueKind == JsonValueKind.Array)
+        return await ConfirmVisionAsync(baseUrl, ParseTags(body, endpoint, (int)response.StatusCode), ct);
+    }
+
+    /// <summary>
+    /// Ollama answers <c>{"models":[{"name":…,"capabilities":[…]}]}</c>. Anything else — an HTML error
+    /// page, an OpenAI-shaped <c>{"data":[…]}</c>, a bare <c>{}</c> — is some other server on that
+    /// port, and used to parse into an empty list the caller then reported as "no models installed":
+    /// advice that sends the user off to install models on a machine that isn't Ollama. An empty
+    /// <c>models</c> array stays a legitimate answer; only a missing or foreign one is refused.
+    /// </summary>
+    private static List<OllamaModelInfo> ParseTags(string body, string endpoint, int statusCode)
+    {
+        JsonDocument doc;
+        try
         {
+            doc = JsonDocument.Parse(body);
+        }
+        catch (JsonException ex)
+        {
+            throw new OllamaEndpointException(endpoint, statusCode,
+                "the body is not JSON — an HTML error page means something else answers there", ex);
+        }
+
+        using (doc)
+        {
+            if (doc.RootElement.ValueKind != JsonValueKind.Object
+                || !doc.RootElement.TryGetProperty("models", out var models))
+            {
+                throw new OllamaEndpointException(endpoint, statusCode,
+                    "the reply carries no \"models\" array, which every Ollama /api/tags reply has");
+            }
+
+            if (models.ValueKind != JsonValueKind.Array)
+                throw new OllamaEndpointException(endpoint, statusCode, "its \"models\" field is not a list");
+
+            var infos = new List<OllamaModelInfo>();
             foreach (var model in models.EnumerateArray())
             {
                 if (model.TryGetProperty("name", out var name) && name.GetString() is { Length: > 0 } n)
@@ -67,10 +101,10 @@ public sealed class OllamaModelCatalog : IOllamaModelCatalog
                     infos.Add(new OllamaModelInfo(n, capabilities));
                 }
             }
-        }
 
-        infos.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
-        return await ConfirmVisionAsync(baseUrl, infos, ct);
+            infos.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+            return infos;
+        }
     }
 
     // How many /api/show probes to run at once. Refresh is a manual action and /api/show is a cheap

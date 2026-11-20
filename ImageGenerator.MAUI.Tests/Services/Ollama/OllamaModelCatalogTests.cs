@@ -114,6 +114,66 @@ public sealed class OllamaModelCatalogTests
         await act.Should().NotThrowAsync("the unload is a best-effort GPU-free, not part of the result");
     }
 
+    // ---- "answered, but is not Ollama" is a different fault than "unreachable" -------------
+    // The report: an OpenAI-compatible server on a real port answers, /api/tags 404s, and the single
+    // InvalidOperationException the catalog used to throw got phrased as "Couldn't reach Ollama" —
+    // sending the user after a dead server that was demonstrably alive.
+
+    [Fact]
+    public async Task ListModelInfosAsync_Http404_ThrowsEndpointExceptionNamingStatusAndEndpoint()
+    {
+        var catalog = BuildCatalog(() => new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
+
+        var act = () => catalog.ListModelInfosAsync("http://192.168.178.26:47832/v1");
+
+        var ex = (await act.Should().ThrowAsync<OllamaEndpointException>()).Which;
+        ex.StatusCode.Should().Be(404);
+        ex.Endpoint.Should().Be("http://192.168.178.26:47832/v1/api/tags");
+        ex.Problem.Should().BeNull("the status code is already the whole story");
+    }
+
+    // A server that answers 200 with a body Ollama never sends. Parsing these into an empty list is
+    // what produced "No models installed on the Ollama server" for a machine with no Ollama on it.
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"data":[{"id":"gpt-4o"}]}""")]
+    [InlineData("""{"error":{"message":"missing api key"}}""")]
+    public async Task ListModelInfosAsync_ForeignJsonBody_ThrowsEndpointException(string body)
+    {
+        var catalog = BuildCatalog(() => Oks(body));
+
+        var act = () => catalog.ListModelInfosAsync("http://192.168.178.26:47832/v1");
+
+        var ex = (await act.Should().ThrowAsync<OllamaEndpointException>()).Which;
+        ex.Problem.Should().Contain("models", "a 200 with no models array is a foreign server, not an empty one");
+    }
+
+    [Fact]
+    public async Task ListModelInfosAsync_HtmlBody_ThrowsEndpointExceptionBlamingTheBodyNotTheNetwork()
+    {
+        var catalog = BuildCatalog(() => Oks("<html><body>502 Bad Gateway</body></html>"));
+
+        var act = () => catalog.ListModelInfosAsync("http://192.168.178.26:47832");
+
+        var ex = (await act.Should().ThrowAsync<OllamaEndpointException>()).Which;
+        ex.StatusCode.Should().Be(200, "the proxy really did answer 200");
+        ex.Problem.Should().Contain("not JSON");
+    }
+
+    // The empty answer that IS honest, and has to stay honest: Ollama up, nothing pulled.
+    [Fact]
+    public async Task ListModelInfosAsync_EmptyModelsArray_ReturnsEmptyWithoutThrowing()
+    {
+        var catalog = BuildCatalog(() => Oks("""{"models":[]}"""));
+
+        var models = await catalog.ListModelInfosAsync("http://fireengine:11434");
+
+        models.Should().BeEmpty();
+    }
+
+    private static HttpResponseMessage Oks(string body) =>
+        new(System.Net.HttpStatusCode.OK) { Content = new StringContent(body) };
+
     private sealed class CapturingFactory(HttpClient client) : IHttpClientFactory
     {
         public List<string> Names { get; } = [];
