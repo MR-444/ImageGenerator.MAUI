@@ -150,12 +150,13 @@ public sealed class VisionObservationService : IVisionObservationService
             : ModelConstants.Ollama.DefaultBaseUrl;
         // The chain ends at "nothing picked", not at a hardcoded model: the old fallback named a
         // model most servers don't have, and a non-vision one at that, so it failed as an opaque
-        // 404 instead of telling the user to pick a vision model.
+        // 404 instead of telling the user to pick a vision model. It then went one step further and
+        // borrowed LoadOllamaModel() — the IMAGE GENERATION model, which cannot answer a chat request
+        // about a picture and failed exactly as opaquely. "Pick a vision model" is the honest end of
+        // this chain.
         var modelId = requestedModel is { Length: > 0 } m
             ? m
-            : _uiStateStore.LoadOllamaVisionModel() is { Length: > 0 } vm
-                ? vm
-                : _uiStateStore.LoadOllamaModel() ?? string.Empty;
+            : _uiStateStore.LoadOllamaVisionModel() ?? string.Empty;
         return string.IsNullOrWhiteSpace(modelId)
             ? (string.Empty, baseUrl, "Pick a local vision model first — refresh the list, then choose one.")
             : (modelId, baseUrl, null);

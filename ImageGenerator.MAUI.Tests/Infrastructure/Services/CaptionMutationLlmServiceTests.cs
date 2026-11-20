@@ -13,7 +13,7 @@ namespace ImageGenerator.MAUI.Tests.Infrastructure.Services;
 
 /// <summary>
 /// The AI caption mutator's seam: a fake <see cref="CaptionMutationLlmService.MutationCompletion"/>
-/// replaces the network so the request build, tier→model routing, validate-retry loop, and override
+/// replaces the network so the request build, provider routing, validate-retry loop, and override
 /// precedence run without disk or HTTP.
 /// </summary>
 public sealed class CaptionMutationLlmServiceTests : IDisposable
@@ -43,9 +43,9 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
     {
         var schemaKind = JsonValueKind.Undefined;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, _, schema, _) => { schemaKind = schema.ValueKind; return Task.FromResult(ValidJson); });
+            (_, _, _, _, schema, _) => { schemaKind = schema.ValueKind; return Task.FromResult(ValidJson); });
 
-        var result = await sut.MutateAsync(Base, "make it winter", 0, ModelTier.Sonnet);
+        var result = await sut.MutateAsync(Base, "make it winter", 0, Sonnet);
 
         result.Success.Should().BeTrue();
         result.Prompt.Should().NotBeNull();
@@ -53,46 +53,72 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
         schemaKind.Should().Be(JsonValueKind.Object, "every mutation call is constrained to the V4 schema");
     }
 
-    // ---- Model routing (Sonnet / Opus / Local) -------------------------------------------
+    // ---- What the service is told to call ------------------------------------------------
+    //
+    // Provider and model are the page's decision; the service's contract is "call exactly this". These
+    // tests exist so nobody re-derives a model inside the service again: that is where the old tier enum
+    // kept its two hardcoded Claude ids, and a model picked from a catalog would have been silently
+    // ignored by it.
 
     [Theory]
-    [InlineData(ModelTier.Sonnet, "claude-sonnet-4-6")]
-    [InlineData(ModelTier.Opus, "claude-opus-4-8")]
-    public async Task MutateAsync_AnthropicTiers_PassTheExpectedModelId(ModelTier tier, string expectedModel)
+    [InlineData("claude-sonnet-4-6")]
+    [InlineData("claude-opus-4-8")]
+    [InlineData("a-model-invented-tomorrow")]
+    public async Task MutateAsync_AnthropicTarget_CallsTheModelItWasHanded(string modelId)
     {
         string? seenModel = null;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, modelId, _, _, _, _, _, _) => { seenModel = modelId; return Task.FromResult(ValidJson); });
+            (target, _, _, _, _, _) => { seenModel = target.ModelId; return Task.FromResult(ValidJson); });
 
-        await sut.MutateAsync(Base, "x", 0, tier);
+        await sut.MutateAsync(Base, "x", 0, Claude(modelId));
 
-        seenModel.Should().Be(expectedModel);
+        seenModel.Should().Be(modelId);
     }
 
     [Fact]
-    public async Task MutateAsync_LocalTier_UsesOllamaModelAndBaseUrl_AndNeedsNoKey()
+    public async Task MutateAsync_LocalTarget_UsesTheHandedModelAndEndpoint_AndNeedsNoKey()
     {
-        var uiStore = new Mock<IUiStateStore>();
-        uiStore.Setup(s => s.LoadOllamaModel()).Returns("llama3.1");
-        uiStore.Setup(s => s.LoadOllamaBaseUrl()).Returns("http://host:11434");
-
-        ModelTier seenTier = ModelTier.Sonnet;
-        string? seenModel = null, seenBaseUrl = null, seenKey = "unset";
+        LlmTarget seenTarget = default;
+        string? seenKey = "unset";
         var sut = CreateSut(KeyStore(null), // no Anthropic key at all
-            (tier, modelId, apiKey, baseUrl, _, _, _, _) =>
+            (target, apiKey, _, _, _, _) =>
             {
-                seenTier = tier; seenModel = modelId; seenBaseUrl = baseUrl; seenKey = apiKey;
+                seenTarget = target;
+                seenKey = apiKey;
                 return Task.FromResult(ValidJson);
-            },
-            uiStore);
+            });
 
-        var result = await sut.MutateAsync(Base, "x", 0, ModelTier.Local);
+        var result = await sut.MutateAsync(Base, "x", 0, Local("llama3.1", "http://host:11434"));
 
-        result.Success.Should().BeTrue("the Local tier needs no Anthropic key");
-        seenTier.Should().Be(ModelTier.Local);
-        seenModel.Should().Be("llama3.1");
-        seenBaseUrl.Should().Be("http://host:11434");
-        seenKey.Should().BeNull();
+        result.Success.Should().BeTrue("a local call needs no provider key");
+        seenTarget.Provider.Should().Be(ModelProvider.Local);
+        seenTarget.ModelId.Should().Be("llama3.1");
+        seenTarget.BaseUrl.Should().Be("http://host:11434");
+        seenKey.Should().BeNull("there is nothing to authenticate to on the LAN");
+    }
+
+    [Fact]
+    public async Task MutateAsync_NoModelSelected_RefusesAndNamesOllama()
+    {
+        var sut = CreateSut(KeyStore(null), NeverCalled);
+
+        var result = await sut.MutateAsync(Base, "x", 0, Local(model: ""));
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("Ollama model selected",
+            "an empty pick is a UI state, and the sentence has to say where to fix it");
+    }
+
+    [Fact]
+    public async Task MutateAsync_OpenRouterTarget_WithoutAnOpenRouterKey_NamesOpenRouter()
+    {
+        var sut = CreateSut(KeyStore("sk-ant"), NeverCalled);
+
+        var result = await sut.MutateAsync(
+            Base, "x", 0, new LlmTarget(ModelProvider.OpenRouter, "some-model", string.Empty));
+
+        result.Error.Should().Contain("OpenRouter API key",
+            "the mutator used to read only the Anthropic store; an Anthropic key is not an OpenRouter key");
     }
 
     [Fact]
@@ -100,9 +126,9 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
     {
         var called = false;
         var sut = CreateSut(KeyStore(null),
-            (_, _, _, _, _, _, _, _) => { called = true; return Task.FromResult(ValidJson); });
+            (_, _, _, _, _, _) => { called = true; return Task.FromResult(ValidJson); });
 
-        var result = await sut.MutateAsync(Base, "x", 0, ModelTier.Sonnet);
+        var result = await sut.MutateAsync(Base, "x", 0, Sonnet);
 
         result.Success.Should().BeFalse();
         result.Error.Should().Contain("API key");
@@ -117,9 +143,9 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
         var seen = new List<IReadOnlyList<ChatTurn>>();
         var call = 0;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, messages, _, _) => { seen.Add(messages); return Task.FromResult(call++ == 0 ? ValidationFailJson : ValidJson); });
+            (_, _, _, messages, _, _) => { seen.Add(messages); return Task.FromResult(call++ == 0 ? ValidationFailJson : ValidJson); });
 
-        var result = await sut.MutateAsync(Base, "x", 0, ModelTier.Sonnet);
+        var result = await sut.MutateAsync(Base, "x", 0, Sonnet);
 
         result.Success.Should().BeTrue();
         seen.Should().HaveCount(2);
@@ -132,9 +158,9 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
     {
         var calls = 0;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, _, _, _) => { calls++; return Task.FromResult(ValidationFailJson); });
+            (_, _, _, _, _, _) => { calls++; return Task.FromResult(ValidationFailJson); });
 
-        var result = await sut.MutateAsync(Base, "x", 0, ModelTier.Sonnet);
+        var result = await sut.MutateAsync(Base, "x", 0, Sonnet);
 
         result.Success.Should().BeFalse();
         result.Error.Should().Contain("Background");
@@ -146,9 +172,9 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
     {
         var calls = 0;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, _, _, _) => { calls++; return Task.FromResult("this is not json {"); });
+            (_, _, _, _, _, _) => { calls++; return Task.FromResult("this is not json {"); });
 
-        var result = await sut.MutateAsync(Base, "x", 0, ModelTier.Sonnet);
+        var result = await sut.MutateAsync(Base, "x", 0, Sonnet);
 
         result.Success.Should().BeFalse();
         result.Error.Should().Contain("structured prompt");
@@ -159,9 +185,9 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
     public async Task MutateAsync_TransportThrows_FailsGracefully()
     {
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, _, _, _) => throw new HttpRequestException("network down"));
+            (_, _, _, _, _, _) => throw new HttpRequestException("network down"));
 
-        var result = await sut.MutateAsync(Base, "x", 0, ModelTier.Sonnet);
+        var result = await sut.MutateAsync(Base, "x", 0, Sonnet);
 
         result.Success.Should().BeFalse();
         result.Error.Should().Contain("couldn't reach the model");
@@ -174,12 +200,12 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
     {
         string? captured = null;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, messages, _, _) => { captured = messages[0].Content; return Task.FromResult(ValidJson); });
+            (_, _, _, messages, _, _) => { captured = messages[0].Content; return Task.FromResult(ValidJson); });
 
-        await sut.MutateAsync(Base, "x", 0, ModelTier.Sonnet);
+        await sut.MutateAsync(Base, "x", 0, Sonnet);
         captured.Should().Contain("variation #1");
 
-        await sut.MutateAsync(Base, "x", 4, ModelTier.Sonnet);
+        await sut.MutateAsync(Base, "x", 4, Sonnet);
         captured.Should().Contain("variation #5");
     }
 
@@ -188,11 +214,11 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
     {
         var captured = new List<string>();
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, messages, _, _) => { captured.Add(messages[0].Content); return Task.FromResult(ValidJson); });
+            (_, _, _, messages, _, _) => { captured.Add(messages[0].Content); return Task.FromResult(ValidJson); });
 
         // No steer ⇒ a blind call can't "be distinct from the others", so each index gets a concrete lens.
-        await sut.MutateAsync(Base, "", 0, ModelTier.Sonnet);
-        await sut.MutateAsync(Base, "", 1, ModelTier.Sonnet);
+        await sut.MutateAsync(Base, "", 0, Sonnet);
+        await sut.MutateAsync(Base, "", 1, Sonnet);
 
         captured[0].Should().Contain("TIME OF DAY");
         captured[1].Should().Contain("SEASON");
@@ -204,10 +230,10 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
     {
         string? captured = null;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, messages, _, _) => { captured = messages[0].Content; return Task.FromResult(ValidJson); });
+            (_, _, _, messages, _, _) => { captured = messages[0].Content; return Task.FromResult(ValidJson); });
 
         // A steer dominates; the index-0 lens ("different TIME OF DAY") must NOT appear to fight "3am".
-        await sut.MutateAsync(Base, "3am, high drama", 0, ModelTier.Sonnet);
+        await sut.MutateAsync(Base, "3am, high drama", 0, Sonnet);
 
         captured.Should().Contain("3am, high drama");
         captured.Should().NotContain("TIME OF DAY");
@@ -221,9 +247,9 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
     {
         var called = false;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, _, _, _) => { called = true; return Task.FromResult(ValidJson); });
+            (_, _, _, _, _, _) => { called = true; return Task.FromResult(ValidJson); });
 
-        var result = await sut.BreedAsync([], "x", 0, ModelTier.Sonnet);
+        var result = await sut.BreedAsync([], "x", 0, Sonnet);
 
         result.Success.Should().BeFalse();
         called.Should().BeFalse();
@@ -234,9 +260,9 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
     {
         string? captured = null;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, messages, _, _) => { captured = messages[0].Content; return Task.FromResult(ValidJson); });
+            (_, _, _, messages, _, _) => { captured = messages[0].Content; return Task.FromResult(ValidJson); });
 
-        var result = await sut.BreedAsync([Base, Base], "blend them", 0, ModelTier.Sonnet);
+        var result = await sut.BreedAsync([Base, Base], "blend them", 0, Sonnet);
 
         result.Success.Should().BeTrue();
         captured.Should().Contain("PARENT CAPTIONS").And.Contain("[2]").And.Contain("offspring #1");
@@ -252,9 +278,9 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
 
         string? captured = null;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, system, _, _, _) => { captured = system; return Task.FromResult(ValidJson); });
+            (_, _, system, _, _, _) => { captured = system; return Task.FromResult(ValidJson); });
 
-        await sut.MutateAsync(Base, "x", 0, ModelTier.Sonnet);
+        await sut.MutateAsync(Base, "x", 0, Sonnet);
 
         captured.Should().Be("PRIVATE MUTATION OVERRIDE");
     }
@@ -264,9 +290,9 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
     {
         string? captured = null;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, system, _, _, _) => { captured = system; return Task.FromResult(ValidJson); });
+            (_, _, system, _, _, _) => { captured = system; return Task.FromResult(ValidJson); });
 
-        await sut.MutateAsync(Base, "x", 0, ModelTier.Sonnet);
+        await sut.MutateAsync(Base, "x", 0, Sonnet);
 
         captured.Should().Be("BUNDLED MUTATION PROMPT");
     }
@@ -284,13 +310,35 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
     private CaptionMutationLlmService CreateSut(
         Mock<IAnthropicTokenStore> tokenStore,
         CaptionMutationLlmService.MutationCompletion completion,
-        Mock<IUiStateStore>? uiStore = null) =>
+        string? openRouterKey = null) =>
         new(tokenStore.Object,
-            (uiStore ?? new Mock<IUiStateStore>()).Object,
+            OpenRouterKeyStore(openRouterKey).Object,
             NullLogger<CaptionMutationLlmService>.Instance,
             completion,
             promptDirectoryOverride: _tempDir,
             assetOpener: FakeBundledAsset);
+
+    /// <summary>A completion that fails the test if the service reaches the model at all.</summary>
+    private static Task<string> NeverCalled(
+        LlmTarget target, string? apiKey, string systemPrompt,
+        IReadOnlyList<ChatTurn> messages, JsonElement schema, CancellationToken ct) =>
+        throw new InvalidOperationException("the service must refuse before calling a model");
+
+    /// <summary>The target the mutation page hands the service for a Claude pick.</summary>
+    private static LlmTarget Sonnet => new(ModelProvider.Anthropic, AnthropicModels.Sonnet, string.Empty);
+
+    private static LlmTarget Claude(string modelId) =>
+        new(ModelProvider.Anthropic, modelId, string.Empty);
+
+    private static LlmTarget Local(string model, string baseUrl = "http://127.0.0.1:11434") =>
+        new(ModelProvider.Local, model, baseUrl);
+
+    private static Mock<IOpenRouterTokenStore> OpenRouterKeyStore(string? key)
+    {
+        var mock = new Mock<IOpenRouterTokenStore>();
+        mock.Setup(s => s.LoadAsync()).ReturnsAsync(key);
+        return mock;
+    }
 
     private static Mock<IAnthropicTokenStore> KeyStore(string? key)
     {

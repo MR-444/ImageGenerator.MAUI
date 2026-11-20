@@ -2,6 +2,7 @@ using FluentAssertions;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
+using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
 using ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
@@ -228,8 +229,10 @@ public class IdeaToPromptViewModelTests
 
         await vm.BuildCommand.ExecuteAsync(null);
 
-        builder.ProseTiers.Should().Equal(ModelTier.Local);
-        builder.JsonTiers.Should().Equal(ModelTier.Local);
+        // Both passes go to the same target the page is set to, and "Local" is the provider, not a
+        // model name: which Ollama tag is the service's own concern from here on.
+        builder.ProseTargets.Should().OnlyContain(t => t.Provider == ModelProvider.Local);
+        builder.JsonTargets.Should().OnlyContain(t => t.Provider == ModelProvider.Local);
     }
 
     // Real decodable bytes: reference-image intake now normalizes via ImagePayloadNormalizer,
@@ -394,7 +397,10 @@ public class IdeaToPromptViewModelTests
 
         await vm.BuildCommand.ExecuteAsync(null);
 
-        builder.ProseTiers.Should().Equal(tier);
+        var passed = builder.ProseTargets.Single();
+        passed.Provider.Should().Be(ModelProvider.Anthropic);
+        passed.ModelId.Should().Be(tier == ModelTier.Opus ? AnthropicModels.Opus : AnthropicModels.Sonnet,
+            "the page's tier names the model the service is told to call");
     }
 
     [Fact]
@@ -527,39 +533,39 @@ public class IdeaToPromptViewModelTests
     {
         public Task<ProseResult> BuildProseAsync(
             string idea,
-            CancellationToken cancellationToken = default,
-            ModelTier tier = ModelTier.Opus) =>
+            LlmTarget target,
+            CancellationToken cancellationToken = default) =>
             Task.FromResult(prose);
 
         public Task<PromptBuilderResult> BuildJsonAsync(
             string proseInner,
-            CancellationToken cancellationToken = default,
-            ModelTier tier = ModelTier.Opus) =>
+            LlmTarget target,
+            CancellationToken cancellationToken = default) =>
             Task.FromResult(json);
     }
 
     private sealed class TrackingPromptBuilder(ProseResult prose, PromptBuilderResult json) : IPromptBuilderService
     {
         public List<string> ProseInputs { get; } = [];
-        public List<ModelTier> ProseTiers { get; } = [];
-        public List<ModelTier> JsonTiers { get; } = [];
+        public List<LlmTarget> ProseTargets { get; } = [];
+        public List<LlmTarget> JsonTargets { get; } = [];
 
         public Task<ProseResult> BuildProseAsync(
             string idea,
-            CancellationToken cancellationToken = default,
-            ModelTier tier = ModelTier.Opus)
+            LlmTarget target,
+            CancellationToken cancellationToken = default)
         {
             ProseInputs.Add(idea);
-            ProseTiers.Add(tier);
+            ProseTargets.Add(target);
             return Task.FromResult(prose);
         }
 
         public Task<PromptBuilderResult> BuildJsonAsync(
             string proseInner,
-            CancellationToken cancellationToken = default,
-            ModelTier tier = ModelTier.Opus)
+            LlmTarget target,
+            CancellationToken cancellationToken = default)
         {
-            JsonTiers.Add(tier);
+            JsonTargets.Add(target);
             return Task.FromResult(json);
         }
     }
@@ -572,8 +578,8 @@ public class IdeaToPromptViewModelTests
 
         public async Task<ProseResult> BuildProseAsync(
             string idea,
-            CancellationToken cancellationToken = default,
-            ModelTier tier = ModelTier.Opus)
+            LlmTarget target,
+            CancellationToken cancellationToken = default)
         {
             try
             {
@@ -590,8 +596,8 @@ public class IdeaToPromptViewModelTests
 
         public Task<PromptBuilderResult> BuildJsonAsync(
             string proseInner,
-            CancellationToken cancellationToken = default,
-            ModelTier tier = ModelTier.Opus) =>
+            LlmTarget target,
+            CancellationToken cancellationToken = default) =>
             Task.FromResult(PromptBuilderResult.Fail("not reached in the cancellation test"));
     }
 
@@ -609,13 +615,14 @@ public class IdeaToPromptViewModelTests
 
     // A GeneratorViewModel built from bare mocks — mirrors GeneratorViewModelTests; we only touch
     // Parameters, so no mock setups are needed.
-    // The Local tier has no default model, so a generator that has never picked one blocks every
-    // build with "pick a local Ollama model first". Tests about the prose/JSON passes want a
-    // working setup; the guard itself is covered by Build_LocalTier_WithNoModelPicked_*.
+    // The Local tier has no default model, so a generator whose prompt writer has never picked one
+    // blocks every build with "pick a local Ollama model first". Tests about the prose/JSON passes
+    // want a working setup; the guard itself is covered by Build_LocalTier_WithNoModelPicked_*.
+    // Note which pick this is: the WRITER's, not Settings.OllamaModel, which names the image model.
     private static GeneratorViewModel BuildGenerator(string ollamaModel = "llama3.1")
     {
         var generator = BuildBareGenerator();
-        generator.Settings.OllamaModel = ollamaModel;
+        generator.Settings.PromptWriterModel = ollamaModel;
         return generator;
     }
 

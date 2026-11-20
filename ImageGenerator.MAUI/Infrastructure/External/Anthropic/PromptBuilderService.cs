@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Infrastructure.External.Ollama;
+using ImageGenerator.MAUI.Infrastructure.External.OpenRouter;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
@@ -23,12 +24,6 @@ namespace ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 /// </summary>
 public sealed class PromptBuilderService : IPromptBuilderService
 {
-    private const string SonnetModelId = "claude-sonnet-4-6";
-    private const string OpusModelId = "claude-opus-4-8";
-
-    /// <summary>Kept for existing diagnostics/tests that refer to the original prompt-builder model.</summary>
-    public const string ModelId = OpusModelId;
-
     // VPE pass (idea → prose). Override beats bundled.
     private const string VpeSystemPromptAsset = "PromptBuilder/vpe-system.md";
     private const string VpeOverrideFileName = "vpe-prompt.md";
@@ -72,17 +67,17 @@ public sealed class PromptBuilderService : IPromptBuilderService
         """;
 
     /// <summary>
-    /// Transport seam: route a prompt-builder call to the right backend. For <see cref="ModelTier.Local"/>
-    /// it hits Ollama at <paramref name="baseUrl"/> (no key); otherwise the Anthropic Messages API with
-    /// <paramref name="apiKey"/>. When <paramref name="schema"/> is non-null the call uses structured
-    /// outputs (the JSON pass); when null it's a plain text call (the VPE prose pass).
+    /// Transport seam: hand one prepared prompt-builder call to the backend the target names, with that
+    /// provider's key already resolved (null for Local, which takes no auth). When
+    /// <paramref name="schema"/> is non-null the call uses structured outputs (the JSON pass); when null
+    /// it's a plain text call (the VPE prose pass).
     /// </summary>
     internal delegate Task<string> StructuredCompletion(
-        ModelTier tier, string modelId, string? apiKey, string baseUrl,
+        LlmTarget target, string? apiKey,
         string systemPrompt, IReadOnlyList<ChatTurn> messages, JsonElement? schema, CancellationToken ct);
 
-    private readonly IAnthropicTokenStore _tokenStore;
-    private readonly IUiStateStore _uiStateStore;
+    private readonly IAnthropicTokenStore _anthropicTokenStore;
+    private readonly IOpenRouterTokenStore _openRouterTokenStore;
     private readonly ILogger<PromptBuilderService> _logger;
     private readonly Func<string, Task<Stream>> _assetOpener;
     private readonly string _promptDirectory;
@@ -92,10 +87,10 @@ public sealed class PromptBuilderService : IPromptBuilderService
     /// HttpClient. The token store, logger, and factory are all resolved from the container.</summary>
     public PromptBuilderService(
         IAnthropicTokenStore tokenStore,
-        IUiStateStore uiStateStore,
+        IOpenRouterTokenStore openRouterTokenStore,
         ILogger<PromptBuilderService> logger,
         IHttpClientFactory httpClientFactory)
-        : this(tokenStore, uiStateStore, logger,
+        : this(tokenStore, openRouterTokenStore, logger,
             BuildHttpCompletion(httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory)), logger))
     {
     }
@@ -109,14 +104,14 @@ public sealed class PromptBuilderService : IPromptBuilderService
     /// </summary>
     internal PromptBuilderService(
         IAnthropicTokenStore tokenStore,
-        IUiStateStore uiStateStore,
+        IOpenRouterTokenStore openRouterTokenStore,
         ILogger<PromptBuilderService> logger,
         StructuredCompletion completion,
         string? promptDirectoryOverride = null,
         Func<string, Task<Stream>>? assetOpener = null)
     {
-        _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
-        _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
+        _anthropicTokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+        _openRouterTokenStore = openRouterTokenStore ?? throw new ArgumentNullException(nameof(openRouterTokenStore));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _complete = completion ?? throw new ArgumentNullException(nameof(completion));
         _assetOpener = assetOpener ?? FileSystem.OpenAppPackageFileAsync;
@@ -128,16 +123,19 @@ public sealed class PromptBuilderService : IPromptBuilderService
     /// <summary>Pass 1 (VPE): idea → a normal prose prompt. One plain text call, no validator.</summary>
     public async Task<ProseResult> BuildProseAsync(
         string idea,
-        CancellationToken cancellationToken = default,
-        ModelTier tier = ModelTier.Opus)
+        LlmTarget target,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(idea))
             return ProseResult.Fail("Describe an idea first.");
 
-        var modelId = ResolveModelId(tier);
-        var (apiKey, baseUrl, credentialError) = await ResolveBackendAsync(tier);
+        if (!target.HasModel)
+            return ProseResult.Fail(target.MissingModelError("on the Describe an idea page."));
+
+        var (apiKey, credentialError) = await LlmCredentials.ResolveAsync(target.Provider, _anthropicTokenStore, _openRouterTokenStore);
         if (credentialError is not null)
             return ProseResult.Fail(credentialError);
+
 
         string systemPrompt;
         try
@@ -156,7 +154,7 @@ public sealed class PromptBuilderService : IPromptBuilderService
         try
         {
             // schema = null → a plain text call; the VPE pass emits prose, not JSON.
-            raw = await _complete(tier, modelId, apiKey, baseUrl, systemPrompt, messages, null, cancellationToken);
+            raw = await _complete(target, apiKey, systemPrompt, messages, null, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -165,12 +163,12 @@ public sealed class PromptBuilderService : IPromptBuilderService
         catch (Exception ex)
         {
             _logger.LogError(ex, "PromptBuilder: VPE call failed");
-            return ProseResult.Fail($"The prompt builder couldn't reach {ProviderLabel(tier)}: {ex.Message}");
+            return ProseResult.Fail($"The prompt builder couldn't reach {target.ProviderLabel}: {ex.Message}");
         }
 
         var prose = raw.Trim();
         if (string.IsNullOrEmpty(prose))
-            return ProseResult.Fail($"{ProviderLabel(tier)} returned an empty prompt. Try rephrasing the idea.");
+            return ProseResult.Fail($"{target.ProviderLabel} returned an empty prompt. Try rephrasing the idea.");
 
         return ProseResult.Ok(prose);
     }
@@ -178,14 +176,16 @@ public sealed class PromptBuilderService : IPromptBuilderService
     /// <summary>Pass 2 (Ideogram adapter): prose → a schema-valid V4 prompt with one validator-feedback retry.</summary>
     public async Task<PromptBuilderResult> BuildJsonAsync(
         string proseInner,
-        CancellationToken cancellationToken = default,
-        ModelTier tier = ModelTier.Opus)
+        LlmTarget target,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(proseInner))
             return PromptBuilderResult.Fail("Build a prose prompt first.");
 
-        var modelId = ResolveModelId(tier);
-        var (apiKey, baseUrl, credentialError) = await ResolveBackendAsync(tier);
+        if (!target.HasModel)
+            return PromptBuilderResult.Fail(target.MissingModelError("on the Describe an idea page."));
+
+        var (apiKey, credentialError) = await LlmCredentials.ResolveAsync(target.Provider, _anthropicTokenStore, _openRouterTokenStore);
         if (credentialError is not null)
             return PromptBuilderResult.Fail(credentialError);
 
@@ -208,7 +208,7 @@ public sealed class PromptBuilderService : IPromptBuilderService
             try
             {
                 raw = await _complete(
-                    tier, modelId, apiKey, baseUrl, systemPrompt, messages, V4StructuredSchema.Schema, cancellationToken);
+                    target, apiKey, systemPrompt, messages, V4StructuredSchema.Schema, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -216,8 +216,8 @@ public sealed class PromptBuilderService : IPromptBuilderService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "PromptBuilder: model call failed (tier {Tier}, attempt {Attempt})", tier, attempt);
-                return PromptBuilderResult.Fail($"The prompt builder couldn't reach {ProviderLabel(tier)}: {ex.Message}");
+                _logger.LogError(ex, "PromptBuilder: model call failed ({Provider} {Model}, attempt {Attempt})", target.ProviderLabel, target.ModelId, attempt);
+                return PromptBuilderResult.Fail($"The prompt builder couldn't reach {target.ProviderLabel}: {ex.Message}");
             }
 
             V4JsonPrompt prompt;
@@ -229,7 +229,7 @@ public sealed class PromptBuilderService : IPromptBuilderService
             {
                 if (attempt >= MaxAttempts)
                     return PromptBuilderResult.Fail(
-                        $"{ProviderLabel(tier)} returned text that isn't a valid structured prompt: {ex.Message}");
+                        $"{target.ProviderLabel} returned text that isn't a valid structured prompt: {ex.Message}");
 
                 messages.Add(new("assistant", raw));
                 messages.Add(new("user",
@@ -243,7 +243,7 @@ public sealed class PromptBuilderService : IPromptBuilderService
 
             if (attempt >= MaxAttempts)
                 return PromptBuilderResult.Fail(
-                    $"{ProviderLabel(tier)}'s prompt didn't satisfy the schema:\n• " + string.Join("\n• ", errors));
+                    $"{target.ProviderLabel}'s prompt didn't satisfy the schema:\n• " + string.Join("\n• ", errors));
 
             messages.Add(new("assistant", raw));
             messages.Add(new("user",
@@ -296,38 +296,11 @@ public sealed class PromptBuilderService : IPromptBuilderService
         }
     }
 
-    private async Task<(string? ApiKey, string BaseUrl, string? Error)> ResolveBackendAsync(ModelTier tier)
-    {
-        if (tier == ModelTier.Local)
-        {
-            var baseUrl = _uiStateStore.LoadOllamaBaseUrl() is { Length: > 0 } u
-                ? u
-                : ModelConstants.Ollama.DefaultBaseUrl;
-            // The local tier has no default model — an unpicked one used to fall through to a
-            // hardcoded name the server usually didn't have, failing as an opaque 404.
-            return _uiStateStore.LoadOllamaModel() is { Length: > 0 }
-                ? (null, baseUrl, null)
-                : (null, baseUrl, "No local Ollama model selected — pick one on the Describe an idea page or in Settings.");
-        }
-
-        var apiKey = await _tokenStore.LoadAsync();
-        return string.IsNullOrWhiteSpace(apiKey)
-            ? (null, string.Empty, "No Anthropic API key — add it on the Settings page.")
-            : (apiKey, string.Empty, null);
-    }
-
-    private string ResolveModelId(ModelTier tier) => tier switch
-    {
-        ModelTier.Sonnet => SonnetModelId,
-        ModelTier.Local => _uiStateStore.LoadOllamaModel() ?? string.Empty,
-        _ => OpusModelId
-    };
-
-    private static string ProviderLabel(ModelTier tier) => tier == ModelTier.Local ? "Ollama" : "Claude";
-
     private static StructuredCompletion BuildHttpCompletion(IHttpClientFactory httpClientFactory, ILogger logger) =>
-        (tier, modelId, apiKey, baseUrl, systemPrompt, messages, schema, ct) =>
-            tier == ModelTier.Local
-                ? OllamaChatTransport.SendAsync(httpClientFactory, logger, baseUrl, modelId, systemPrompt, messages, schema, ct)
-                : AnthropicMessagesTransport.SendAsync(httpClientFactory, logger, modelId, apiKey!, systemPrompt, messages, schema, ct);
+        (target, apiKey, systemPrompt, messages, schema, ct) => target.Provider switch
+        {
+            ModelProvider.Local => OllamaChatTransport.SendAsync(httpClientFactory, logger, target.BaseUrl, target.ModelId, systemPrompt, messages, schema, ct),
+            ModelProvider.OpenRouter => OpenRouterChatTransport.SendAsync(httpClientFactory, logger, apiKey!, target.ModelId, systemPrompt, messages, schema, ct),
+            _ => AnthropicMessagesTransport.SendAsync(httpClientFactory, logger, target.ModelId, apiKey!, systemPrompt, messages, schema, ct)
+        };
 }

@@ -27,12 +27,14 @@ public interface ICaptionMutationLlmService
 {
     /// <summary>
     /// ONE call → ONE validated variant of <paramref name="baseCaption"/> steered by
-    /// <paramref name="steer"/> (free text, e.g. "make it winter"). Callers fan out N with bounded
+    /// <paramref name="steer"/> (free text, e.g. "make it winter"). <paramref name="target"/> says who
+    /// answers: provider, model and local endpoint arrive from the caller, so this service never has to
+    /// work out which model "its" role wanted. Callers fan out N with bounded
     /// concurrency; <paramref name="index"/> nudges the model toward a distinct direction per variant
     /// (no seed/temperature is available). Validator-gated with one feedback retry.
     /// </summary>
     Task<LlmVariantResult> MutateAsync(
-        V4JsonPrompt baseCaption, string steer, int index, ModelTier tier, CancellationToken ct = default);
+        V4JsonPrompt baseCaption, string steer, int index, LlmTarget target, CancellationToken ct = default);
 
     /// <summary>
     /// Crossbreed/mutate around the marked <paramref name="winners"/> into ONE new validated offspring
@@ -40,7 +42,7 @@ public interface ICaptionMutationLlmService
     /// <see cref="MutateAsync"/>.
     /// </summary>
     Task<LlmVariantResult> BreedAsync(
-        IReadOnlyList<V4JsonPrompt> winners, string steer, int index, ModelTier tier, CancellationToken ct = default);
+        IReadOnlyList<V4JsonPrompt> winners, string steer, int index, LlmTarget target, CancellationToken ct = default);
 }
 
 /// <summary>Outcome of one LLM mutation call: either a validated V4 caption (+ a short job-card label)

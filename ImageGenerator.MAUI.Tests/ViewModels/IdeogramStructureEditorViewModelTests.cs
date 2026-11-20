@@ -59,17 +59,6 @@ public class IdeogramStructureEditorViewModelTests
     }
 
     [Fact]
-    public void EnrichLocalModel_WithoutGenerator_IsEmptyRatherThanAGuessedDefault()
-    {
-        // There is no app-level default Ollama model: which models a server has is per-server, so
-        // guessing one only produced an opaque 404. Empty means "nothing picked" and callers must
-        // say so instead of sending a made-up model name.
-        var sut = CreateSut();
-
-        sut.EnrichLocalModel.Should().BeEmpty();
-    }
-
-    [Fact]
     public void LoadFromJson_ValidStructuredPrompt_PopulatesAllFields()
     {
         var sut = CreateSut();
@@ -762,14 +751,14 @@ public class IdeogramStructureEditorViewModelTests
 
         sut.StatusKind.Should().Be(StatusKind.Error);
         sut.HasEnrichPreview.Should().BeFalse();
-        enrich.Verify(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<ModelTier>(), It.IsAny<CancellationToken>()), Times.Never);
+        enrich.Verify(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<LlmTarget>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
     public async Task EnrichFromLayout_Success_PopulatesPreview_WithoutMutatingDescsYet()
     {
         var enrich = new Mock<IEnrichRegionsLlmService>();
-        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<ModelTier>(), It.IsAny<CancellationToken>()))
+        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<LlmTarget>(), It.IsAny<CancellationToken>()))
               .ReturnsAsync(LlmVariantResult.Ok(EnrichedOf(), "Enriched: x"));
         var sut = CreateSut(enrich.Object);
         sut.LoadFromJson(SampleJson);
@@ -786,7 +775,7 @@ public class IdeogramStructureEditorViewModelTests
     public async Task AcceptEnrich_CopiesNewDescsInOrder_PreservingBboxTextAndSelection()
     {
         var enrich = new Mock<IEnrichRegionsLlmService>();
-        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<ModelTier>(), It.IsAny<CancellationToken>()))
+        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<LlmTarget>(), It.IsAny<CancellationToken>()))
               .ReturnsAsync(LlmVariantResult.Ok(EnrichedOf(), "Enriched: x"));
         var sut = CreateSut(enrich.Object);
         sut.LoadFromJson(SampleJson);
@@ -811,7 +800,7 @@ public class IdeogramStructureEditorViewModelTests
     public async Task DiscardEnrich_LeavesDescsUnchanged()
     {
         var enrich = new Mock<IEnrichRegionsLlmService>();
-        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<ModelTier>(), It.IsAny<CancellationToken>()))
+        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<LlmTarget>(), It.IsAny<CancellationToken>()))
               .ReturnsAsync(LlmVariantResult.Ok(EnrichedOf(), "Enriched: x"));
         var sut = CreateSut(enrich.Object);
         sut.LoadFromJson(SampleJson);
@@ -827,7 +816,7 @@ public class IdeogramStructureEditorViewModelTests
     public async Task EnrichFromLayout_ServiceFailure_SetsErrorStatus_ElementsUntouched()
     {
         var enrich = new Mock<IEnrichRegionsLlmService>();
-        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<ModelTier>(), It.IsAny<CancellationToken>()))
+        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<LlmTarget>(), It.IsAny<CancellationToken>()))
               .ReturnsAsync(LlmVariantResult.Fail("model said no"));
         var sut = CreateSut(enrich.Object);
         sut.LoadFromJson(SampleJson);
@@ -845,7 +834,7 @@ public class IdeogramStructureEditorViewModelTests
     {
         var gate = new TaskCompletionSource<LlmVariantResult>();
         var enrich = new Mock<IEnrichRegionsLlmService>();
-        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<ModelTier>(), It.IsAny<CancellationToken>()))
+        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<LlmTarget>(), It.IsAny<CancellationToken>()))
               .Returns(gate.Task);
         var sut = CreateSut(enrich.Object);
         sut.LoadFromJson(SampleJson);
@@ -864,8 +853,8 @@ public class IdeogramStructureEditorViewModelTests
     {
         var gate = new TaskCompletionSource();
         var enrich = new Mock<IEnrichRegionsLlmService>();
-        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<ModelTier>(), It.IsAny<CancellationToken>()))
-              .Returns(async (V4JsonPrompt _, ModelTier _, CancellationToken ct) =>
+        enrich.Setup(s => s.EnrichAsync(It.IsAny<V4JsonPrompt>(), It.IsAny<LlmTarget>(), It.IsAny<CancellationToken>()))
+              .Returns(async (V4JsonPrompt _, LlmTarget _, CancellationToken ct) =>
               {
                   await gate.Task;
                   ct.ThrowIfCancellationRequested();

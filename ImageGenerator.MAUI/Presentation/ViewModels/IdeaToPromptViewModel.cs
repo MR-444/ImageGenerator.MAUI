@@ -446,7 +446,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
 
         // There is no default Ollama model — guessing one only produced an opaque 404 from a server
         // that never had it. Same contract as the OpenRouter vision picker below.
-        if (tier == ModelTier.Local && string.IsNullOrWhiteSpace(_settings.OllamaModel))
+        if (tier == ModelTier.Local && string.IsNullOrWhiteSpace(_settings.PromptWriterModel))
         {
             SetStatus("Pick a local Ollama model first. Refresh the list, then choose a model.", StatusKind.Error);
             return;
@@ -537,7 +537,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
             SetStatus($"Asking {ModelDisplay(tier)} to write a prompt…", StatusKind.Info);
 
             // Pass 1 (always): idea → prose.
-            var proseResult = await _builder.BuildProseAsync(ideaForPrompt, token, tier);
+            var proseResult = await _builder.BuildProseAsync(ideaForPrompt, _settings.PromptWriterTarget(tier), token);
             if (!proseResult.Success || proseResult.Prose is null)
             {
                 SetStatus(proseResult.Error ?? "Couldn't build a prompt.", StatusKind.Error);
@@ -554,7 +554,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
 
             // Pass 2 (optional): prose → Ideogram V4 JSON. On failure the prose above stays usable.
             SetStatus("Prose ready — building the Ideogram V4 JSON prompt…", StatusKind.Info);
-            var jsonResult = await _builder.BuildJsonAsync(Prose, token, tier);
+            var jsonResult = await _builder.BuildJsonAsync(Prose, _settings.PromptWriterTarget(tier), token);
             if (!jsonResult.Success || jsonResult.Prompt is null)
             {
                 SetStatus(
@@ -585,7 +585,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
                 {
                     // Pass CancellationToken.None so a user cancel still unloads local models from VRAM.
                     if (tier == ModelTier.Local)
-                        await _ollamaCatalog.UnloadAsync(_settings.OllamaBaseUrl, _settings.OllamaModel, CancellationToken.None);
+                        await _ollamaCatalog.UnloadAsync(_settings.OllamaBaseUrl, _settings.PromptWriterModel, CancellationToken.None);
                     if (usesLocalVision)
                         await _ollamaCatalog.UnloadAsync(_settings.OllamaBaseUrl, _settings.OllamaVisionModel, CancellationToken.None);
                 }

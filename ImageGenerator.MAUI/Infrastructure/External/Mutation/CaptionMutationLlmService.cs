@@ -3,6 +3,7 @@ using System.Text.Json;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 using ImageGenerator.MAUI.Infrastructure.External.Ollama;
+using ImageGenerator.MAUI.Infrastructure.External.OpenRouter;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
@@ -17,9 +18,6 @@ namespace ImageGenerator.MAUI.Infrastructure.External.Mutation;
 /// </summary>
 public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
 {
-    private const string SonnetModelId = "claude-sonnet-4-6";
-    private const string OpusModelId = "claude-opus-4-8";
-
     private const string SystemPromptAsset = "Mutation/mutation-system.md";
     private const string OverrideFileName = "mutation-prompt.md";
 
@@ -27,30 +25,30 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
     private const int LabelMaxLength = 64;
 
     /// <summary>
-    /// Transport seam: route a mutation call to the right backend. For <see cref="ModelTier.Local"/> it
-    /// hits Ollama at <paramref name="baseUrl"/> (no key); otherwise the Anthropic Messages API with
-    /// <paramref name="apiKey"/>. Tests inject a fake to assert tier/modelId passthrough and exercise the
-    /// validate-retry loop without disk or network.
+    /// Transport seam: hand one prepared call to whatever backend the target names. The service has
+    /// already resolved <paramref name="apiKey"/> for that target's provider (null for Local, which takes
+    /// no auth) — the transport gets everything it needs and looks nothing up. Tests inject a fake to
+    /// assert target/key passthrough and exercise the validate-retry loop without disk or network.
     /// </summary>
     internal delegate Task<string> MutationCompletion(
-        ModelTier tier, string modelId, string? apiKey, string baseUrl,
+        LlmTarget target, string? apiKey,
         string systemPrompt, IReadOnlyList<ChatTurn> messages, JsonElement schema, CancellationToken ct);
 
-    private readonly IAnthropicTokenStore _tokenStore;
-    private readonly IUiStateStore _uiStateStore;
+    private readonly IAnthropicTokenStore _anthropicTokenStore;
+    private readonly IOpenRouterTokenStore _openRouterTokenStore;
     private readonly ILogger<CaptionMutationLlmService> _logger;
     private readonly MutationCompletion _complete;
     private readonly Func<string, Task<Stream>> _assetOpener;
     private readonly string _promptDirectory;
 
-    /// <summary>Production ctor (DI): Anthropic tiers use the shared named HttpClient + token store; the
-    /// Local tier uses the Ollama client + the endpoint/model from <see cref="IUiStateStore"/>.</summary>
+    /// <summary>Production ctor (DI): the caller names the target; this resolves the key that provider
+    /// needs and routes the call to that provider's transport.</summary>
     public CaptionMutationLlmService(
         IAnthropicTokenStore tokenStore,
-        IUiStateStore uiStateStore,
+        IOpenRouterTokenStore openRouterTokenStore,
         ILogger<CaptionMutationLlmService> logger,
         IHttpClientFactory httpClientFactory)
-        : this(tokenStore, uiStateStore, logger,
+        : this(tokenStore, openRouterTokenStore, logger,
             BuildHttpCompletion(httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory)), logger))
     {
     }
@@ -59,14 +57,14 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
     /// directory + asset opener are injectable so override precedence is unit-testable.</summary>
     internal CaptionMutationLlmService(
         IAnthropicTokenStore tokenStore,
-        IUiStateStore uiStateStore,
+        IOpenRouterTokenStore openRouterTokenStore,
         ILogger<CaptionMutationLlmService> logger,
         MutationCompletion completion,
         string? promptDirectoryOverride = null,
         Func<string, Task<Stream>>? assetOpener = null)
     {
-        _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
-        _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
+        _anthropicTokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+        _openRouterTokenStore = openRouterTokenStore ?? throw new ArgumentNullException(nameof(openRouterTokenStore));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _complete = completion ?? throw new ArgumentNullException(nameof(completion));
         _assetOpener = assetOpener ?? FileSystem.OpenAppPackageFileAsync;
@@ -76,42 +74,32 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
     }
 
     public Task<LlmVariantResult> MutateAsync(
-        V4JsonPrompt baseCaption, string steer, int index, ModelTier tier, CancellationToken ct = default)
+        V4JsonPrompt baseCaption, string steer, int index, LlmTarget target, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(baseCaption);
-        return RunAsync(BuildMutateUserTurn(baseCaption, steer, index), tier, ct);
+        return RunAsync(BuildMutateUserTurn(baseCaption, steer, index), target, ct);
     }
 
     public Task<LlmVariantResult> BreedAsync(
-        IReadOnlyList<V4JsonPrompt> winners, string steer, int index, ModelTier tier, CancellationToken ct = default)
+        IReadOnlyList<V4JsonPrompt> winners, string steer, int index, LlmTarget target, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(winners);
         if (winners.Count == 0)
             return Task.FromResult(LlmVariantResult.Fail("Select at least one variant to breed from."));
-        return RunAsync(BuildBreedUserTurn(winners, steer, index), tier, ct);
+        return RunAsync(BuildBreedUserTurn(winners, steer, index), target, ct);
     }
 
-    /// <summary>Resolve credentials/endpoint for the tier, then the shared validate-retry loop.</summary>
-    private async Task<LlmVariantResult> RunAsync(string userContent, ModelTier tier, CancellationToken ct)
+    /// <summary>Resolve the credential the target's provider needs, then run the shared validate-retry loop.</summary>
+    private async Task<LlmVariantResult> RunAsync(string userContent, LlmTarget target, CancellationToken ct)
     {
-        var modelId = ResolveModelId(tier);
+        // A target with no model is a state the caller must turn into a sentence, never a request: on
+        // Local it used to fall through to a hardcoded tag most servers do not have, failing as a 404.
+        if (!target.HasModel)
+            return LlmVariantResult.Fail(target.MissingModelError("on the Mutation Engine page."));
 
-        string? apiKey = null;
-        var baseUrl = string.Empty;
-        if (tier == ModelTier.Local)
-        {
-            baseUrl = _uiStateStore.LoadOllamaBaseUrl() is { Length: > 0 } u ? u : ModelConstants.Ollama.DefaultBaseUrl;
-            // The local tier has no default model — an unpicked one used to fall through to a
-            // hardcoded name the server usually didn't have, failing as an opaque 404.
-            if (string.IsNullOrWhiteSpace(modelId))
-                return LlmVariantResult.Fail("No local Ollama model selected — pick one in Settings.");
-        }
-        else
-        {
-            apiKey = await _tokenStore.LoadAsync();
-            if (string.IsNullOrWhiteSpace(apiKey))
-                return LlmVariantResult.Fail("No Anthropic API key — add it on the Settings page.");
-        }
+        var (apiKey, credentialError) = await LlmCredentials.ResolveAsync(target.Provider, _anthropicTokenStore, _openRouterTokenStore);
+        if (credentialError is not null)
+            return LlmVariantResult.Fail(credentialError);
 
         string systemPrompt;
         try
@@ -131,7 +119,7 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
             string raw;
             try
             {
-                raw = await _complete(tier, modelId, apiKey, baseUrl, systemPrompt, messages, V4StructuredSchema.Schema, ct);
+                raw = await _complete(target, apiKey, systemPrompt, messages, V4StructuredSchema.Schema, ct);
             }
             catch (OperationCanceledException)
             {
@@ -139,7 +127,7 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "CaptionMutationLlm: model call failed (tier {Tier}, attempt {Attempt})", tier, attempt);
+                _logger.LogError(ex, "CaptionMutationLlm: model call failed ({Provider} {Model}, attempt {Attempt})", target.ProviderLabel, target.ModelId, attempt);
                 return LlmVariantResult.Fail($"The mutation couldn't reach the model: {ex.Message}");
             }
 
@@ -175,13 +163,6 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
         // Unreachable: the loop returns on the final attempt either way.
         return LlmVariantResult.Fail("The mutation gave up after a retry.");
     }
-
-    private string ResolveModelId(ModelTier tier) => tier switch
-    {
-        ModelTier.Opus => OpusModelId,
-        ModelTier.Local => _uiStateStore.LoadOllamaModel() ?? string.Empty,
-        _ => SonnetModelId
-    };
 
     /// <summary>Per-variant creative lenses for UNDIRECTED batches, picked by <c>index</c>. Each call is
     /// independent and blind to its siblings, so a generic "be distinct from the others" does nothing —
@@ -276,8 +257,10 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
     }
 
     private static MutationCompletion BuildHttpCompletion(IHttpClientFactory httpClientFactory, ILogger logger) =>
-        (tier, modelId, apiKey, baseUrl, systemPrompt, messages, schema, ct) =>
-            tier == ModelTier.Local
-                ? OllamaChatTransport.SendAsync(httpClientFactory, logger, baseUrl, modelId, systemPrompt, messages, schema, ct)
-                : AnthropicMessagesTransport.SendAsync(httpClientFactory, logger, modelId, apiKey!, systemPrompt, messages, schema, ct);
+        (target, apiKey, systemPrompt, messages, schema, ct) => target.Provider switch
+        {
+            ModelProvider.Local => OllamaChatTransport.SendAsync(httpClientFactory, logger, target.BaseUrl, target.ModelId, systemPrompt, messages, schema, ct),
+            ModelProvider.OpenRouter => OpenRouterChatTransport.SendAsync(httpClientFactory, logger, apiKey!, target.ModelId, systemPrompt, messages, schema, ct),
+            _ => AnthropicMessagesTransport.SendAsync(httpClientFactory, logger, target.ModelId, apiKey!, systemPrompt, messages, schema, ct)
+        };
 }

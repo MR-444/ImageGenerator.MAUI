@@ -17,5 +17,5 @@ public interface IEnrichRegionsLlmService
     /// change) with one feedback retry. Returns a failure result rather than throwing on a bad model reply.
     /// </summary>
     Task<LlmVariantResult> EnrichAsync(
-        V4JsonPrompt baseCaption, ModelTier tier, CancellationToken ct = default);
+        V4JsonPrompt baseCaption, LlmTarget target, CancellationToken ct = default);
 }

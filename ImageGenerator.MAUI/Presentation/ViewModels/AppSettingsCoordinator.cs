@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ImageGenerator.MAUI.Infrastructure.External.Ollama;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
@@ -49,6 +50,34 @@ public sealed partial class AppSettingsCoordinator(
     // 21-parameter constructor from growing.
 
     private void SetStatus(string message, StatusKind kind) => _setStatus(message, kind);
+
+    // Inline, per-card result of the two server-backed pickers. The host's StatusMessage bar is
+    // rendered only by MainPage.xaml, and the sibling pages bind their OWN view model's status, so
+    // until now every one of the 7 Refresh/Folder buttons in the app reported its failure to a label
+    // that was not on the page pressed: the user saw nothing and the log got a WARN.
+    // Empty means "nothing to report" — the same null-hides-the-label contract as
+    // GeneratorViewModel.CivitaiConnectionStatus, which is the in-app pattern this copies.
+    [ObservableProperty]
+    private string? _ollamaServerStatus;
+
+    [ObservableProperty]
+    private string? _openRouterVisionStatus;
+
+    // One funnel per card, so what the card shows and what the status bar shows can never drift
+    // apart. announce=false is the silent session-start probe (EnsureOllamaModelsLoadedAsync) and
+    // stays silent by design: a down server must not nag on every page navigation.
+    private void ReportOllama(string message, StatusKind kind, bool announce = true)
+    {
+        if (!announce) return;
+        OllamaServerStatus = message;
+        SetStatus(message, kind);
+    }
+
+    private void ReportOpenRouter(string message, StatusKind kind)
+    {
+        OpenRouterVisionStatus = message;
+        SetStatus(message, kind);
+    }
 
     // Non-secret server setting (first of its kind) — Preferences-backed, not a token store.
     // The ComfyUI generation service re-reads the store per request, so edits apply instantly.
@@ -101,8 +130,14 @@ public sealed partial class AppSettingsCoordinator(
     [ObservableProperty]
     private string _ollamaBaseUrl = ModelConstants.Ollama.DefaultBaseUrl;
 
-    partial void OnOllamaBaseUrlChanged(string value) =>
+    partial void OnOllamaBaseUrlChanged(string value)
+    {
+        // A new address invalidates the old one's verdict: leaving "that isn't an Ollama server"
+        // sitting in red under a just-corrected URL reads as "still broken" right before the retry.
+        // The Entry commits on focus-loss/Enter, so this is per edit, not per keystroke.
+        OllamaServerStatus = null;
         _uiStateStore.PersistOllamaBaseUrl(value);
+    }
 
     // No compile-time default model: which models exist is per-server, so the old hardcoded
     // "qwen2.5" was wrong on most hosts and failed as an opaque Ollama 404. Empty means
@@ -133,6 +168,42 @@ public sealed partial class AppSettingsCoordinator(
     // One flag covers both pickers: they are always rebuilt together by the same refresh.
     private bool _suppressOllamaModelPersist;
 
+    // ---- One Local-tier model per LLM role -------------------------------------------------
+    // Three values, not three lists: all three pickers draw from OllamaModels. They are separate
+    // because they are three decisions, and until documents/plan-model-picker-rows.md they were one
+    // decision — every role read OllamaModel, so picking a cheap tag to verify a caption mutation
+    // also changed the model the generate button renders with.
+    //
+    // They share _suppressOllamaModelPersist with the two pickers above rather than getting flags of
+    // their own: they bind the SAME ItemsSource, so they take the same null back at the same moment
+    // when a refresh clears it, and unsuppressed that null persists an empty string.
+    [ObservableProperty]
+    private string _promptWriterModel = string.Empty;
+
+    partial void OnPromptWriterModelChanged(string value)
+    {
+        if (_suppressOllamaModelPersist) return;
+        _uiStateStore.PersistPromptWriterModel(value);
+    }
+
+    [ObservableProperty]
+    private string _mutationModel = string.Empty;
+
+    partial void OnMutationModelChanged(string value)
+    {
+        if (_suppressOllamaModelPersist) return;
+        _uiStateStore.PersistMutationModel(value);
+    }
+
+    [ObservableProperty]
+    private string _enrichModel = string.Empty;
+
+    partial void OnEnrichModelChanged(string value)
+    {
+        if (_suppressOllamaModelPersist) return;
+        _uiStateStore.PersistEnrichModel(value);
+    }
+
     [ObservableProperty]
     private string _openRouterVisionModel = string.Empty;
 
@@ -162,6 +233,7 @@ public sealed partial class AppSettingsCoordinator(
     private async Task RefreshOpenRouterVisionModelsAsync()
     {
         if (openRouterModelCatalog is null) return;
+        OpenRouterVisionStatus = "Checking OpenRouter…";
         try
         {
             var models = await openRouterModelCatalog.ListVisionModelsAsync(OpenRouterVisionFreeOnly);
@@ -186,7 +258,7 @@ public sealed partial class AppSettingsCoordinator(
             // alike. SafeSet skips identical rewrites, so the common case costs nothing.
             _uiStateStore.PersistOpenRouterVisionModel(OpenRouterVisionModel);
 
-            SetStatus(models.Count > 0
+            ReportOpenRouter(models.Count > 0
                 ? $"Found {models.Count} OpenRouter vision model(s){(OpenRouterVisionFreeOnly ? " with free pricing." : ".")}"
                 : "No OpenRouter vision models matched the current filter.",
                 models.Count > 0 ? StatusKind.Success : StatusKind.Warning);
@@ -194,7 +266,7 @@ public sealed partial class AppSettingsCoordinator(
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Couldn't list OpenRouter vision models");
-            SetStatus($"Couldn't refresh OpenRouter models: {ex.Message}", StatusKind.Error);
+            ReportOpenRouter($"Couldn't refresh OpenRouter models: {ex.Message}", StatusKind.Error);
         }
     }
 
@@ -235,6 +307,7 @@ public sealed partial class AppSettingsCoordinator(
     private async Task LoadOllamaModelsAsync(bool announce)
     {
         if (ollamaModelCatalog is null) return;
+        if (announce) OllamaServerStatus = "Checking the Ollama server…";
         try
         {
             var modelInfos = await ollamaModelCatalog.ListModelInfosAsync(OllamaBaseUrl);
@@ -249,12 +322,17 @@ public sealed partial class AppSettingsCoordinator(
             // show the warning, but keep the cached options and the user's pick untouched.
             if (models.Length == 0)
             {
-                if (announce) SetStatus("No models installed on the Ollama server.", StatusKind.Warning);
+                ReportOllama("No models installed on the Ollama server.", StatusKind.Warning, announce);
                 return;
             }
 
             var current = OllamaModel;
             var currentVision = OllamaVisionModel;
+            // The role pickers point at the list being rebuilt, so a tag the server dropped has to
+            // go from each of them too — a role naming a model this server no longer has fails at
+            // call time, as a 404 nobody would trace back to this card.
+            var (currentWriter, currentMutation, currentEnrich) =
+                (PromptWriterModel, MutationModel, EnrichModel);
 
             _suppressOllamaModelPersist = true;
             try
@@ -271,12 +349,21 @@ public sealed partial class AppSettingsCoordinator(
                 OllamaModel = OllamaModels.Contains(current) ? current : string.Empty;
                 OllamaVisionModel = string.Empty;
                 OllamaVisionModel = OllamaVisionModels.Contains(currentVision) ? currentVision : string.Empty;
+                PromptWriterModel = string.Empty;
+                PromptWriterModel = OllamaModels.Contains(currentWriter) ? currentWriter : string.Empty;
+                MutationModel = string.Empty;
+                MutationModel = OllamaModels.Contains(currentMutation) ? currentMutation : string.Empty;
+                EnrichModel = string.Empty;
+                EnrichModel = OllamaModels.Contains(currentEnrich) ? currentEnrich : string.Empty;
             }
             finally { _suppressOllamaModelPersist = false; }
 
             // Deliberate writes, outside the window: persist a restored pick and a genuine drop alike.
             _uiStateStore.PersistOllamaModel(OllamaModel);
             _uiStateStore.PersistOllamaVisionModel(OllamaVisionModel);
+            _uiStateStore.PersistPromptWriterModel(PromptWriterModel);
+            _uiStateStore.PersistMutationModel(MutationModel);
+            _uiStateStore.PersistEnrichModel(EnrichModel);
             _uiStateStore.PersistOllamaModels(OllamaBaseUrl, models, visionModels);
 
             // Report exactly what the reconciliation above cleared, by comparing each pick against
@@ -286,25 +373,54 @@ public sealed partial class AppSettingsCoordinator(
                 {
                     OllamaModel.Length == 0 ? current : null,
                     OllamaVisionModel.Length == 0 ? currentVision : null,
+                    PromptWriterModel.Length == 0 ? currentWriter : null,
+                    MutationModel.Length == 0 ? currentMutation : null,
+                    EnrichModel.Length == 0 ? currentEnrich : null,
                 }
                 .Where(m => !string.IsNullOrWhiteSpace(m))
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
 
-            if (!announce) return;
-            SetStatus(
+            ReportOllama(
                 dropped.Length > 0
                     ? $"{string.Join(", ", dropped)} no longer installed on the Ollama server — pick another model."
                     : $"Found {models.Length} Ollama model(s), {visionModels.Length} with vision.",
-                dropped.Length > 0 ? StatusKind.Warning : StatusKind.Success);
+                dropped.Length > 0 ? StatusKind.Warning : StatusKind.Success,
+                announce);
+        }
+        catch (OllamaEndpointException ex)
+        {
+            // The host answered; something other than Ollama is listening. Telling the user it could
+            // not be reached sends them after a cable, so this case keeps its own sentence and its
+            // own log line — and must stay ahead of the transport catch below.
+            _logger.LogWarning(ex, "Configured Ollama URL is not an Ollama endpoint {Url}", OllamaBaseUrl);
+            ReportOllama(NotOllamaSentence(ex), StatusKind.Error, announce);
         }
         catch (Exception ex)
         {
             // Nothing has been cleared at this point — ListModelInfosAsync throws before the
             // rebuild below it — so a down server leaves the cached list and the pick intact.
             _logger.LogWarning(ex, "Couldn't list Ollama models from {Url}", OllamaBaseUrl);
-            if (announce) SetStatus($"Couldn't reach Ollama at {OllamaBaseUrl}: {ex.Message}", StatusKind.Error);
+            ReportOllama($"Couldn't reach Ollama at {OllamaBaseUrl}: {ex.Message}", StatusKind.Error, announce);
         }
+    }
+
+    /// <summary>
+    /// "HTTP 404" is a fact, not advice. Name the route that failed, say what a working value looks
+    /// like, and name the one mistake that reproduces this exactly: a <c>/v1</c> address is the
+    /// OpenAI-compatible API, which answers on every path it knows and 404s the ones it does not.
+    /// </summary>
+    private string NotOllamaSentence(OllamaEndpointException ex)
+    {
+        var route = ex.Endpoint.Contains("/api/", StringComparison.Ordinal) ? "/api/tags" : ex.Endpoint;
+        var head = ex.Problem is null
+            ? $"{OllamaBaseUrl} answered HTTP {ex.StatusCode} on {route}"
+            : $"{OllamaBaseUrl} answered on {route} but {ex.Problem}";
+        var openAiRoot = OllamaBaseUrl.Contains("/v1", StringComparison.OrdinalIgnoreCase)
+            ? " A /v1 address is the OpenAI-compatible API; the model list needs Ollama’s own API at the server root."
+            : string.Empty;
+        return $"{head} — that is not an Ollama server, so restarting or installing models there will not help. "
+             + $"Ollama usually listens on {ModelConstants.Ollama.DefaultBaseUrl}.{openAiRoot}";
     }
 
     // The configurable ROOT data folder (images, json-prompts, comfy-workflows, mutation-library
@@ -391,6 +507,11 @@ public sealed partial class AppSettingsCoordinator(
 
         var savedOllamaModel = _uiStateStore.LoadOllamaModel();
         var savedOllamaVisionModel = _uiStateStore.LoadOllamaVisionModel();
+        // Each role's own pick, seeded by the store from the generation model the one time it has
+        // never been set on its own (IUiStateStore.LoadPromptWriterModel).
+        var savedWriterModel = _uiStateStore.LoadPromptWriterModel();
+        var savedMutationModel = _uiStateStore.LoadMutationModel();
+        var savedEnrichModel = _uiStateStore.LoadEnrichModel();
         // Seed the pickers from the last-known server list BEFORE assigning the selected
         // model so any attached Picker already sees the item in ItemsSource. The saved pick is
         // appended when the cache predates it; startup has verified nothing against the server yet,
@@ -415,6 +536,19 @@ public sealed partial class AppSettingsCoordinator(
                     OllamaVisionModels.Add(savedOllamaVisionModel);
                 OllamaVisionModel = savedOllamaVisionModel;
             }
+
+            // Same rule for the three role picks: show a saved tag even when the cache predates it,
+            // and make sure it is IN the list first, because a Picker silently declines an item its
+            // ItemsSource does not contain. The first successful refresh reconciles the lot.
+            foreach (var saved in new[] { savedWriterModel, savedMutationModel, savedEnrichModel })
+            {
+                if (!string.IsNullOrWhiteSpace(saved) && !OllamaModels.Contains(saved))
+                    OllamaModels.Add(saved);
+            }
+
+            PromptWriterModel = savedWriterModel ?? string.Empty;
+            MutationModel = savedMutationModel ?? string.Empty;
+            EnrichModel = savedEnrichModel ?? string.Empty;
         }
         finally { _suppressOllamaModelPersist = false; }
 

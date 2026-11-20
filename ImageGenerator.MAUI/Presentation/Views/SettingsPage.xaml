@@ -191,6 +191,13 @@
                             AutomationId="OllamaVisionModelPicker" />
                     <Label Text="A large model cold-loads into VRAM on the first call — expect the first local response to take a few minutes."
                            Style="{StaticResource HelperText}" />
+                    <!-- Reports this card's server call inline: the page has no status bar of its
+                         own and the generator's bar is drawn only on MainPage, so a wrong server URL
+                         would otherwise leave nothing but a WARN in the log file. -->
+                    <Label Text="{Binding Settings.OllamaServerStatus}"
+                           Style="{StaticResource HelperText}"
+                           IsVisible="{Binding Settings.OllamaServerStatus, Converter={StaticResource NonEmptyStringToBool}}"
+                           AutomationId="OllamaStatusLabel" />
                 </VerticalStackLayout>
             </Border>
 
@@ -229,6 +236,13 @@
                                 SemanticProperties.Description="Show free OpenRouter vision models only"
                                 AutomationId="OpenRouterVisionFreeOnlySwitch" />
                     </Grid>
+                    <!-- Reports this card's server call inline: the page has no status bar of its
+                         own and the generator's bar is drawn only on MainPage, so a wrong server URL
+                         would otherwise leave nothing but a WARN in the log file. -->
+                    <Label Text="{Binding Settings.OpenRouterVisionStatus}"
+                           Style="{StaticResource HelperText}"
+                           IsVisible="{Binding Settings.OpenRouterVisionStatus, Converter={StaticResource NonEmptyStringToBool}}"
+                           AutomationId="OpenRouterVisionStatusLabel" />
                 </VerticalStackLayout>
             </Border>
 

@@ -575,6 +575,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         }
 
         var tier = SelectedModelTier;
+        var target = _settings.MutationTarget(tier);
         var steer = Steer;
         var baseCaption = _base;
         var count = Count;
@@ -627,9 +628,9 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
 
                 results = breedSet is { Count: > 0 }
                     ? await FanOutAsync(count, ConcurrencyFor(tier),
-                        i => _mutationLlm.BreedAsync(breedSet, steer, i, tier))
+                        i => _mutationLlm.BreedAsync(breedSet, steer, i, target))
                     : await FanOutAsync(count, ConcurrencyFor(tier),
-                        i => _mutationLlm.MutateAsync(baseCaption, steer, i, tier));
+                        i => _mutationLlm.MutateAsync(baseCaption, steer, i, target));
 
                 // Free the local GPU before the ComfyUI render: the 27B is done generating captions and
                 // both models won't fit. Fires once after the whole (sequential) Local batch; cloud tiers
@@ -682,7 +683,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
     /// model the service used (generator settings, else the constants' defaults). Best-effort.</summary>
     private async Task UnloadLocalModelAsync()
     {
-        await _ollamaCatalog!.UnloadAsync(_settings.OllamaBaseUrl, _settings.OllamaModel);
+        await _ollamaCatalog!.UnloadAsync(_settings.OllamaBaseUrl, _settings.MutationModel);
     }
 
     /// <summary>A local model on one GPU serves requests serially, so concurrent calls would queue

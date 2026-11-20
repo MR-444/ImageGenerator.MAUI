@@ -25,9 +25,6 @@ public sealed class PromptBuilderServiceTests : IDisposable
     private readonly string _tempDir = Path.Combine(
         Path.GetTempPath(), "prompt-builder-tests-" + Guid.NewGuid().ToString("N"));
 
-    private delegate Task<string> LegacyCompletion(
-        string apiKey, string systemPrompt, IReadOnlyList<ChatTurn> messages, JsonElement? schema, CancellationToken ct);
-
     public void Dispose()
     {
         try { Directory.Delete(_tempDir, recursive: true); }
@@ -40,9 +37,9 @@ public sealed class PromptBuilderServiceTests : IDisposable
     public async Task BuildProseAsync_NoApiKey_FailsWithoutCallingTheModel()
     {
         var called = false;
-        var sut = CreateSut(KeyStore(null), (_, _, _, _, _) => { called = true; return Task.FromResult(ProseReply); });
+        var sut = CreateSut(KeyStore(null), (_, _, _, _, _, _) => { called = true; return Task.FromResult(ProseReply); });
 
-        var result = await sut.BuildProseAsync("a red fox");
+        var result = await sut.BuildProseAsync("a red fox", Sonnet);
 
         result.Success.Should().BeFalse();
         result.Error.Should().Contain("API key");
@@ -52,9 +49,9 @@ public sealed class PromptBuilderServiceTests : IDisposable
     [Fact]
     public async Task BuildProseAsync_EmptyIdea_Fails()
     {
-        var sut = CreateSut(KeyStore("sk-ant"), (_, _, _, _, _) => Task.FromResult(ProseReply));
+        var sut = CreateSut(KeyStore("sk-ant"), (_, _, _, _, _, _) => Task.FromResult(ProseReply));
 
-        var result = await sut.BuildProseAsync("   ");
+        var result = await sut.BuildProseAsync("   ", Sonnet);
 
         result.Success.Should().BeFalse();
     }
@@ -63,43 +60,58 @@ public sealed class PromptBuilderServiceTests : IDisposable
     public async Task BuildJsonAsync_EmptyProse_Fails()
     {
         var called = false;
-        var sut = CreateSut(KeyStore("sk-ant"), (_, _, _, _, _) => { called = true; return Task.FromResult(ValidJson); });
+        var sut = CreateSut(KeyStore("sk-ant"), (_, _, _, _, _, _) => { called = true; return Task.FromResult(ValidJson); });
 
-        var result = await sut.BuildJsonAsync("   ");
+        var result = await sut.BuildJsonAsync("   ", Sonnet);
 
         result.Success.Should().BeFalse();
         called.Should().BeFalse("an empty prose input must not reach the model");
     }
 
     [Fact]
-    public async Task BuildProseAsync_LocalTier_UsesOllamaModelAndBaseUrl_AndNeedsNoKey()
+    public async Task BuildProseAsync_LocalTarget_UsesTheHandedModelAndEndpoint_AndNeedsNoKey()
     {
         var keyStore = KeyStore(null);
-        var uiStore = UiStore("http://host:11434", "qwen3");
-        ModelTier? seenTier = null;
-        string? seenModel = null;
-        string? seenBaseUrl = null;
+        LlmTarget seenTarget = default;
         string? seenApiKey = "unexpected";
 
-        var sut = CreateRoutedSut(keyStore, uiStore,
-            (tier, modelId, apiKey, baseUrl, _, _, schema, _) =>
+        var sut = CreateSut(keyStore,
+            (target, apiKey, _, _, _, _) =>
             {
-                seenTier = tier;
-                seenModel = modelId;
-                seenBaseUrl = baseUrl;
+                seenTarget = target;
                 seenApiKey = apiKey;
-                schema.HasValue.Should().BeFalse("the prose pass is schema-less even on Ollama");
                 return Task.FromResult(ProseReply);
             });
 
-        var result = await sut.BuildProseAsync("a red fox", tier: ModelTier.Local);
+        var result = await sut.BuildProseAsync("a red fox", Local("qwen3", "http://host:11434"));
 
-        result.Success.Should().BeTrue("the Local tier needs no Anthropic key");
-        seenTier.Should().Be(ModelTier.Local);
-        seenModel.Should().Be("qwen3");
-        seenBaseUrl.Should().Be("http://host:11434");
+        result.Success.Should().BeTrue("a local call needs no provider key");
+        seenTarget.Provider.Should().Be(ModelProvider.Local);
+        seenTarget.ModelId.Should().Be("qwen3");
+        seenTarget.BaseUrl.Should().Be("http://host:11434");
         seenApiKey.Should().BeNull();
-        keyStore.Verify(s => s.LoadAsync(), Times.Never);
+        keyStore.Verify(s => s.LoadAsync(), Times.Never, "no Anthropic key is even read for a local call");
+    }
+
+    [Fact]
+    public async Task BuildProseAsync_NoModelSelected_RefusesAndNamesOllama()
+    {
+        var sut = CreateSut(KeyStore(null), NeverCalled);
+
+        var result = await sut.BuildProseAsync("a red fox", Local(model: ""));
+
+        result.Error.Should().Contain("Ollama model selected");
+    }
+
+    [Fact]
+    public async Task BuildProseAsync_OpenRouterTarget_WithoutAnOpenRouterKey_NamesOpenRouter()
+    {
+        var sut = CreateSut(KeyStore("sk-ant"), NeverCalled);
+
+        var result = await sut.BuildProseAsync(
+            "a red fox", new LlmTarget(ModelProvider.OpenRouter, "some-model", string.Empty));
+
+        result.Error.Should().Contain("OpenRouter API key");
     }
 
     // ---- Pass 1: VPE prose --------------------------------------------------------------
@@ -108,13 +120,13 @@ public sealed class PromptBuilderServiceTests : IDisposable
     public async Task BuildProseAsync_ValidResponse_ReturnsProseFromASchemaLessCall()
     {
         bool? schemaProvided = null;
-        var sut = CreateSut(KeyStore("sk-ant"), (_, _, _, schema, _) =>
+        var sut = CreateSut(KeyStore("sk-ant"), (_, _, _, _, schema, _) =>
         {
             schemaProvided = schema.HasValue;
             return Task.FromResult("  " + ProseReply + "  ");   // wrapped in whitespace to prove trimming
         });
 
-        var result = await sut.BuildProseAsync("a red fox in snow");
+        var result = await sut.BuildProseAsync("a red fox in snow", Sonnet);
 
         result.Success.Should().BeTrue();
         result.Prose.Should().Be(ProseReply);
@@ -125,9 +137,9 @@ public sealed class PromptBuilderServiceTests : IDisposable
     [Fact]
     public async Task BuildProseAsync_EmptyModelText_Fails()
     {
-        var sut = CreateSut(KeyStore("sk-ant"), (_, _, _, _, _) => Task.FromResult("   "));
+        var sut = CreateSut(KeyStore("sk-ant"), (_, _, _, _, _, _) => Task.FromResult("   "));
 
-        var result = await sut.BuildProseAsync("a red fox");
+        var result = await sut.BuildProseAsync("a red fox", Sonnet);
 
         result.Success.Should().BeFalse();
     }
@@ -136,9 +148,9 @@ public sealed class PromptBuilderServiceTests : IDisposable
     public async Task BuildProseAsync_TransportThrows_FailsGracefully()
     {
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _) => throw new HttpRequestException("network down"));
+            (_, _, _, _, _, _) => throw new HttpRequestException("network down"));
 
-        var result = await sut.BuildProseAsync("a red fox");
+        var result = await sut.BuildProseAsync("a red fox", Sonnet);
 
         result.Success.Should().BeFalse();
         result.Error.Should().Contain("couldn't reach Claude");
@@ -150,13 +162,13 @@ public sealed class PromptBuilderServiceTests : IDisposable
     public async Task BuildJsonAsync_ValidResponse_ReturnsParsedPromptFromAStructuredCall()
     {
         bool? schemaProvided = null;
-        var sut = CreateSut(KeyStore("sk-ant"), (_, _, _, schema, _) =>
+        var sut = CreateSut(KeyStore("sk-ant"), (_, _, _, _, schema, _) =>
         {
             schemaProvided = schema.HasValue;
             return Task.FromResult(ValidJson);
         });
 
-        var result = await sut.BuildJsonAsync(ProseReply);
+        var result = await sut.BuildJsonAsync(ProseReply, Sonnet);
 
         result.Success.Should().BeTrue();
         result.Prompt.Should().NotBeNull();
@@ -172,13 +184,13 @@ public sealed class PromptBuilderServiceTests : IDisposable
     {
         var seenMessages = new List<IReadOnlyList<ChatTurn>>();
         var call = 0;
-        var sut = CreateSut(KeyStore("sk-ant"), (_, _, messages, _, _) =>
+        var sut = CreateSut(KeyStore("sk-ant"), (_, _, _, messages, _, _) =>
         {
             seenMessages.Add(messages);
             return Task.FromResult(call++ == 0 ? ValidationFailJson : ValidJson);
         });
 
-        var result = await sut.BuildJsonAsync(ProseReply);
+        var result = await sut.BuildJsonAsync(ProseReply, Sonnet);
 
         result.Success.Should().BeTrue();
         seenMessages.Should().HaveCount(2, "the first attempt failed validation, so it retries once");
@@ -191,9 +203,9 @@ public sealed class PromptBuilderServiceTests : IDisposable
     public async Task BuildJsonAsync_ValidationFailsTwice_FailsWithTheErrors()
     {
         var calls = 0;
-        var sut = CreateSut(KeyStore("sk-ant"), (_, _, _, _, _) => { calls++; return Task.FromResult(ValidationFailJson); });
+        var sut = CreateSut(KeyStore("sk-ant"), (_, _, _, _, _, _) => { calls++; return Task.FromResult(ValidationFailJson); });
 
-        var result = await sut.BuildJsonAsync(ProseReply);
+        var result = await sut.BuildJsonAsync(ProseReply, Sonnet);
 
         result.Success.Should().BeFalse();
         result.Error.Should().Contain("Background");
@@ -204,9 +216,9 @@ public sealed class PromptBuilderServiceTests : IDisposable
     public async Task BuildJsonAsync_UnparseableTwice_Fails()
     {
         var calls = 0;
-        var sut = CreateSut(KeyStore("sk-ant"), (_, _, _, _, _) => { calls++; return Task.FromResult("this is not json {"); });
+        var sut = CreateSut(KeyStore("sk-ant"), (_, _, _, _, _, _) => { calls++; return Task.FromResult("this is not json {"); });
 
-        var result = await sut.BuildJsonAsync(ProseReply);
+        var result = await sut.BuildJsonAsync(ProseReply, Sonnet);
 
         result.Success.Should().BeFalse();
         result.Error.Should().Contain("structured prompt");
@@ -217,9 +229,9 @@ public sealed class PromptBuilderServiceTests : IDisposable
     public async Task BuildJsonAsync_TransportThrows_FailsGracefully()
     {
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _) => throw new HttpRequestException("network down"));
+            (_, _, _, _, _, _) => throw new HttpRequestException("network down"));
 
-        var result = await sut.BuildJsonAsync(ProseReply);
+        var result = await sut.BuildJsonAsync(ProseReply, Sonnet);
 
         result.Success.Should().BeFalse();
         result.Error.Should().Contain("couldn't reach Claude");
@@ -234,9 +246,9 @@ public sealed class PromptBuilderServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(_tempDir, "vpe-prompt.md"), "PRIVATE VPE OVERRIDE");
 
         string? captured = null;
-        var sut = CreateSut(KeyStore("sk-ant"), (_, system, _, _, _) => { captured = system; return Task.FromResult(ProseReply); });
+        var sut = CreateSut(KeyStore("sk-ant"), (_, _, system, _, _, _) => { captured = system; return Task.FromResult(ProseReply); });
 
-        await sut.BuildProseAsync("a red fox");
+        await sut.BuildProseAsync("a red fox", Sonnet);
 
         captured.Should().Be("PRIVATE VPE OVERRIDE");
     }
@@ -245,9 +257,9 @@ public sealed class PromptBuilderServiceTests : IDisposable
     public async Task BuildProseAsync_NoOverrideFile_UsesBundledVpeAsset()
     {
         string? captured = null;
-        var sut = CreateSut(KeyStore("sk-ant"), (_, system, _, _, _) => { captured = system; return Task.FromResult(ProseReply); });
+        var sut = CreateSut(KeyStore("sk-ant"), (_, _, system, _, _, _) => { captured = system; return Task.FromResult(ProseReply); });
 
-        await sut.BuildProseAsync("a red fox");
+        await sut.BuildProseAsync("a red fox", Sonnet);
 
         captured.Should().Be("BUNDLED VPE PROMPT");
     }
@@ -259,9 +271,9 @@ public sealed class PromptBuilderServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(_tempDir, "system-prompt.md"), "PRIVATE OVERRIDE PROMPT");
 
         string? captured = null;
-        var sut = CreateSut(KeyStore("sk-ant"), (_, system, _, _, _) => { captured = system; return Task.FromResult(ValidJson); });
+        var sut = CreateSut(KeyStore("sk-ant"), (_, _, system, _, _, _) => { captured = system; return Task.FromResult(ValidJson); });
 
-        await sut.BuildJsonAsync(ProseReply);
+        await sut.BuildJsonAsync(ProseReply, Sonnet);
 
         captured.Should().Be("PRIVATE OVERRIDE PROMPT");
     }
@@ -270,9 +282,9 @@ public sealed class PromptBuilderServiceTests : IDisposable
     public async Task BuildJsonAsync_NoOverrideFile_UsesBundledJsonAsset()
     {
         string? captured = null;
-        var sut = CreateSut(KeyStore("sk-ant"), (_, system, _, _, _) => { captured = system; return Task.FromResult(ValidJson); });
+        var sut = CreateSut(KeyStore("sk-ant"), (_, _, system, _, _, _) => { captured = system; return Task.FromResult(ValidJson); });
 
-        await sut.BuildJsonAsync(ProseReply);
+        await sut.BuildJsonAsync(ProseReply, Sonnet);
 
         captured.Should().Be("BUNDLED JSON PROMPT");
     }
@@ -285,9 +297,9 @@ public sealed class PromptBuilderServiceTests : IDisposable
         await File.WriteAllTextAsync(promptPath, "PRIVATE OVERRIDE PROMPT");
 
         string? captured = null;
-        var sut = CreateSut(KeyStore("sk-ant"), (_, system, _, _, _) => { captured = system; return Task.FromResult(ValidJson); });
+        var sut = CreateSut(KeyStore("sk-ant"), (_, _, system, _, _, _) => { captured = system; return Task.FromResult(ValidJson); });
 
-        await sut.BuildJsonAsync(ProseReply);
+        await sut.BuildJsonAsync(ProseReply, Sonnet);
 
         // README.txt seeded for discoverability...
         File.Exists(Path.Combine(_tempDir, "README.txt")).Should().BeTrue();
@@ -318,17 +330,10 @@ public sealed class PromptBuilderServiceTests : IDisposable
 
     private PromptBuilderService CreateSut(
         Mock<IAnthropicTokenStore> store,
-        LegacyCompletion completion) =>
-        CreateRoutedSut(store, UiStore(),
-            (tier, modelId, apiKey, baseUrl, systemPrompt, messages, schema, ct) =>
-                completion(apiKey ?? string.Empty, systemPrompt, messages, schema, ct));
-
-    private PromptBuilderService CreateRoutedSut(
-        Mock<IAnthropicTokenStore> store,
-        Mock<IUiStateStore> uiStore,
-        PromptBuilderService.StructuredCompletion completion) =>
+        PromptBuilderService.StructuredCompletion completion,
+        string? openRouterKey = null) =>
         new(store.Object,
-            uiStore.Object,
+            OpenRouterKeyStore(openRouterKey).Object,
             NullLogger<PromptBuilderService>.Instance,
             completion,
             promptDirectoryOverride: _tempDir,
@@ -341,11 +346,22 @@ public sealed class PromptBuilderServiceTests : IDisposable
         return mock;
     }
 
-    private static Mock<IUiStateStore> UiStore(string? ollamaUrl = null, string? ollamaModel = null)
+    /// <summary>A completion that fails the test if the service reaches the model at all.</summary>
+    private static Task<string> NeverCalled(
+        LlmTarget target, string? apiKey, string systemPrompt,
+        IReadOnlyList<ChatTurn> messages, JsonElement? schema, CancellationToken ct) =>
+        throw new InvalidOperationException("the service must refuse before calling a model");
+
+    /// <summary>The target the page hands this service for a Claude pick.</summary>
+    private static LlmTarget Sonnet => new(ModelProvider.Anthropic, AnthropicModels.Sonnet, string.Empty);
+
+    private static LlmTarget Local(string model, string baseUrl = "http://127.0.0.1:11434") =>
+        new(ModelProvider.Local, model, baseUrl);
+
+    private static Mock<IOpenRouterTokenStore> OpenRouterKeyStore(string? key)
     {
-        var mock = new Mock<IUiStateStore>();
-        mock.Setup(s => s.LoadOllamaBaseUrl()).Returns(ollamaUrl);
-        mock.Setup(s => s.LoadOllamaModel()).Returns(ollamaModel);
+        var mock = new Mock<IOpenRouterTokenStore>();
+        mock.Setup(s => s.LoadAsync()).ReturnsAsync(key);
         return mock;
     }
 

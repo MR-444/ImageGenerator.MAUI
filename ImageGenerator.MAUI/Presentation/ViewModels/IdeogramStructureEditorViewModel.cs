@@ -174,14 +174,9 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
     /// <summary>The host generator, exposed so the page can reuse the shared Ollama model picker.</summary>
     public GeneratorViewModel? Generator => _generator;
 
-    /// <summary>Resolved Ollama model the Local tier will use when the editor is hosted stand-alone.</summary>
-    public string EnrichLocalModel =>
-        _settings.OllamaModel;
-
     partial void OnEnrichTierChanged(ModelTier value)
     {
         OnPropertyChanged(nameof(ShowEnrichLocalModel));
-        OnPropertyChanged(nameof(EnrichLocalModel));
     }
 
     /// <summary>True while a model call is in flight — gates the button + shows the cancel affordance.</summary>
@@ -740,7 +735,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         _enrichCts = new CancellationTokenSource();
         try
         {
-            var result = await _enrich.EnrichAsync(model, EnrichTier, _enrichCts.Token);
+            var result = await _enrich.EnrichAsync(model, _settings.EnrichTarget(EnrichTier), _enrichCts.Token);
             if (!result.Success || result.Prompt is null)
             {
                 SetStatus(result.Error ?? "The enrichment didn't return a result.", StatusKind.Error);

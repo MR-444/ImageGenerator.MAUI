@@ -4,6 +4,7 @@ using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library;
+using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
 using ImageGenerator.MAUI.Shared.Constants;
@@ -270,7 +271,9 @@ public class MutationEngineViewModelTests
 
         stub.MutateCalls.Should().HaveCount(5);
         stub.MutateCalls.Select(c => c.Index).Should().BeEquivalentTo([0, 1, 2, 3, 4]);
-        stub.MutateCalls.Should().OnlyContain(c => c.Steer == "make it winter" && c.Tier == ModelTier.Opus);
+        stub.MutateCalls.Should().OnlyContain(c => c.Steer == "make it winter"
+            && c.Target.Provider == ModelProvider.Anthropic && c.Target.ModelId == AnthropicModels.Opus,
+            "every fan-out call carries the same target the page was left on");
         sut.StatusKind.Should().Be(StatusKind.Success); // no generator ⇒ "variants ready"
     }
 
@@ -372,7 +375,8 @@ public class MutationEngineViewModelTests
         stub.BreedCalls.Should().HaveCount(4);
         stub.BreedCalls.Select(c => c.Index).Should().BeEquivalentTo([0, 1, 2, 3]);
         stub.BreedCalls.Should().OnlyContain(c =>
-            c.WinnerCount == 2 && c.Steer == "blend them" && c.Tier == ModelTier.Sonnet);
+            c.WinnerCount == 2 && c.Steer == "blend them"
+            && c.Target.Provider == ModelProvider.Anthropic && c.Target.ModelId == AnthropicModels.Sonnet);
     }
 
     [Fact]
@@ -521,15 +525,16 @@ public class MutationEngineViewModelTests
     }
 
     // The unload is where the resolved endpoint actually leaves the process, so the two strings are
-    // the contract worth pinning: the generator's Ollama URL — never its ComfyUI URL — and the
-    // generator's picked model. Sibling pages used to derive both per page; one shared reader now
-    // owns the fallbacks, and these two tests are what keep it honest.
+    // the contract worth pinning: the generator's Ollama URL — never its ComfyUI URL — and THIS
+    // page's own model, not the image model the generate button uses. Sibling pages used to derive
+    // both per page; one shared reader now owns the fallbacks, and these two tests keep it honest.
     [Fact]
     public async Task MutateWithAi_LocalTier_UnloadsAtTheGeneratorsEndpointAndModel()
     {
         var catalog = new StubOllamaCatalog();
         var generator = BuildGenerator("http://comfy.example:8188", "http://ollama.example:11434");
-        generator.Settings.OllamaModel = "qwen2.5-vl:7b";
+        generator.Settings.MutationModel = "qwen2.5-vl:7b";
+        generator.Settings.OllamaModel = "flux-schnell";
         var sut = CreateSutWithAiAndGate(
             new FailingMutationLlm(), catalog, new FakeGpuGate(), generator);
         sut.SetBaseForTest(MutationTestData.BaseCaption());
@@ -542,7 +547,8 @@ public class MutationEngineViewModelTests
         catalog.Unloads.Should().HaveCount(1);
         catalog.Unloads[0].Url.Should().Be("http://ollama.example:11434",
             "the model is freed at the endpoint the Local tier talked to, not at the ComfyUI one");
-        catalog.Unloads[0].Model.Should().Be("qwen2.5-vl:7b", "and the model unloaded is the generator's pick");
+        catalog.Unloads[0].Model.Should().Be("qwen2.5-vl:7b",
+            "and the model freed is the one this page called, not the image model sharing the server");
     }
 
     // A blank setting is not an endpoint: the default host has to reach the unload too, or the model
@@ -552,7 +558,7 @@ public class MutationEngineViewModelTests
     {
         var catalog = new StubOllamaCatalog();
         var generator = BuildGenerator("http://comfy.example:8188", "");
-        generator.Settings.OllamaModel = "qwen2.5-vl:7b";
+        generator.Settings.MutationModel = "qwen2.5-vl:7b";
         var sut = CreateSutWithAiAndGate(
             new FailingMutationLlm(), catalog, new FakeGpuGate(), generator);
         sut.SetBaseForTest(MutationTestData.BaseCaption());
@@ -662,11 +668,11 @@ public class MutationEngineViewModelTests
     private sealed class FailingMutationLlm : ICaptionMutationLlmService
     {
         public Task<LlmVariantResult> MutateAsync(
-            V4JsonPrompt baseCaption, string steer, int index, ModelTier tier, CancellationToken ct = default) =>
+            V4JsonPrompt baseCaption, string steer, int index, LlmTarget target, CancellationToken ct = default) =>
             Task.FromResult(LlmVariantResult.Fail("test: no variant"));
 
         public Task<LlmVariantResult> BreedAsync(
-            IReadOnlyList<V4JsonPrompt> winners, string steer, int index, ModelTier tier, CancellationToken ct = default) =>
+            IReadOnlyList<V4JsonPrompt> winners, string steer, int index, LlmTarget target, CancellationToken ct = default) =>
             Task.FromResult(LlmVariantResult.Fail("test: no variant"));
     }
 
@@ -707,20 +713,20 @@ public class MutationEngineViewModelTests
 
     private sealed class StubMutationLlm : ICaptionMutationLlmService
     {
-        public List<(int Index, string Steer, ModelTier Tier, V4JsonPrompt Base)> MutateCalls { get; } = [];
-        public List<(int WinnerCount, int Index, string Steer, ModelTier Tier)> BreedCalls { get; } = [];
+        public List<(int Index, string Steer, LlmTarget Target, V4JsonPrompt Base)> MutateCalls { get; } = [];
+        public List<(int WinnerCount, int Index, string Steer, LlmTarget Target)> BreedCalls { get; } = [];
 
         public Task<LlmVariantResult> MutateAsync(
-            V4JsonPrompt baseCaption, string steer, int index, ModelTier tier, CancellationToken ct = default)
+            V4JsonPrompt baseCaption, string steer, int index, LlmTarget target, CancellationToken ct = default)
         {
-            MutateCalls.Add((index, steer, tier, baseCaption));
+            MutateCalls.Add((index, steer, target, baseCaption));
             return Task.FromResult(LlmVariantResult.Ok(MutationTestData.BaseCaption(), $"v{index}"));
         }
 
         public Task<LlmVariantResult> BreedAsync(
-            IReadOnlyList<V4JsonPrompt> winners, string steer, int index, ModelTier tier, CancellationToken ct = default)
+            IReadOnlyList<V4JsonPrompt> winners, string steer, int index, LlmTarget target, CancellationToken ct = default)
         {
-            BreedCalls.Add((winners.Count, index, steer, tier));
+            BreedCalls.Add((winners.Count, index, steer, target));
             return Task.FromResult(LlmVariantResult.Ok(MutationTestData.BaseCaption(), $"b{index}"));
         }
     }

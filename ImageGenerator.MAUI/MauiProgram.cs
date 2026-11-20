@@ -126,8 +126,9 @@ public static class MauiProgram
                 totalTimeout: TimeSpan.FromMinutes(5))
             .AddRemoteHttpLogging(AnthropicMessagesTransport.HttpClientName);
 
-        // OpenRouter is used for optional remote vision observation in "Describe an idea". Calls carry
-        // base64 image data, so give them the same generous budget as the other LLM transports.
+        // One OpenRouter client, two callers: optional remote vision observation in "Describe an idea"
+        // (base64 image data) and `OpenRouterChatTransport`'s text turns for the prompt-writer, mutator
+        // and enrich roles. Both need the same generous budget as the other LLM transports.
         builder.Services.AddHttpClient(VisionObservationService.OpenRouterHttpClientName)
             .ConfigureStandardResilience(
                 perAttemptTimeout: TimeSpan.FromSeconds(120),

@@ -5,6 +5,7 @@ using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation;
 using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 using ImageGenerator.MAUI.Infrastructure.External.Ollama;
+using ImageGenerator.MAUI.Infrastructure.External.OpenRouter;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
@@ -24,9 +25,6 @@ namespace ImageGenerator.MAUI.Infrastructure.External.Mutation;
 /// </summary>
 public sealed class EnrichRegionsLlmService : IEnrichRegionsLlmService
 {
-    private const string SonnetModelId = "claude-sonnet-4-6";
-    private const string OpusModelId = "claude-opus-4-8";
-
     private const string SystemPromptAsset = "Mutation/enrich-region-system.md";
     private const string OverrideFileName = "enrich-region-prompt.md";
 
@@ -35,25 +33,26 @@ public sealed class EnrichRegionsLlmService : IEnrichRegionsLlmService
     private const int IdentityMaxLength = 40;
 
     /// <summary>Transport seam — identical signature to <c>CaptionMutationLlmService.MutationCompletion</c> so
-    /// tests inject a fake the same way. Local → Ollama (no key); otherwise the Anthropic Messages API.</summary>
+    /// tests inject a fake the same way. The target names the backend; <c>apiKey</c> is already resolved for
+    /// that provider (null for Local, which takes no auth).</summary>
     internal delegate Task<string> EnrichCompletion(
-        ModelTier tier, string modelId, string? apiKey, string baseUrl,
+        LlmTarget target, string? apiKey,
         string systemPrompt, IReadOnlyList<ChatTurn> messages, JsonElement schema, CancellationToken ct);
 
-    private readonly IAnthropicTokenStore _tokenStore;
-    private readonly IUiStateStore _uiStateStore;
+    private readonly IAnthropicTokenStore _anthropicTokenStore;
+    private readonly IOpenRouterTokenStore _openRouterTokenStore;
     private readonly ILogger<EnrichRegionsLlmService> _logger;
     private readonly EnrichCompletion _complete;
     private readonly Func<string, Task<Stream>> _assetOpener;
     private readonly string _promptDirectory;
 
-    /// <summary>Production ctor (DI): shares the named HttpClient + token store with the mutator/builder.</summary>
+    /// <summary>Production ctor (DI): shares the named HttpClients and token stores with the mutator/builder.</summary>
     public EnrichRegionsLlmService(
         IAnthropicTokenStore tokenStore,
-        IUiStateStore uiStateStore,
+        IOpenRouterTokenStore openRouterTokenStore,
         ILogger<EnrichRegionsLlmService> logger,
         IHttpClientFactory httpClientFactory)
-        : this(tokenStore, uiStateStore, logger,
+        : this(tokenStore, openRouterTokenStore, logger,
             BuildHttpCompletion(httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory)), logger))
     {
     }
@@ -62,14 +61,14 @@ public sealed class EnrichRegionsLlmService : IEnrichRegionsLlmService
     /// directory + asset opener are injectable so override precedence is unit-testable.</summary>
     internal EnrichRegionsLlmService(
         IAnthropicTokenStore tokenStore,
-        IUiStateStore uiStateStore,
+        IOpenRouterTokenStore openRouterTokenStore,
         ILogger<EnrichRegionsLlmService> logger,
         EnrichCompletion completion,
         string? promptDirectoryOverride = null,
         Func<string, Task<Stream>>? assetOpener = null)
     {
-        _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
-        _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
+        _anthropicTokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+        _openRouterTokenStore = openRouterTokenStore ?? throw new ArgumentNullException(nameof(openRouterTokenStore));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _complete = completion ?? throw new ArgumentNullException(nameof(completion));
         _assetOpener = assetOpener ?? FileSystem.OpenAppPackageFileAsync;
@@ -79,28 +78,18 @@ public sealed class EnrichRegionsLlmService : IEnrichRegionsLlmService
     }
 
     public async Task<LlmVariantResult> EnrichAsync(
-        V4JsonPrompt baseCaption, ModelTier tier, CancellationToken ct = default)
+        V4JsonPrompt baseCaption, LlmTarget target, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(baseCaption);
 
-        var modelId = ResolveModelId(tier);
+        // A target with no model is a state the caller must turn into a sentence, never a request: on
+        // Local it used to fall through to a hardcoded tag most servers do not have, failing as a 404.
+        if (!target.HasModel)
+            return LlmVariantResult.Fail(target.MissingModelError("in the structure editor."));
 
-        string? apiKey = null;
-        var baseUrl = string.Empty;
-        if (tier == ModelTier.Local)
-        {
-            baseUrl = _uiStateStore.LoadOllamaBaseUrl() is { Length: > 0 } u ? u : ModelConstants.Ollama.DefaultBaseUrl;
-            // The local tier has no default model — an unpicked one used to fall through to a
-            // hardcoded name the server usually didn't have, failing as an opaque 404.
-            if (string.IsNullOrWhiteSpace(modelId))
-                return LlmVariantResult.Fail("No local Ollama model selected — pick one in Settings.");
-        }
-        else
-        {
-            apiKey = await _tokenStore.LoadAsync();
-            if (string.IsNullOrWhiteSpace(apiKey))
-                return LlmVariantResult.Fail("No Anthropic API key — add it on the Settings page.");
-        }
+        var (apiKey, credentialError) = await LlmCredentials.ResolveAsync(target.Provider, _anthropicTokenStore, _openRouterTokenStore);
+        if (credentialError is not null)
+            return LlmVariantResult.Fail(credentialError);
 
         string systemPrompt;
         try
@@ -121,7 +110,7 @@ public sealed class EnrichRegionsLlmService : IEnrichRegionsLlmService
             string raw;
             try
             {
-                raw = await _complete(tier, modelId, apiKey, baseUrl, systemPrompt, messages, V4StructuredSchema.Schema, ct);
+                raw = await _complete(target, apiKey, systemPrompt, messages, V4StructuredSchema.Schema, ct);
             }
             catch (OperationCanceledException)
             {
@@ -129,7 +118,7 @@ public sealed class EnrichRegionsLlmService : IEnrichRegionsLlmService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "EnrichRegionsLlm: model call failed (tier {Tier}, attempt {Attempt})", tier, attempt);
+                _logger.LogError(ex, "EnrichRegionsLlm: model call failed ({Provider} {Model}, attempt {Attempt})", target.ProviderLabel, target.ModelId, attempt);
                 return LlmVariantResult.Fail($"The enrichment couldn't reach the model: {ex.Message}");
             }
 
@@ -221,13 +210,6 @@ public sealed class EnrichRegionsLlmService : IEnrichRegionsLlmService
 
         return result;
     }
-
-    private string ResolveModelId(ModelTier tier) => tier switch
-    {
-        ModelTier.Opus => OpusModelId,
-        ModelTier.Local => _uiStateStore.LoadOllamaModel() ?? string.Empty,
-        _ => SonnetModelId
-    };
 
     /// <summary>Compose the user turn: the base caption JSON + a compact, geometry-grounded facts block.</summary>
     internal static string BuildEnrichUserTurn(V4JsonPrompt baseCaption, RegionGraphResult graph)
@@ -367,8 +349,10 @@ public sealed class EnrichRegionsLlmService : IEnrichRegionsLlmService
     }
 
     private static EnrichCompletion BuildHttpCompletion(IHttpClientFactory httpClientFactory, ILogger logger) =>
-        (tier, modelId, apiKey, baseUrl, systemPrompt, messages, schema, ct) =>
-            tier == ModelTier.Local
-                ? OllamaChatTransport.SendAsync(httpClientFactory, logger, baseUrl, modelId, systemPrompt, messages, schema, ct)
-                : AnthropicMessagesTransport.SendAsync(httpClientFactory, logger, modelId, apiKey!, systemPrompt, messages, schema, ct);
+        (target, apiKey, systemPrompt, messages, schema, ct) => target.Provider switch
+        {
+            ModelProvider.Local => OllamaChatTransport.SendAsync(httpClientFactory, logger, target.BaseUrl, target.ModelId, systemPrompt, messages, schema, ct),
+            ModelProvider.OpenRouter => OpenRouterChatTransport.SendAsync(httpClientFactory, logger, apiKey!, target.ModelId, systemPrompt, messages, schema, ct),
+            _ => AnthropicMessagesTransport.SendAsync(httpClientFactory, logger, target.ModelId, apiKey!, systemPrompt, messages, schema, ct)
+        };
 }

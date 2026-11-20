@@ -236,7 +236,7 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <Picker Grid.Column="0"
                                             ItemsSource="{Binding Generator.Settings.OllamaModels}"
-                                            SelectedItem="{Binding Generator.Settings.OllamaModel, Mode=TwoWay}"
+                                            SelectedItem="{Binding Generator.Settings.MutationModel, Mode=TwoWay}"
                                             Title="Refresh, then pick a model…"
                                             AutomationId="MutationOllamaModelPicker" />
                                     <Button Grid.Column="1"
@@ -247,6 +247,13 @@
                                 </Grid>
                                 <Label Text="Set the server URL on Settings. A 27B model takes a few minutes on the first (cold) call."
                                        Style="{StaticResource HelperText}" />
+                                <!-- Reports this card's server call inline: the page has no status bar of its
+                                     own and the generator's bar is drawn only on MainPage, so a wrong server URL
+                                     would otherwise leave nothing but a WARN in the log file. -->
+                                <Label Text="{Binding Generator.Settings.OllamaServerStatus}"
+                                       Style="{StaticResource HelperText}"
+                                       IsVisible="{Binding Generator.Settings.OllamaServerStatus, Converter={StaticResource NonEmptyStringToBool}}"
+                                       AutomationId="MutationOllamaStatusLabel" />
                             </VerticalStackLayout>
 
                             <Label Text="{Binding CostEstimate}" Style="{StaticResource HelperText}"

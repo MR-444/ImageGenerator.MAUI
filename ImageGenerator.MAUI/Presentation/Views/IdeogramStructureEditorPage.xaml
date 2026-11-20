@@ -402,7 +402,7 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <Picker Grid.Column="0"
                                             ItemsSource="{Binding Generator.Settings.OllamaModels}"
-                                            SelectedItem="{Binding Generator.Settings.OllamaModel, Mode=TwoWay}"
+                                            SelectedItem="{Binding Generator.Settings.EnrichModel, Mode=TwoWay}"
                                             Title="Refresh, then pick a model…"
                                             IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
                                             AutomationId="EditorEnrichOllamaModelPicker" />
@@ -415,6 +415,13 @@
                                 </Grid>
                                 <Label Text="The Ollama server URL is shared with AI mutation and configured in Settings."
                                        Style="{StaticResource HelperText}" />
+                                <!-- Reports this card's server call inline: the page has no status bar of its
+                                     own and the generator's bar is drawn only on MainPage, so a wrong server URL
+                                     would otherwise leave nothing but a WARN in the log file. -->
+                                <Label Text="{Binding Generator.Settings.OllamaServerStatus}"
+                                       Style="{StaticResource HelperText}"
+                                       IsVisible="{Binding Generator.Settings.OllamaServerStatus, Converter={StaticResource NonEmptyStringToBool}}"
+                                       AutomationId="EditorEnrichOllamaStatusLabel" />
                             </VerticalStackLayout>
                             </VerticalStackLayout>
 

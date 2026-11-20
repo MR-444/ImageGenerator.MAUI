@@ -187,6 +187,33 @@ public sealed class VisionObservationServiceTests : IDisposable
         message.Should().Contain("temporarily rate-limited upstream");
     }
 
+    [Fact]
+    public async Task ObserveAsync_LocalWithNoVisionPick_RefusesRatherThanBorrowingTheGenerationModel()
+    {
+        // The end of the resolution chain used to be LoadOllamaModel(): the model the generate button
+        // renders WITH, which cannot answer a chat request about a picture — the same opaque failure
+        // the hardcoded default above it had been removed for, one layer further down.
+        var ui = new Mock<IUiStateStore>();
+        ui.Setup(s => s.LoadOllamaBaseUrl()).Returns("http://host:11434");
+        ui.Setup(s => s.LoadOllamaModel()).Returns("flux-schnell");
+        var called = false;
+
+        var sut = CreateSut(ui, (_, _, _, _, _, _) =>
+        {
+            called = true;
+            return Task.FromResult("must never run");
+        });
+
+        var result = await sut.ObserveAsync(new VisionObservationRequest(
+            VisionObservationProvider.LocalOllama,
+            "data:image/png;base64,abcd",
+            "ref.png"));
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("Pick a local vision model first");
+        called.Should().BeFalse("no model call is made against a model that was never picked");
+    }
+
     private VisionObservationService CreateSut(
         Mock<IUiStateStore> uiStore,
         VisionObservationService.ObservationCompletion completion,

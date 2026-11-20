@@ -5,6 +5,7 @@ using System.Text.Json;
 using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation;
+using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 using ImageGenerator.MAUI.Infrastructure.External.Mutation;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -81,9 +82,9 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
     {
         var schemaKind = JsonValueKind.Undefined;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, _, schema, _) => { schemaKind = schema.ValueKind; return Task.FromResult(EnrichedJson); });
+            (_, _, _, _, schema, _) => { schemaKind = schema.ValueKind; return Task.FromResult(EnrichedJson); });
 
-        var result = await sut.EnrichAsync(Base, ModelTier.Sonnet);
+        var result = await sut.EnrichAsync(Base, Sonnet);
 
         result.Success.Should().BeTrue();
         result.Prompt!.CompositionalDeconstruction.Elements[0].Desc.Should().Contain("lower-left");
@@ -94,43 +95,61 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
     // ---- Model routing -------------------------------------------------------------------
 
     [Theory]
-    [InlineData(ModelTier.Sonnet, "claude-sonnet-4-6")]
-    [InlineData(ModelTier.Opus, "claude-opus-4-8")]
-    public async Task EnrichAsync_AnthropicTiers_PassTheExpectedModelId(ModelTier tier, string expectedModel)
+    [InlineData("claude-sonnet-4-6")]
+    [InlineData("claude-opus-4-8")]
+    [InlineData("a-model-invented-tomorrow")]
+    public async Task EnrichAsync_AnthropicTarget_CallsTheModelItWasHanded(string modelId)
     {
         string? seenModel = null;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, modelId, _, _, _, _, _, _) => { seenModel = modelId; return Task.FromResult(EnrichedJson); });
+            (target, _, _, _, _, _) => { seenModel = target.ModelId; return Task.FromResult(EnrichedJson); });
 
-        await sut.EnrichAsync(Base, tier);
+        await sut.EnrichAsync(Base, new LlmTarget(ModelProvider.Anthropic, modelId, string.Empty));
 
-        seenModel.Should().Be(expectedModel);
+        seenModel.Should().Be(modelId);
     }
 
     [Fact]
-    public async Task EnrichAsync_LocalTier_UsesOllamaModelAndBaseUrl_AndNeedsNoKey()
+    public async Task EnrichAsync_LocalTarget_UsesTheHandedModelAndEndpoint_AndNeedsNoKey()
     {
-        var uiStore = new Mock<IUiStateStore>();
-        uiStore.Setup(s => s.LoadOllamaModel()).Returns("qwen3");
-        uiStore.Setup(s => s.LoadOllamaBaseUrl()).Returns("http://host:11434");
-
-        ModelTier seenTier = ModelTier.Sonnet;
-        string? seenModel = null, seenBaseUrl = null, seenKey = "unset";
-        var sut = CreateSut(KeyStore(null),
-            (tier, modelId, apiKey, baseUrl, _, _, _, _) =>
+        LlmTarget seenTarget = default;
+        string? seenKey = "unset";
+        var sut = CreateSut(KeyStore(null), // no Anthropic key at all
+            (target, apiKey, _, _, _, _) =>
             {
-                seenTier = tier; seenModel = modelId; seenBaseUrl = baseUrl; seenKey = apiKey;
+                seenTarget = target;
+                seenKey = apiKey;
                 return Task.FromResult(EnrichedJson);
-            },
-            uiStore);
+            });
 
-        var result = await sut.EnrichAsync(Base, ModelTier.Local);
+        var result = await sut.EnrichAsync(Base, Local("qwen3", "http://host:11434"));
 
-        result.Success.Should().BeTrue("the Local tier needs no Anthropic key");
-        seenTier.Should().Be(ModelTier.Local);
-        seenModel.Should().Be("qwen3");
-        seenBaseUrl.Should().Be("http://host:11434");
+        result.Success.Should().BeTrue("a local call needs no provider key");
+        seenTarget.Provider.Should().Be(ModelProvider.Local);
+        seenTarget.ModelId.Should().Be("qwen3");
+        seenTarget.BaseUrl.Should().Be("http://host:11434");
         seenKey.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task EnrichAsync_NoModelSelected_RefusesAndNamesOllama()
+    {
+        var sut = CreateSut(KeyStore(null), NeverCalled);
+
+        var result = await sut.EnrichAsync(Base, Local(model: ""));
+
+        result.Error.Should().Contain("Ollama model selected");
+    }
+
+    [Fact]
+    public async Task EnrichAsync_OpenRouterTarget_WithoutAnOpenRouterKey_NamesOpenRouter()
+    {
+        var sut = CreateSut(KeyStore("sk-ant"), NeverCalled);
+
+        var result = await sut.EnrichAsync(
+            Base, new LlmTarget(ModelProvider.OpenRouter, "some-model", string.Empty));
+
+        result.Error.Should().Contain("OpenRouter API key");
     }
 
     [Fact]
@@ -138,9 +157,9 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
     {
         var called = false;
         var sut = CreateSut(KeyStore(null),
-            (_, _, _, _, _, _, _, _) => { called = true; return Task.FromResult(EnrichedJson); });
+            (_, _, _, _, _, _) => { called = true; return Task.FromResult(EnrichedJson); });
 
-        var result = await sut.EnrichAsync(Base, ModelTier.Sonnet);
+        var result = await sut.EnrichAsync(Base, Sonnet);
 
         result.Success.Should().BeFalse();
         result.Error.Should().Contain("API key");
@@ -155,9 +174,9 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
         var seen = new List<IReadOnlyList<ImageGenerator.MAUI.Infrastructure.External.Anthropic.ChatTurn>>();
         var call = 0;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, messages, _, _) => { seen.Add(messages); return Task.FromResult(call++ == 0 ? ValidationFailJson : EnrichedJson); });
+            (_, _, _, messages, _, _) => { seen.Add(messages); return Task.FromResult(call++ == 0 ? ValidationFailJson : EnrichedJson); });
 
-        var result = await sut.EnrichAsync(Base, ModelTier.Sonnet);
+        var result = await sut.EnrichAsync(Base, Sonnet);
 
         result.Success.Should().BeTrue();
         seen.Should().HaveCount(2);
@@ -170,9 +189,9 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
     {
         var calls = 0;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, _, _, _) => { calls++; return Task.FromResult(ValidationFailJson); });
+            (_, _, _, _, _, _) => { calls++; return Task.FromResult(ValidationFailJson); });
 
-        var result = await sut.EnrichAsync(Base, ModelTier.Sonnet);
+        var result = await sut.EnrichAsync(Base, Sonnet);
 
         result.Success.Should().BeFalse();
         calls.Should().Be(2);
@@ -183,9 +202,9 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
     {
         var calls = 0;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, _, _, _) => { calls++; return Task.FromResult("not json {"); });
+            (_, _, _, _, _, _) => { calls++; return Task.FromResult("not json {"); });
 
-        var result = await sut.EnrichAsync(Base, ModelTier.Sonnet);
+        var result = await sut.EnrichAsync(Base, Sonnet);
 
         result.Success.Should().BeFalse();
         result.Error.Should().Contain("structured prompt");
@@ -196,9 +215,9 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
     public async Task EnrichAsync_TransportThrows_FailsGracefully()
     {
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, _, _, _) => throw new HttpRequestException("network down"));
+            (_, _, _, _, _, _) => throw new HttpRequestException("network down"));
 
-        var result = await sut.EnrichAsync(Base, ModelTier.Sonnet);
+        var result = await sut.EnrichAsync(Base, Sonnet);
 
         result.Success.Should().BeFalse();
         result.Error.Should().Contain("couldn't reach the model");
@@ -218,9 +237,9 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
         };
         var calls = 0;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, _, _, _) => { calls++; return Task.FromResult(reply); });
+            (_, _, _, _, _, _) => { calls++; return Task.FromResult(reply); });
 
-        var result = await sut.EnrichAsync(Base, ModelTier.Sonnet);
+        var result = await sut.EnrichAsync(Base, Sonnet);
 
         result.Success.Should().BeTrue("preserved fields are spliced from the original, never validated away");
         calls.Should().Be(1, "no retry needed — the model's preserved-field edit is simply ignored");
@@ -237,9 +256,9 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
         var baseCaption = V4JsonPromptSerializer.Deserialize(CurlyBaseJson);
         var calls = 0;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, _, _, _) => { calls++; return Task.FromResult(CurlyStraightenedReply); });
+            (_, _, _, _, _, _) => { calls++; return Task.FromResult(CurlyStraightenedReply); });
 
-        var result = await sut.EnrichAsync(baseCaption, ModelTier.Sonnet);
+        var result = await sut.EnrichAsync(baseCaption, Sonnet);
 
         result.Success.Should().BeTrue("preserved fields come from the original, so a straightened quote can't fail it");
         calls.Should().Be(1, "preserved fields are never compared against the model output");
@@ -263,9 +282,9 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
         };
         var calls = 0;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, _, _, _, _) => { calls++; return Task.FromResult(bad); });
+            (_, _, _, _, _, _) => { calls++; return Task.FromResult(bad); });
 
-        var result = await sut.EnrichAsync(Base, ModelTier.Sonnet);
+        var result = await sut.EnrichAsync(Base, Sonnet);
 
         result.Success.Should().BeFalse("a misaligned element list can't be spliced 1:1");
         calls.Should().Be(2, "the misalignment triggers the one feedback retry");
@@ -329,9 +348,9 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
 
         string? captured = null;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, system, _, _, _) => { captured = system; return Task.FromResult(EnrichedJson); });
+            (_, _, system, _, _, _) => { captured = system; return Task.FromResult(EnrichedJson); });
 
-        await sut.EnrichAsync(Base, ModelTier.Sonnet);
+        await sut.EnrichAsync(Base, Sonnet);
 
         captured.Should().Be("PRIVATE ENRICH OVERRIDE");
     }
@@ -341,9 +360,9 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
     {
         string? captured = null;
         var sut = CreateSut(KeyStore("sk-ant"),
-            (_, _, _, _, system, _, _, _) => { captured = system; return Task.FromResult(EnrichedJson); });
+            (_, _, system, _, _, _) => { captured = system; return Task.FromResult(EnrichedJson); });
 
-        await sut.EnrichAsync(Base, ModelTier.Sonnet);
+        await sut.EnrichAsync(Base, Sonnet);
 
         captured.Should().Be("BUNDLED ENRICH PROMPT");
     }
@@ -361,14 +380,32 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
     private EnrichRegionsLlmService CreateSut(
         Mock<IAnthropicTokenStore> tokenStore,
         EnrichRegionsLlmService.EnrichCompletion completion,
-        Mock<IUiStateStore>? uiStore = null) =>
+        string? openRouterKey = null) =>
         new(tokenStore.Object,
-            (uiStore ?? new Mock<IUiStateStore>()).Object,
+            OpenRouterKeyStore(openRouterKey).Object,
             NullLogger<EnrichRegionsLlmService>.Instance,
             completion,
             promptDirectoryOverride: _tempDir,
             assetOpener: FakeBundledAsset);
 
+    /// <summary>A completion that fails the test if the service reaches the model at all.</summary>
+    private static Task<string> NeverCalled(
+        LlmTarget target, string? apiKey, string systemPrompt,
+        IReadOnlyList<ChatTurn> messages, JsonElement schema, CancellationToken ct) =>
+        throw new InvalidOperationException("the service must refuse before calling a model");
+
+    /// <summary>The target the page hands this service for a Claude pick.</summary>
+    private static LlmTarget Sonnet => new(ModelProvider.Anthropic, AnthropicModels.Sonnet, string.Empty);
+
+    private static LlmTarget Local(string model, string baseUrl = "http://127.0.0.1:11434") =>
+        new(ModelProvider.Local, model, baseUrl);
+
+    private static Mock<IOpenRouterTokenStore> OpenRouterKeyStore(string? key)
+    {
+        var mock = new Mock<IOpenRouterTokenStore>();
+        mock.Setup(s => s.LoadAsync()).ReturnsAsync(key);
+        return mock;
+    }
     private static Mock<IAnthropicTokenStore> KeyStore(string? key)
     {
         var mock = new Mock<IAnthropicTokenStore>();

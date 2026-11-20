@@ -1,5 +1,6 @@
 using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
+using ImageGenerator.MAUI.Infrastructure.External.Ollama;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
 using ImageGenerator.MAUI.Shared.Constants;
@@ -275,6 +276,215 @@ public partial class GeneratorViewModelTests
     {
         _viewModel.Settings.OllamaModel.Should().BeEmpty("which models exist is per-server; guessing one only 404s");
         _viewModel.Settings.OllamaVisionModel.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RefreshOllamaModels_WhenTheHostIsNotOllama_BlamesTheServerNotTheConnection()
+    {
+        var vm = OllamaVm(out var catalog, out _);
+        vm.Settings.OllamaBaseUrl = "http://192.168.178.26:47832/v1";
+        catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new OllamaEndpointException("http://192.168.178.26:47832/v1/api/tags", 404));
+
+        await vm.Settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
+
+        var said = vm.Settings.OllamaServerStatus;
+        said.Should().NotBeNull();
+        said.Should().NotContain("Couldn't reach", "the host answered; an unreachable message sends the user after a cable");
+        said.Should().Contain("HTTP 404").And.Contain("/api/tags").And.Contain("not an Ollama server");
+        said.Should().Contain("/v1", "pasting an OpenAI-compatible root IS the mistake being made");
+        vm.StatusKind.Should().Be(StatusKind.Error);
+    }
+
+    [Fact]
+    public async Task RefreshOllamaModels_WhenTheConnectionIsRefused_StillReportsUnreachable()
+    {
+        var vm = OllamaVm(out var catalog, out _);
+        catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("target machine actively refused it"));
+
+        await vm.Settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
+
+        vm.Settings.OllamaServerStatus.Should().StartWith("Couldn't reach Ollama at ")
+            .And.NotContain("/api/tags", "nothing answered, so no route can be blamed");
+    }
+
+    // ---- Inline card status: the failure the user could not see -----------------------------
+    // Pointing the Ollama URL at a server that is merely *not* Ollama (an OpenAI-compatible host
+    // answers; /api/tags just 404s) used to produce a WARN in the log and nothing on screen:
+    // StatusMessage is drawn only by MainPage.xaml, while every one of these buttons lives on
+    // Settings or a sibling page. So the reporting is asserted on the card property now.
+
+    [Fact]
+    public async Task RefreshOllamaModels_WhenTheAnswerIsNotOllama_ReportsItOnTheCard()
+    {
+        var vm = OllamaVm(out var catalog, out _);
+        catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Ollama returned HTTP 404 listing models."));
+
+        await vm.Settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
+
+        vm.Settings.OllamaServerStatus.Should().NotBeNull("a pressed button must answer on its own page");
+        vm.Settings.OllamaServerStatus.Should().Contain("404");
+        vm.StatusKind.Should().Be(StatusKind.Error);
+    }
+
+    [Fact]
+    public async Task RefreshOllamaModels_WhenModelsAreFound_ReportsTheCountOnTheCard()
+    {
+        var vm = OllamaVm(out var catalog, out _);
+        catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([Model("llama3.1"), Model("gemma3:27b", vision: true)]);
+
+        await vm.Settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
+
+        // The card and the status bar carry one sentence, never two variants of it.
+        vm.Settings.OllamaServerStatus.Should().Be(vm.StatusMessage);
+        vm.Settings.OllamaServerStatus.Should().Contain("2 Ollama model(s)").And.Contain("1 with vision");
+        vm.StatusKind.Should().Be(StatusKind.Success);
+    }
+
+    [Fact]
+    public async Task RefreshOllamaModels_WhenNothingIsInstalled_ReportsItOnTheCard()
+    {
+        var vm = OllamaVm(out var catalog, out _);
+        catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        await vm.Settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
+
+        vm.Settings.OllamaServerStatus.Should().Be("No models installed on the Ollama server.");
+    }
+
+    // The silence this phase must NOT break: the session-start probe runs on page appearance, and a
+    // down server nagging on every navigation is its own bug. Only an explicit press reports.
+    [Fact]
+    public async Task EnsureOllamaModelsLoaded_WhenTheServerIsDown_StaysSilentOnTheCardToo()
+    {
+        var vm = OllamaVm(out var catalog, out _);
+        catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("unreachable"));
+
+        await vm.Settings.EnsureOllamaModelsLoadedAsync();
+
+        vm.Settings.OllamaServerStatus.Should().BeNull("the automatic probe must not announce");
+    }
+
+    [Fact]
+    public async Task OllamaBaseUrl_WhenEdited_RetiresThePreviousVerdict()
+    {
+        var vm = OllamaVm(out var catalog, out _);
+        catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Ollama returned HTTP 404 listing models."));
+        await vm.Settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
+        vm.Settings.OllamaServerStatus.Should().NotBeNullOrEmpty();
+
+        vm.Settings.OllamaBaseUrl = "http://localhost:11434";
+
+        vm.Settings.OllamaServerStatus.Should().BeNull(
+            "a corrected URL must not still read \"still not Ollama\" from the URL it replaces");
+    }
+
+    [Fact]
+    public async Task RefreshOpenRouterVisionModels_WhenItThrows_ReportsItOnTheCard()
+    {
+        _mockOpenRouterModelCatalog
+            .Setup(c => c.ListVisionModelsAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("HTTP 401"));
+
+        await _viewModel.Settings.RefreshOpenRouterVisionModelsCommand.ExecuteAsync(null);
+
+        _viewModel.Settings.OpenRouterVisionStatus.Should().Contain("401");
+        _viewModel.Settings.OpenRouterVisionStatus.Should().Be(_viewModel.StatusMessage);
+        _viewModel.StatusKind.Should().Be(StatusKind.Error);
+    }
+
+    // ---- One model per LLM role (plan-model-picker-rows.md, Phase A) ---------------------
+    // Four pages bound Settings.OllamaModel two-way, so choosing a cheap tag to verify a caption
+    // mutation also changed the model the generate button renders with. These pin the split.
+
+    [Fact]
+    public void Settings_RoleModelPicks_AreSeparateValues()
+    {
+        var settings = _viewModel.Settings;
+
+        settings.OllamaModel = "flux-schnell";
+        settings.MutationModel = "llama3.1";
+        settings.PromptWriterModel = "qwen3";
+        settings.EnrichModel = "gemma3:27b";
+
+        settings.OllamaModel.Should().Be("flux-schnell");
+        settings.MutationModel.Should().Be("llama3.1");
+        settings.PromptWriterModel.Should().Be("qwen3");
+        settings.EnrichModel.Should().Be("gemma3:27b");
+    }
+
+    [Theory]
+    [InlineData("mutation")]
+    [InlineData("writer")]
+    [InlineData("enrich")]
+    public void RoleModel_WhenChanged_PersistsToItsOwnKeyOnly(string role)
+    {
+        // The cross-talk this plan exists for was four Pickers writing one key; a role quietly
+        // writing the GENERATION key instead is the same bug with the arrows reversed, and every
+        // other test here stays green through it. A falsification run proved exactly that.
+        var settings = _viewModel.Settings;
+        switch (role)
+        {
+            case "mutation": settings.MutationModel = "llama3.1"; break;
+            case "writer": settings.PromptWriterModel = "qwen3"; break;
+            default: settings.EnrichModel = "gemma3:27b"; break;
+        }
+
+        switch (role)
+        {
+            case "mutation":
+                _mockUiStateStore.Verify(s => s.PersistMutationModel("llama3.1"), Times.Once);
+                break;
+            case "writer":
+                _mockUiStateStore.Verify(s => s.PersistPromptWriterModel("qwen3"), Times.Once);
+                break;
+            default:
+                _mockUiStateStore.Verify(s => s.PersistEnrichModel("gemma3:27b"), Times.Once);
+                break;
+        }
+
+        _mockUiStateStore.Verify(s => s.PersistOllamaModel(It.IsAny<string>()), Times.Never,
+            "a role pick must never reach the key the generate button reads");
+    }
+
+    [Fact]
+    public void LoadSavedUiState_RestoresEachRolePickSeparately()
+    {
+        _mockUiStateStore.Setup(s => s.LoadPromptWriterModel()).Returns("qwen3");
+        _mockUiStateStore.Setup(s => s.LoadMutationModel()).Returns("llama3.1");
+        _mockUiStateStore.Setup(s => s.LoadEnrichModel()).Returns("gemma3:27b");
+
+        _viewModel.LoadSavedUiState();
+
+        _viewModel.Settings.PromptWriterModel.Should().Be("qwen3");
+        _viewModel.Settings.MutationModel.Should().Be("llama3.1");
+        _viewModel.Settings.EnrichModel.Should().Be("gemma3:27b");
+        // A Picker declines an item its ItemsSource does not contain, and startup has asked no server
+        // for a list yet — so a saved tag joins the options rather than being dropped.
+        _viewModel.Settings.OllamaModels.Should().Contain(["qwen3", "llama3.1", "gemma3:27b"]);
+    }
+
+    [Fact]
+    public async Task RefreshOllamaModels_ClearsEveryRoleThatPickedAGoneModel()
+    {
+        var vm = OllamaVm(out var catalog, out var store);
+        catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([Model("gemma3:27b", vision: true)]);
+        vm.Settings.MutationModel = "deleted-on-server";
+        vm.Settings.EnrichModel = "gemma3:27b";
+
+        await vm.Settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
+
+        vm.Settings.MutationModel.Should().BeEmpty("a role naming a model the server dropped fails later as an opaque 404");
+        vm.Settings.EnrichModel.Should().Be("gemma3:27b", "the other role picked a model still installed");
+        store.Verify(s => s.PersistMutationModel(string.Empty), Times.Once);
+        vm.StatusMessage.Should().Contain("deleted-on-server").And.Contain("no longer installed");
     }
 
     private static OllamaModelInfo Model(string name, bool vision = false) =>

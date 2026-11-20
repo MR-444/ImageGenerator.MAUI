@@ -16,14 +16,14 @@ public interface IPromptBuilderService
     /// <summary>Pass 1: idea → a normal prose image prompt (no JSON, no validator). Usable on its own.</summary>
     Task<ProseResult> BuildProseAsync(
         string idea,
-        CancellationToken cancellationToken = default,
-        ModelTier tier = ModelTier.Opus);
+        LlmTarget target,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Pass 2: prose → a schema-valid Ideogram V4 structured prompt (structured output + validate-retry).</summary>
     Task<PromptBuilderResult> BuildJsonAsync(
         string proseInner,
-        CancellationToken cancellationToken = default,
-        ModelTier tier = ModelTier.Opus);
+        LlmTarget target,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>Outcome of the VPE pass: either a prose prompt or a user-facing error.</summary>
