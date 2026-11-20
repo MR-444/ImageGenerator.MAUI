@@ -11,6 +11,8 @@
             </ResourceDictionary.MergedDictionaries>
             <converters:StringToEnumConverter x:Key="StringToEnumConverter" />
             <converters:IntGreaterThanZeroConverter x:Key="IntGreaterThanZero" />
+            <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
+            <converters:InverseBoolConverter x:Key="InverseBool" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

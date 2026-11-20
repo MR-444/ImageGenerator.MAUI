@@ -11,9 +11,7 @@
              Padding="0">
     <ContentPage.Resources>
         <ResourceDictionary>
-            <converters:InverseBoolConverter x:Key="InverseBool" />
             <converters:ShellThumbnailConverter x:Key="ShellThumbnail" />
-            <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
         </ResourceDictionary>
     </ContentPage.Resources>
 

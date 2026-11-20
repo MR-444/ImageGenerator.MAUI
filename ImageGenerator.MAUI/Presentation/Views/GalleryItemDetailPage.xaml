@@ -10,7 +10,6 @@
              Padding="0">
     <ContentPage.Resources>
         <ResourceDictionary>
-            <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
             <converters:ShellPreviewConverter x:Key="ShellPreview" />
         </ResourceDictionary>
     </ContentPage.Resources>

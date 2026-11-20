@@ -12,8 +12,6 @@
              Padding="0">
     <ContentPage.Resources>
         <ResourceDictionary>
-            <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
-            <converters:InverseBoolConverter x:Key="InverseBool" />
             <converters:ResolutionAspectRatioConverter x:Key="ResolutionAspectRatio" />
             <converters:BoolToChevronConverter x:Key="BoolToChevron" />
         </ResourceDictionary>

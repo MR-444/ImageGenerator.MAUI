@@ -54,6 +54,34 @@ public class UiMarkupContractTests
         }
     }
 
+    /// <summary>
+    /// The converters a reusable control needs are declared once, in application resources. A per-page
+    /// copy is more than duplication: it shadows the application instance for that page only, so the
+    /// same control could bind on the page that declares its own copy and show an unbound, permanently
+    /// hidden status label on every other page - a failure with no compile error and no runtime warning.
+    /// </summary>
+    [Fact]
+    public void SharedConverters_AreDeclaredOnceInApplicationResources()
+    {
+        var applicationKeys = ResourceKeys(
+            XDocument.Load(Path.Combine(AppContext.BaseDirectory, "TestAssets", "App.xaml")));
+        string[] shared = ["NonEmptyStringToBool", "InverseBool"];
+
+        applicationKeys.Should().Contain(shared,
+            "a control has no page resources of its own, so application scope is the only place both "
+            + "pages and controls reach");
+
+        foreach (var asset in PageAssets)
+        {
+            var pageKeys = ResourceKeys(
+                XDocument.Load(Path.Combine(AppContext.BaseDirectory, "TestAssets", asset)));
+
+            pageKeys.Should().NotContain(shared,
+                $"{asset} must not re-declare a shared converter, or the control that relies on the "
+                + "application instance silently breaks on every other page");
+        }
+    }
+
     [Fact]
     public void StudioShell_ExposesCreateGalleryAndSettingsRail()
     {

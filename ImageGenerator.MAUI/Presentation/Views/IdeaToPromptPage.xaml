@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:converters="clr-namespace:ImageGenerator.MAUI.Presentation.Converters"
              xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
              x:Class="ImageGenerator.MAUI.Presentation.Views.IdeaToPromptPage"
              x:DataType="vm:IdeaToPromptViewModel"
@@ -10,8 +9,6 @@
              Padding="0">
     <ContentPage.Resources>
         <ResourceDictionary>
-            <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
-            <converters:InverseBoolConverter x:Key="InverseBool" />
 
             <!-- Base look for a segmented-toggle button; the active segment is filled via a
                  per-button DataTrigger keyed on the VM's IsTextSource / IsImageSource. -->

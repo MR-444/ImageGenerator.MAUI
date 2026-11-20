@@ -12,8 +12,6 @@
     <ContentPage.Resources>
         <ResourceDictionary>
             <converters:StringToEnumConverter x:Key="StringToEnumConverter" />
-            <converters:InverseBoolConverter x:Key="InverseBool" />
-            <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
             <converters:ResolutionAspectRatioConverter x:Key="ResolutionAspectRatio" />
         </ResourceDictionary>
     </ContentPage.Resources>
