@@ -188,8 +188,8 @@
                                   ColumnSpacing="8"
                                   IsVisible="{Binding IsLocalVisionProvider}">
                                 <Picker Grid.Column="0"
-                                        ItemsSource="{Binding Generator.OllamaVisionModels}"
-                                        SelectedItem="{Binding Generator.OllamaVisionModel, Mode=TwoWay}"
+                                        ItemsSource="{Binding Generator.Settings.OllamaVisionModels}"
+                                        SelectedItem="{Binding Generator.Settings.OllamaVisionModel, Mode=TwoWay}"
                                         Title="Refresh, then pick a vision model…"
                                         IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                                         MaximumWidthRequest="360"
@@ -197,7 +197,7 @@
                                         AutomationId="IdeaPromptOllamaVisionModelPicker" />
                                 <Button Grid.Column="1"
                                         Text="Refresh"
-                                        Command="{Binding Generator.RefreshOllamaModelsCommand}"
+                                        Command="{Binding Generator.Settings.RefreshOllamaModelsCommand}"
                                         IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                                         Style="{StaticResource SecondaryButton}"
                                         AutomationId="IdeaPromptOllamaVisionRefreshButton" />
@@ -210,8 +210,8 @@
                                   ColumnSpacing="8"
                                   IsVisible="{Binding IsOpenRouterVisionProvider}">
                                 <Picker Grid.Column="0"
-                                        ItemsSource="{Binding Generator.OpenRouterVisionModels}"
-                                        SelectedItem="{Binding Generator.OpenRouterVisionModel, Mode=TwoWay}"
+                                        ItemsSource="{Binding Generator.Settings.OpenRouterVisionModels}"
+                                        SelectedItem="{Binding Generator.Settings.OpenRouterVisionModel, Mode=TwoWay}"
                                         Title="Refresh, then pick a vision model…"
                                         IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                                         MaximumWidthRequest="360"
@@ -219,7 +219,7 @@
                                         AutomationId="IdeaPromptOpenRouterVisionModelPicker" />
                                 <Button Grid.Column="1"
                                         Text="Refresh"
-                                        Command="{Binding Generator.RefreshOpenRouterVisionModelsCommand}"
+                                        Command="{Binding Generator.Settings.RefreshOpenRouterVisionModelsCommand}"
                                         IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                                         Style="{StaticResource SecondaryButton}"
                                         AutomationId="IdeaPromptOpenRouterVisionRefreshButton" />
@@ -233,7 +233,7 @@
                                            Style="{StaticResource HelperText}" />
                                 </VerticalStackLayout>
                                 <Switch Grid.Column="1"
-                                        IsToggled="{Binding Generator.OpenRouterVisionFreeOnly, Mode=TwoWay}"
+                                        IsToggled="{Binding Generator.Settings.OpenRouterVisionFreeOnly, Mode=TwoWay}"
                                         IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                                         VerticalOptions="Center"
                                         AutomationId="IdeaPromptOpenRouterVisionFreeOnlySwitch" />
@@ -294,8 +294,8 @@
                                 <Label Text="Local model (Ollama)" Style="{StaticResource FieldLabel}" />
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <Picker Grid.Column="0"
-                                            ItemsSource="{Binding Generator.OllamaModels}"
-                                            SelectedItem="{Binding Generator.OllamaModel, Mode=TwoWay}"
+                                            ItemsSource="{Binding Generator.Settings.OllamaModels}"
+                                            SelectedItem="{Binding Generator.Settings.OllamaModel, Mode=TwoWay}"
                                             Title="Refresh, then pick a model…"
                                             IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                                             MaximumWidthRequest="360"
@@ -303,7 +303,7 @@
                                             AutomationId="IdeaPromptOllamaModelPicker" />
                                     <Button Grid.Column="1"
                                             Text="Refresh"
-                                            Command="{Binding Generator.RefreshOllamaModelsCommand}"
+                                            Command="{Binding Generator.Settings.RefreshOllamaModelsCommand}"
                                             IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                                             Style="{StaticResource SecondaryButton}"
                                             AutomationId="IdeaPromptOllamaRefreshButton" />

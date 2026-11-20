@@ -83,7 +83,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _generator = generator;
-        _settings = new(generator);
+        _settings = new(generator?.Settings);
         _clipboard = clipboard;
         _mutationLlm = mutationLlm;
         _ollamaCatalog = ollamaCatalog;

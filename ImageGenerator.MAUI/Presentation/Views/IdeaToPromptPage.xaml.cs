@@ -36,7 +36,7 @@ public partial class IdeaToPromptPage
     {
         base.OnAppearing();
         if (BindingContext is IdeaToPromptViewModel { Generator: { } generator })
-            _ = generator.EnsureOllamaModelsLoadedAsync();
+            _ = generator.Settings.EnsureOllamaModelsLoadedAsync();
     }
 
     private async void OnBackClicked(object? sender, EventArgs e)

@@ -51,7 +51,7 @@
                          (System), 1=Light, 2=Dark — keep this order in sync with AppThemeIndex. -->
                     <Label Text="Choose the color theme. System follows your Windows setting."
                            Style="{StaticResource HelperText}" />
-                    <Picker SelectedIndex="{Binding AppThemeIndex, Mode=TwoWay}"
+                    <Picker SelectedIndex="{Binding Settings.AppThemeIndex, Mode=TwoWay}"
                             MaximumWidthRequest="180"
                             HorizontalOptions="Start"
                             SemanticProperties.Description="Color theme"
@@ -115,7 +115,7 @@
                     <!-- Non-secret server setting, not a token: plain Preferences-backed Entry. -->
                     <Label Text="URL of your ComfyUI instance (no token needed) — local default, or a LAN host started with --listen."
                            Style="{StaticResource HelperText}" />
-                    <Entry Text="{Binding ComfyUiBaseUrl, Mode=TwoWay}"
+                    <Entry Text="{Binding Settings.ComfyUiBaseUrl, Mode=TwoWay}"
                            Placeholder="http://127.0.0.1:8188"
                            Keyboard="Url"
                            SemanticProperties.Description="Base URL of the ComfyUI server"
@@ -128,7 +128,7 @@
                                    Style="{StaticResource HelperText}" />
                         </VerticalStackLayout>
                         <Switch Grid.Column="1"
-                                IsToggled="{Binding UseSageAttention, Mode=TwoWay}"
+                                IsToggled="{Binding Settings.UseSageAttention, Mode=TwoWay}"
                                 VerticalOptions="Center"
                                 SemanticProperties.Description="Use SageAttention for compatible ComfyUI workflows"
                                 AutomationId="UseSageAttentionSwitch" />
@@ -141,7 +141,7 @@
                                    Style="{StaticResource HelperText}" />
                         </VerticalStackLayout>
                         <Switch Grid.Column="1"
-                                IsToggled="{Binding FreeVramAfterRendering, Mode=TwoWay}"
+                                IsToggled="{Binding Settings.FreeVramAfterRendering, Mode=TwoWay}"
                                 VerticalOptions="Center"
                                 SemanticProperties.Description="Free ComfyUI GPU memory after rendering"
                                 AutomationId="FreeVramAfterRenderingSwitch" />
@@ -158,7 +158,7 @@
                          without paying Anthropic. No token needed; output quality depends on the model. -->
                     <Label Text="Local Ollama server for the prompt builder and AI tools' Local tier — a free path with no token. Output quality depends on the installed model."
                            Style="{StaticResource HelperText}" />
-                    <Entry Text="{Binding OllamaBaseUrl, Mode=TwoWay}"
+                    <Entry Text="{Binding Settings.OllamaBaseUrl, Mode=TwoWay}"
                            Placeholder="http://fireengine:11434"
                            Keyboard="Url"
                            SemanticProperties.Description="Base URL of the local Ollama server"
@@ -167,8 +167,8 @@
                     <!-- Refresh pulls the installed models from the server; pick one. -->
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                         <Picker Grid.Column="0"
-                                ItemsSource="{Binding OllamaModels}"
-                                SelectedItem="{Binding OllamaModel, Mode=TwoWay}"
+                                ItemsSource="{Binding Settings.OllamaModels}"
+                                SelectedItem="{Binding Settings.OllamaModel, Mode=TwoWay}"
                                 Title="Refresh, then pick a model…"
                                 MaximumWidthRequest="360"
                                 HorizontalOptions="Start"
@@ -176,14 +176,14 @@
                                 AutomationId="OllamaModelPicker" />
                         <Button Grid.Column="1"
                                 Text="Refresh"
-                                Command="{Binding RefreshOllamaModelsCommand}"
+                                Command="{Binding Settings.RefreshOllamaModelsCommand}"
                                 Style="{StaticResource SecondaryButton}"
                                 SemanticProperties.Description="List models from the Ollama server"
                                 AutomationId="OllamaModelRefreshButton" />
                     </Grid>
                     <Label Text="Vision model" Style="{StaticResource FieldLabel}" />
-                    <Picker ItemsSource="{Binding OllamaVisionModels}"
-                            SelectedItem="{Binding OllamaVisionModel, Mode=TwoWay}"
+                    <Picker ItemsSource="{Binding Settings.OllamaVisionModels}"
+                            SelectedItem="{Binding Settings.OllamaVisionModel, Mode=TwoWay}"
                             Title="Refresh, then pick a vision model…"
                             MaximumWidthRequest="360"
                             HorizontalOptions="Start"
@@ -203,8 +203,8 @@
                            Style="{StaticResource HelperText}" />
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                         <Picker Grid.Column="0"
-                                ItemsSource="{Binding OpenRouterVisionModels}"
-                                SelectedItem="{Binding OpenRouterVisionModel, Mode=TwoWay}"
+                                ItemsSource="{Binding Settings.OpenRouterVisionModels}"
+                                SelectedItem="{Binding Settings.OpenRouterVisionModel, Mode=TwoWay}"
                                 Title="Refresh, then pick a model…"
                                 MaximumWidthRequest="360"
                                 HorizontalOptions="Start"
@@ -212,7 +212,7 @@
                                 AutomationId="OpenRouterVisionModelPicker" />
                         <Button Grid.Column="1"
                                 Text="Refresh"
-                                Command="{Binding RefreshOpenRouterVisionModelsCommand}"
+                                Command="{Binding Settings.RefreshOpenRouterVisionModelsCommand}"
                                 Style="{StaticResource SecondaryButton}"
                                 SemanticProperties.Description="List OpenRouter vision models"
                                 AutomationId="OpenRouterVisionModelRefreshButton" />
@@ -224,7 +224,7 @@
                                    Style="{StaticResource HelperText}" />
                         </VerticalStackLayout>
                         <Switch Grid.Column="1"
-                                IsToggled="{Binding OpenRouterVisionFreeOnly, Mode=TwoWay}"
+                                IsToggled="{Binding Settings.OpenRouterVisionFreeOnly, Mode=TwoWay}"
                                 VerticalOptions="Center"
                                 SemanticProperties.Description="Show free OpenRouter vision models only"
                                 AutomationId="OpenRouterVisionFreeOnlySwitch" />
@@ -241,13 +241,13 @@
                            Style="{StaticResource HelperText}" />
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                         <Entry Grid.Column="0"
-                               Text="{Binding OutputFolder, Mode=TwoWay}"
+                               Text="{Binding Settings.OutputFolder, Mode=TwoWay}"
                                Placeholder="Pictures\ImageGenerator.MAUI"
                                SemanticProperties.Description="Folder where generated images are saved"
                                AutomationId="OutputFolderEntry" />
                         <Button Grid.Column="1"
                                 Text="Browse…"
-                                Command="{Binding BrowseOutputFolderCommand}"
+                                Command="{Binding Settings.BrowseOutputFolderCommand}"
                                 Style="{StaticResource SecondaryButton}"
                                 SemanticProperties.Description="Choose the output folder"
                                 AutomationId="OutputFolderBrowseButton" />

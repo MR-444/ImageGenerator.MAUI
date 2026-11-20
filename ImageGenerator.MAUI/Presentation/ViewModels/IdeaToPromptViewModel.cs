@@ -60,7 +60,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _generator = generator;
-        _settings = new GeneratorSettingsReader(generator);
+        _settings = new GeneratorSettingsReader(generator?.Settings);
         _ollamaCatalog = ollamaCatalog;
         _gpuGate = gpuGate;
         _visionObserver = visionObserver;

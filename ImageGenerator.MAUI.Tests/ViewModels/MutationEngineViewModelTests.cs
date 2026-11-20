@@ -529,7 +529,7 @@ public class MutationEngineViewModelTests
     {
         var catalog = new StubOllamaCatalog();
         var generator = BuildGenerator("http://comfy.example:8188", "http://ollama.example:11434");
-        generator.OllamaModel = "qwen2.5-vl:7b";
+        generator.Settings.OllamaModel = "qwen2.5-vl:7b";
         var sut = CreateSutWithAiAndGate(
             new FailingMutationLlm(), catalog, new FakeGpuGate(), generator);
         sut.SetBaseForTest(MutationTestData.BaseCaption());
@@ -552,7 +552,7 @@ public class MutationEngineViewModelTests
     {
         var catalog = new StubOllamaCatalog();
         var generator = BuildGenerator("http://comfy.example:8188", "");
-        generator.OllamaModel = "qwen2.5-vl:7b";
+        generator.Settings.OllamaModel = "qwen2.5-vl:7b";
         var sut = CreateSutWithAiAndGate(
             new FailingMutationLlm(), catalog, new FakeGpuGate(), generator);
         sut.SetBaseForTest(MutationTestData.BaseCaption());
@@ -652,8 +652,9 @@ public class MutationEngineViewModelTests
             Mock.Of<IFolderPicker>(),
             NullLogger<GeneratorViewModel>.Instance)
         {
-            ComfyUiBaseUrl = comfyUrl,
-            OllamaBaseUrl = ollamaUrl
+            // Settings moved to AppSettingsCoordinator; a nested initializer keeps
+            // the one-expression shape these helpers had.
+            Settings = { ComfyUiBaseUrl = comfyUrl, OllamaBaseUrl = ollamaUrl }
         };
         return gen;
     }

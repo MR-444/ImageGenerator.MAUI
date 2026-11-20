@@ -1,7 +1,10 @@
 # GeneratorViewModel refactor — **Phase 2**: `AppSettingsCoordinator`, exposed as `Generator.Settings`
 
-**Status**: planned, no Phase 2 code written. Tree green — **1,427 passed / 0 failed / 0 skipped**, app
-builds 0 warnings / 0 errors.
+**Status**: **Phase 2 implemented in the working tree, not yet committed.** `AppSettingsCoordinator.cs`
+exists (476 lines, 10 `[ObservableProperty]`, 4 `[RelayCommand]`, 6 ctor params) and is exposed as
+`Generator.Settings`; `GeneratorViewModel` is **1,594 lines** with 23 observables, 8 commands and still
+**21 ctor params** (rule 5). Tree green — **1,561 passed / 0 failed / 0 skipped**, app builds 0 warnings
+/ 0 errors and 0 `MAUIG2045`. No §1 rule changed; §11 records the four measurements that did.
 
 **This file is Phase 2 only.** The complete Phase 1 record — the extraction itself, its measured blast
 radius, the seven corrections to that plan, and Prep A/B/C as written up — is archived verbatim at
@@ -270,39 +273,21 @@ figure this replaced ("53") could not be.
 
 ## 8. Method and invariants inherited from Phase 1 (do not re-derive these)
 
-- **Binding paths are not build-validated in this project.** Measured with a control, full
-  `-t:Rebuild` each time: `{Binding DefinitelyNotAProperty12345}` → *build succeeded, 0 warnings, 0
-  errors*; `<Label BogusPropertyName="x">` → *build succeeded*; malformed XML → `error MAUIG1001`. So
-  neither paths nor member names are validated, only XAML **structure**.
-  `MauiEnableXamlCBindingWithSourceCompilation=true` (`csproj:18`) is a misleading leftover — it feeds
-  `XamlCTask CompileBindingsWithSource` and the `RuntimeFeature` switch, but validating names is not
-  what the pipeline does. **No configuration buys build-time markup safety here; the reflection guard
-  test is the only machine check that will ever exist for a binding path.** Do not spend another
-  investigation on "just turn it on".
-- **A stale build hides XAML edits.** `UiMarkupContractTests` reads its pages from `bin/…/TestAssets`,
-  build-time copies (`Link="TestAssets\…Page.xaml" CopyToOutputDirectory="PreserveNewest"`,
-  `ImageGenerator.MAUI.Tests.csproj:44-58`). `dotnet test --no-build` after a XAML edit tests the
-  **previous** markup. Never verify a XAML change without building.
-- **Nested binding paths notify in this app already** (Phase 1's H3). `{Binding Settings.OutputFolder}`
-  and the sibling `Generator.Settings.OllamaModel` double hop rely on the binding engine subscribing to
-  the *intermediate* segment — proven live by `{Binding ProviderFilter.SelectedModel}`
-  (`MainPage.xaml:62`) and `{Binding InputImages.CanAddImage}` (`:180`), both raised from inside their
-  coordinators. No `OnPropertyChanged("Settings")` re-raise is needed; do not flatten the design to
-  avoid a nesting level that already works.
-- **Repath `Path=`, never `AutomationId`** (Phase 1's H8). **175** `AutomationId`s sit on exactly the
-  five pages being repathed (MainPage 48, SettingsPage 24, IdeaToPrompt 35, MutationEngine 23,
-  IdeogramStructureEditor 45), often on the *same element* as the binding being rewritten — e.g.
-  `UpscaleAfterRenderCheckBox`. The ids are the manual- and UI-test hooks; rewriting them silently
-  breaks tooling no test will report.
-- **Verbatim move beats hand transcription.** Expose what the moved body already calls (Phase 1 gave
-  its coordinator a private `Parameters` plus same-named fields) so bodies compile unchanged instead of
-  a find/replace across 40 sites. Pattern: `git show cdb46c5`.
-- **`UiDispatcher` runs synchronously when `MainThread` throws** (unit tests, no WinRT) — which is why
-  tests can drive these view-model and coordinator methods directly, and why `AppSettingsCoordinator`
-  needs no dispatcher abstraction of its own.
-- **Encoding is part of the diff.** Every touched file stays UTF-8 without BOM, CRLF. Phase 1 produced
-  `\r\r\n` in `MainPage.xaml` from an intermediate script — caught and reverted, but it turned a 22-line
-  diff into 727. Check the line endings of any file a repath script writes.
+- **An unresolved binding path is build-WARNED, never build-failed.** Re-controlled on this tree
+  (SDK 11.0.100) the way the original control was run: one bogus path injected into
+  `SettingsPage.xaml`, full `-t:Rebuild` → **4 × `MAUIG2045` “Binding: Property
+  'BogusNotAProperty12345' not found on GeneratorViewModel”**, naming page, line and column — and
+  `0 Error(s)`. The control quoted at the end of this bullet no longer reproduces (§11), so the operative half of this rule
+  survives for a different reason: a warning gates nothing unless someone counts it, which is why
+  `UiMarkupContractTests.PageLevelBindings_ResolveAgainstTheViewModelGraph` is still the only machine
+  check that *fails* on a bad path. Use both — `grep -c MAUIG2045` over the build log is a precise
+  repath checklist (it named exactly the 33 bindings this phase moved, and fell to 0 once they moved),
+  the guard test is the gate. `MauiEnableXamlCBindingWithSourceCompilation=true` (`csproj:18`) is still
+  not the lever; there is nothing further to switch on.
+  *(Historical control, kept because the whole plan was built on it: measured at `b6b795a` with full
+  `-t:Rebuild` each time,* `{Binding DefinitelyNotAProperty12345}` *→ build succeeded, 0 warnings, 0
+  errors;* `<Label BogusPropertyName="x">` *→ build succeeded; malformed XML →* `error MAUIG1001` *— so
+  only XAML **structure** was validated then.)*
 
 ---
 
@@ -372,6 +357,39 @@ what the §4 measurement rule is for, and it now applies to this section as much
 ---
 
 ## 11. Corrections applied to this plan
+
+### Added by Phase 2 itself (measured on the tree it landed on, 32 commits after `b6b795a`)
+
+- **§8's "binding paths are not build-validated" is superseded.** A bogus path now yields `MAUIG2045`
+  even on a clean `-t:Rebuild` (4 warnings, 0 errors). §8 rewritten. The guard test was separately
+  proven live: a deliberately broken copy of `SettingsPage.xaml` placed in `bin/…/TestAssets` made
+  exactly `PageLevelBindings_ResolveAgainstTheViewModelGraph("SettingsPage.xaml")` fail (line 170),
+  nothing else.
+- **Inbound reads of region D: 1 → 2.** §3 counted only `MaybeFreeComfyUiVramAsync`. `RunJobAsync`
+  reads `ComfyUiBaseUrl` **and** `OllamaBaseUrl` for the `GpuColocation.SameHost` GPU gate, so the cut
+  rewrites three inbound reads, not one. Skipped in silence this does not fail: the coordinator's
+  defaults are non-null, so co-location keeps comparing a real URL against a default and the GPU gate
+  simply stops matching — no exception, no red test.
+- **Gate 1,427 → 1,561.** 32 commits of test growth (1,240 → 1,331 `Fact`/`Theory` declarations).
+  Re-measure before quoting either figure.
+- **The move is 388 lines and the result is 1,594, not ≈1,515.** Regions D/E/F measured 290/76/23 here
+  vs 292/76/23 at `b6b795a`, but the VM had grown 1,905 → 1,977 in between (`RefreshCapabilities`
+  114 → 147, almost entirely comments), so "≈1,515" was honest arithmetic on a stale base. An outcome
+  number is worthless without the tree it was computed against.
+- **Blast radius reproduced where it counted:** the 33 XAML repaths (MainPage 1, SettingsPage 16,
+  IdeaToPrompt 10, MutationEngine 3, IdeogramEditor 3) and the 4 `EnsureOllamaModelsLoadedAsync`
+  code-behind calls came out exactly as written here. Test refs measured **58 member accesses over
+  4 files**; §4's 65/27/5 used a looser token rule, and its 5th file (`UiMarkupContractTests`) carries
+  a XAML *literal* to repath rather than a member access — 5 files touched either way.
+- **Two sums that prove the cut itself, with no test involved:** `[ObservableProperty]` 23 + 10 =
+  **33** and `[RelayCommand]` 8 + 4 = **12** across the two files, the exact pre-cut totals. A moved
+  member left behind twice, or dropped, breaks one of them.
+- **`IFolderPicker` / `IOllamaModelCatalog` / `IOpenRouterModelCatalog` left the VM as fields** but not
+  as ctor params: rule 5 held at 21 parameters because the coordinator is composed inside the
+  constructor from params the host already took. `GeneratorSettingsReader` now takes
+  `AppSettingsCoordinator?`, which is what its own comment had been promising; the three sibling VMs
+  pass `generator?.Settings` and gained nothing else.
+
 
 Numbers above were re-measured on the tree at `b6b795a` and replaced figures carried over from the
 Phase 1-era draft:

@@ -24,7 +24,7 @@ public partial class MutationEnginePage
         // the page (the VM swallows + logs). Refreshing here picks up a style just saved in the gallery.
         _ = _viewModel.LoadLibraryAsync();
         // Fill the Ollama model picker without a manual Refresh (idempotent, once per session).
-        if (_viewModel.Generator is { } generator) _ = generator.EnsureOllamaModelsLoadedAsync();
+        if (_viewModel.Generator is { } generator) _ = generator.Settings.EnsureOllamaModelsLoadedAsync();
     }
 
     private async void OnBackClicked(object? sender, EventArgs e)

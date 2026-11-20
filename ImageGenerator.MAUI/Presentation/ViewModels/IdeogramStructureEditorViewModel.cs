@@ -50,7 +50,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         _fileLauncher = fileLauncher ?? throw new ArgumentNullException(nameof(fileLauncher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _generator = generator;
-        _settings = new GeneratorSettingsReader(generator);
+        _settings = new GeneratorSettingsReader(generator?.Settings);
         _enrich = enrich;
 
         // Mode snapshot is safe: this VM is transient (fresh per navigation) and the singleton

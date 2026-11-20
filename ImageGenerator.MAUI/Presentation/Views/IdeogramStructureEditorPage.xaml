@@ -401,14 +401,14 @@
                                 <Label Text="Local model (Ollama)" Style="{StaticResource FieldLabel}" />
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <Picker Grid.Column="0"
-                                            ItemsSource="{Binding Generator.OllamaModels}"
-                                            SelectedItem="{Binding Generator.OllamaModel, Mode=TwoWay}"
+                                            ItemsSource="{Binding Generator.Settings.OllamaModels}"
+                                            SelectedItem="{Binding Generator.Settings.OllamaModel, Mode=TwoWay}"
                                             Title="Refresh, then pick a model…"
                                             IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
                                             AutomationId="EditorEnrichOllamaModelPicker" />
                                     <Button Grid.Column="1"
                                             Text="Refresh"
-                                            Command="{Binding Generator.RefreshOllamaModelsCommand}"
+                                            Command="{Binding Generator.Settings.RefreshOllamaModelsCommand}"
                                             IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
                                             Style="{StaticResource SecondaryButton}"
                                             AutomationId="EditorEnrichOllamaRefreshButton" />

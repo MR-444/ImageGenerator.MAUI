@@ -80,7 +80,7 @@ public class UiMarkupContractTests
     {
         var markup = Markup("SettingsPage.xaml");
 
-        markup.Should().Contain("IsToggled=\"{Binding UseSageAttention, Mode=TwoWay}\"")
+        markup.Should().Contain("IsToggled=\"{Binding Settings.UseSageAttention, Mode=TwoWay}\"")
             .And.Contain("SemanticProperties.Description=\"Use SageAttention for compatible ComfyUI workflows\"")
             .And.Contain("AutomationId=\"UseSageAttentionSwitch\"");
     }

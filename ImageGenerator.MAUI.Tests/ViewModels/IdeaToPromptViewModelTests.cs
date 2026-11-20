@@ -615,7 +615,7 @@ public class IdeaToPromptViewModelTests
     private static GeneratorViewModel BuildGenerator(string ollamaModel = "llama3.1")
     {
         var generator = BuildBareGenerator();
-        generator.OllamaModel = ollamaModel;
+        generator.Settings.OllamaModel = ollamaModel;
         return generator;
     }
 

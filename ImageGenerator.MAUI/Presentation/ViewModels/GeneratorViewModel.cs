@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -26,11 +25,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     private readonly IModelCatalogCoordinator _catalogCoordinator;
     private readonly IModelDescriptorRegistry _registry;
     private readonly IGalleryService _galleryService;
-    private readonly IFolderPicker _folderPicker;
-    private readonly IOllamaModelCatalog? _ollamaModelCatalog;
     private readonly IComfyUiVramService? _comfyVram;
     private readonly IGpuGate? _gpuGate;
-    private readonly IOpenRouterModelCatalog? _openRouterModelCatalog;
     private readonly ILogger<GeneratorViewModel> _logger;
 
     [ObservableProperty]
@@ -116,6 +112,11 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
     public ProviderFilterCoordinator ProviderFilter { get; }
     public BatchCoordinator Batch { get; }
+
+    // User preferences that are not generation parameters: ComfyUI/Ollama server URLs, the two
+    // VRAM toggles, appearance, the Ollama/OpenRouter vision pickers and the output folder.
+    // Bound from SettingsPage as Settings.* and from the sibling pages as Generator.Settings.*.
+    public AppSettingsCoordinator Settings { get; }
 
     // ComfyUI workflow state (baked model, quality preset, Krea-2 LoRAs, input-image support,
     // upscale chain + factor). Bound from MainPage as ComfyUi.*; re-probed on every model swap.
@@ -211,295 +212,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     // (see RunJobAsync); canceled/failed jobs never become the featured card.
     [ObservableProperty]
     private GenerationJob? _latestCompletedJob;
-
-    // Non-secret server setting (first of its kind) — Preferences-backed, not a token store.
-    // The ComfyUI generation service re-reads the store per request, so edits apply instantly.
-    [ObservableProperty]
-    private string _comfyUiBaseUrl = ModelConstants.ComfyUi.DefaultBaseUrl;
-
-    partial void OnComfyUiBaseUrlChanged(string value) =>
-        _uiStateStore.PersistComfyUiBaseUrl(value);
-
-    // Runtime-only ComfyUI optimization. Default off because the KJNodes patch node and the
-    // sageattention host library are optional; the generation service reads this persisted
-    // value immediately before each workflow submission.
-    [ObservableProperty]
-    private bool _useSageAttention;
-
-    partial void OnUseSageAttentionChanged(bool value) =>
-        _uiStateStore.PersistUseSageAttention(value);
-
-    // When on, POST /free to ComfyUI once rendering is idle so local Ollama prompt/AI work (and the OS) get
-    // the VRAM back. Default on; turn off to keep the checkpoint resident for faster single-image iteration.
-    [ObservableProperty]
-    private bool _freeVramAfterRendering = true;
-
-    partial void OnFreeVramAfterRenderingChanged(bool value) =>
-        _uiStateStore.PersistFreeVramAfterRendering(value);
-
-    // Color theme selection for the Settings "Appearance" picker. Bound as an int so the picker's
-    // SelectedIndex maps straight onto the AppTheme enum (0=Unspecified/System, 1=Light, 2=Dark) with
-    // no value converter. Persists the pick and applies it live to Application.UserAppTheme; the whole
-    // UI is already AppThemeBinding-driven so it repaints immediately. Loaded at VM init below.
-    [ObservableProperty]
-    private int _appThemeIndex; // 0=System, 1=Light, 2=Dark
-
-    partial void OnAppThemeIndexChanged(int value)
-    {
-        var theme = (AppTheme)value;
-        _uiStateStore.PersistAppTheme(theme);
-        ApplyAppTheme(theme);
-    }
-
-    // Applying UserAppTheme touches the visual tree, so marshal to the UI thread — the change hook can
-    // fire off it. No-op when there's no live Application (unit tests construct the VM headless).
-    private static void ApplyAppTheme(AppTheme theme)
-    {
-        if (Application.Current is { } app)
-            app.Dispatcher.Dispatch(() => app.UserAppTheme = theme);
-    }
-
-    // The local Ollama server + model for the AI caption mutator's free "Local" tier. Preferences-backed
-    // like the ComfyUI URL; the mutation service re-reads the store per request, so edits apply instantly.
-    [ObservableProperty]
-    private string _ollamaBaseUrl = ModelConstants.Ollama.DefaultBaseUrl;
-
-    partial void OnOllamaBaseUrlChanged(string value) =>
-        _uiStateStore.PersistOllamaBaseUrl(value);
-
-    // No compile-time default model: which models exist is per-server, so the old hardcoded
-    // "qwen2.5" was wrong on most hosts and failed as an opaque Ollama 404. Empty means
-    // "never picked" and the pickers show their "Refresh, then pick a model…" title.
-    //
-    // The persist hooks are gated by a suppression window because a MAUI Picker whose
-    // SelectedItem is two-way bound here pushes NULL back the moment its ItemsSource is
-    // cleared — which every refresh does. Unsuppressed, that null persisted an empty string
-    // and silently destroyed the saved pick on the next launch.
-    [ObservableProperty]
-    private string _ollamaModel = string.Empty;
-
-    partial void OnOllamaModelChanged(string value)
-    {
-        if (_suppressOllamaModelPersist) return;
-        _uiStateStore.PersistOllamaModel(value);
-    }
-
-    [ObservableProperty]
-    private string _ollamaVisionModel = string.Empty;
-
-    partial void OnOllamaVisionModelChanged(string value)
-    {
-        if (_suppressOllamaModelPersist) return;
-        _uiStateStore.PersistOllamaVisionModel(value);
-    }
-
-    // One flag covers both pickers: they are always rebuilt together by the same refresh.
-    private bool _suppressOllamaModelPersist;
-
-    [ObservableProperty]
-    private string _openRouterVisionModel = string.Empty;
-
-    partial void OnOpenRouterVisionModelChanged(string value)
-    {
-        if (_suppressOpenRouterVisionModelPersist) return;
-        _uiStateStore.PersistOpenRouterVisionModel(value);
-    }
-
-    // Same Picker-clears-its-selection hazard as _suppressOllamaModelPersist above.
-    private bool _suppressOpenRouterVisionModelPersist;
-
-    [ObservableProperty]
-    private bool _openRouterVisionFreeOnly = true;
-
-    partial void OnOpenRouterVisionFreeOnlyChanged(bool value)
-    {
-        if (_suppressOpenRouterVisionModelPersist) return;
-        _uiStateStore.PersistOpenRouterVisionFreeOnly(value);
-        OpenRouterVisionModels.Clear();
-        OpenRouterVisionModel = string.Empty;
-    }
-
-    public ObservableCollection<string> OpenRouterVisionModels { get; } = [];
-
-    [RelayCommand]
-    private async Task RefreshOpenRouterVisionModelsAsync()
-    {
-        if (_openRouterModelCatalog is null) return;
-        try
-        {
-            var models = await _openRouterModelCatalog.ListVisionModelsAsync(OpenRouterVisionFreeOnly);
-            var current = OpenRouterVisionModel;
-
-            _suppressOpenRouterVisionModelPersist = true;
-            try
-            {
-                OpenRouterVisionModels.Clear();
-                foreach (var model in models)
-                    OpenRouterVisionModels.Add(model.Id);
-
-                // Re-assert through empty so the picker re-selects even when clearing the
-                // ItemsSource did not push a null back through the binding.
-                var resolved = OpenRouterVisionModels.Contains(current) ? current : string.Empty;
-                OpenRouterVisionModel = string.Empty;
-                OpenRouterVisionModel = resolved;
-            }
-            finally { _suppressOpenRouterVisionModelPersist = false; }
-
-            // Deliberate write, outside the window: persists a restored pick and a genuine drop
-            // alike. SafeSet skips identical rewrites, so the common case costs nothing.
-            _uiStateStore.PersistOpenRouterVisionModel(OpenRouterVisionModel);
-
-            SetStatus(models.Count > 0
-                ? $"Found {models.Count} OpenRouter vision model(s){(OpenRouterVisionFreeOnly ? " with free pricing." : ".")}"
-                : "No OpenRouter vision models matched the current filter.",
-                models.Count > 0 ? StatusKind.Success : StatusKind.Warning);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Couldn't list OpenRouter vision models");
-            SetStatus($"Couldn't refresh OpenRouter models: {ex.Message}", StatusKind.Error);
-        }
-    }
-
-    /// <summary>Installed Ollama models for the Settings picker; filled by <see cref="RefreshOllamaModelsCommand"/>.</summary>
-    public ObservableCollection<string> OllamaModels { get; } = [];
-
-    /// <summary>Installed Ollama models that advertise both vision and completion capabilities.</summary>
-    public ObservableCollection<string> OllamaVisionModels { get; } = [];
-
-    /// <summary>Pull the model list from the configured Ollama server into the picker.</summary>
-    [RelayCommand]
-    private Task RefreshOllamaModelsAsync() => LoadOllamaModelsAsync(announce: true);
-
-    // Set once per app session by EnsureOllamaModelsLoadedAsync, whether or not the fetch worked:
-    // a down server must not be re-probed (and re-stalled on) by every page navigation.
-    private bool _ollamaLoadAttempted;
-
-    /// <summary>
-    /// Fetch the model list once per app session, on first appearance of a page that shows an Ollama
-    /// picker, so the user doesn't have to press Refresh to see their models. Silent: a server that is
-    /// down leaves the cached list in place and says nothing — the Refresh button stays the diagnostic
-    /// path, and the "pick a model first" build guard points at it.
-    /// </summary>
-    public Task EnsureOllamaModelsLoadedAsync()
-    {
-        if (_ollamaLoadAttempted) return Task.CompletedTask;
-        _ollamaLoadAttempted = true;
-        return LoadOllamaModelsAsync(announce: false);
-    }
-
-    // Null-tolerant by design — see the call site in LoadSavedUiState.
-    private static void SeedPicker(ObservableCollection<string> picker, IReadOnlyList<string>? cached)
-    {
-        if (cached is null) return;
-        foreach (var m in cached) picker.Add(m);
-    }
-
-    private async Task LoadOllamaModelsAsync(bool announce)
-    {
-        if (_ollamaModelCatalog is null) return;
-        try
-        {
-            var modelInfos = await _ollamaModelCatalog.ListModelInfosAsync(OllamaBaseUrl);
-            var models = modelInfos.Select(m => m.Name).ToArray();
-            var visionModels = modelInfos
-                .Where(m => m is { SupportsCompletion: true, SupportsVision: true })
-                .Select(m => m.Name)
-                .ToArray();
-
-            // An empty list is ambiguous — a server with nothing pulled looks exactly like a
-            // misconfigured URL or a proxy answering for one. Refuse to reconcile against it:
-            // show the warning, but keep the cached options and the user's pick untouched.
-            if (models.Length == 0)
-            {
-                if (announce) SetStatus("No models installed on the Ollama server.", StatusKind.Warning);
-                return;
-            }
-
-            var current = OllamaModel;
-            var currentVision = OllamaVisionModel;
-
-            _suppressOllamaModelPersist = true;
-            try
-            {
-                OllamaModels.Clear();
-                foreach (var m in models) OllamaModels.Add(m);
-                OllamaVisionModels.Clear();
-                foreach (var m in visionModels) OllamaVisionModels.Add(m);
-
-                // A model the server no longer lists is dropped rather than kept as a ghost entry
-                // that fails later as a 404. Re-assert through empty so the picker re-selects even
-                // when clearing the ItemsSource did not push a null back through the binding.
-                OllamaModel = string.Empty;
-                OllamaModel = OllamaModels.Contains(current) ? current : string.Empty;
-                OllamaVisionModel = string.Empty;
-                OllamaVisionModel = OllamaVisionModels.Contains(currentVision) ? currentVision : string.Empty;
-            }
-            finally { _suppressOllamaModelPersist = false; }
-
-            // Deliberate writes, outside the window: persist a restored pick and a genuine drop alike.
-            _uiStateStore.PersistOllamaModel(OllamaModel);
-            _uiStateStore.PersistOllamaVisionModel(OllamaVisionModel);
-            _uiStateStore.PersistOllamaModels(OllamaBaseUrl, models, visionModels);
-
-            // Report exactly what the reconciliation above cleared, by comparing each pick against
-            // its own list — a model that is still installed but stopped advertising vision is
-            // dropped from the vision picker only, and must still be named here.
-            var dropped = new[]
-                {
-                    OllamaModel.Length == 0 ? current : null,
-                    OllamaVisionModel.Length == 0 ? currentVision : null,
-                }
-                .Where(m => !string.IsNullOrWhiteSpace(m))
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-
-            if (!announce) return;
-            SetStatus(
-                dropped.Length > 0
-                    ? $"{string.Join(", ", dropped)} no longer installed on the Ollama server — pick another model."
-                    : $"Found {models.Length} Ollama model(s), {visionModels.Length} with vision.",
-                dropped.Length > 0 ? StatusKind.Warning : StatusKind.Success);
-        }
-        catch (Exception ex)
-        {
-            // Nothing has been cleared at this point — ListModelInfosAsync throws before the
-            // rebuild below it — so a down server leaves the cached list and the pick intact.
-            _logger.LogWarning(ex, "Couldn't list Ollama models from {Url}", OllamaBaseUrl);
-            if (announce) SetStatus($"Couldn't reach Ollama at {OllamaBaseUrl}: {ex.Message}", StatusKind.Error);
-        }
-    }
-
-    // The configurable ROOT data folder (images, json-prompts, comfy-workflows, mutation-library
-    // and prompt-builder all live under it). Preferences-backed like the ComfyUI URL; the change
-    // hook applies the override to OutputPaths so saves, the gallery and "Open output folder"
-    // follow it live. Defaults to the fixed Pictures\Emberforge location for display until the
-    // user picks another.
-    [ObservableProperty]
-    private string _outputFolder = OutputPaths.DefaultRootDirectory;
-
-    partial void OnOutputFolderChanged(string value)
-    {
-        var trimmed = value.Trim();
-        _uiStateStore.PersistOutputFolder(trimmed);
-        OutputPaths.SetRootOverride(trimmed);
-    }
-
-    [RelayCommand]
-    private async Task BrowseOutputFolderAsync()
-    {
-        try
-        {
-            var picked = await _folderPicker.PickFolderAsync(OutputFolder);
-            // Null => the user cancelled; leave the current value untouched.
-            if (!string.IsNullOrWhiteSpace(picked))
-                OutputFolder = picked;
-        }
-        catch (Exception ex)
-        {
-            SetStatus($"Couldn't open the folder picker: {ex.Message}", StatusKind.Error);
-        }
-    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SupportsCustomDimensions))]
@@ -902,12 +614,15 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         _catalogCoordinator = catalogCoordinator ?? throw new ArgumentNullException(nameof(catalogCoordinator));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _galleryService = galleryService ?? throw new ArgumentNullException(nameof(galleryService));
-        _folderPicker = folderPicker ?? throw new ArgumentNullException(nameof(folderPicker));
-        _ollamaModelCatalog = ollamaModelCatalog;
         _comfyVram = comfyVram;
         _gpuGate = gpuGate;
-        _openRouterModelCatalog = openRouterModelCatalog;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+        // Composed here, not resolved: the host keeps its 21 parameters (a DI constructor is
+        // resolved, never called, so a hand-written one cannot be unit-tested) and the coordinator
+        // takes the three dependencies no generator member touches any more.
+        Settings = new AppSettingsCoordinator(
+            uiStateStore, folderPicker, ollamaModelCatalog, openRouterModelCatalog, SetStatus, logger);
         if (promptBatchParser is null) throw new ArgumentNullException(nameof(promptBatchParser));
 
         Jobs.CollectionChanged += OnJobsCollectionChanged;
@@ -1215,7 +930,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         var isComfyJob = ModelConstants.ComfyUi.IsId(job.Parameters.Model);
         var gpuGated = _gpuGate is not null
             && isComfyJob
-            && GpuColocation.SameHost(ComfyUiBaseUrl, OllamaBaseUrl);
+            && GpuColocation.SameHost(Settings.ComfyUiBaseUrl, Settings.OllamaBaseUrl);
 
         IDisposable? singleJobLease = null;
         if (gpuGated)
@@ -1399,7 +1114,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     /// </summary>
     internal async Task MaybeFreeComfyUiVramAsync(string model)
     {
-        if (!FreeVramAfterRendering
+        if (!Settings.FreeVramAfterRendering
             || _comfyVram is null
             || Batch.IsBatchRunning
             || !ModelConstants.ComfyUi.IsId(model))
@@ -1474,30 +1189,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         {
             if (_flashVersion == version) FlashMessage = null;
         });
-    }
-
-    [RelayCommand]
-    private async Task OpenOutputFolderAsync()
-    {
-        try
-        {
-            // Directory.CreateDirectory + Process.Start are fast on a warm filesystem but can
-            // stall the UI on cold/network/OneDrive paths. Push to the thread pool.
-            await Task.Run(() =>
-            {
-                Directory.CreateDirectory(OutputPaths.GeneratedImagesDirectory);
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "explorer.exe",
-                    Arguments = $"\"{OutputPaths.GeneratedImagesDirectory}\"",
-                    UseShellExecute = true
-                });
-            });
-        }
-        catch (Exception ex)
-        {
-            SetStatus($"Couldn't open Explorer: {ex.Message}", StatusKind.Error);
-        }
     }
 
     /// <summary>
@@ -1694,82 +1385,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             Parameters.Prompt = savedPrompt;
         }
 
-        // First write equals the loaded value, so the OnChanged persist is a harmless echo —
-        // no suppression window needed (unlike resolution, nothing else writes this field).
-        var savedComfyUrl = _uiStateStore.LoadComfyUiBaseUrl();
-        if (!string.IsNullOrEmpty(savedComfyUrl))
-        {
-            ComfyUiBaseUrl = savedComfyUrl;
-        }
-
-        var savedOllamaUrl = _uiStateStore.LoadOllamaBaseUrl();
-        if (!string.IsNullOrEmpty(savedOllamaUrl))
-        {
-            OllamaBaseUrl = savedOllamaUrl;
-        }
-
-        var savedOllamaModel = _uiStateStore.LoadOllamaModel();
-        var savedOllamaVisionModel = _uiStateStore.LoadOllamaVisionModel();
-        // Seed the pickers from the last-known server list BEFORE assigning the selected
-        // model so any attached Picker already sees the item in ItemsSource. The saved pick is
-        // appended when the cache predates it; startup has verified nothing against the server yet,
-        // so nothing is dropped here — the first successful refresh is what reconciles.
-        // Seed defensively: this runs on the startup path, where an unhandled exception is a native
-        // WinUI fail-fast rather than a catchable error, so a store handing back null degrades to
-        // "no cache" instead of taking the app down.
-        _suppressOllamaModelPersist = true;
-        try
-        {
-            SeedPicker(OllamaModels, _uiStateStore.LoadOllamaModels(OllamaBaseUrl));
-            SeedPicker(OllamaVisionModels, _uiStateStore.LoadOllamaVisionModels(OllamaBaseUrl));
-            if (!string.IsNullOrWhiteSpace(savedOllamaModel))
-            {
-                if (!OllamaModels.Contains(savedOllamaModel))
-                    OllamaModels.Add(savedOllamaModel);
-                OllamaModel = savedOllamaModel;
-            }
-            if (!string.IsNullOrWhiteSpace(savedOllamaVisionModel))
-            {
-                if (!OllamaVisionModels.Contains(savedOllamaVisionModel))
-                    OllamaVisionModels.Add(savedOllamaVisionModel);
-                OllamaVisionModel = savedOllamaVisionModel;
-            }
-        }
-        finally { _suppressOllamaModelPersist = false; }
-
-        _suppressOpenRouterVisionModelPersist = true;
-        try
-        {
-            OpenRouterVisionFreeOnly = _uiStateStore.LoadOpenRouterVisionFreeOnly();
-            var savedOpenRouterVisionModel = _uiStateStore.LoadOpenRouterVisionModel();
-            if (savedOpenRouterVisionModel is { Length: > 0 } savedOpenRouterModel
-                && (!OpenRouterVisionFreeOnly || savedOpenRouterModel.EndsWith(":free", StringComparison.OrdinalIgnoreCase)))
-            {
-                OpenRouterVisionModels.Add(savedOpenRouterModel);
-                OpenRouterVisionModel = savedOpenRouterModel;
-            }
-        }
-        finally { _suppressOpenRouterVisionModelPersist = false; }
-
-        // Default-on; only flips the field when the user previously turned it off (OnChanged re-persist is
-        // a harmless echo — nothing else writes this field).
-        FreeVramAfterRendering = _uiStateStore.LoadFreeVramAfterRendering();
-
-        // Default-off host capability. Like the server URL, the generation service re-reads
-        // the persisted value per run, so this load merely echoes the switch into Settings.
-        UseSageAttention = _uiStateStore.LoadUseSageAttention();
-
-        // Echo the saved theme into the picker (the theme itself is already applied at startup in
-        // App.xaml.cs). OnChanged re-persists/re-applies harmlessly. Default 0 = System (follow OS).
-        AppThemeIndex = (int)_uiStateStore.LoadAppTheme();
-
-        // The override was already applied at the composition root; this just echoes the saved
-        // value into the bound field so Settings shows it. OnChanged re-applies harmlessly.
-        var savedOutputFolder = _uiStateStore.LoadOutputFolder();
-        if (!string.IsNullOrEmpty(savedOutputFolder))
-        {
-            OutputFolder = savedOutputFolder;
-        }
+        Settings.LoadSavedSettings();
 
         var savedModel = _uiStateStore.LoadModel();
         if (!string.IsNullOrEmpty(savedModel))

@@ -149,7 +149,7 @@ public partial class GeneratorViewModelTests
     {
         var vram = new StubComfyVram();
         var vm = BuildViewModelWithVram(vram);
-        vm.FreeVramAfterRendering = true;
+        vm.Settings.FreeVramAfterRendering = true;
 
         await vm.MaybeFreeComfyUiVramAsync("comfyui/anything");
         vram.Calls.Should().Be(1, "enabled + ComfyUI model + no batch running");
@@ -157,7 +157,7 @@ public partial class GeneratorViewModelTests
         await vm.MaybeFreeComfyUiVramAsync(ModelConstants.Flux.Pro11);
         vram.Calls.Should().Be(1, "non-ComfyUI models hold no local VRAM");
 
-        vm.FreeVramAfterRendering = false;
+        vm.Settings.FreeVramAfterRendering = false;
         await vm.MaybeFreeComfyUiVramAsync("comfyui/anything");
         vram.Calls.Should().Be(1, "the toggle gates it off");
     }
@@ -241,8 +241,8 @@ public partial class GeneratorViewModelTests
     {
         var gate = new FakeGpuGate();
         var vm = BuildGatedViewModel(gate);
-        vm.ComfyUiBaseUrl = "http://fireEngine:8188";   // note the case difference vs the Ollama default
-        vm.OllamaBaseUrl = "http://fireengine:11434";
+        vm.Settings.ComfyUiBaseUrl = "http://fireEngine:8188";   // note the case difference vs the Ollama default
+        vm.Settings.OllamaBaseUrl = "http://fireengine:11434";
         vm.Parameters.Model = "comfyui/test";            // tokenless local provider
         vm.Parameters.Prompt = "a cat";
 
@@ -261,8 +261,8 @@ public partial class GeneratorViewModelTests
     {
         var gate = new FakeGpuGate();
         var vm = BuildGatedViewModel(gate);
-        vm.ComfyUiBaseUrl = "http://fireengine:8188";
-        vm.OllamaBaseUrl = "http://fireengine:11434";
+        vm.Settings.ComfyUiBaseUrl = "http://fireengine:8188";
+        vm.Settings.OllamaBaseUrl = "http://fireengine:11434";
         vm.Parameters.Model = ModelConstants.Flux.Pro11;  // Replicate — never touches fireEngine's VRAM
         vm.Parameters.ApiToken = "valid-token";
         vm.Parameters.Prompt = "a cat";

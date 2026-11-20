@@ -18,16 +18,16 @@ public partial class GeneratorViewModelTests
     [Fact]
     public async Task RefreshOpenRouterVisionModels_FreeOnly_ClearsPaidSelection()
     {
-        _viewModel.OpenRouterVisionFreeOnly = true;
-        _viewModel.OpenRouterVisionModel = "paid/vision";
+        _viewModel.Settings.OpenRouterVisionFreeOnly = true;
+        _viewModel.Settings.OpenRouterVisionModel = "paid/vision";
         _mockOpenRouterModelCatalog
             .Setup(c => c.ListVisionModelsAsync(true, It.IsAny<CancellationToken>()))
             .ReturnsAsync([new OpenRouterModelInfo("free/vision:free", "Free Vision", true)]);
 
-        await _viewModel.RefreshOpenRouterVisionModelsCommand.ExecuteAsync(null);
+        await _viewModel.Settings.RefreshOpenRouterVisionModelsCommand.ExecuteAsync(null);
 
-        _viewModel.OpenRouterVisionModels.Should().Equal("free/vision:free");
-        _viewModel.OpenRouterVisionModel.Should().BeEmpty();
+        _viewModel.Settings.OpenRouterVisionModels.Should().Equal("free/vision:free");
+        _viewModel.Settings.OpenRouterVisionModel.Should().BeEmpty();
     }
 
     [Fact]
@@ -38,9 +38,9 @@ public partial class GeneratorViewModelTests
 
         _viewModel.LoadSavedUiState();
 
-        _viewModel.OpenRouterVisionFreeOnly.Should().BeTrue();
-        _viewModel.OpenRouterVisionModel.Should().BeEmpty();
-        _viewModel.OpenRouterVisionModels.Should().BeEmpty();
+        _viewModel.Settings.OpenRouterVisionFreeOnly.Should().BeTrue();
+        _viewModel.Settings.OpenRouterVisionModel.Should().BeEmpty();
+        _viewModel.Settings.OpenRouterVisionModels.Should().BeEmpty();
     }
 
     [Fact]
@@ -51,14 +51,14 @@ public partial class GeneratorViewModelTests
 
         _viewModel.LoadSavedUiState();
 
-        _viewModel.OpenRouterVisionModel.Should().Be("free/vision:free");
-        _viewModel.OpenRouterVisionModels.Should().ContainSingle().Which.Should().Be("free/vision:free");
+        _viewModel.Settings.OpenRouterVisionModel.Should().Be("free/vision:free");
+        _viewModel.Settings.OpenRouterVisionModels.Should().ContainSingle().Which.Should().Be("free/vision:free");
     }
 
     [Fact]
     public void UseSageAttention_WhenChanged_PersistsHostSetting()
     {
-        _viewModel.UseSageAttention = true;
+        _viewModel.Settings.UseSageAttention = true;
 
         _mockUiStateStore.Verify(s => s.PersistUseSageAttention(true), Times.Once);
     }
@@ -70,7 +70,7 @@ public partial class GeneratorViewModelTests
 
         _viewModel.LoadSavedUiState();
 
-        _viewModel.UseSageAttention.Should().BeTrue();
+        _viewModel.Settings.UseSageAttention.Should().BeTrue();
         _mockUiStateStore.Verify(s => s.LoadUseSageAttention(), Times.Once);
     }
 
@@ -83,9 +83,9 @@ public partial class GeneratorViewModelTests
         _mockFolderPicker.Setup(p => p.PickFolderAsync(It.IsAny<string?>())).ReturnsAsync(picked);
         try
         {
-            await _viewModel.BrowseOutputFolderCommand.ExecuteAsync(null);
+            await _viewModel.Settings.BrowseOutputFolderCommand.ExecuteAsync(null);
 
-            _viewModel.OutputFolder.Should().Be(picked);
+            _viewModel.Settings.OutputFolder.Should().Be(picked);
             _mockUiStateStore.Verify(s => s.PersistOutputFolder(picked), Times.Once);
             // The picked folder is the root; images land in its "pictures" subfolder.
             OutputPaths.RootDirectory.Should().Be(picked);
@@ -101,12 +101,12 @@ public partial class GeneratorViewModelTests
     [Fact]
     public async Task BrowseOutputFolder_WhenCancelled_LeavesValueUnchanged()
     {
-        var original = _viewModel.OutputFolder;
+        var original = _viewModel.Settings.OutputFolder;
         _mockFolderPicker.Setup(p => p.PickFolderAsync(It.IsAny<string?>())).ReturnsAsync((string?)null);
 
-        await _viewModel.BrowseOutputFolderCommand.ExecuteAsync(null);
+        await _viewModel.Settings.BrowseOutputFolderCommand.ExecuteAsync(null);
 
-        _viewModel.OutputFolder.Should().Be(original);
+        _viewModel.Settings.OutputFolder.Should().Be(original);
         _mockUiStateStore.Verify(s => s.PersistOutputFolder(It.IsAny<string>()), Times.Never);
     }
 
@@ -115,7 +115,7 @@ public partial class GeneratorViewModelTests
     {
         try
         {
-            _viewModel.OutputFolder = @"E:\elsewhere";
+            _viewModel.Settings.OutputFolder = @"E:\elsewhere";
 
             OutputPaths.GeneratedImagesDirectory.Should().Be(Path.Combine(@"E:\elsewhere", "pictures"));
             // Every data folder follows the configured root now, including comfy-workflows.
@@ -140,12 +140,12 @@ public partial class GeneratorViewModelTests
         var vm = OllamaVm(out var catalog, out var store);
         catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([Model("llama3.1"), Model("gemma3:27b", vision: true)]);
-        vm.OllamaModel = "llama3.1";
+        vm.Settings.OllamaModel = "llama3.1";
 
-        await vm.RefreshOllamaModelsCommand.ExecuteAsync(null);
+        await vm.Settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
 
-        vm.OllamaModel.Should().Be("llama3.1", "the pick is still installed");
-        vm.OllamaModels.Should().BeEquivalentTo(["llama3.1", "gemma3:27b"]);
+        vm.Settings.OllamaModel.Should().Be("llama3.1", "the pick is still installed");
+        vm.Settings.OllamaModels.Should().BeEquivalentTo(["llama3.1", "gemma3:27b"]);
         store.Verify(s => s.PersistOllamaModel(string.Empty), Times.Never,
             "a Picker's null push during the rebuild must never reach Preferences");
     }
@@ -156,12 +156,12 @@ public partial class GeneratorViewModelTests
         var vm = OllamaVm(out var catalog, out var store);
         catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([Model("gemma3:27b", vision: true)]);
-        vm.OllamaModel = "deleted-on-server";
+        vm.Settings.OllamaModel = "deleted-on-server";
 
-        await vm.RefreshOllamaModelsCommand.ExecuteAsync(null);
+        await vm.Settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
 
-        vm.OllamaModel.Should().BeEmpty("a ghost entry only fails later as an opaque 404");
-        vm.OllamaModels.Should().NotContain("deleted-on-server");
+        vm.Settings.OllamaModel.Should().BeEmpty("a ghost entry only fails later as an opaque 404");
+        vm.Settings.OllamaModels.Should().NotContain("deleted-on-server");
         vm.StatusKind.Should().Be(StatusKind.Warning);
         vm.StatusMessage.Should().Contain("deleted-on-server").And.Contain("no longer installed");
         store.Verify(s => s.PersistOllamaModel(string.Empty), Times.Once, "the drop is deliberate and must stick");
@@ -175,13 +175,13 @@ public partial class GeneratorViewModelTests
         var vm = OllamaVm(out var catalog, out var store);
         catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([Model("llama3.1")]);
-        vm.OllamaModel = "llama3.1";
-        vm.OllamaVisionModel = "llama3.1";
+        vm.Settings.OllamaModel = "llama3.1";
+        vm.Settings.OllamaVisionModel = "llama3.1";
 
-        await vm.RefreshOllamaModelsCommand.ExecuteAsync(null);
+        await vm.Settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
 
-        vm.OllamaModel.Should().Be("llama3.1", "it is still installed for text");
-        vm.OllamaVisionModel.Should().BeEmpty("it can no longer serve a vision request");
+        vm.Settings.OllamaModel.Should().Be("llama3.1", "it is still installed for text");
+        vm.Settings.OllamaVisionModel.Should().BeEmpty("it can no longer serve a vision request");
         vm.StatusKind.Should().Be(StatusKind.Warning);
         vm.StatusMessage.Should().Contain("llama3.1");
         store.Verify(s => s.PersistOllamaVisionModel(string.Empty), Times.Once);
@@ -193,13 +193,13 @@ public partial class GeneratorViewModelTests
         var vm = OllamaVm(out var catalog, out var store);
         catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpRequestException("connection refused"));
-        vm.OllamaModel = "llama3.1";
-        vm.OllamaModels.Add("llama3.1");
+        vm.Settings.OllamaModel = "llama3.1";
+        vm.Settings.OllamaModels.Add("llama3.1");
 
-        await vm.RefreshOllamaModelsCommand.ExecuteAsync(null);
+        await vm.Settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
 
-        vm.OllamaModel.Should().Be("llama3.1", "an unreachable server proves nothing about the model");
-        vm.OllamaModels.Should().ContainSingle().Which.Should().Be("llama3.1");
+        vm.Settings.OllamaModel.Should().Be("llama3.1", "an unreachable server proves nothing about the model");
+        vm.Settings.OllamaModels.Should().ContainSingle().Which.Should().Be("llama3.1");
         vm.StatusKind.Should().Be(StatusKind.Error);
         store.Verify(s => s.PersistOllamaModel(string.Empty), Times.Never);
     }
@@ -212,11 +212,11 @@ public partial class GeneratorViewModelTests
         var vm = OllamaVm(out var catalog, out var store);
         catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
-        vm.OllamaModel = "llama3.1";
+        vm.Settings.OllamaModel = "llama3.1";
 
-        await vm.RefreshOllamaModelsCommand.ExecuteAsync(null);
+        await vm.Settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
 
-        vm.OllamaModel.Should().Be("llama3.1");
+        vm.Settings.OllamaModel.Should().Be("llama3.1");
         vm.StatusKind.Should().Be(StatusKind.Warning);
         store.Verify(s => s.PersistOllamaModel(string.Empty), Times.Never);
     }
@@ -225,11 +225,11 @@ public partial class GeneratorViewModelTests
     public async Task RefreshOllamaModels_CachesTheListForTheNextLaunch()
     {
         var vm = OllamaVm(out var catalog, out var store);
-        vm.OllamaBaseUrl = "http://fireengine:11434";
+        vm.Settings.OllamaBaseUrl = "http://fireengine:11434";
         catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([Model("llama3.1"), Model("gemma3:27b", vision: true)]);
 
-        await vm.RefreshOllamaModelsCommand.ExecuteAsync(null);
+        await vm.Settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
 
         store.Verify(s => s.PersistOllamaModels(
             "http://fireengine:11434",
@@ -244,12 +244,12 @@ public partial class GeneratorViewModelTests
         catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([Model("llama3.1")]);
 
-        await vm.EnsureOllamaModelsLoadedAsync();
-        await vm.EnsureOllamaModelsLoadedAsync();
+        await vm.Settings.EnsureOllamaModelsLoadedAsync();
+        await vm.Settings.EnsureOllamaModelsLoadedAsync();
 
         catalog.Verify(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once,
             "every page appearance must not re-probe the server");
-        vm.OllamaModels.Should().Contain("llama3.1");
+        vm.Settings.OllamaModels.Should().Contain("llama3.1");
         vm.StatusMessage.Should().BeNullOrEmpty("the automatic load is not a user action worth narrating");
     }
 
@@ -264,17 +264,17 @@ public partial class GeneratorViewModelTests
 
         _viewModel.LoadSavedUiState();
 
-        _viewModel.OllamaModels.Should().BeEquivalentTo((string[])["llama3.1", "gemma3:27b"],
+        _viewModel.Settings.OllamaModels.Should().BeEquivalentTo((string[])["llama3.1", "gemma3:27b"],
             "the picker is usable at launch, and for the whole session if the server is down");
-        _viewModel.OllamaVisionModels.Should().BeEquivalentTo(["gemma3:27b"]);
-        _viewModel.OllamaModel.Should().Be("llama3.1");
+        _viewModel.Settings.OllamaVisionModels.Should().BeEquivalentTo(["gemma3:27b"]);
+        _viewModel.Settings.OllamaModel.Should().Be("llama3.1");
     }
 
     [Fact]
     public void OllamaModel_HasNoImplicitDefault()
     {
-        _viewModel.OllamaModel.Should().BeEmpty("which models exist is per-server; guessing one only 404s");
-        _viewModel.OllamaVisionModel.Should().BeEmpty();
+        _viewModel.Settings.OllamaModel.Should().BeEmpty("which models exist is per-server; guessing one only 404s");
+        _viewModel.Settings.OllamaVisionModel.Should().BeEmpty();
     }
 
     private static OllamaModelInfo Model(string name, bool vision = false) =>

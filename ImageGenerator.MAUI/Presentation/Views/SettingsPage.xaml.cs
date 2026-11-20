@@ -23,7 +23,7 @@ public partial class SettingsPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
-        _ = _viewModel.EnsureOllamaModelsLoadedAsync();
+        _ = _viewModel.Settings.EnsureOllamaModelsLoadedAsync();
     }
 
     private enum SettingsCategory { Appearance, ApiKeys, Generation, AiServices, Output, Integrations }

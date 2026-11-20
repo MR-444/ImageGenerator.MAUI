@@ -707,7 +707,7 @@
 
                 <Button Grid.Row="0" Grid.Column="2"
                         Text="Open output folder"
-                        Command="{Binding OpenOutputFolderCommand}"
+                        Command="{Binding Settings.OpenOutputFolderCommand}"
                         Style="{StaticResource SecondaryButton}"
                         VerticalOptions="Center"
                         SemanticProperties.Description="Open the generated-images folder in Explorer"
