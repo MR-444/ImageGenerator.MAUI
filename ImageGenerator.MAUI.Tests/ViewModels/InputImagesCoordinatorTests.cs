@@ -1,6 +1,10 @@
 using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
+using ImageGenerator.MAUI.Infrastructure.Imaging;
 using ImageGenerator.MAUI.Presentation.ViewModels;
+using Microsoft.Extensions.Logging.Abstractions;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
 
@@ -35,7 +39,87 @@ public class InputImagesCoordinatorTests
             setAspectRatioProgrammatically: setAspectRatio ?? (_ => { }),
             mirrorImagePromptsToParameters: mirrorImagePrompts ?? (() => { }),
             setStatus: setStatus ?? ((_, _) => { }),
+            logger: NullLogger.Instance,
             initialPreferredAspectRatio: initialPreferredAspectRatio);
+    }
+
+    // ---- Intake: what arrives is not what gets sent ------------------------------------------
+
+    [Fact]
+    public async Task AddAsInputAsync_ShrinksAnOversizeFile_ToTheModelInputBudget()
+    {
+        var path = WritePng("oversize.png", 3000, 2000);
+        var statuses = new List<(string Message, StatusKind Kind)>();
+        try
+        {
+            var coord = Build(setStatus: (message, kind) => statuses.Add((message, kind)));
+
+            await coord.AddAsInputAsync(path);
+
+            var item = Assert.Single(coord.SelectedImages);
+            using var sent = SixLabors.ImageSharp.Image.Load(Convert.FromBase64String(item.Base64));
+            Math.Max(sent.Width, sent.Height).Should().Be(ImagePayloadLimits.ModelInput.MaxDimension!.Value,
+                "a phone-camera photo is not what a hosted model should be sent");
+            statuses.Should().ContainSingle().Which.Message
+                .Should().StartWith("Added as input.")
+                .And.Contain("→", "the status says out loud what was done to the file");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task AddAsInputAsync_PassesAFileInsideTheBudget_ThroughUnchanged()
+    {
+        var path = WritePng("fine.png", 640, 480);
+        var statuses = new List<(string Message, StatusKind Kind)>();
+        try
+        {
+            var coord = Build(setStatus: (message, kind) => statuses.Add((message, kind)));
+
+            await coord.AddAsInputAsync(path);
+
+            var item = Assert.Single(coord.SelectedImages);
+            Convert.FromBase64String(item.Base64).Should().Equal(await File.ReadAllBytesAsync(path),
+                "re-encoding a file that already fits only loses quality");
+            statuses.Should().ContainSingle().Which.Message.Should().Be("Added as input.");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task AddAsInputAsync_RefusesAFileNothingCanDecode()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}-not-an-image.png");
+        await File.WriteAllBytesAsync(path, [1, 2, 3, 4]);
+        var statuses = new List<(string Message, StatusKind Kind)>();
+        try
+        {
+            var coord = Build(setStatus: (message, kind) => statuses.Add((message, kind)));
+
+            await coord.AddAsInputAsync(path);
+
+            coord.SelectedImages.Should().BeEmpty(
+                "a file no endpoint can decode would fail later as a provider error nobody recognises");
+            statuses.Should().ContainSingle().Which.Message.Should().Contain("Unsupported image format");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    private static string WritePng(string fileName, int width, int height)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}-{fileName}");
+        using var image = new Image<Rgba32>(width, height, new Rgba32(255, 255, 255));
+        image.SaveAsPng(path);
+        return path;
     }
 
     [Fact]

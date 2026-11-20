@@ -936,6 +936,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             setAspectRatioProgrammatically: SetAspectRatioProgrammatically,
             mirrorImagePromptsToParameters: MirrorImagePromptsToParameters,
             setStatus: SetStatus,
+            logger: logger,
             initialPreferredAspectRatio: _parameters.AspectRatio);
 
         // ComfyUI workflow probing/ownership. Constructed before ProviderFilter because

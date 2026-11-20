@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
-using ImageGenerator.MAUI.Core.Domain.Enums;
 using ImageGenerator.MAUI.Core.Domain.Services;
+using ImageGenerator.MAUI.Infrastructure.Imaging;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -24,7 +24,11 @@ namespace ImageGenerator.MAUI.Infrastructure.External.Civitai;
 /// Both surfaces are unversioned (MCP self-reports 0.1.0) — response parsing is tolerant and
 /// every server-side failure returns an unsuccessful result instead of throwing.
 /// </summary>
-public sealed class CivitaiPostingService : ICivitaiPostingService
+public sealed class CivitaiPostingService(
+    IHttpClientFactory httpClientFactory,
+    ICivitaiTokenStore tokenStore,
+    ILogger<CivitaiPostingService> logger)
+    : ICivitaiPostingService
 {
     internal const string HttpClientName = "civitai";
 
@@ -32,34 +36,19 @@ public sealed class CivitaiPostingService : ICivitaiPostingService
     private const string TrpcBaseUrl = "https://civitai.com/api/trpc/";
     private const string PostUrlPrefix = "https://civitai.com/posts/";
 
-    // upload_image rejects anything whose *decoded* size exceeds 10 MiB — base64 inflation is
-    // not the constraint, the raw file size is. An upscaled PNG clears it easily (observed:
-    // 13,246,392 bytes), so oversize files are re-encoded to JPEG for the upload only. Pixel
-    // dimensions are preserved, which is the point of having upscaled; the file on disk is
-    // untouched; and generation data is unaffected because it rides in the tRPC meta field
-    // rather than in the image bytes (see the class remarks).
-    private const int MaxUploadBytes = 10 * 1024 * 1024;
-    private const int RecompressQuality = 92;
+    // upload_image rejects anything whose *decoded* size passes 10 MiB, so oversize files are
+    // re-encoded for the upload only: the file on disk is untouched, and the generation data is
+    // unaffected because it rides in the tRPC meta field rather than in the image bytes (see the
+    // class remarks). Budget, quality and "never resize" live with every other outgoing image in
+    // ImagePayloadLimits.CivitAiUpload.
+    private static readonly ImagePayloadLimits UploadLimits = ImagePayloadLimits.CivitAiUpload;
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ICivitaiTokenStore _tokenStore;
-    private readonly IImageEncoderProvider _encoderProvider;
-    private readonly ILogger<CivitaiPostingService> _logger;
+    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+    private readonly ICivitaiTokenStore _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+    private readonly ILogger<CivitaiPostingService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private int _requestId;
-
-    public CivitaiPostingService(
-        IHttpClientFactory httpClientFactory,
-        ICivitaiTokenStore tokenStore,
-        IImageEncoderProvider encoderProvider,
-        ILogger<CivitaiPostingService> logger)
-    {
-        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
-        _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
-        _encoderProvider = encoderProvider ?? throw new ArgumentNullException(nameof(encoderProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
 
     public Task<CivitaiPostResult> PostImageAsync(
         string filePath,
@@ -127,7 +116,7 @@ public sealed class CivitaiPostingService : ICivitaiPostingService
             var outcome = publish ? "Posted to CivitAI" : "Created CivitAI draft";
             var note = recompressed == 0
                 ? "."
-                : $" ({recompressed} of {images.Count} re-encoded to JPEG to fit CivitAI's {MaxUploadBytes / (1024 * 1024)} MiB limit).";
+                : $" ({recompressed} of {images.Count} re-encoded to fit CivitAI's {UploadLimits.MaxBytes / (1024 * 1024)} MiB limit).";
             return new CivitaiPostResult(true, postId, $"{PostUrlPrefix}{postId}", outcome + note);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -159,26 +148,24 @@ public sealed class CivitaiPostingService : ICivitaiPostingService
     {
         var bytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
 
-        // Check locally rather than letting the server reject it: the upload would otherwise
-        // push ~4/3 of an oversize file over the wire before failing.
-        var recompressed = false;
-        if (bytes.Length > MaxUploadBytes)
+        // Shrunk locally rather than letting the server reject it: the upload would otherwise push
+        // ~4/3 of an oversize file over the wire before failing. The budget is bytes only — the
+        // pixels an upscale existed to produce stay, and transparency stays (see
+        // ImagePayloadLimits.CivitAiUpload).
+        var prepared = await ImagePayloadNormalizer.PrepareAsync(bytes, UploadLimits, cancellationToken);
+        if (prepared.Bytes is null)
         {
-            var originalLength = bytes.Length;
-            bytes = await RecompressToJpegAsync(bytes, cancellationToken);
-            recompressed = true;
-            _logger.LogInformation(
-                "CivitAI upload re-encoded to JPEG File={File} {Original} -> {Recompressed} bytes",
-                Path.GetFileName(filePath), originalLength, bytes.Length);
-
-            if (bytes.Length > MaxUploadBytes)
-            {
-                throw new CivitaiApiException(
-                    $"{Path.GetFileName(filePath)} is {originalLength / (1024.0 * 1024.0):F1} MB and is still " +
-                    $"{bytes.Length / (1024.0 * 1024.0):F1} MB after re-encoding to JPEG — CivitAI's limit is " +
-                    $"{MaxUploadBytes / (1024 * 1024)} MiB. Lower the upscale factor or resize before posting.");
-            }
+            throw new CivitaiApiException($"{Path.GetFileName(filePath)}: {prepared.Error}");
         }
+
+        var recompressed = prepared.Note is not null;
+        if (recompressed)
+        {
+            _logger.LogInformation(
+                "CivitAI upload re-encoded File={File} {Change}", Path.GetFileName(filePath), prepared.Note);
+        }
+
+        bytes = prepared.Bytes;
 
         var base64 = Convert.ToBase64String(bytes);
         var contentType = ImageDataUriEncoder.DetectImageMimeType(base64);
@@ -201,23 +188,6 @@ public sealed class CivitaiPostingService : ICivitaiPostingService
         if (meta is { Count: > 0 }) image["meta"] = meta;
         if (modelVersionId is { } versionId) image["modelVersionId"] = versionId;
         return (image, recompressed);
-    }
-
-    /// <summary>
-    /// Re-encodes to JPEG at the same pixel dimensions. Only reached for files over the upload
-    /// cap — upscaled PNGs, in practice, where dropping lossless encoding recovers far more than
-    /// the overage while keeping the resolution the upscale existed to produce.
-    /// </summary>
-    private async Task<byte[]> RecompressToJpegAsync(byte[] bytes, CancellationToken cancellationToken)
-    {
-        using var source = new MemoryStream(bytes, writable: false);
-        using var image = await SixLabors.ImageSharp.Image.LoadAsync(source, cancellationToken);
-        using var target = new MemoryStream();
-        await image.SaveAsync(
-            target,
-            _encoderProvider.GetImageEncoder(ImageOutputFormat.Jpg, RecompressQuality),
-            cancellationToken);
-        return target.ToArray();
     }
 
     public async Task<CivitaiConnectionResult> TestConnectionAsync(CancellationToken cancellationToken = default)

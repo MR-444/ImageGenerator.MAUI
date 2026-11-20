@@ -219,10 +219,12 @@ public class IdeaToPromptViewModelTests
     {
         var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
         var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
-            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator());
-        vm.SelectedModelTier = ModelTier.Local;
-        vm.BuildJson = true;
-        vm.Idea = "a red fox in snow";
+            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator())
+        {
+            SelectedModelTier = ModelTier.Local,
+            BuildJson = true,
+            Idea = "a red fox in snow"
+        };
 
         await vm.BuildCommand.ExecuteAsync(null);
 
@@ -230,11 +232,10 @@ public class IdeaToPromptViewModelTests
         builder.JsonTiers.Should().Equal(ModelTier.Local);
     }
 
-    // Real decodable bytes: reference-image intake now normalizes via VisionImageNormalizer,
+    // Real decodable bytes: reference-image intake now normalizes via ImagePayloadNormalizer,
     // so opaque dummies like [1,2,3,4] are rejected at import. PNGs pass through byte-identical,
     // keeping the pass-through assertions below valid.
     private static readonly byte[] TinyPng = CreatePng(1);
-    private static readonly byte[] OtherPng = CreatePng(2);
 
     private static byte[] CreatePng(int size)
     {
@@ -242,21 +243,6 @@ public class IdeaToPromptViewModelTests
         using var ms = new MemoryStream();
         image.SaveAsPng(ms);
         return ms.ToArray();
-    }
-
-    [Fact]
-    public void BuildCommand_ImageMode_RequiresReferenceImage()
-    {
-        var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
-        vm.SelectedModelTier = ModelTier.Local;
-
-        vm.SourceMode = IdeaSourceMode.Image;
-
-        vm.BuildCommand.CanExecute(null).Should().BeFalse("image mode needs an image, not typed text");
-
-        vm.SetReferenceImageForTest("ref.png", TinyPng);
-
-        vm.BuildCommand.CanExecute(null).Should().BeTrue();
     }
 
     [Fact]
@@ -287,135 +273,7 @@ public class IdeaToPromptViewModelTests
         vm.BuildCommand.CanExecute(null).Should().BeTrue();
         vm.StatusKind.Should().Be(StatusKind.Info);
     }
-
-    [Fact]
-    public async Task Build_ImageMode_ObservesImageBeforeVpe_AndKeepsObservationVisible()
-    {
-        var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
-        var observer = new FakeVisionObserver(VisionObservationResult.Ok("A boy on a playground swing in warm sun."));
-        var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
-            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator(), visionObserver: observer);
-        vm.SelectedModelTier = ModelTier.Local;
-        vm.SourceMode = IdeaSourceMode.Image;
-        vm.Idea = "make it uplifting";
-        vm.BuildJson = false;
-        vm.SetReferenceImageForTest("swing.png", TinyPng);
-
-        await vm.BuildCommand.ExecuteAsync(null);
-
-        observer.Requests.Should().ContainSingle();
-        observer.Requests[0].Provider.Should().Be(VisionObservationProvider.LocalOllama);
-        observer.Requests[0].FileName.Should().Be("swing.png");
-        vm.ObservedImageDescription.Should().Be("A boy on a playground swing in warm sun.");
-        vm.HasObservation.Should().BeTrue();
-        builder.ProseInputs.Should().ContainSingle()
-            .Which.Should().Contain("A boy on a playground swing")
-            .And.Contain("make it uplifting");
-        vm.Prose.Should().Be(Prose);
-        vm.StatusKind.Should().Be(StatusKind.Success);
-    }
-
-    // ---- Observe once, reuse until the image or vision model changes --------------------
-
-    // The reported bug: a second Build re-captioned an unchanged image, paying for a second vision
-    // call. The user's own scenario is the interesting one — they change the notes and rebuild to
-    // steer the prompt, which is a legitimate second build that must NOT re-observe: the notes never
-    // reach the vision model, they are merged in afterwards for the prose pass.
-    [Fact]
-    public async Task Build_ImageMode_SecondBuildWithChangedNotes_ReusesObservation_AndRestreersTheProse()
-    {
-        var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
-        var observer = new FakeVisionObserver(VisionObservationResult.Ok("A boy on a playground swing in warm sun."));
-        var vm = NewImageVm(builder, observer);
-        vm.Idea = "make it uplifting";
-
-        await vm.BuildCommand.ExecuteAsync(null);
-        vm.Idea = "make it melancholy instead";
-        await vm.BuildCommand.ExecuteAsync(null);
-
-        observer.Requests.Should().ContainSingle("the image and vision model never changed");
-        builder.ProseInputs.Should().HaveCount(2, "the prompt is still rebuilt for the new notes");
-        builder.ProseInputs[1].Should()
-            .Contain("A boy on a playground swing", "the cached observation is reused verbatim")
-            .And.Contain("make it melancholy instead")
-            .And.NotContain("make it uplifting");
-        vm.HasObservation.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task Build_ImageMode_NewImage_ObservesAgain()
-    {
-        var observer = new FakeVisionObserver(VisionObservationResult.Ok("An observation."));
-        var vm = NewImageVm(new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())), observer);
-
-        await vm.BuildCommand.ExecuteAsync(null);
-        vm.SetReferenceImageForTest("other.png", OtherPng);
-        await vm.BuildCommand.ExecuteAsync(null);
-
-        observer.Requests.Should().HaveCount(2, "a different image is a different caption");
-    }
-
-    [Fact]
-    public async Task Build_ImageMode_ChangedVisionModel_ObservesAgain()
-    {
-        var observer = new FakeVisionObserver(VisionObservationResult.Ok("An observation."));
-        var generator = BuildGenerator();
-        generator.OllamaVisionModel = "llava:13b";
-        var vm = NewImageVm(new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())), observer, generator);
-
-        await vm.BuildCommand.ExecuteAsync(null);
-        generator.OllamaVisionModel = "gemma3:27b";
-        await vm.BuildCommand.ExecuteAsync(null);
-
-        observer.Requests.Should().HaveCount(2, "another vision model sees the image differently");
-    }
-
-    [Fact]
-    public async Task ReObserve_DiscardsTheObservation_AndTheNextBuildObservesAgain()
-    {
-        var observer = new FakeVisionObserver(VisionObservationResult.Ok("An observation."));
-        var vm = NewImageVm(new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())), observer);
-        await vm.BuildCommand.ExecuteAsync(null);
-
-        vm.ReObserveCommand.CanExecute(null).Should().BeTrue();
-        vm.ReObserveCommand.Execute(null);
-
-        vm.HasObservation.Should().BeFalse("the box clears so the user can see it will be rebuilt");
-        await vm.BuildCommand.ExecuteAsync(null);
-        observer.Requests.Should().HaveCount(2);
-    }
-
-    [Fact]
-    public async Task Build_ImageMode_HandEditedObservation_IsUsedVerbatimWithoutObserving()
-    {
-        var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
-        var observer = new FakeVisionObserver(VisionObservationResult.Ok("A boy on a playground swing in warm sun."));
-        var vm = NewImageVm(builder, observer);
-        await vm.BuildCommand.ExecuteAsync(null);
-        vm.ObservationEdited.Should().BeFalse("the VM wrote that text, not the user");
-
-        vm.ObservedImageDescription = "A girl on a swing at dusk, hand-corrected.";
-        vm.ObservationEdited.Should().BeTrue();
-        await vm.BuildCommand.ExecuteAsync(null);
-
-        observer.Requests.Should().ContainSingle("an edited observation is never silently overwritten");
-        builder.ProseInputs[1].Should().Contain("hand-corrected");
-    }
-
-    [Fact]
-    public async Task Build_ImageMode_NewImage_ClearsTheHandEditedFlag()
-    {
-        var observer = new FakeVisionObserver(VisionObservationResult.Ok("An observation."));
-        var vm = NewImageVm(new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())), observer);
-        await vm.BuildCommand.ExecuteAsync(null);
-        vm.ObservedImageDescription = "My own words.";
-
-        vm.SetReferenceImageForTest("other.png", OtherPng);
-
-        vm.ObservationEdited.Should().BeFalse("an edit describes the old image, not the new one");
-        vm.HasObservation.Should().BeFalse();
-    }
-
+    
     // ---- No implicit Ollama model -------------------------------------------------------
 
     [Fact]
@@ -423,66 +281,17 @@ public class IdeaToPromptViewModelTests
     {
         var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
         var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
-            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator(ollamaModel: string.Empty));
-        vm.SelectedModelTier = ModelTier.Local;
-        vm.Idea = "a red fox in snow";
+            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator(ollamaModel: string.Empty))
+            {
+                SelectedModelTier = ModelTier.Local,
+                Idea = "a red fox in snow"
+            };
 
         await vm.BuildCommand.ExecuteAsync(null);
 
         builder.ProseInputs.Should().BeEmpty("guessing a model name only produced an opaque Ollama 404");
         vm.StatusKind.Should().Be(StatusKind.Error);
         vm.StatusMessage.Should().Contain("Pick a local Ollama model first");
-    }
-
-    [Fact]
-    public async Task Build_LocalVisionWithNoModelPicked_FailsBeforeObservation()
-    {
-        var observer = new FakeVisionObserver(VisionObservationResult.Ok("An observation."));
-        var vm = NewImageVm(
-            new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())),
-            observer,
-            BuildGenerator(ollamaModel: string.Empty));
-        vm.SelectedModelTier = ModelTier.Sonnet;   // only the VISION model is missing
-
-        await vm.BuildCommand.ExecuteAsync(null);
-
-        observer.Requests.Should().BeEmpty();
-        vm.StatusKind.Should().Be(StatusKind.Error);
-        vm.StatusMessage.Should().Contain("Pick a local vision model first");
-    }
-
-    // Image mode, Local tier, one reference image already loaded — the shape every reuse test wants.
-    private IdeaToPromptViewModel NewImageVm(
-        TrackingPromptBuilder builder, FakeVisionObserver observer, GeneratorViewModel? generator = null)
-    {
-        var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
-            NullLogger<IdeaToPromptViewModel>.Instance,
-            generator: generator ?? BuildGenerator(), visionObserver: observer);
-        vm.SelectedModelTier = ModelTier.Local;
-        vm.SourceMode = IdeaSourceMode.Image;
-        vm.BuildJson = false;
-        vm.SetReferenceImageForTest("swing.png", TinyPng);
-        return vm;
-    }
-
-    [Fact]
-    public async Task Build_ImageMode_ObservationFailure_StopsBeforeVpe()
-    {
-        var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
-        var observer = new FakeVisionObserver(VisionObservationResult.Fail("not a vision model"));
-        var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
-            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator(), visionObserver: observer);
-        vm.SelectedModelTier = ModelTier.Local;
-        vm.SourceMode = IdeaSourceMode.Image;
-        vm.SetReferenceImageForTest("ref.png", TinyPng);
-
-        await vm.BuildCommand.ExecuteAsync(null);
-
-        observer.Requests.Should().ContainSingle();
-        builder.ProseInputs.Should().BeEmpty("a failed observation must not spend a later model call");
-        vm.StatusKind.Should().Be(StatusKind.Error);
-        vm.StatusMessage.Should().Contain("not a vision model");
-        vm.HasProse.Should().BeFalse();
     }
 
     [Fact]
@@ -534,9 +343,11 @@ public class IdeaToPromptViewModelTests
     {
         var builder = new CancellableProseBuilder();
         var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
-            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator());
-        vm.SelectedModelTier = ModelTier.Local;
-        vm.Idea = "a red fox in snow";
+            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator())
+        {
+            SelectedModelTier = ModelTier.Local,
+            Idea = "a red fox in snow"
+        };
 
         // Start the build; it parks at the (infinite) prose call until the token fires.
         var build = vm.BuildCommand.ExecuteAsync(null);
@@ -574,36 +385,16 @@ public class IdeaToPromptViewModelTests
     {
         var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
         var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
-            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator());
-        vm.SelectedModelTier = tier;
-        vm.BuildJson = false;
-        vm.Idea = "a red fox in snow";
+            NullLogger<IdeaToPromptViewModel>.Instance, generator: BuildGenerator())
+        {
+            SelectedModelTier = tier,
+            BuildJson = false,
+            Idea = "a red fox in snow"
+        };
 
         await vm.BuildCommand.ExecuteAsync(null);
 
         builder.ProseTiers.Should().Equal(tier);
-    }
-
-    [Fact]
-    public async Task Build_OpenRouterImageMode_WithBlankModel_FailsBeforeObservation()
-    {
-        var generator = BuildGenerator();
-        generator.OpenRouterVisionModel = string.Empty;
-        var builder = new TrackingPromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
-        var observer = new FakeVisionObserver(VisionObservationResult.Ok("not reached"));
-        var vm = new IdeaToPromptViewModel(builder, _clipboard.Object,
-            NullLogger<IdeaToPromptViewModel>.Instance, generator, visionObserver: observer);
-        vm.SelectedModelTier = ModelTier.Local;
-        vm.SourceMode = IdeaSourceMode.Image;
-        vm.SelectedVisionProvider = VisionObservationProvider.OpenRouter;
-        vm.SetReferenceImageForTest("ref.png", TinyPng);
-
-        await vm.BuildCommand.ExecuteAsync(null);
-
-        observer.Requests.Should().BeEmpty();
-        builder.ProseInputs.Should().BeEmpty();
-        vm.StatusKind.Should().Be(StatusKind.Error);
-        vm.StatusMessage.Should().Contain("OpenRouter vision model");
     }
 
     [Fact]
@@ -624,11 +415,11 @@ public class IdeaToPromptViewModelTests
     }
 
     [Fact]
-    public void SetReferenceImageFromBytes_LoadsBrowserBitmapReferenceImage()
+    public async Task SetReferenceImageFromBytes_LoadsBrowserBitmapReferenceImage()
     {
         var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
 
-        var loaded = vm.SetReferenceImageFromBytes("browser-reference.png", TinyPng, "browser bitmap");
+        var loaded = await vm.SetReferenceImageFromBytesAsync("browser-reference.png", TinyPng, "browser bitmap");
 
         loaded.Should().BeTrue();
         vm.ReferenceImageBase64.Should().Be(Convert.ToBase64String(TinyPng));
@@ -637,43 +428,11 @@ public class IdeaToPromptViewModelTests
     }
 
     [Fact]
-    public async Task SetReferenceImageFromBytes_ValidImage_ResetsPreviousResultsAndActions()
-    {
-        var observer = new FakeVisionObserver(VisionObservationResult.Ok("The old image observation."));
-        var vm = new IdeaToPromptViewModel(
-            new FakePromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())),
-            _clipboard.Object,
-            NullLogger<IdeaToPromptViewModel>.Instance,
-            generator: BuildGenerator(),
-            visionObserver: observer);
-        vm.SelectedModelTier = ModelTier.Local;
-        vm.SourceMode = IdeaSourceMode.Image;
-        vm.BuildJson = true;
-        vm.SetReferenceImageForTest("old.png", TinyPng);
-        await vm.BuildCommand.ExecuteAsync(null);
-
-        vm.HasProse.Should().BeTrue();
-        vm.HasObservation.Should().BeTrue();
-        vm.HasJson.Should().BeTrue();
-
-        var loaded = vm.SetReferenceImageFromBytes("new.png", OtherPng);
-
-        loaded.Should().BeTrue();
-        vm.Prose.Should().BeEmpty();
-        vm.ObservedImageDescription.Should().BeEmpty();
-        vm.HasJson.Should().BeFalse();
-        vm.CopyProseCommand.CanExecute(null).Should().BeFalse();
-        vm.UseProseCommand.CanExecute(null).Should().BeFalse();
-        vm.UseJsonCommand.CanExecute(null).Should().BeFalse();
-        vm.BuildCommand.CanExecute(null).Should().BeTrue();
-    }
-
-    [Fact]
-    public void SetReferenceImageFromBytes_RejectsEmptyClipboardBitmap()
+    public async Task SetReferenceImageFromBytes_RejectsEmptyClipboardBitmap()
     {
         var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
 
-        var loaded = vm.SetReferenceImageFromBytes("pasted-reference.png", []);
+        var loaded = await vm.SetReferenceImageFromBytesAsync("pasted-reference.png", []);
 
         loaded.Should().BeFalse();
         vm.HasReferenceImage.Should().BeFalse();
@@ -681,29 +440,29 @@ public class IdeaToPromptViewModelTests
     }
 
     [Fact]
-    public void SetReferenceImageFromBytes_TranscodesWebpToPng()
+    public async Task SetReferenceImageFromBytes_TranscodesWebpToPng()
     {
         // The live-bug shape: a browser image (WebP, often with a lying .png/.jfif name) used
         // to pass through untouched and die at generate time as Ollama's opaque HTTP 400
         // ("Failed to load image or audio file"). Intake must hand every backend PNG/JPEG.
         using var image = new Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(2, 2);
         using var ms = new MemoryStream();
-        image.SaveAsWebp(ms);
+        await image.SaveAsWebpAsync(ms);
         var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
 
-        var loaded = vm.SetReferenceImageFromBytes("browser-image.png", ms.ToArray());
+        var loaded = await vm.SetReferenceImageFromBytesAsync("browser-image.png", ms.ToArray());
 
         loaded.Should().BeTrue();
         var stored = Convert.FromBase64String(vm.ReferenceImageBase64);
-        stored.Take(4).Should().Equal((byte)0x89, (byte)'P', (byte)'N', (byte)'G');
+        stored.Take(4).Should().Equal(0x89, (byte)'P', (byte)'N', (byte)'G');
     }
 
     [Fact]
-    public void SetReferenceImageFromBytes_RejectsUndecodableBytes()
+    public async Task SetReferenceImageFromBytes_RejectsUndecodableBytes()
     {
         var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
 
-        var loaded = vm.SetReferenceImageFromBytes("mystery.avif", [1, 2, 3, 4]);
+        var loaded = await vm.SetReferenceImageFromBytesAsync("mystery.avif", [1, 2, 3, 4]);
 
         loaded.Should().BeFalse();
         vm.HasReferenceImage.Should().BeFalse();
@@ -720,7 +479,7 @@ public class IdeaToPromptViewModelTests
         vm.Idea = "a red fox in snow";
         await vm.BuildCommand.ExecuteAsync(null);
 
-        var loaded = vm.SetReferenceImageFromBytes("empty.png", []);
+        var loaded = await vm.SetReferenceImageFromBytesAsync("empty.png", []);
 
         loaded.Should().BeFalse();
         vm.Prose.Should().Be(Prose);
@@ -731,14 +490,14 @@ public class IdeaToPromptViewModelTests
     }
 
     [Fact]
-    public void SetReferenceImageFromBytes_OversizedImage_DownscalesReferenceImage()
+    public async Task SetReferenceImageFromBytes_OversizedImage_DownscalesReferenceImage()
     {
         using var image = new Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(2000, 1500);
         using var ms = new MemoryStream();
-        image.SaveAsPng(ms);
+        await image.SaveAsPngAsync(ms);
         var vm = NewVm(ProseOk(), JsonOk(MutationTestData.BaseCaption()));
 
-        var loaded = vm.SetReferenceImageFromBytes("large.png", ms.ToArray());
+        var loaded = await vm.SetReferenceImageFromBytesAsync("large.png", ms.ToArray());
 
         loaded.Should().BeTrue();
         vm.HasReferenceImage.Should().BeTrue();
@@ -746,7 +505,7 @@ public class IdeaToPromptViewModelTests
         // Verify the stored base64 image was actually shrunk to <= 1024px:
         var storedBytes = Convert.FromBase64String(vm.ReferenceImageBase64);
         using var decoded = SixLabors.ImageSharp.Image.Load(storedBytes);
-        decoded.Width.Should().Be(VisionImageNormalizer.MaxDimension);
+        decoded.Width.Should().Be(ImagePayloadLimits.Vision.MaxDimension!.Value);
         decoded.Height.Should().Be(768);
     }
 
@@ -773,7 +532,7 @@ public class IdeaToPromptViewModelTests
             Task.FromResult(prose);
 
         public Task<PromptBuilderResult> BuildJsonAsync(
-            string prose,
+            string proseInner,
             CancellationToken cancellationToken = default,
             ModelTier tier = ModelTier.Opus) =>
             Task.FromResult(json);
@@ -796,7 +555,7 @@ public class IdeaToPromptViewModelTests
         }
 
         public Task<PromptBuilderResult> BuildJsonAsync(
-            string prose,
+            string proseInner,
             CancellationToken cancellationToken = default,
             ModelTier tier = ModelTier.Opus)
         {
@@ -830,23 +589,10 @@ public class IdeaToPromptViewModelTests
         }
 
         public Task<PromptBuilderResult> BuildJsonAsync(
-            string prose,
+            string proseInner,
             CancellationToken cancellationToken = default,
             ModelTier tier = ModelTier.Opus) =>
             Task.FromResult(PromptBuilderResult.Fail("not reached in the cancellation test"));
-    }
-
-    private sealed class FakeVisionObserver(VisionObservationResult result) : IVisionObservationService
-    {
-        public List<VisionObservationRequest> Requests { get; } = [];
-
-        public Task<VisionObservationResult> ObserveAsync(
-            VisionObservationRequest request,
-            CancellationToken ct = default)
-        {
-            Requests.Add(request);
-            return Task.FromResult(result);
-        }
     }
 
     private sealed class FakeReferenceImageDownloader(ReferenceImageDownloadResult result) : IReferenceImageDownloadService

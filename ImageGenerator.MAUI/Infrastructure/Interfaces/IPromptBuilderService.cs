@@ -21,7 +21,7 @@ public interface IPromptBuilderService
 
     /// <summary>Pass 2: prose → a schema-valid Ideogram V4 structured prompt (structured output + validate-retry).</summary>
     Task<PromptBuilderResult> BuildJsonAsync(
-        string prose,
+        string proseInner,
         CancellationToken cancellationToken = default,
         ModelTier tier = ModelTier.Opus);
 }

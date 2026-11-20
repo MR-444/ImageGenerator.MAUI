@@ -18,7 +18,7 @@ namespace ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 /// same shape <c>CivitaiPostingService</c> uses, which carries zero risk to the MAUI win-x64
 /// single-file/trimmed publish. The official <c>Anthropic</c> NuGet SDK can replace the
 /// <see cref="StructuredCompletion"/> seam later without touching the interface, the validator gate,
-/// or the handoff — once its publish behavior is verified on the trimmed target.
+/// or the handoff — once its publishing behavior is verified on the trimmed target.
 /// </para>
 /// </summary>
 public sealed class PromptBuilderService : IPromptBuilderService
@@ -177,11 +177,11 @@ public sealed class PromptBuilderService : IPromptBuilderService
 
     /// <summary>Pass 2 (Ideogram adapter): prose → a schema-valid V4 prompt with one validator-feedback retry.</summary>
     public async Task<PromptBuilderResult> BuildJsonAsync(
-        string prose,
+        string proseInner,
         CancellationToken cancellationToken = default,
         ModelTier tier = ModelTier.Opus)
     {
-        if (string.IsNullOrWhiteSpace(prose))
+        if (string.IsNullOrWhiteSpace(proseInner))
             return PromptBuilderResult.Fail("Build a prose prompt first.");
 
         var modelId = ResolveModelId(tier);
@@ -200,7 +200,7 @@ public sealed class PromptBuilderService : IPromptBuilderService
             return PromptBuilderResult.Fail("Couldn't load the prompt-builder instructions. See app.log.");
         }
 
-        var messages = new List<ChatTurn> { new("user", prose.Trim()) };
+        var messages = new List<ChatTurn> { new("user", proseInner.Trim()) };
 
         for (var attempt = 1; attempt <= MaxAttempts; attempt++)
         {

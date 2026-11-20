@@ -5,7 +5,6 @@ using FluentAssertions;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.External.Civitai;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
-using ImageGenerator.MAUI.Infrastructure.Services;
 using ImageGenerator.MAUI.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -48,7 +47,6 @@ public sealed class CivitaiPostingServiceTests : IDisposable
         _sut = new CivitaiPostingService(
             new StubHttpClientFactory(() => new HttpClient(_handler, disposeHandler: false)),
             _tokenStore.Object,
-            new ImageEncoderProvider(),
             NullLogger<CivitaiPostingService>.Instance);
     }
 
@@ -164,7 +162,7 @@ public sealed class CivitaiPostingServiceTests : IDisposable
 
         await _sut.PostImageAsync(_imagePath, "t", null, null);
 
-        File.ReadAllBytes(_imagePath).Should().Equal(PngBytes,
+        (await File.ReadAllBytesAsync(_imagePath)).Should().Equal(PngBytes,
             "the upload must be byte-identical and never touch the saved file");
     }
 
@@ -180,7 +178,7 @@ public sealed class CivitaiPostingServiceTests : IDisposable
         var result = await _sut.PostImageAsync(oversizePath, "t", null, null);
 
         result.Success.Should().BeTrue(because: result.Message);
-        result.Message.Should().Contain("re-encoded to JPEG");
+        result.Message.Should().Contain("re-encoded");
 
         var uploaded = Convert.FromBase64String(UploadedDataArgument());
         uploaded.Length.Should().BeLessThan(10 * 1024 * 1024, "the payload must fit CivitAI's cap");
@@ -193,14 +191,14 @@ public sealed class CivitaiPostingServiceTests : IDisposable
     public async Task PostImage_OversizeFile_LeavesTheLocalFileUntouched()
     {
         var oversizePath = WriteIncompressiblePng(2600, 2600);
-        var originalBytes = File.ReadAllBytes(oversizePath);
+        var originalBytes = await File.ReadAllBytesAsync(oversizePath);
 
         _handler.Enqueue(HttpStatusCode.OK, UploadResponse);
         _handler.Enqueue(HttpStatusCode.OK, CreatePostResponse);
 
         await _sut.PostImageAsync(oversizePath, "t", null, null);
 
-        File.ReadAllBytes(oversizePath).Should().Equal(originalBytes,
+        (await File.ReadAllBytesAsync(oversizePath)).Should().Equal(originalBytes,
             "re-encoding happens in memory for the upload only");
     }
 
@@ -341,7 +339,7 @@ public sealed class CivitaiPostingServiceTests : IDisposable
     public async Task PostImages_MultipleImages_CreatesOneDraft_WithIndexedImages()
     {
         var second = Path.Combine(_tempDir, "image2.png");
-        File.WriteAllBytes(second, PngBytes);
+        await File.WriteAllBytesAsync(second, PngBytes);
 
         // Two uploads, then one create.
         _handler.Enqueue(HttpStatusCode.OK, UploadResponse);

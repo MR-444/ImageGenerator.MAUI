@@ -170,7 +170,7 @@ public partial class IdeaToPromptPage
                 var bitmapBytes = await TryReadBitmapAsync(dv);
                 if (bitmapBytes is { Length: > 0 })
                 {
-                    viewModel.SetReferenceImageFromBytes("browser-reference.png", bitmapBytes, sourcePath: "browser bitmap");
+                    await viewModel.SetReferenceImageFromBytesAsync("browser-reference.png", bitmapBytes, sourcePath: "browser bitmap");
                     return;
                 }
             }
@@ -235,7 +235,7 @@ public partial class IdeaToPromptPage
         {
             var bitmapBytes = await TryReadBitmapAsync(dataView);
             if (bitmapBytes is { Length: > 0 })
-                return viewModel.SetReferenceImageFromBytes($"{source}-reference.png", bitmapBytes, $"{source} bitmap");
+                return await viewModel.SetReferenceImageFromBytesAsync($"{source}-reference.png", bitmapBytes, $"{source} bitmap");
         }
 
         // Browser clipboards commonly expose both a bitmap and the source URL. Prefer the bitmap
@@ -281,7 +281,7 @@ public partial class IdeaToPromptPage
         var sourcePath = string.IsNullOrWhiteSpace(file.Path)
             ? "dropped storage file"
             : file.Path;
-        return viewModel.SetReferenceImageFromBytes(fileName, imageBytes, sourcePath);
+        return await viewModel.SetReferenceImageFromBytesAsync(fileName, imageBytes, sourcePath);
     }
 
     private static async Task<byte[]?> TryReadStorageFileAsync(StorageFile file)

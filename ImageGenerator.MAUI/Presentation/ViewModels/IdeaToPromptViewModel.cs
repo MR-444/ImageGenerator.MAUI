@@ -151,8 +151,8 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
     // part of it: user notes never reach the vision model (BuildIdeaFromObservation merges them in
     // afterwards, for the prose pass), so re-observing because the notes changed would buy nothing
     // and cost a second vision call. The image is hashed rather than compared by reference —
-    // VisionImageNormalizer returns the SAME array for already-valid PNG/JPEG, so identity is not a
-    // usable change signal.
+    // ImagePayloadNormalizer hands back the SAME array for a payload that was already valid, so
+    // identity is not a usable change signal.
     private string? _observationFingerprint;
 
     private string CurrentObservationFingerprint() =>
@@ -265,14 +265,16 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         await using var stream = await result.OpenReadAsync();
         using var memoryStream = new MemoryStream();
         await stream.CopyToAsync(memoryStream);
-        if (SetReferenceImage(result.FileName, memoryStream.ToArray(), result.FullPath, createPreview: true))
+        if (await SetReferenceImageAsync(result.FileName, memoryStream.ToArray(), result.FullPath))
         {
-            SetStatus($"Reference image ready: {result.FileName}", StatusKind.Info);
+            SetStatus($"Reference image ready: {ReferenceImageFileName}", StatusKind.Info);
         }
     }
 
     public async Task SetReferenceImageFromPathAsync(string filePath)
     {
+        if (IsBusy) return;
+
         if (!File.Exists(filePath))
         {
             SetStatus("File not found.", StatusKind.Error);
@@ -282,9 +284,9 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         try
         {
             var imageBytes = await File.ReadAllBytesAsync(filePath);
-            if (SetReferenceImage(Path.GetFileName(filePath), imageBytes, filePath, createPreview: true))
+            if (await SetReferenceImageAsync(Path.GetFileName(filePath), imageBytes, filePath))
             {
-                SetStatus($"Reference image ready: {Path.GetFileName(filePath)}", StatusKind.Info);
+                SetStatus($"Reference image ready: {ReferenceImageFileName}", StatusKind.Info);
             }
         }
         catch (Exception ex)
@@ -293,21 +295,25 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         }
     }
 
-    public bool SetReferenceImageFromBytes(string fileName, byte[] bytes, string? sourcePath = null)
+    public async Task<bool> SetReferenceImageFromBytesAsync(string fileName, byte[] bytes, string? sourcePath = null)
     {
+        if (IsBusy) return false;
+
         if (bytes.Length == 0)
         {
             SetStatus("The dropped image was empty.", StatusKind.Error);
             return false;
         }
 
-        if (!SetReferenceImage(fileName, bytes, sourcePath, createPreview: true)) return false;
+        if (!await SetReferenceImageAsync(fileName, bytes, sourcePath)) return false;
         SetStatus($"Reference image ready: {ReferenceImageFileName}", StatusKind.Info);
         return true;
     }
 
     public async Task<bool> SetReferenceImageFromUrlAsync(string url)
     {
+        if (IsBusy) return false;
+
         if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
@@ -332,7 +338,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
                 return false;
             }
 
-            if (!SetReferenceImage(result.FileName ?? "browser-reference", result.Bytes, uri.ToString(), createPreview: true))
+            if (!await SetReferenceImageAsync(result.FileName ?? "browser-reference", result.Bytes, uri.ToString()))
             {
                 return false;
             }
@@ -350,6 +356,8 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
     [RelayCommand]
     private void ClearReferenceImage()
     {
+        if (IsBusy) return;
+
         ReferenceImageBase64 = string.Empty;
         ReferenceImagePreview = null;
         ReferenceImageFileName = string.Empty;
@@ -359,18 +367,14 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         SetStatus("Reference image cleared.", StatusKind.Info);
     }
 
-    internal void SetReferenceImageForTest(string fileName, byte[] bytes)
+    private async Task<bool> SetReferenceImageAsync(string fileName, byte[] bytes, string? sourcePath)
     {
-        SetReferenceImage(fileName, bytes, sourcePath: null, createPreview: false);
-    }
-
-    private bool SetReferenceImage(string fileName, byte[] bytes, string? sourcePath, bool createPreview)
-    {
-        // Normalize BEFORE accepting: Ollama only decodes JPEG/PNG, so a browser WebP (often
-        // saved with a lying ".png"/".jfif" name) used to sail through here and die at
-        // generate time as an opaque HTTP 400. Decodable formats are transcoded to PNG; the
-        // rest are rejected right now with a message the user can act on.
-        var (normalized, error) = VisionImageNormalizer.Normalize(bytes);
+        // Normalize off the UI thread BEFORE accepting: Ollama only decodes JPEG/PNG, so a browser
+        // WebP (often saved with a lying ".png"/".jfif" name) used to sail through here and die at
+        // generate time as an opaque HTTP 400. Decodable formats are transcoded to PNG; the rest
+        // are rejected right now with a message the user can act on. The vision budget also caps
+        // the long edge at 1024px, because a tiled vision model bills the image in tokens.
+        var (normalized, _, error) = await ImagePayloadNormalizer.PrepareAsync(bytes, ImagePayloadLimits.Vision);
         if (normalized is null)
         {
             SetStatus(error!, StatusKind.Error);
@@ -382,23 +386,21 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
             ? sourcePath is { Length: > 0 } path ? Path.GetFileName(path) : "reference image"
             : fileName;
         ResetAllResults();
+        ReferenceImagePreview = PreviewFor(normalized);
+        return true;
+    }
 
-        if (!createPreview)
-        {
-            ReferenceImagePreview = null;
-            return true;
-        }
-
+    private ImageSource? PreviewFor(byte[] bytes)
+    {
         try
         {
-            ReferenceImagePreview = ImageSource.FromStream(() => new MemoryStream(normalized));
+            return ImageSource.FromStream(() => new MemoryStream(bytes));
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "IdeaToPrompt: reference image preview failed");
-            ReferenceImagePreview = null;
+            return null;
         }
-        return true;
     }
 
     // A new (or cleared) reference image invalidates everything, the observation included.
@@ -577,20 +579,30 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         }
         finally
         {
-            if (_ollamaCatalog is not null)
+            try
             {
-                if (tier == ModelTier.Local)
-                    await _ollamaCatalog.UnloadAsync(_settings.OllamaBaseUrl, _settings.OllamaModel, token);
-                if (usesLocalVision)
-                    await _ollamaCatalog.UnloadAsync(_settings.OllamaBaseUrl, _settings.OllamaVisionModel, token);
+                if (_ollamaCatalog is not null)
+                {
+                    // Pass CancellationToken.None so a user cancel still unloads local models from VRAM.
+                    if (tier == ModelTier.Local)
+                        await _ollamaCatalog.UnloadAsync(_settings.OllamaBaseUrl, _settings.OllamaModel, CancellationToken.None);
+                    if (usesLocalVision)
+                        await _ollamaCatalog.UnloadAsync(_settings.OllamaBaseUrl, _settings.OllamaVisionModel, CancellationToken.None);
+                }
             }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "IdeaToPrompt: Ollama model unload failed");
+            }
+            finally
+            {
+                gpuLease?.Dispose();
+                if (gpuGated && _generator is not null) _generator.IsGpuBusy = false;
 
-            gpuLease?.Dispose();
-            if (gpuGated && _generator is not null) _generator.IsGpuBusy = false;
-
-            IsBusy = false;
-            _cts = null;
-            cts.Dispose();
+                IsBusy = false;
+                _cts = null;
+                cts.Dispose();
+            }
         }
     }
 
@@ -661,7 +673,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
     }
 
     /// <summary>The established handoff: serialize compact into the prompt box and flip on JSON mode —
-    /// identical to <c>IdeogramStructureEditorViewModel.ApplyToGenerator</c>. Internal so tests assert it.</summary>
+    /// identical to <c>IdeogramStructureEditorViewModel.ApplyToGenerator</c>.</summary>
     private void ApplyToGenerator(V4JsonPrompt prompt)
     {
         if (_generator is null) return;

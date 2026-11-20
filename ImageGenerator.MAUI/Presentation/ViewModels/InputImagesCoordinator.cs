@@ -3,12 +3,18 @@ using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
+using ImageGenerator.MAUI.Infrastructure.Imaging;
+using Microsoft.Extensions.Logging;
 
 namespace ImageGenerator.MAUI.Presentation.ViewModels;
 
 /// <summary>
 /// Sub-VM that owns the image-prompt collection and the sticky-AR state machine.
 /// Created and held by GeneratorViewModel; bound from the Input Image card on MainPage.
+///
+/// Intake: every file arriving through either entry point is shrunk to a payload a hosted API
+/// takes (<see cref="ImagePayloadLimits.ModelInput"/>) before it joins the collection, so nothing
+/// downstream ever sees a 36 MB photo.
 ///
 /// AR sticky: tracks the user's last explicit AR pick so a model swap that lands on a model
 /// supporting it can restore it; also auto-switches AR to "match_input_image" on 0→1 image
@@ -24,6 +30,7 @@ public sealed partial class InputImagesCoordinator : ObservableObject
     private readonly Action<string> _setAspectRatioProgrammatically;
     private readonly Action _mirrorImagePromptsToParameters;
     private readonly Action<string, StatusKind> _setStatus;
+    private readonly ILogger _logger;
 
     private int _lastImageCount;
     private string? _preferredAspectRatio;
@@ -44,12 +51,14 @@ public sealed partial class InputImagesCoordinator : ObservableObject
         Action<string> setAspectRatioProgrammatically,
         Action mirrorImagePromptsToParameters,
         Action<string, StatusKind> setStatus,
+        ILogger logger,
         string? initialPreferredAspectRatio = null)
     {
         _capsAccessor = capsAccessor ?? throw new ArgumentNullException(nameof(capsAccessor));
         _setAspectRatioProgrammatically = setAspectRatioProgrammatically ?? throw new ArgumentNullException(nameof(setAspectRatioProgrammatically));
         _mirrorImagePromptsToParameters = mirrorImagePromptsToParameters ?? throw new ArgumentNullException(nameof(mirrorImagePromptsToParameters));
         _setStatus = setStatus ?? throw new ArgumentNullException(nameof(setStatus));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _preferredAspectRatio = initialPreferredAspectRatio;
 
         SelectedImages.CollectionChanged += OnSelectedImagesChanged;
@@ -153,15 +162,23 @@ public sealed partial class InputImagesCoordinator : ObservableObject
             return;
         }
 
-        await using var stream = await result.OpenReadAsync();
-        using var memoryStream = new MemoryStream();
-        await stream.CopyToAsync(memoryStream);
-        var imageBytes = memoryStream.ToArray();
-        var base64 = Convert.ToBase64String(imageBytes);
-        var preview = ImageSource.FromStream(() => new MemoryStream(imageBytes));
+        try
+        {
+            await using var stream = await result.OpenReadAsync();
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
 
-        SelectedImages.Add(new InputImageItem(base64, preview, result.FileName, result.FullPath));
-        _setStatus($"Added image: {result.FileName} ({SelectedImages.Count}/{_capsAccessor().MaxImageInputs})", StatusKind.Info);
+            await AttachAsync(
+                memoryStream.ToArray(),
+                result.FileName,
+                result.FullPath,
+                () => $"Added image: {result.FileName} ({SelectedImages.Count}/{_capsAccessor().MaxImageInputs})",
+                StatusKind.Info);
+        }
+        catch (Exception ex)
+        {
+            _setStatus($"Error adding image: {ex.Message}", StatusKind.Error);
+        }
     }
 
     [RelayCommand]
@@ -202,16 +219,75 @@ public sealed partial class InputImagesCoordinator : ObservableObject
 
         try
         {
-            var imageBytes = await File.ReadAllBytesAsync(filePath);
-            var base64 = Convert.ToBase64String(imageBytes);
-            var preview = ImageSource.FromStream(() => new MemoryStream(imageBytes));
-            var name = Path.GetFileName(filePath);
-            SelectedImages.Add(new InputImageItem(base64, preview, name, filePath));
-            _setStatus("Added as input.", StatusKind.Success);
+            await AttachAsync(
+                await File.ReadAllBytesAsync(filePath),
+                Path.GetFileName(filePath),
+                filePath,
+                () => "Added as input.",
+                StatusKind.Success);
         }
         catch (Exception ex)
         {
             _setStatus($"Error using image as input: {ex.Message}", StatusKind.Error);
+        }
+    }
+
+    /// <summary>
+    /// Shared tail of both add paths: reduce the file to a payload a hosted model can take, queue
+    /// it (which mirrors it into the parameters), report. A file nothing can decode is refused here,
+    /// while the user is still looking at the picker, rather than at generate time as a provider
+    /// error nobody recognises.
+    ///
+    /// <paramref name="addedMessage"/> is built after the add so it can report the position in the
+    /// list; <paramref name="kind"/> is the status colour that belongs to it.
+    /// </summary>
+    private async Task AttachAsync(
+        byte[] imageBytes,
+        string fileName,
+        string? sourcePath,
+        Func<string> addedMessage,
+        StatusKind kind)
+    {
+        var prepared = await ImagePayloadNormalizer.PrepareAsync(imageBytes, ImagePayloadLimits.ModelInput);
+        if (prepared.Bytes is null)
+        {
+            _setStatus(prepared.Error!, StatusKind.Error);
+            return;
+        }
+
+        SelectedImages.Add(new InputImageItem(
+            Convert.ToBase64String(prepared.Bytes),
+            PreviewFor(prepared.Bytes),
+            fileName,
+            sourcePath));
+
+        var message = addedMessage();
+        if (prepared.Note is { } note)
+        {
+            // What goes out is not the file that came in — resized, re-encoded, or both — and the
+            // model is about to work from that other picture, so say so where the add was reported.
+            _logger.LogInformation("Input image re-encoded File={FileName} {Change}", fileName, note);
+            message = $"{message} · {note}";
+        }
+        _setStatus(message, kind);
+    }
+
+    /// <summary>
+    /// Thumbnail made from the bytes that will actually be sent rather than from the original file,
+    /// so the list never decodes a 36 MB photo to draw a 40-pixel square. A thumbnail that cannot be
+    /// made must not cost the user the attachment, so failure here is swallowed on purpose: the
+    /// image stays queued, only its picture is missing.
+    /// </summary>
+    private ImageSource? PreviewFor(byte[] bytes)
+    {
+        try
+        {
+            return ImageSource.FromStream(() => new MemoryStream(bytes));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Input image preview failed Bytes={Bytes}", bytes.Length);
+            return null;
         }
     }
 }
