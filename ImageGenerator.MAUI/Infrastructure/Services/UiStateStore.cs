@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
+using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging;
 
 namespace ImageGenerator.MAUI.Infrastructure.Services;
@@ -24,6 +26,9 @@ public sealed class UiStateStore : IUiStateStore
     private const string OllamaVisionModelKey = "imggen.ollama_vision_model";
     private const string OllamaModelCacheKey = "imggen.ollama_model_cache";
     private const string OllamaVisionModelCacheKey = "imggen.ollama_vision_model_cache";
+    private const string PromptWriterModelKey = "imggen.prompt_writer_model";
+    private const string MutationModelKey = "imggen.mutation_model";
+    private const string EnrichModelKey = "imggen.enrich_model";
     private const string OpenRouterVisionModelKey = "imggen.openrouter_vision_model";
     private const string OpenRouterVisionFreeOnlyKey = "imggen.openrouter_vision_free_only";
     private const string IdeaBuildJsonKey = "imggen.idea_build_json";
@@ -220,6 +225,153 @@ public sealed class UiStateStore : IUiStateStore
     public string? LoadOllamaVisionModel() => LoadString(OllamaVisionModelKey);
 
     public void PersistOllamaVisionModel(string value) => PersistString(OllamaVisionModelKey, value);
+
+    // One Ollama tag per LLM role. Until documents/plan-model-picker-rows.md all three read
+    // OllamaModelKey, so choosing a cheap tag to verify a caption mutation also changed the model
+    // behind the generate button.
+    public string? LoadPromptWriterModel() => LoadRoleModel(PromptWriterModelKey);
+
+    public void PersistPromptWriterModel(string value) => PersistString(PromptWriterModelKey, value);
+
+    /// <inheritdoc cref="LoadPromptWriterModel" />
+    public string? LoadMutationModel() => LoadRoleModel(MutationModelKey);
+
+    public void PersistMutationModel(string value) => PersistString(MutationModelKey, value);
+
+    /// <inheritdoc cref="LoadPromptWriterModel" />
+    public string? LoadEnrichModel() => LoadRoleModel(EnrichModelKey);
+
+    public void PersistEnrichModel(string value) => PersistString(EnrichModelKey, value);
+
+    // Which provider each text role calls, and the model it calls per provider. See
+    // IUiStateStore.LoadLlmProvider / LoadLlmModel for why the model is keyed by provider too.
+    private static string ProviderKey(ModelRole role) => role switch
+    {
+        ModelRole.PromptWrite => "imggen.prompt_writer_provider",
+        ModelRole.Mutate => "imggen.mutation_provider",
+        _ => "imggen.enrich_provider"
+    };
+
+    private static string AnthropicModelKey(ModelRole role) => role switch
+    {
+        ModelRole.PromptWrite => "imggen.prompt_writer.anthropic_model",
+        ModelRole.Mutate => "imggen.mutation.anthropic_model",
+        _ => "imggen.enrich.anthropic_model"
+    };
+
+    private static string OpenRouterModelKey(ModelRole role) => role switch
+    {
+        ModelRole.PromptWrite => "imggen.prompt_writer.openrouter_model",
+        ModelRole.Mutate => "imggen.mutation.openrouter_model",
+        _ => "imggen.enrich.openrouter_model"
+    };
+
+    public ModelProvider LoadLlmProvider(ModelRole role)
+    {
+        var key = ProviderKey(role);
+        if (RoleKeyIsStored(key))
+        {
+            // An enum written as text outlives renames; degrade to the default rather than throwing on
+            // startup, which is what the tier picker did with an unrecognised stored value.
+            return Enum.TryParse<ModelProvider>(LoadString(key), out var parsed) ? parsed : DefaultLlmProvider;
+        }
+
+        // First run after the provider split: inherit the prompt writer's persisted tier (the only role
+        // that ever remembered one) so "I run this on Ollama" survives the upgrade; every other role
+        // defaults to the provider its old tier name implied.
+        ModelProvider? inherited = null;
+        if (role == ModelRole.PromptWrite && LoadPromptWriterTier() is { } legacyTier)
+            inherited = FromLegacyTier(legacyTier);
+        var adopted = inherited ?? DefaultLlmProvider;
+        PersistString(key, adopted.ToString());
+        _logger.LogDebug("UiStateStore.{Key} adopted {Provider} once", key, adopted);
+        return adopted;
+    }
+
+    public void PersistLlmProvider(ModelRole role, ModelProvider value) => PersistString(ProviderKey(role), value.ToString());
+
+    public string? LoadLlmModel(ModelRole role, ModelProvider provider) => provider switch
+    {
+        // The Local slot is the per-role key from Phase A, seeded once from the generation model. That
+        // seeding is correct here and only here: the generation model IS an Ollama tag.
+        ModelProvider.Local => role switch
+        {
+            ModelRole.PromptWrite => LoadPromptWriterModel(),
+            ModelRole.Mutate => LoadMutationModel(),
+            _ => LoadEnrichModel()
+        },
+        // A default Claude model is honest — the app has always named one. There is no default
+        // OpenRouter slug: the catalog is hundreds deep and any guess bills a credit to someone.
+        ModelProvider.Anthropic => LoadString(AnthropicModelKey(role)) ?? AnthropicModels.DefaultFor(role),
+        _ => LoadString(OpenRouterModelKey(role))
+    };
+
+    public void PersistLlmModel(ModelRole role, ModelProvider provider, string? value)
+    {
+        var key = provider switch
+        {
+            ModelProvider.Local => role switch
+            {
+                ModelRole.PromptWrite => PromptWriterModelKey,
+                ModelRole.Mutate => MutationModelKey,
+                _ => EnrichModelKey
+            },
+            ModelProvider.Anthropic => AnthropicModelKey(role),
+            _ => OpenRouterModelKey(role)
+        };
+        PersistString(key, value ?? string.Empty);
+    }
+
+    public LlmTarget LoadLlmTarget(ModelRole role)
+    {
+        var provider = LoadLlmProvider(role);
+        return new LlmTarget(
+            provider,
+            LoadLlmModel(role, provider) ?? string.Empty,
+            provider == ModelProvider.Local ? ModelConstants.Ollama.ResolveBaseUrl(LoadOllamaBaseUrl()) : string.Empty);
+    }
+
+    /// <summary>What these roles ran on before providers were choosable: Anthropic for all three text
+    /// roles, matching the Sonnet/Opus defaults each page shipped with.</summary>
+    private const ModelProvider DefaultLlmProvider = ModelProvider.Anthropic;
+
+    private static ModelProvider FromLegacyTier(ModelTier tier) => tier == ModelTier.Local
+        ? ModelProvider.Local
+        : ModelProvider.Anthropic;
+
+    /// <summary>
+    /// Read-through seeding, and the only reason a Load ever writes: a role with a value of its own
+    /// keeps it; a role whose key has never been written adopts the generation model ONCE and writes
+    /// it down, so this update changes nobody's behaviour on first launch. Written on the first read
+    /// is what makes it once — afterwards the role owns the value, and clearing it stays cleared.
+    /// </summary>
+    private string? LoadRoleModel(string key)
+    {
+        // ContainsKey rather than "did something come back": this store collapses an empty value to
+        // null on read, and a role cleared because its model left the server must stay cleared rather
+        // than silently re-borrowing whatever the generate button renders with.
+        if (RoleKeyIsStored(key)) return LoadString(key);
+
+        var seed = LoadString(OllamaModelKey);
+        if (string.IsNullOrWhiteSpace(seed)) return null;
+
+        PersistString(key, seed);
+        _logger.LogDebug("UiStateStore.{Key} adopted the generation model {Model} once", key, seed);
+        return seed;
+    }
+
+    private bool RoleKeyIsStored(string key)
+    {
+        try
+        {
+            return _preferences.ContainsKey(key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "UiStateStore.ContainsKey({Key}) failed", key);
+            return false;
+        }
+    }
 
     public IReadOnlyList<string> LoadOllamaModels(string baseUrl) =>
         LoadModelCache(OllamaModelCacheKey, baseUrl);

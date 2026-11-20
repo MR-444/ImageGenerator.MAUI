@@ -60,8 +60,10 @@ public interface IUiStateStore
     /// </summary>
     string? LoadOllamaModel();
     /// <summary>
-    /// The Ollama vision-capable model used by image-to-prompt observation. Null when never set — callers
-    /// fall back to the ordinary Ollama model, and must then ask the user to pick one.
+    /// The Ollama vision-capable model used by image-to-prompt observation. Null when never set — the
+    /// observer then refuses with "pick a vision model first". It deliberately does NOT fall back to
+    /// <see cref="LoadOllamaModel"/>: that value is the image generation model, and an Ollama image
+    /// model cannot answer a chat request about a picture.
     /// </summary>
     string? LoadOllamaVisionModel();
     /// <summary>
@@ -133,6 +135,57 @@ public interface IUiStateStore
     void PersistOllamaModel(string value);
     /// <inheritdoc cref="LoadOllamaVisionModel"/>
     void PersistOllamaVisionModel(string value);
+
+    /// <summary>
+    /// The Ollama tag one LLM role calls on its Local tier: the prompt writer, the caption mutator,
+    /// the region enricher. Three values because they are three decisions — before
+    /// <c>documents/plan-model-picker-rows.md</c> all three read <see cref="LoadOllamaModel"/>, which
+    /// also named the image model the generate button renders with.
+    /// Null when never set and never seeded; the store seeds a role that has no value of its own from
+    /// <see cref="LoadOllamaModel"/> exactly once. There is no default model — callers must refuse
+    /// with "pick a model first" rather than guess one.
+    /// </summary>
+    string? LoadPromptWriterModel();
+    /// <inheritdoc cref="LoadPromptWriterModel" />
+    string? LoadMutationModel();
+    /// <inheritdoc cref="LoadPromptWriterModel" />
+    string? LoadEnrichModel();
+    /// <inheritdoc cref="LoadPromptWriterModel" />
+    void PersistPromptWriterModel(string value);
+    /// <inheritdoc cref="LoadPromptWriterModel" />
+    void PersistMutationModel(string value);
+    /// <inheritdoc cref="LoadPromptWriterModel" />
+    void PersistEnrichModel(string value);
+
+    /// <summary>
+    /// Which provider answers this role's calls. Defaults to <see cref="ModelProvider.Anthropic"/> —
+    /// the tier all three text roles ran on before a provider was something you could choose, so this
+    /// update moves nobody. A stored value that no longer parses also lands there rather than throwing:
+    /// an enum written as text is allowed to outlive a rename, and silently defaulting is what the
+    /// tier picker already did with an unknown selection.
+    /// </summary>
+    ModelProvider LoadLlmProvider(ModelRole role);
+    /// <inheritdoc cref="LoadLlmProvider" />
+    void PersistLlmProvider(ModelRole role, ModelProvider value);
+
+    /// <summary>
+    /// The model this role calls <em>on the given provider</em>. Per provider on purpose: a role that
+    /// tries Claude for a run and comes back to Ollama must not have lost its local tag, and an Ollama
+    /// tag is not a valid Claude or OpenRouter id — seeding those slots from the generation model would
+    /// be the "hand a model something it cannot read" bug all over again.
+    /// Anthropic falls back to that role's historical default model; Local and OpenRouter have no
+    /// default (which models exist is per-server / per-catalog) and return null for "pick one first".
+    /// </summary>
+    string? LoadLlmModel(ModelRole role, ModelProvider provider);
+    /// <inheritdoc cref="LoadLlmModel" />
+    void PersistLlmModel(ModelRole role, ModelProvider provider, string? value);
+
+    /// <summary>
+    /// Provider + model + endpoint in one call: what a service is handed so it never has to work out
+    /// which model its role wanted. The single place the "no URL typed means the default host" rule is
+    /// applied for an LLM call.
+    /// </summary>
+    LlmTarget LoadLlmTarget(ModelRole role);
     /// <inheritdoc cref="LoadOpenRouterVisionModel"/>
     void PersistOpenRouterVisionModel(string value);
     /// <inheritdoc cref="LoadOpenRouterVisionFreeOnly"/>

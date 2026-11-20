@@ -13,6 +13,10 @@ public class UiStateStoreTests
     private const string PromptKey = "imggen.last_prompt";
     private const string ModelKey = "imggen.last_model";
     private const string UseJsonPromptKey = "imggen.use_json_prompt";
+    private const string OllamaModelKey = "imggen.ollama_model";
+    private const string PromptWriterModelKey = "imggen.prompt_writer_model";
+    private const string MutationModelKey = "imggen.mutation_model";
+    private const string EnrichModelKey = "imggen.enrich_model";
 
     // Real (tiny) debounce window for the prompt writer; prompt tests wait comfortably
     // past it so slow CI runners don't race the background write — same numbers as
@@ -715,5 +719,72 @@ public class UiStateStoreTests
         _preferences.ThrowOnGet = new InvalidOperationException("backend down");
 
         _sut.LoadOllamaModels("http://fireengine:11434").Should().BeEmpty();
+    }
+
+    // ---- One Ollama model per LLM role -------------------------------------------------
+    // Every role used to read imggen.ollama_model. Splitting it must not cost anybody their
+    // existing pick, so a role that has never had one adopts the generation model exactly once.
+
+    [Fact]
+    public void LoadMutationModel_NeverStored_AdoptsTheGenerationModelOnce()
+    {
+        _preferences.Seed(OllamaModelKey, "llama3.1");
+
+        _sut.LoadMutationModel().Should().Be("llama3.1");
+
+        // Adopted, not merely returned — writing it down is what makes the borrow one-time.
+        _preferences.Get<string>(MutationModelKey, string.Empty).Should().Be("llama3.1");
+    }
+
+    [Fact]
+    public void LoadPromptWriterModel_OnceItHasItsOwnValue_IgnoresTheGenerationModel()
+    {
+        _preferences.Seed(OllamaModelKey, "flux-schnell");
+        _preferences.Seed(PromptWriterModelKey, "qwen3");
+
+        _sut.LoadPromptWriterModel().Should().Be("qwen3");
+        _preferences.Get<string>(OllamaModelKey, string.Empty).Should().Be("flux-schnell");
+    }
+
+    [Theory]
+    [InlineData(PromptWriterModelKey)]
+    [InlineData(MutationModelKey)]
+    [InlineData(EnrichModelKey)]
+    public void LoadRoleModel_WithNothingStoredAnywhere_HasNoDefault(string key)
+    {
+        // Which models a server has is per-server, so a defaulted name only ever produced an opaque
+        // 404. "Nothing picked" stays nothing, and nothing gets written for it either.
+        var sut = _sut;
+        var loaded = key switch
+        {
+            PromptWriterModelKey => sut.LoadPromptWriterModel(),
+            MutationModelKey => sut.LoadMutationModel(),
+            _ => sut.LoadEnrichModel(),
+        };
+
+        loaded.Should().BeNull();
+        _preferences.ContainsKey(key).Should().BeFalse();
+    }
+
+    [Fact]
+    public void LoadEnrichModel_AfterThePickWasCleared_StaysUnset()
+    {
+        // A role cleared because its model left the server must not quietly re-adopt the generation
+        // model on the next launch. LoadString reports "" as null, so the distinction lives in
+        // whether the key exists at all.
+        _preferences.Seed(OllamaModelKey, "llama3.1");
+        _sut.PersistEnrichModel(string.Empty);
+
+        _sut.LoadEnrichModel().Should().BeNullOrEmpty();
+    }
+
+    [Fact]
+    public void PersistMutationModel_WritesOnlyItsOwnKey()
+    {
+        _sut.PersistMutationModel("llama3.1");
+
+        _preferences.Get<string>(MutationModelKey, string.Empty).Should().Be("llama3.1");
+        _preferences.ContainsKey(OllamaModelKey).Should().BeFalse(
+            "the mutation pick must never reach the key the generate button reads");
     }
 }

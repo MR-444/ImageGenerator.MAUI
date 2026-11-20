@@ -86,5 +86,10 @@ public static class ModelConstants
         // ones exist is per-server, so the guess was wrong on most hosts and surfaced as an opaque
         // Ollama 404 at request time. Callers must resolve a user-picked model and fail with a
         // "pick a model first" message when there isn't one — same contract as the OpenRouter tier.
+
+        /// <summary>The one place "no URL typed means the default host" is decided. A blank setting is
+        /// not an endpoint, and three services plus the settings reader each used to re-derive it.</summary>
+        public static string ResolveBaseUrl(string? baseUrl) =>
+            string.IsNullOrWhiteSpace(baseUrl) ? DefaultBaseUrl : baseUrl;
     }
 }
