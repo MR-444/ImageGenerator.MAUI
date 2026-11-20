@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:behaviors="clr-namespace:ImageGenerator.MAUI.Presentation.Behaviors"
+             xmlns:ctrl="clr-namespace:ImageGenerator.MAUI.Presentation.Views.Controls"
              xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
              xmlns:lib="clr-namespace:ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library"
              x:Class="ImageGenerator.MAUI.Presentation.Views.MutationEnginePage"
@@ -223,31 +224,20 @@
                             <Label Text="Sonnet = affordable default · Opus = stronger/pricier · Local = free Ollama (round-trip only)."
                                    Style="{StaticResource HelperText}" />
 
-                            <!-- Local-only: which Ollama model. Type any tag, or Refresh to pick from the server. -->
-                            <VerticalStackLayout Spacing="8" IsVisible="{Binding IsLocalTier}">
-                                <Label Text="Local model (Ollama)" Style="{StaticResource FieldLabel}" />
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                    <Picker Grid.Column="0"
-                                            ItemsSource="{Binding Generator.Settings.OllamaModels}"
-                                            SelectedItem="{Binding Generator.Settings.MutationModel, Mode=TwoWay}"
-                                            Title="Refresh, then pick a model…"
-                                            AutomationId="MutationOllamaModelPicker" />
-                                    <Button Grid.Column="1"
-                                            Text="Refresh"
-                                            Command="{Binding Generator.Settings.RefreshOllamaModelsCommand}"
-                                            Style="{StaticResource SecondaryButton}"
-                                            AutomationId="MutationOllamaRefreshButton" />
-                                </Grid>
-                                <Label Text="Set the server URL on Settings. A 27B model takes a few minutes on the first (cold) call."
-                                       Style="{StaticResource HelperText}" />
-                                <!-- Reports this card's server call inline: the page has no status bar of its
-                                     own and the generator's bar is drawn only on MainPage, so a wrong server URL
-                                     would otherwise leave nothing but a WARN in the log file. -->
-                                <Label Text="{Binding Generator.Settings.OllamaServerStatus}"
-                                       Style="{StaticResource HelperText}"
-                                       IsVisible="{Binding Generator.Settings.OllamaServerStatus, Converter={StaticResource NonEmptyStringToBool}}"
-                                       AutomationId="MutationOllamaStatusLabel" />
-                            </VerticalStackLayout>
+                            <!-- Local-only: which Ollama model. Type any tag, or Refresh to pick from the server.
+                                 The row is the shared four-control shape (label, picker + Refresh, helper,
+                                 status); the automation ids stay this page's, because they are what the UI
+                                 tests click. -->
+                            <ctrl:ModelPickerRow IsVisible="{Binding IsLocalTier}"
+                                                 TitleText="Local model (Ollama)"
+                                                 Models="{Binding Generator.Settings.OllamaModels}"
+                                                 SelectedModel="{Binding Generator.Settings.MutationModel, Mode=TwoWay}"
+                                                 RefreshCommand="{Binding Generator.Settings.RefreshOllamaModelsCommand}"
+                                                 Helper="Set the server URL on Settings. A 27B model takes a few minutes on the first (cold) call."
+                                                 Status="{Binding Generator.Settings.OllamaServerStatus}"
+                                                 ModelPickerAutomationId="MutationOllamaModelPicker"
+                                                 RefreshAutomationId="MutationOllamaRefreshButton"
+                                                 StatusAutomationId="MutationOllamaStatusLabel" />
 
                             <Label Text="{Binding CostEstimate}" Style="{StaticResource HelperText}"
                                    AutomationId="MutationCostEstimateLabel" />

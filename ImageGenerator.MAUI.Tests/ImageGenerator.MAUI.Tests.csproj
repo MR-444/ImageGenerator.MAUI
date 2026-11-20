@@ -5,12 +5,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
-        <!-- CsWinRT1032 is a WinRT projection/AOT diagnostic, and this compilation can never be
-             affected by it: a plain xunit host, never WinRT-projected, never trimmed, never
-             AOT-published. The app project does NOT suppress it — every one of its 34 sites carries
-             an explicit array cast instead, which is the better answer where WinRT is real. Here the
-             diagnostic itself is the mistake, so it is silenced rather than the test code being
-             rewritten ~99 times to satisfy a projection this assembly does not use. -->
+        <!-- CsWinRT1032 is a WinRT projection/AOT diagnostic -->
         <NoWarn Condition="'$(PublishAot)' != 'true' and '$(PublishTrimmed)' != 'true'">$(NoWarn);CsWinRT1032</NoWarn>
     </PropertyGroup>
 
@@ -54,6 +49,11 @@
                CopyToOutputDirectory="PreserveNewest" />
       <Content Include="..\ImageGenerator.MAUI\AppShell.xaml"
                Link="TestAssets\AppShell.xaml"
+               CopyToOutputDirectory="PreserveNewest" />
+      <!-- Shared controls are contract-checked like pages: they resolve their StaticResources through
+           the hosting page and application scope, so their markup has to be readable by the suite. -->
+      <Content Include="..\ImageGenerator.MAUI\Presentation\Views\Controls\ModelPickerRow.xaml"
+               Link="TestAssets\ModelPickerRow.xaml"
                CopyToOutputDirectory="PreserveNewest" />
       <Content Include="..\ImageGenerator.MAUI\App.xaml"
                Link="TestAssets\App.xaml"

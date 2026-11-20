@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:ctrl="clr-namespace:ImageGenerator.MAUI.Presentation.Views.Controls"
+             x:Class="ImageGenerator.MAUI.Presentation.Views.Controls.ModelPickerRow"
+             x:DataType="ctrl:ModelPickerRow">
+    <VerticalStackLayout Spacing="8">
+        <Label Text="{Binding TitleText}"
+               Style="{StaticResource FieldLabel}"
+               IsVisible="{Binding TitleText, Converter={StaticResource NonEmptyStringToBool}}" />
+
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <Picker Grid.Column="0"
+                    ItemsSource="{Binding Models}"
+                    SelectedItem="{Binding SelectedModel, Mode=TwoWay}"
+                    Title="{Binding PickerTitle}"
+                    AutomationId="{Binding ModelPickerAutomationId}" />
+            <Button Grid.Column="1"
+                    Text="Refresh"
+                    Command="{Binding RefreshCommand}"
+                    Style="{StaticResource SecondaryButton}"
+                    AutomationId="{Binding RefreshAutomationId}" />
+        </Grid>
+
+        <Label Text="{Binding Helper}"
+               Style="{StaticResource HelperText}"
+               IsVisible="{Binding Helper, Converter={StaticResource NonEmptyStringToBool}}" />
+
+        <!-- The card reports its own server call: these pages have no status bar, so a wrong server
+             URL would otherwise leave nothing behind but a WARN in the log file. -->
+        <Label Text="{Binding Status}"
+               Style="{StaticResource HelperText}"
+               IsVisible="{Binding Status, Converter={StaticResource NonEmptyStringToBool}}"
+               AutomationId="{Binding StatusAutomationId}" />
+    </VerticalStackLayout>
+</ContentView>

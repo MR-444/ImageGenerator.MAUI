@@ -16,10 +16,21 @@ public class UiMarkupContractTests
         "GalleryItemDetailPage.xaml", "SettingsPage.xaml"
     ];
 
+    /// <summary>
+    /// Shared controls are not pages, but they resolve resources the same way - through the page that
+    /// hosts them and then application scope - so they join the checks that prove a StaticResource
+    /// actually exists. A control no page hosts evaluates no bindings at all, which is why each one is
+    /// adopted in the commit that writes it.
+    /// </summary>
+    private static readonly string[] ControlAssets =
+    [
+        "ModelPickerRow.xaml"
+    ];
+
     [Fact]
     public void EveryPageMarkup_IsWellFormed_AndAvoidsUnsupportedAccelerators()
     {
-        foreach (var asset in PageAssets)
+        foreach (var asset in PageAssets.Concat(ControlAssets))
         {
             var document = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "TestAssets", asset));
             document.Root.Should().NotBeNull($"{asset} must load as XAML/XML");
@@ -35,7 +46,7 @@ public class UiMarkupContractTests
         var applicationKeys = ResourceKeys(
             XDocument.Load(Path.Combine(AppContext.BaseDirectory, "TestAssets", "App.xaml")));
 
-        foreach (var asset in PageAssets)
+        foreach (var asset in PageAssets.Concat(ControlAssets))
         {
             var document = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "TestAssets", asset));
             var availableKeys = applicationKeys
@@ -80,6 +91,33 @@ public class UiMarkupContractTests
                 $"{asset} must not re-declare a shared converter, or the control that relies on the "
                 + "application instance silently breaks on every other page");
         }
+    }
+
+    /// <summary>
+    /// Checks that the mutation engine page routes model selection through the shared row rather than a local hand-rolled picker. The row must receive the page's model source, a two-way bound selected mutation model, the catalog refresh command, and the server status, while preserving the automation identifiers that existing UI tests depend on. It also ensures no duplicate picker remains with the same automation identifier.
+    /// </summary>
+    [Fact]
+    public void MutationEnginePage_PicksItsLocalModelThroughTheSharedRow()
+    {
+        var markup = Markup("MutationEnginePage.xaml");
+        var row = XDocument.Parse(markup)
+            .Descendants()
+            .Single(element => element.Name.LocalName == "ModelPickerRow");
+
+        ((string?)row.Attribute("Models")).Should().Be("{Binding Generator.Settings.OllamaModels}");
+        ((string?)row.Attribute("SelectedModel")).Should()
+            .Be("{Binding Generator.Settings.MutationModel, Mode=TwoWay}",
+                "a one-way binding here would let the user pick a model that is never used");
+        ((string?)row.Attribute("RefreshCommand")).Should()
+            .Be("{Binding Generator.Settings.RefreshOllamaModelsCommand}");
+        ((string?)row.Attribute("Status")).Should().Be("{Binding Generator.Settings.OllamaServerStatus}");
+        ((string?)row.Attribute("ModelPickerAutomationId")).Should().Be("MutationOllamaModelPicker");
+        ((string?)row.Attribute("RefreshAutomationId")).Should().Be("MutationOllamaRefreshButton");
+        ((string?)row.Attribute("StatusAutomationId")).Should().Be("MutationOllamaStatusLabel");
+
+        Count(markup, "MutationOllamaModelPicker").Should().Be(1,
+            "the id moves onto the row; a leftover hand-rolled picker would put a second picker on the "
+            + "same page under the same handle");
     }
 
     [Fact]
@@ -148,29 +186,9 @@ public class UiMarkupContractTests
     }
 
     /// <summary>
-    /// The build does not validate MAUI binding paths (XamlSourceGen is off in this project — a
-    /// {Binding Typo} compiles clean and silently shows a blank control), so every page's binding
-    /// graph is checked here against the view models. One case per page, so a failure names the
-    /// page; the root view model is the page's own <c>x:DataType</c>, which compiled bindings
-    /// already require — so a page cannot silently change what is being checked.
-    ///
-    /// A path is walked segment by segment and every segment must be a public instance property of
-    /// the type the previous segment resolved to (a collection resolves to its element type). That
-    /// covers a hop into a sub-view-model without a hand-kept table — <c>ComfyUi</c>,
-    /// <c>InputImages</c>, <c>ProviderFilter</c>, <c>Batch</c> today, and it needs no edit when the
-    /// next coordinator lands — which is what makes a refactor's repath machine-checked: leave one
-    /// binding on the old owner and the case fails with the path to bind instead.
-    ///
-    /// Rules, all aimed at the failure mode of pulling state into a sub-view-model:
-    /// • every segment resolves, or the failure names the sub-model that does own the member;
-    /// • a path must not end on a sub-model itself (binding the object is never what markup means).
-    ///
-    /// A "sub-model" is a property whose type name ends in <c>Coordinator</c> — the convention the
-    /// extractions follow. Out of page scope, and skipped: anything inside a DataTemplate that
-    /// declares its own x:DataType (its DataContext is the item), any binding carrying its own
-    /// <c>Source=</c>, <c>RelativeSource=</c> or <c>x:DataType</c>, and <c>&lt;Binding&gt;</c>
-    /// elements (MultiBinding children) that declare their own <c>x:DataType</c>.
+    /// Verifies that page-level bindings declared in a XAML page resolve against the view model graph associated with that page.
     /// </summary>
+    /// <param name="asset">The identifier or path of the XAML page test asset to inspect.</param>
     [Theory]
     [MemberData(nameof(PagesWithADeclaredViewModel))]
     public void PageLevelBindings_ResolveAgainstTheViewModelGraph(string asset)
@@ -196,7 +214,7 @@ public class UiMarkupContractTests
             $"{asset} contributed almost no page-level binding to check");
 
         failures.Should().BeEmpty("MAUI does not validate binding paths at build time, so an " +
-            "unresolvable page-level binding is a silently blank control at runtime");
+                                  "unresolvable page-level binding is a silently blank control at runtime");
     }
 
     /// <summary>
@@ -390,6 +408,9 @@ public class UiMarkupContractTests
 
     private static string Markup(string asset) =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "TestAssets", asset));
+
+    private static int Count(string haystack, string needle) =>
+        haystack.Split(needle).Length - 1;
 
     private static HashSet<string> ResourceKeys(XDocument document)
     {
