@@ -94,28 +94,59 @@ public class UiMarkupContractTests
     }
 
     /// <summary>
-    /// Checks that the mutation engine page routes model selection through the shared row rather than a local hand-rolled picker. The row must receive the page's model source, a two-way bound selected mutation model, the catalog refresh command, and the server status, while preserving the automation identifiers that existing UI tests depend on. It also ensures no duplicate picker remains with the same automation identifier.
+    /// Every place a model is chosen goes through the shared row, bound two-way to the property that
+    /// names the model this role actually calls. Each row is located by its own automation id, so a page
+    /// may host several (Idea to Prompt hosts three: two observers and a writer) and each is checked
+    /// against its own expectations instead of the page's first one.
+    ///   The per-row columns are the whole point: the defect this change set exists to kill was several
+    /// pickers writing one stored value, and a copy-paste of the wrong role property is exactly one
+    /// attribute away. A row wired to another role's model compiles, renders and passes every other
+    /// test — only this table notices.
+    ///   The status label is spelled out per row instead of derived from the prefix: Idea to Prompt's
+    /// writer row answers to IdeaPromptTierOllamaStatusLabel, named in the era when the writer picked a
+    /// tier. Existing UI tests use that handle, so the table carries the wart rather than renaming it.
     /// </summary>
     [Theory]
-    [InlineData("MutationEnginePage.xaml", "MutationModel", "MutationOllama")]
-    [InlineData("IdeogramStructureEditorPage.xaml", "EnrichModel", "EditorEnrichOllama")]
-    public void EachLocalRole_PicksItsModelThroughTheSharedRow(string page, string roleModel, string idPrefix)
+    [InlineData("MutationEnginePage.xaml", "MutationOllama", "MutationModel", "IsLocalTier",
+                "OllamaModels", "RefreshOllamaModelsCommand", "OllamaServerStatus",
+                "MutationOllamaStatusLabel")]
+    [InlineData("IdeogramStructureEditorPage.xaml", "EditorEnrichOllama", "EnrichModel", "ShowEnrichLocalModel",
+                "OllamaModels", "RefreshOllamaModelsCommand", "OllamaServerStatus",
+                "EditorEnrichOllamaStatusLabel")]
+    [InlineData("IdeaToPromptPage.xaml", "IdeaPromptOllamaVision", "OllamaVisionModel", "IsLocalVisionProvider",
+                "OllamaVisionModels", "RefreshOllamaModelsCommand", "OllamaServerStatus",
+                "IdeaPromptOllamaVisionStatusLabel")]
+    [InlineData("IdeaToPromptPage.xaml", "IdeaPromptOpenRouterVision", "OpenRouterVisionModel", "IsOpenRouterVisionProvider",
+                "OpenRouterVisionModels", "RefreshOpenRouterVisionModelsCommand", "OpenRouterVisionStatus",
+                "IdeaPromptOpenRouterVisionStatusLabel")]
+    [InlineData("IdeaToPromptPage.xaml", "IdeaPromptOllama", "PromptWriterModel", "IsLocalTier",
+                "OllamaModels", "RefreshOllamaModelsCommand", "OllamaServerStatus",
+                "IdeaPromptTierOllamaStatusLabel")]
+    public void EachRole_PicksItsModelThroughTheSharedRow(
+        string page, string idPrefix, string roleModel, string gate,
+        string modelsSource, string refreshCommand, string statusSource, string statusId)
     {
         var markup = Markup(page);
-        var row = XDocument.Parse(markup)
-            .Descendants()
-            .Single(element => element.Name.LocalName == "ModelPickerRow");
+        var row = XDocument.Parse(markup).Descendants()
+            .Single(element => element.Name.LocalName == "ModelPickerRow"
+                               && (string?)element.Attribute("ModelPickerAutomationId") == idPrefix + "ModelPicker");
 
-        ((string?)row.Attribute("Models")).Should().Be("{Binding Generator.Settings.OllamaModels}");
+        ((string?)row.Attribute("Models")).Should().Be("{Binding Generator.Settings." + modelsSource + "}");
         ((string?)row.Attribute("SelectedModel")).Should()
             .Be("{Binding Generator.Settings." + roleModel + ", Mode=TwoWay}",
                 "a one-way binding here would let the user pick a model that is never used");
         ((string?)row.Attribute("RefreshCommand")).Should()
-            .Be("{Binding Generator.Settings.RefreshOllamaModelsCommand}");
-        ((string?)row.Attribute("Status")).Should().Be("{Binding Generator.Settings.OllamaServerStatus}");
+            .Be("{Binding Generator.Settings." + refreshCommand + "}");
+        ((string?)row.Attribute("Status")).Should()
+            .Be("{Binding Generator.Settings." + statusSource + "}",
+                "a refresh that fails silently is how a wrong server URL becomes a WARN in a log file "
+                + "nobody opens");
+        ((string?)row.Attribute("IsVisible")).Should().Be("{Binding " + gate + "}",
+            "two model rows on screen at once means the user can set one and pay with the other, and a "
+            + "row for a provider the user did not select should not be on screen at all");
         ((string?)row.Attribute("ModelPickerAutomationId")).Should().Be(idPrefix + "ModelPicker");
         ((string?)row.Attribute("RefreshAutomationId")).Should().Be(idPrefix + "RefreshButton");
-        ((string?)row.Attribute("StatusAutomationId")).Should().Be(idPrefix + "StatusLabel");
+        ((string?)row.Attribute("StatusAutomationId")).Should().Be(statusId);
 
         Count(markup, idPrefix + "ModelPicker").Should().Be(1,
             "the id moves onto the row; a leftover hand-rolled picker would put a second picker on the "

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:ctrl="clr-namespace:ImageGenerator.MAUI.Presentation.Views.Controls"
              xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
              x:Class="ImageGenerator.MAUI.Presentation.Views.IdeaToPromptPage"
              x:DataType="vm:IdeaToPromptViewModel"
@@ -181,64 +182,28 @@
                                     HorizontalOptions="Start"
                                     AutomationId="VisionProviderPicker" />
 
-                            <Grid ColumnDefinitions="*,Auto"
-                                  ColumnSpacing="8"
-                                  IsVisible="{Binding IsLocalVisionProvider}">
-                                <Picker Grid.Column="0"
-                                        ItemsSource="{Binding Generator.Settings.OllamaVisionModels}"
-                                        SelectedItem="{Binding Generator.Settings.OllamaVisionModel, Mode=TwoWay}"
-                                        Title="Refresh, then pick a vision model…"
-                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                        MaximumWidthRequest="360"
-                                        HorizontalOptions="Start"
-                                        AutomationId="IdeaPromptOllamaVisionModelPicker" />
-                                <Button Grid.Column="1"
-                                        Text="Refresh"
-                                        Command="{Binding Generator.Settings.RefreshOllamaModelsCommand}"
-                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        AutomationId="IdeaPromptOllamaVisionRefreshButton" />
-                            </Grid>
-                            <Label Text="Only installed Ollama models advertising vision + completion appear after refresh."
-                                   IsVisible="{Binding IsLocalVisionProvider}"
-                                   Style="{StaticResource HelperText}" />
-                            <!-- Reports this card's server call inline: the page has no status bar of its
-                                 own and the generator's bar is drawn only on MainPage, so a wrong server URL
-                                 would otherwise leave nothing but a WARN in the log file. -->
-                            <VerticalStackLayout IsVisible="{Binding IsLocalVisionProvider}">
-                                <Label Text="{Binding Generator.Settings.OllamaServerStatus}"
-                                       Style="{StaticResource HelperText}"
-                                       IsVisible="{Binding Generator.Settings.OllamaServerStatus, Converter={StaticResource NonEmptyStringToBool}}"
-                                       AutomationId="IdeaPromptOllamaVisionStatusLabel" />
-                            </VerticalStackLayout>
+                            <ctrl:ModelPickerRow IsVisible="{Binding IsLocalVisionProvider}"
+                                                 PickerTitle="Refresh, then pick a vision model…"
+                                                 Models="{Binding Generator.Settings.OllamaVisionModels}"
+                                                 SelectedModel="{Binding Generator.Settings.OllamaVisionModel, Mode=TwoWay}"
+                                                 RefreshCommand="{Binding Generator.Settings.RefreshOllamaModelsCommand}"
+                                                 Helper="Only installed Ollama models advertising vision + completion appear after refresh."
+                                                 Status="{Binding Generator.Settings.OllamaServerStatus}"
+                                                 IsBusy="{Binding IsBusy}"
+                                                 ModelPickerAutomationId="IdeaPromptOllamaVisionModelPicker"
+                                                 RefreshAutomationId="IdeaPromptOllamaVisionRefreshButton"
+                                                 StatusAutomationId="IdeaPromptOllamaVisionStatusLabel" />
 
-                            <Grid ColumnDefinitions="*,Auto"
-                                  ColumnSpacing="8"
-                                  IsVisible="{Binding IsOpenRouterVisionProvider}">
-                                <Picker Grid.Column="0"
-                                        ItemsSource="{Binding Generator.Settings.OpenRouterVisionModels}"
-                                        SelectedItem="{Binding Generator.Settings.OpenRouterVisionModel, Mode=TwoWay}"
-                                        Title="Refresh, then pick a vision model…"
-                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                        MaximumWidthRequest="360"
-                                        HorizontalOptions="Start"
-                                        AutomationId="IdeaPromptOpenRouterVisionModelPicker" />
-                                <Button Grid.Column="1"
-                                        Text="Refresh"
-                                        Command="{Binding Generator.Settings.RefreshOpenRouterVisionModelsCommand}"
-                                        IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        AutomationId="IdeaPromptOpenRouterVisionRefreshButton" />
-                            </Grid>
-                            <!-- Reports this card's server call inline: the page has no status bar of its
-                                 own and the generator's bar is drawn only on MainPage, so a wrong server URL
-                                 would otherwise leave nothing but a WARN in the log file. -->
-                            <VerticalStackLayout IsVisible="{Binding IsOpenRouterVisionProvider}">
-                                <Label Text="{Binding Generator.Settings.OpenRouterVisionStatus}"
-                                       Style="{StaticResource HelperText}"
-                                       IsVisible="{Binding Generator.Settings.OpenRouterVisionStatus, Converter={StaticResource NonEmptyStringToBool}}"
-                                       AutomationId="IdeaPromptOpenRouterVisionStatusLabel" />
-                            </VerticalStackLayout>
+                            <ctrl:ModelPickerRow IsVisible="{Binding IsOpenRouterVisionProvider}"
+                                                 PickerTitle="Refresh, then pick a vision model…"
+                                                 Models="{Binding Generator.Settings.OpenRouterVisionModels}"
+                                                 SelectedModel="{Binding Generator.Settings.OpenRouterVisionModel, Mode=TwoWay}"
+                                                 RefreshCommand="{Binding Generator.Settings.RefreshOpenRouterVisionModelsCommand}"
+                                                 Status="{Binding Generator.Settings.OpenRouterVisionStatus}"
+                                                 IsBusy="{Binding IsBusy}"
+                                                 ModelPickerAutomationId="IdeaPromptOpenRouterVisionModelPicker"
+                                                 RefreshAutomationId="IdeaPromptOpenRouterVisionRefreshButton"
+                                                 StatusAutomationId="IdeaPromptOpenRouterVisionStatusLabel" />
                             <Grid ColumnDefinitions="*,Auto"
                                   ColumnSpacing="12"
                                   IsVisible="{Binding IsOpenRouterVisionProvider}">
@@ -305,34 +270,18 @@
                                 </VerticalStackLayout>
                             </Grid>
 
-                            <VerticalStackLayout Spacing="8" IsVisible="{Binding IsLocalTier}">
-                                <Label Text="Local model (Ollama)" Style="{StaticResource FieldLabel}" />
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                    <Picker Grid.Column="0"
-                                            ItemsSource="{Binding Generator.Settings.OllamaModels}"
-                                            SelectedItem="{Binding Generator.Settings.PromptWriterModel, Mode=TwoWay}"
-                                            Title="Refresh, then pick a model…"
-                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                            MaximumWidthRequest="360"
-                                            HorizontalOptions="Start"
-                                            AutomationId="IdeaPromptOllamaModelPicker" />
-                                    <Button Grid.Column="1"
-                                            Text="Refresh"
-                                            Command="{Binding Generator.Settings.RefreshOllamaModelsCommand}"
-                                            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                            Style="{StaticResource SecondaryButton}"
-                                            AutomationId="IdeaPromptOllamaRefreshButton" />
-                                </Grid>
-                                <Label Text="The Ollama server URL is shared with AI mutation and configured in Settings."
-                                       Style="{StaticResource HelperText}" />
-                                <!-- Reports this card's server call inline: the page has no status bar of its
-                                     own and the generator's bar is drawn only on MainPage, so a wrong server URL
-                                     would otherwise leave nothing but a WARN in the log file. -->
-                                <Label Text="{Binding Generator.Settings.OllamaServerStatus}"
-                                       Style="{StaticResource HelperText}"
-                                       IsVisible="{Binding Generator.Settings.OllamaServerStatus, Converter={StaticResource NonEmptyStringToBool}}"
-                                       AutomationId="IdeaPromptTierOllamaStatusLabel" />
-                            </VerticalStackLayout>
+                            <ctrl:ModelPickerRow IsVisible="{Binding IsLocalTier}"
+                                                 TitleText="Local model (Ollama)"
+                                                 PickerTitle="Refresh, then pick a model…"
+                                                 Models="{Binding Generator.Settings.OllamaModels}"
+                                                 SelectedModel="{Binding Generator.Settings.PromptWriterModel, Mode=TwoWay}"
+                                                 RefreshCommand="{Binding Generator.Settings.RefreshOllamaModelsCommand}"
+                                                 Helper="The Ollama server URL is shared with AI mutation and configured in Settings."
+                                                 Status="{Binding Generator.Settings.OllamaServerStatus}"
+                                                 IsBusy="{Binding IsBusy}"
+                                                 ModelPickerAutomationId="IdeaPromptOllamaModelPicker"
+                                                 RefreshAutomationId="IdeaPromptOllamaRefreshButton"
+                                                 StatusAutomationId="IdeaPromptTierOllamaStatusLabel" />
                         </VerticalStackLayout>
                     </Border>
 

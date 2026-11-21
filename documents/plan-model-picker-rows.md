@@ -216,13 +216,51 @@ Modality is a measured fact, not an assumption: image-reference count per servic
     `CopyToOutputDirectory="PreserveNewest"`, so after putting a file back, `dotnet test --no-build`
     re-runs against the copy of the *broken* version. A XAML cycle ends with a build of the test
     project, not a test run.
-26. **A whole-file diff appeared out of a 50-line edit, and my explanation for it did not survive being
-    tested.** Rewriting this document through a script produced `@@ -1,446 +1,476 @@` plus
-    `git diff --check` complaints on lines nobody had touched; I concluded the file was LF in the repo and
-    my script had forced it to CRLF. Re-running the same edit at both endings gives the same +46/-11, so
-    that explanation is wrong and the cause is open. The durable part is the symptom to watch for: when a
-    hunk header spans the whole file, the diff is lying about the size of the change — stop and check
-    before committing it, because the real edit is then invisible.
+26. **A working copy holding CRLF while its neighbours hold LF turns an ordinary edit into a
+    whole-file diff — and the plan's "preserve CRLF" rule was backwards for this tree.** For a while
+    CRLF looked harmless: `922d4e3` and `bd743c8` diffed honestly with CRLF working copies. Then
+    swapping three rows on `IdeaToPromptPage.xaml` — 33 lines in, 92 out — reported 472 deletions and
+    413 insertions. `git ls-files --eol` settled it: the index is LF everywhere and the working tree is
+    **280 files LF / 116 CRLF / 3 mixed**, so this tree is LF-majority, and on a file git declines to
+    eol-normalize every line becomes a change. Diagnosis is cheap and belongs *before* any suspicion of
+    an external writer: `git diff --ignore-cr-at-eol --numstat` beside `git diff --numstat` separates
+    "I edited 33 lines" from "the endings moved", and `git ls-files --eol <path>` says whether git will
+    normalize at all.
+    **Why the earlier reasoning failed:** it read `git show HEAD:<path>` as the file's stored ending.
+    autocrlf stores every text blob as LF, so that command reports LF for everything in the repository
+    and cannot tell a CRLF working copy from an LF one. **Rule: write the endings the file's own
+    neighbours already have.** The files this session authored were converted to LF once the rule was
+    known; the 116 pre-existing CRLF files stay as they are, because converting them would be a
+    whole-file round-trip in commits that have nothing to do with line endings.
+27. **Replacing a span by index arithmetic ate its neighbour, and only the XAML compiler noticed.** The
+    writer row's replacement resolved its start anchor with `index` over the whole file instead of from
+    the current position, so the span swallowed the Ideogram V4 JSON checkbox's two labels and the
+    `</Grid>` closing their grid. The file still read plausibly and so did the diff. Two checks now run
+    before a span-editing script writes: the set of `AutomationId` values must be identical before and
+    after (nothing gained, nothing lost), and the result must parse as XML. The first names the casualty
+    — `BuildJsonCheckBox` survived while its labels vanished — the second fails on the tag mismatch.
+    **A move must state what it forbids changing, and check exactly that.**
+28. **Deriving a row's three automation ids from one prefix broke on the first page predating the
+    convention.** Idea to Prompt's writer row answers to `IdeaPromptTierOllamaStatusLabel` — named in
+    the era when the writer chose a *tier* — while its picker is `IdeaPromptOllamaModelPicker`. The
+    widened contract table derived the status id from the picker prefix and failed on it at the first
+    honest run. The handle belongs to UI tests outside this change set, so the table carries the wart as
+    an explicit column instead of renaming it. **The derivation was the assumption; the failure was
+    correct, and what changed was the test's reach, not the app's name.**
+29. **The visibility gate is now part of the row contract, because an ungated row is how the old
+    confusion comes back.** The first version of the Idea-to-Prompt writer row dropped
+    `IsVisible="{Binding IsLocalTier}"` along with the wrapper that had carried it: under a Claude tier
+    the user would have seen a Local model picker for a provider they had not selected, which is the
+    same class of defect as four pickers writing one value. Every row in the shared table declares the
+    flag that shows it (`IsLocalTier`, `ShowEnrichLocalModel`, `IsLocalVisionProvider`,
+    `IsOpenRouterVisionProvider`) and the test asserts it, so an always-visible row fails.
+
+**Status.** B1 done, gate **1,605**. B2.0 done (`8bffa9e`), B2.1 done (`c2deff9` + `7ebe6e3`),
+**B2.2a done** (structure editor + the enrichment-visibility fix, gate **1,624**), **B2.2b done** (Idea
+to Prompt's three rows, gate **1,627**). B2 is not done until B2.3 deletes `ModelTier` and the
+transitional `GeneratorSettingsReader.*Target(tier)` bridge. Only Settings still hand-rolls pickers, and
+those go in Phase C.
+
 
 ## 5. Target design
 
@@ -385,7 +423,6 @@ shared-state defect, one paste away — failed the editor case while mutation st
 
 is asserted by its own page test for the same reason (§5.3).
 
-
 **Also in this slice,** because adopting the row put the cursor on the section around it. The enrichment
 section started collapsed behind a grey word with no chevron, while the tier defaults to a paid Anthropic
 model and the Enrich button sits further down the same pane — so the page could spend money on a model
@@ -396,11 +433,23 @@ three other accordion sections; `EnrichmentSettings_DoNotHideTheModelThatCostsMo
 
 Gate **1,624** after this slice.
 
-### Phase B2.2b — Idea to Prompt, remaining host
-Three rows: `IdeaPromptOllamaVision*`, `IdeaPromptOpenRouterVision*`, `IdeaPromptOllama*`. Still owed
-before that page can adopt: the OpenRouter `visionOnly` text list, the coordinator's
-`OpenRouterModels` + refresh, persisting `SelectedVisionProvider`, and wiring the provider pickers to
-`LoadLlmTarget` / persist.
+### Phase B2.2b — Idea to Prompt · **DONE (2026-11-21)**
+Three rows, 85 hand-rolled lines → 33: the local observer (`IdeaPromptOllamaVision*`), the OpenRouter
+observer (`IdeaPromptOpenRouterVision*`, the first non-Ollama host, so `Models` / `RefreshCommand` /
+`Status` are now columns of the contract table rather than Ollama constants), and the local writer
+(`IdeaPromptOllama*`). The OpenRouter *free-only* row stays on the page: it is a second control beside
+the row, not part of it.
+
+The four plumbing items this page was thought to need turned out not to be prerequisites: all three rows
+already bound `Settings.*`, which is what the row needs. Persisting `SelectedVisionProvider` and adding
+OpenRouter as a *writer* are features, not moves, and moving them here would have made a page swap
+impossible to review. Both are parked in §9.
+
+The contract test became a table over (page, row id, role model, **gate**, model source, refresh
+command, status source, status id) and locates each row by its own picker id, because this page hosts
+three. Falsified one row at a time: local observer writing `OllamaModel` (the original defect), OpenRouter
+observer gated on `IsLocalVisionProvider` (the copy-paste next door), writer bound to `MutationModel` —
+each failed only its own row.
 
 ### Phase B2.3 — delete the tier
 Provider selection moves into the row (`Providers` / `SelectedProvider`), `ModelTier` (52 app refs
