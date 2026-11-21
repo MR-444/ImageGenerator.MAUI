@@ -1,6 +1,8 @@
 # Model choice by role — `Local | Anthropic | OpenRouter`, with the picker where the model is used
 
-**Status:** Phase A **done** (gate moved 1,575 → **1,591 passed / 0 failed**). Phase B and C not started.
+**Status:** Phase A and Phase B1 **done**; Phase B2 **in progress** — `ModelPickerRow` exists, its first
+host is live and its second (structure editor) is next. Gate: **1,620 passed / 0 failed / 0 skipped**,
+app builds at 0 warnings and 0 `MAUIG2045`.
 **Measured on:** `main` 2026-11-20, the tree that landed the inline server-status labels and
 `OllamaEndpointException` (test gate **1,575 passed / 0 failed / 0 skipped**).
 
@@ -95,13 +97,20 @@ Modality is a measured fact, not an assumption: image-reference count per servic
    (`architecture.input_modalities` contains `image`) happens inside `ParseVisionModels`, which then
    throws the answer away. An unfiltered list that *marks* image-capable rows needs that flag carried
    out — the computation already exists, so this is a field, not an algorithm.
-8. **Anthropic has no catalog and no Settings card.** Its key is a row in the *Provider API keys*
-   grid (`TokenProviders`, built in `GeneratorViewModel`). Listing Anthropic models means a new
-   catalog + transport call; until then the Anthropic model box is a typed entry with a default, like
-   the old `AnthropicVisionModel` was.
+8. **Anthropic's model list is a request away, not a constant.** `GET /v1/models` returns each model
+   with `display_name`, `created_at`, `line`, `lifecycle` (`active` / `deprecated` / `retired`) and
+   a `capabilities` object — including `thinking.types.adaptive.supported`, `effort.supported`,
+   `structured_outputs.supported` and `image_input.supported`. So the Anthropic picker can list live
+   models, default to the newest active one, and *read* compatibility instead of assuming it. There
+   is no Anthropic catalog in this repo today — and there was never an Anthropic vision route either:
+   `git log --all -S AnthropicVisionModel` finds the name nowhere in history, so plan text that
+   described one was describing something never committed. Corrected here rather than planned
+   against.
 9. **Anthropic models take images**, so `observe` is the one role where a third provider is not
-   speculative — but it needs a Messages-API-with-image branch that does not exist
-   (`SendOpenRouterVisionAsync` is `private static` inside the vision service).
+   speculative. The filter is `capabilities.image_input.supported` — the same shape as the existing
+   OpenRouter vision filter — and the Messages-with-image branch does not yet exist
+   (`SendOpenRouterVisionAsync` is `private static` inside the vision service). Cost, not capability,
+   is why it stays out of the defaults.
 10. **The inline status labels just landed are copied six times** across four pages, plus the
     `Picker + Refresh + status` trio four times. Whatever shape is chosen here absorbs both.
 
@@ -146,6 +155,52 @@ Modality is a measured fact, not an assumption: image-reference count per servic
     into an `LlmTarget`. It exists so the seam could land without dragging four XAML surfaces along; the
     `ModelPickerRow` work replaces it and these three methods go with it.
 
+### Found while implementing Phase B2 (the control)
+
+19. **Converter scope was the real prerequisite, not the control.** `NonEmptyStringToBool` was
+    declared seven times and `InverseBool` five, once per page. A control has no page resources to
+    resolve from, so it needs application scope — and a page that re-declares a key *shadows* the
+    application instance for that page alone, which is exactly how a shared control ends up binding
+    on one page and silently not on the next. Both now live once in `App.xaml`, and
+    `SharedConverters_AreDeclaredOnceInApplicationResources` fails if a page copy comes back.
+20. **`App.xaml` already carried a dead converter.** `StringToEnumConverter` was declared at
+    application scope and then re-declared by every page that uses it, so application scope had
+    exactly one live consumer in the whole app: `IntGreaterThanZero`, which no page declares. Left
+    alone — deleting it is its own sweep — but it is why application scope was the established home
+    here rather than a new convention invented for the control.
+21. **A second writer can rewrite a file mid-change, and this has now happened twice.** `App.xaml`
+    came back with additions missing, a comment duplicated and an mtime *older* than the write; the
+    whole of this plan was then reverted to its pre-edit state by the same mechanism and committed
+    that way, caught only by re-reading the file afterwards. Files the owner has open in the IDE are
+    two-writer surfaces: write the whole file, then re-read it (build, suite, byte-level BOM/CRLF
+    audit, and a grep for the text that was supposed to be there).
+
+### Found while running the first adopted row (2026-11-21)
+
+22. **The row shipped inert and every test stayed green.** A `ContentView`'s content inherits the
+    binding context of whatever *hosts* it, and every host here is a page whose view model has
+    neither `Models` nor `RefreshCommand`. The picker listed nothing and Refresh was a button with a
+    null command, while the app built at 0 warnings, `MAUIG2045` found every path valid (they were:
+    the check is against `x:DataType`, a name check and not a source check), and all 1,607 tests
+    passed. Confirmed in the generated `InitializeComponent`: 0 occurrences of `BindingContext` in
+    the entire file, and every internal binding compiled to `source => source.RefreshCommand` — the
+    inherited context. Fixed by naming the context on the row's **content** (regenerated as
+    `RelativeBindingSource(FindAncestor, typeof(ModelPickerRow), 1)`) and *not* on the row element,
+    because what a page binds on the row — `IsVisible` first — must keep resolving against the page.
+23. **The evidence that it worked was consistent with it being broken.** "A bad server URL shows a
+    status line" was read as the row reporting. It was the page's own `MutationStatusLabel` at the
+    foot of the page, saying the same thing off the same exception. A check that would also pass with
+    the feature deleted checks nothing; the row's status line is only distinguishable by its
+    `AutomationId`, which is why the manual matrix in §8 names handles and not sentences.
+24. **No MAUI control can be constructed in this test project, so there is no runtime binding test.**
+    `new Label()` dies in `Microsoft.Maui.Controls.Element`'s static initializer with
+    `RPC_E_WRONGTHREAD` on an xunit worker thread, and an STA thread does not help: WinUI's
+    `DispatcherQueueController.CreateOnCurrentThread` fails with *ClassFactory cannot supply requested
+    class*, because WindowsAppSDK is never bootstrapped in a bare test host. So `ModelPickerRowTests`
+    asserts the boundary statically — content names its own context, every internal binding path is
+    a property the row itself declares, every host-facing member is a real `BindableProperty`,
+    `SelectedModel` defaults to two-way — and the pixels stay on the manual list.
+
 ## 5. Target design
 
 ### 5.1 Contract
@@ -181,20 +236,35 @@ adopt it once and write it.* Never re-seed, never overwrite.
 `imggen.ollama_model` stays as the **generation** model's value (§9). It stops being read by any LLM
 service in Phase A, which is what actually breaks the cross-talk.
 
-### 5.3 `ModelPickerRow` — one control, four pages
+### 5.3 `ModelPickerRow` — one control, four pages · **first host landed 2026-11-21**
 
-Bindables: `Providers`, `SelectedProvider`, `Models`, `SelectedModel`, `RefreshCommand`, `IsBusy`,
-`Status`, `Helper`. It renders exactly what the pages hand-roll today — provider field, model picker,
-Refresh, and the `NonEmptyStringToBool`-gated status label — so the six status labels added this week
-stop being six copies. Refresh is per provider: the row asks its host for the provider's list, so a
-page never refreshes a list it is not showing.
+As built, `Presentation/Views/Controls/ModelPickerRow.xaml`: `TitleText`, `PickerTitle`, `Models`,
+`SelectedModel`, `RefreshCommand`, `Helper`, `Status`, and three `*AutomationId` string properties.
+`SelectedModel` is two-way *by default* — a row that only read back would let the user pick a model
+that is then never used. It renders what the pages hand-rolled: field label, `Picker` + Refresh in a
+`*,Auto` grid, helper line, and a status line that collapses when empty. The automation ids are
+properties rather than fixed values because they are the owning page's UI-test handles, and two
+roles on one page cannot share one. Deliberately **not** in it yet: `Providers` /
+`SelectedProvider` — each page still shows its own `ModelTier` picker above the row, and provider
+selection cannot move into the control in the same commit that deletes `ModelTier` (§6, B2.3).
+
+Two measured facts decided the ordering, and both contradict the obvious way to write this:
+
+- A `ContentView` that no page instantiates compiles fine and evaluates **zero** bindings. A control
+  cannot be landed "first, alone" and verified afterwards, so the control and its first host are one
+  commit.
+- Binding paths *inside* the control are checked against its `x:DataType`: `{Binding TitleTxt}`
+  produced `ModelPickerRow.xaml(14,17): warning MAUIG2045: Binding: Property "TitleTxt" not found
+  on "…ModelPickerRow"`. Against this project's 0-warning rule that is a gate, not a hint — but it
+  is a gate on **names**. It says nothing about whether the object those names are looked up on at
+  run time is the control, and that gap is what shipped broken (§4.22).
 
 ### 5.4 List and credential sources per provider
 
 | provider | model list | refresh | credential |
 |---|---|---|---|
 | Local (Ollama) | `Settings.OllamaModels` (all) / `OllamaVisionModels` for `observe` — both already exist | `RefreshOllamaModelsCommand` | none |
-| Anthropic | *new*: typed entry + catalog if/when one exists | catalog, or none in Phase A | Anthropic row, Provider API keys |
+| Anthropic | *new*: `GET /v1/models` — lifecycle + capabilities (§4.8) | catalog call, key required | Anthropic row, Provider API keys |
 | OpenRouter | *new*: `ListModelsAsync(freeOnly, visionOnly)` — one call, filtered for `observe`, unfiltered + flagged for text roles | same command, per provider | OpenRouter row / token store |
 
 The list itself stays a connection-side concern in `AppSettingsCoordinator`: sharing *a list of what a
@@ -263,10 +333,42 @@ Falsification of B1, in order:
   closing brace, so the wire test failed on its own fixture before it proved anything. Check the
   regression reaches the file *and* that the fixture is right.
 
-### Phase B — provider + model, one control
-`ModelProvider`/`LlmTarget` replace `ModelTier` (79 + 116 refs); services stop reading settings;
-`ModelPickerRow` extracted and adopted on all four pages; OpenRouter `visionOnly` flag + text
-transport branch; Anthropic entry with one home for the model ids; cost copy resolved (§4.6).
+### Phase B2.0 — shared converter scope · **DONE (2026-11-21)**
+The two converters the control needs moved to `App.xaml`; twelve page-local declarations went with
+them, three pages also lost an `xmlns:converters` with nothing left to qualify, two lost a resource
+block left empty. Gate **1,606**. Falsification: re-declared `InverseBool` on `MainPage` → the guard
+failed, naming the page and the key.
+
+### Phase B2.1 — the control and its first host · **DONE (2026-11-21)**
+`ModelPickerRow` plus its adoption on `MutationEnginePage.xaml`, one commit (§5.3): 25 hand-rolled
+lines became one element keeping all three of the page's automation ids. `ModelPickerRow.xaml`
+joined `TestAssets` and the well-formedness and converter-resolution loops as `ControlAssets`.
+Falsified twice before shipping — dropped `Mode=TwoWay`, typo'd binding path — and it *still* shipped
+not working, because neither check looked at where the binding source comes from (§4.22). What
+catches it now is `ModelPickerRowTests` (§4.24) plus the manual matrix in §8. Gate after the fix:
+**1,620**.
+
+### Phase B2.2 — remaining hosts
+`IdeogramStructureEditorPage` (one row: `EditorEnrich*`), then `IdeaToPromptPage` (three rows:
+`IdeaPromptOllamaVision*`, `IdeaPromptOpenRouterVision*`, `IdeaPromptOllama*`). One page per commit;
+the ids are already distinct per role, which is what makes each swap mechanical. Still owed inside
+Phase B: the OpenRouter `visionOnly` text list, the coordinator's `OpenRouterModels` + refresh,
+persisting `SelectedVisionProvider`, and wiring the provider pickers to `LoadLlmTarget` / persist.
+
+### Phase B2.3 — delete the tier
+Provider selection moves into the row (`Providers` / `SelectedProvider`), `ModelTier` (52 app refs
+across 10 files, 116 test refs) and the `GeneratorSettingsReader.*Target(tier)` bridge (§4.18) go,
+with the cost copy (§4.6) resolved before the merge rather than after.
+
+### Phase B1.5 (new) — the official `Anthropic` package, before the Anthropic half of B2
+The hand-rolled transport pins `anthropic-version: 2023-06-01`, builds request bodies from anonymous
+objects and parses errors by string. The official SDK models all of that, exposes `HttpClient` /
+`Handlers` so the existing named client and the `FakeHttpMessageHandler` wire tests survive, and
+returns `GET /v1/models` typed with the lifecycle and capability fields §4.8 needs. A separate slice
+because it changes what three call sites send, and before B2's Anthropic picker because the picker
+needs that list. Worth settling before the AOT objection is raised: this app publishes
+`PublishSingleFile` + self-contained with **no** `PublishAot` and **no** `PublishTrimmed`
+(`publish.ps1`), so the SDK's open AOT issue costs this project nothing.
 
 ### Phase C — Settings shrinks to connections
 Delete the three model pickers and their helper prose, keep base URLs / keys / free-only, retire the
@@ -303,9 +405,12 @@ grep -c MAUIG2045 <build log>                                            # repat
 dotnet test ImageGenerator.MAUI.Tests/ImageGenerator.MAUI.Tests.csproj -c Debug
 ```
 
-Gate after Phase B1: **1,605 passed / 0 failed / 0 skipped**, app builds at 0 warnings and 0
-`MAUIG2045`. Manual matrix per role: pick → restart → still picked; change another role → this one
-picked; change another role → this one unchanged; kill the server → the row explains it in place.
+Gate after the first adopted row and its fix: **1,620 passed / 0 failed / 0 skipped**, app builds at
+0 warnings and 0 `MAUIG2045`. Manual matrix per role, naming the handle and not the sentence
+(§4.23): pick → restart → still picked; change another role → this one picked; change another role
+→ this one unchanged; kill the server → the row explains it under its own `…StatusLabel`; **the
+row's own picker lists models after Refresh** — that last one is what silently died first time, and
+nothing saw it.
 
 Pre-existing and not from this work: `ComfyUiImageGenerationServiceTests.Ws_CanceledDuringReceive_
 StillNotifiesServerCancel` fails every time it is run alone and passes inside the full run — an
@@ -313,13 +418,27 @@ isolation bug in that test, untouched here and worth its own fix.
 
 ---
 
-## 9. One open question for the owner
+## 9. Open questions for the owner
 
 `generate` is the image model, and its **local (Ollama) image model** can currently only be chosen in
 Settings (`MainPage.xaml` has no Ollama picker at all — verified). Under §1.2 that box should move to
 the page where generation happens; under §1.1 `generate` is out of scope. Until decided, the Settings
 picker stays and is relabelled as the generation model only. Recommend moving it onto the generate
 card in Phase C.
+
+Added while reading the Anthropic API (§4.8); each is a decision and not a discovery:
+
+- **`anthropic-version`.** The transport pins `2023-06-01`; the documented current version is
+  `2026-10-21`. Nothing the app sends is rejected by the newer version (no `temperature`, `top_p` or
+  `top_k` go to Anthropic), so the bump looks safe — but "safe" here is a decision with a migration
+  page behind it, not a free change. Adopting the SDK (B1.5) hands the constant to somebody else.
+- **Cost copy.** Once an arbitrary model id is selectable,
+  `SelectedModelTier == Opus ? 0.028 : 0.017` is not an estimate, it is a guess with two inputs.
+  Recommend neutral wording ("billed per token by Anthropic") plus the model `line` where it is
+  informative, and dollar figures only for ids whose prices are actually known.
+- **Anthropic as a vision provider.** Capability says yes (`image_input.supported`), cost says not
+  by default. Nothing in the target design blocks it: one enum member on `VisionObservationProvider`
+  plus the Messages-with-image branch (§4.9).
 
 ## 10. Non-goals
 

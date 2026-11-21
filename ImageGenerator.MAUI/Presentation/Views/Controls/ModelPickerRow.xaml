@@ -4,7 +4,13 @@
              xmlns:ctrl="clr-namespace:ImageGenerator.MAUI.Presentation.Views.Controls"
              x:Class="ImageGenerator.MAUI.Presentation.Views.Controls.ModelPickerRow"
              x:DataType="ctrl:ModelPickerRow">
-    <VerticalStackLayout Spacing="8">
+    <!-- A ContentView's content inherits the binding context of whatever hosts it, and here that is a
+         page view model that has neither Models nor RefreshCommand. Say whose properties these are,
+         otherwise the row renders an empty list beside a dead button while compiling clean and passing
+         every markup test. Set on the content and deliberately not on the row itself: what a page binds
+         *on* the row - IsVisible above all - has to keep resolving against the page. -->
+    <VerticalStackLayout Spacing="8"
+                         BindingContext="{Binding Source={RelativeSource AncestorType={x:Type ctrl:ModelPickerRow}}}">
         <Label Text="{Binding TitleText}"
                Style="{StaticResource FieldLabel}"
                IsVisible="{Binding TitleText, Converter={StaticResource NonEmptyStringToBool}}" />
