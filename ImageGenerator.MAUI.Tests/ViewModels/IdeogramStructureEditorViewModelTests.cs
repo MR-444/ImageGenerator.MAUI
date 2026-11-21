@@ -1,7 +1,9 @@
 using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
+using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
+using ImageGenerator.MAUI.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Element = ImageGenerator.MAUI.Core.Domain.Ideogram.Element;
@@ -43,20 +45,7 @@ public class IdeogramStructureEditorViewModelTests
         sut.SelectedResolution.Should().Be("Auto");
     }
 
-    [Fact]
-    public void EnrichLocalModel_HintHiddenForCloudTiers_ShownForLocal()
-    {
-        var sut = CreateSut();
 
-        sut.EnrichTier.Should().Be(ModelTier.Sonnet);
-        sut.ShowEnrichLocalModel.Should().BeFalse("the cloud tiers name themselves");
-
-        sut.EnrichTier = ModelTier.Local;
-        sut.ShowEnrichLocalModel.Should().BeTrue();
-
-        sut.EnrichTier = ModelTier.Opus;
-        sut.ShowEnrichLocalModel.Should().BeFalse();
-    }
 
     [Fact]
     public void LoadFromJson_ValidStructuredPrompt_PopulatesAllFields()
@@ -730,8 +719,55 @@ public class IdeogramStructureEditorViewModelTests
 
     // ---- Region-aware enrichment ---------------------------------------------------------
 
-    private IdeogramStructureEditorViewModel CreateSut(IEnrichRegionsLlmService enrich) =>
-        new(_fileService.Object, _fileLauncher.Object, NullLogger<IdeogramStructureEditorViewModel>.Instance, enrich: enrich);
+    /// <summary>
+    /// A structure editor with the things a real one is handed: a host to read the provider lists through, and
+    /// a store to remember through. A page whose Enrich button works but that has no settings to read is not a
+    /// state the app ships in, so the default store has already been picked once - and it has to be, because
+    /// Local has no default model by design and a builder that left the row empty would turn every success
+    /// test below into a refusal test. The tests about not having picked anything bring their own store.
+    /// </summary>
+    private IdeogramStructureEditorViewModel CreateSut(
+        IEnrichRegionsLlmService enrich,
+        Mock<IUiStateStore>? store = null,
+        GeneratorViewModel? generator = null) =>
+        new(_fileService.Object, _fileLauncher.Object, NullLogger<IdeogramStructureEditorViewModel>.Instance,
+            enrich: enrich,
+            generator: generator ?? BareGenerator.New(),
+            uiStateStore: (store ?? EnrichmentStore()).Object);
+
+    /// <summary>First launch that has been used once: this role on Local, with a model picked.</summary>
+    private static Mock<IUiStateStore> EnrichmentStore()
+    {
+        var store = EmptyUiStateStore.New();
+        store.Setup(s => s.LoadLlmModel(ModelRole.Enrich, ModelProvider.Local)).Returns("llama3.1");
+        return store;
+    }
+
+    /// <summary>Move the row the way a user does: provider first, then a model out of that provider's list.</summary>
+    private static void PickEnrichment(IdeogramStructureEditorViewModel sut, ModelProvider provider, string model)
+    {
+        var row = sut.Enrichment
+            ?? throw new InvalidOperationException("This page was built with no model settings to read.");
+        row.SelectedProvider = provider;
+        row.SelectedModel = model;
+    }
+
+    /// <summary>
+    /// Enrichment that writes down who it was asked. A bare mock answers null, and a null result would be a
+    /// NullReferenceException in the page rather than a finding; what these tests care about is the target the
+    /// page resolved, which a setup-then-verify mock can assert but not show.
+    /// </summary>
+    private sealed class RecordingEnrichService(LlmVariantResult? reply = null) : IEnrichRegionsLlmService
+    {
+        public List<LlmTarget> Targets { get; } = [];
+
+        public Task<LlmVariantResult> EnrichAsync(
+            V4JsonPrompt baseCaption, LlmTarget target, CancellationToken ct = default)
+        {
+            Targets.Add(target);
+            return Task.FromResult(reply ?? LlmVariantResult.Ok(baseCaption, "Enriched: x"));
+        }
+    }
 
     private static V4JsonPrompt EnrichedOf()
     {
@@ -871,5 +907,168 @@ public class IdeogramStructureEditorViewModelTests
         sut.StatusKind.Should().Be(StatusKind.Info);
         sut.StatusMessage.Should().Contain("cancelled");
         sut.IsEnriching.Should().BeFalse();
+    }
+
+    // ---- The row's own decision ---------------------------------------------------
+    //
+    // Enrichment used to answer with a tier: three words, two of which named a Claude model, no way to say
+    // "OpenRouter", and no memory - it opened on the paid model on every visit. What replaces it is a row
+    // with a provider, a model, a memory, and three different ways to have nobody to call: no settings, no
+    // model, and a settings store that has never been asked about this role.
+
+    [Fact]
+    public void Enrichment_OnFirstLaunchOpensOnLocal_BecauseEnrichingNobodyAskedForShouldNotBillAnyone()
+    {
+        var sut = CreateSut(new RecordingEnrichService(), EmptyUiStateStore.New());
+
+        sut.Enrichment!.SelectedProvider.Should().Be(ModelProvider.Local,
+            "the tier this replaces defaulted to a paid Claude model, and it did so again on every navigation");
+        sut.Enrichment.SelectedModel.Should().BeNull(
+            "Local has no default model to guess, and guessing one is how a page calls a server nobody picked");
+    }
+
+    [Fact]
+    public void Enrichment_IsOfferedEveryProviderThatReadsText()
+    {
+        var sut = CreateSut(new RecordingEnrichService());
+
+        sut.Enrichment!.Providers.Should().Equal(
+            new[] { ModelProvider.Local, ModelProvider.Anthropic, ModelProvider.OpenRouter },
+            "enrichment sends text, so nothing rules a provider out for it - unlike an observer, which cannot "
+            + "use Anthropic in this build and is not offered it");
+    }
+
+    [Fact]
+    public void Enrichment_OpensOnWhatThisRolePickedLastTime()
+    {
+        var store = new Mock<IUiStateStore>();
+        store.Setup(s => s.LoadLlmProvider(ModelRole.Enrich, It.IsAny<ModelProvider>()))
+            .Returns(ModelProvider.OpenRouter);
+        store.Setup(s => s.LoadLlmModel(ModelRole.Enrich, ModelProvider.OpenRouter))
+            .Returns("deepseek/deepseek-chat");
+
+        var sut = CreateSut(new RecordingEnrichService(), store);
+
+        sut.Enrichment!.SelectedProvider.Should().Be(ModelProvider.OpenRouter,
+            "a row that resets on every visit is a row whose answer the page never used");
+        sut.Enrichment.SelectedModel.Should().Be("deepseek/deepseek-chat");
+    }
+
+    [Fact]
+    public void PickingAnEnrichmentModelRemembersItUnderThisRoleAlone()
+    {
+        var store = EmptyUiStateStore.New();
+        var sut = CreateSut(new RecordingEnrichService(), store);
+
+        PickEnrichment(sut, ModelProvider.OpenRouter, "deepseek/deepseek-chat");
+
+        store.Verify(s => s.PersistLlmProvider(ModelRole.Enrich, ModelProvider.OpenRouter), Times.Once);
+        store.Verify(s => s.PersistLlmModel(ModelRole.Enrich, ModelProvider.OpenRouter, "deepseek/deepseek-chat"),
+            Times.Once);
+        store.Verify(
+            s => s.PersistLlmModel(It.Is<ModelRole>(r => r != ModelRole.Enrich), It.IsAny<ModelProvider>(),
+                It.IsAny<string>()), Times.Never,
+            "four roles share this store and this page owns one of them; writing another role's model is how "
+            + "one picker came to move four pages");
+    }
+
+    [Fact]
+    public async Task Enrich_WithNoModelPicked_SendsNoModelAndShowsWhoseAnswerItAskedFor()
+    {
+        // The page does not check for a missing model, and the page does not word that failure. The service
+        // words it per provider - naming Ollama for Local, Claude for Anthropic - and a page repeating the
+        // question in its own words would be a second answer to one question, which is how two wordings
+        // start drifting. What the page owes is a target that admits it has no model, and the sentence it
+        // gets handed back shown as it came.
+        var enrich = new RecordingEnrichService(
+            LlmVariantResult.Fail("No local Ollama model selected - pick one in the structure editor."));
+        var sut = CreateSut(enrich, EmptyUiStateStore.New());
+        sut.LoadFromJson(SampleJson);
+
+        await sut.EnrichFromLayoutCommand.ExecuteAsync(null);
+
+        var sent = enrich.Targets.Should().ContainSingle().Subject;
+        sent.Provider.Should().Be(ModelProvider.Local);
+        sent.HasModel.Should().BeFalse("there is nothing to call, and a row must not invent a model to fill in");
+        sut.StatusKind.Should().Be(StatusKind.Error);
+        sut.StatusMessage.Should().Be("No local Ollama model selected - pick one in the structure editor.",
+            "what the service said is what the page shows, unchanged");
+        sut.HasEnrichPreview.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Enrich_WithNoSettingsToRead_RefusesRatherThanGuessing()
+    {
+        // A structure editor built without a host - and the standalone construction tests above show that is
+        // a real shape - cannot know who would answer. Guessing would bill somebody's key for a description
+        // nobody chose, which is the defect this whole refactor exists to kill.
+        var enrich = new RecordingEnrichService();
+        var sut = new IdeogramStructureEditorViewModel(
+            _fileService.Object, _fileLauncher.Object, NullLogger<IdeogramStructureEditorViewModel>.Instance,
+            enrich: enrich);
+        sut.LoadFromJson(SampleJson);
+
+        await sut.EnrichFromLayoutCommand.ExecuteAsync(null);
+
+        sut.Enrichment.Should().BeNull("there was no host to build a row from");
+        sut.StatusKind.Should().Be(StatusKind.Error);
+        sut.StatusMessage.Should().Contain("unavailable");
+        enrich.Targets.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Enrich_HandsTheRowLocalPickToTheService_AtTheUrlTheSettingsName()
+    {
+        var generator = BareGenerator.New();
+        generator.Settings.OllamaBaseUrl = "http://ollama.example:11434";
+        var enrich = new RecordingEnrichService();
+        var sut = CreateSut(enrich, EnrichmentStore(), generator);
+        sut.LoadFromJson(SampleJson);
+
+        await sut.EnrichFromLayoutCommand.ExecuteAsync(null);
+
+        var sent = enrich.Targets.Should().ContainSingle().Subject;
+        sent.Provider.Should().Be(ModelProvider.Local);
+        sent.ModelId.Should().Be("llama3.1", "the row is the only model enrichment reads now");
+        sent.BaseUrl.Should().Be("http://ollama.example:11434",
+            "which Ollama answers is a setting, not something the service works out for itself");
+    }
+
+    [Fact]
+    public async Task Enrich_HandsTheRowAnthropicPickToTheService_WithNoServerAddressAttached()
+    {
+        var enrich = new RecordingEnrichService();
+        var sut = CreateSut(enrich);
+        sut.LoadFromJson(SampleJson);
+        PickEnrichment(sut, ModelProvider.Anthropic, AnthropicModels.Sonnet);
+
+        await sut.EnrichFromLayoutCommand.ExecuteAsync(null);
+
+        var sent = enrich.Targets.Should().ContainSingle().Subject;
+        sent.Provider.Should().Be(ModelProvider.Anthropic);
+        sent.ModelId.Should().Be(AnthropicModels.Sonnet);
+        sent.BaseUrl.Should().BeEmpty(
+            "Claude answers at one known endpoint; carrying the local Ollama address along would be a way to "
+            + "send an Anthropic key to a LAN server");
+    }
+
+    [Theory]
+    [InlineData(ModelProvider.Local, "Ollama")]
+    [InlineData(ModelProvider.Anthropic, "Anthropic")]
+    [InlineData(ModelProvider.OpenRouter, "OpenRouter")]
+    public void EnrichmentHelper_NamesWhoAnswers_AndOnlyLocalClaimsToBeFree(ModelProvider provider, string brand)
+    {
+        var sut = CreateSut(new RecordingEnrichService());
+
+        sut.Enrichment!.SelectedProvider = provider;
+        var helper = sut.Enrichment.Helper;
+
+        helper.Should().NotBeNull(
+            "a row that switches provider has something to say about the provider it switched to, or it "
+            + "should have said nothing at all");
+        helper.Should().Contain(brand, "helper text that never names who answers is decoration beside a picker");
+        helper!.ToLowerInvariant().Contains("free").Should().Be(provider == ModelProvider.Local,
+            "free is a claim only the local row may make - and the money question is the whole reason this is "
+            + "the one card the page leaves open");
     }
 }

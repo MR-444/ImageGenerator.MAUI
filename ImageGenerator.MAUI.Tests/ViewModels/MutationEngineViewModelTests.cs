@@ -7,6 +7,7 @@ using ImageGenerator.MAUI.Core.Domain.Ideogram.Mutation.Library;
 using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
+using ImageGenerator.MAUI.Tests.TestSupport;
 using ImageGenerator.MAUI.Shared.Constants;
 using ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -774,28 +775,10 @@ public class MutationEngineViewModelTests
     // tests so DispatchAiResultsAsync returns before it ever touches the real render batch.
     private static GeneratorViewModel BuildGenerator(string comfyUrl, string ollamaUrl)
     {
-        var gen = new GeneratorViewModel(
-            Mock.Of<IJobRunner>(),
-            Mock.Of<IApiTokenStore>(),
-            Mock.Of<IPollinationsTokenStore>(),
-            Mock.Of<IComfyUiAuthStore>(),
-            Mock.Of<ICivitaiTokenStore>(),
-            Mock.Of<IAnthropicTokenStore>(),
-            Mock.Of<ICivitaiPostingService>(),
-            Mock.Of<IUiStateStore>(),
-            Mock.Of<IModelCatalogCoordinator>(),
-            ModelDescriptorRegistry.Default(),
-            Mock.Of<IPromptBatchParser>(),
-            Mock.Of<IComfyUiCheckpointService>(),
-            Mock.Of<IGalleryService>(),
-            Mock.Of<IFolderPicker>(),
-            NullLogger<GeneratorViewModel>.Instance)
-        {
-            // Settings moved to AppSettingsCoordinator; a nested initializer keeps
-            // the one-expression shape these helpers had.
-            Settings = { ComfyUiBaseUrl = comfyUrl, OllamaBaseUrl = ollamaUrl }
-        };
-        return gen;
+        var generator = BareGenerator.New();
+        generator.Settings.ComfyUiBaseUrl = comfyUrl;
+        generator.Settings.OllamaBaseUrl = ollamaUrl;
+        return generator;
     }
 
     private sealed class FailingMutationLlm : ICaptionMutationLlmService

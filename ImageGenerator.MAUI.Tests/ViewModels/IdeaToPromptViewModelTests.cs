@@ -6,6 +6,7 @@ using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
 using ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
+using ImageGenerator.MAUI.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using SixLabors.ImageSharp;
@@ -44,7 +45,7 @@ public class IdeaToPromptViewModelTests
     [Fact]
     public void TheWriterOpensOnLocalBecauseLocalCannotBillAnyone()
     {
-        var vm = NewWriterVm(EmptyStore());
+        var vm = NewWriterVm(EmptyUiStateStore.New());
 
         vm.Writer!.SelectedProvider.Should().Be(ModelProvider.Local,
             "nobody has picked anything, and the provider that cannot bill anyone is the one to open on");
@@ -639,19 +640,7 @@ public class IdeaToPromptViewModelTests
         writer.SelectedModel = model;
     }
 
-    /// <summary>
-    /// A store with nothing in it is not a mock that answers null. A real store hands back the caller's
-    /// fallback the first time a role is read, and that fallback is what decides which provider a page
-    /// opens on. Answer null instead and every "opens on …" test below grades the row's own last-ditch
-    /// fallback — the first provider it was handed — and passes whatever the page asked for.
-    /// </summary>
-    private static Mock<IUiStateStore> EmptyStore()
-    {
-        var store = new Mock<IUiStateStore>();
-        store.Setup(s => s.LoadLlmProvider(It.IsAny<ModelRole>(), It.IsAny<ModelProvider>()))
-            .Returns((ModelRole _, ModelProvider fallback) => fallback);
-        return store;
-    }
+
 
     private sealed class FakePromptBuilder(ProseResult prose, PromptBuilderResult json) : IPromptBuilderService
     {
@@ -941,7 +930,7 @@ public class IdeaToPromptViewModelTests
     [Fact]
     public void OpensTheObserverOnLocalOllamaBecauseObservingCostsNothingWhenNothingWasChosen()
     {
-        var vm = NewVisionVm(EmptyStore(), new RecordingVisionObserver());
+        var vm = NewVisionVm(EmptyUiStateStore.New(), new RecordingVisionObserver());
 
         // The writer's rule again, and the same reason to state it twice: this row sends somebody's
         // photograph somewhere, and on a first visit "somewhere" must not be a host that bills.
@@ -1003,20 +992,6 @@ public class IdeaToPromptViewModelTests
         return generator;
     }
 
-    private static GeneratorViewModel BuildBareGenerator() =>
-        new(new Mock<IJobRunner>().Object,
-            new Mock<IApiTokenStore>().Object,
-            new Mock<IPollinationsTokenStore>().Object,
-            new Mock<IComfyUiAuthStore>().Object,
-            new Mock<ICivitaiTokenStore>().Object,
-            new Mock<IAnthropicTokenStore>().Object,
-            new Mock<ICivitaiPostingService>().Object,
-            new Mock<IUiStateStore>().Object,
-            new Mock<IModelCatalogCoordinator>().Object,
-            ModelDescriptorRegistry.Default(),
-            new Mock<IPromptBatchParser>().Object,
-            new Mock<IComfyUiCheckpointService>().Object,
-            new Mock<IGalleryService>().Object,
-            new Mock<IFolderPicker>().Object,
-            NullLogger<GeneratorViewModel>.Instance);
+    /// <summary>The host these pages read settings through; see <c>BareGenerator</c> in TestSupport.</summary>
+    private static GeneratorViewModel BuildBareGenerator() => BareGenerator.New();
 }

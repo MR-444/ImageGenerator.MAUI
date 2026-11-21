@@ -28,12 +28,20 @@ public enum ModelProvider
 /// four Pickers used to write one key, so choosing a caption-mutation model silently changed what the
 /// generate button rendered with.
 /// </summary>
-/// <remarks>The image-observation role is deliberately absent: it sends pixels and lives on
-/// <c>VisionObservationService</c> with its own provider picker. Folding it in here means moving that
-/// service onto the same transport seam, which is a separate change (see the plan's Phase C).</remarks>
+/// <remarks><see cref="Observe"/> is the odd one: it sends pixels, so its model list is filtered to
+/// models that accept them and it is offered fewer providers than the text roles. It is still a role
+/// here because the decision it makes — who answers, with which model, remembered per role — is the
+/// same decision in the same shape; only the list beside it differs.</remarks>
 public enum ModelRole
 {
-    /// <summary>Idea to Prompt: turn an idea (and optionally a reference image's description) into prose/JSON.</summary>
+    /// <summary>
+    /// Idea to Prompt: turn an idea (and optionally a reference image's description) into prose/JSON.
+    /// The one role that still reads the retired <c>ModelTier</c> preference — once, on the first read
+    /// after the split, taking both halves of what the tier meant: it named a provider AND a model in one
+    /// word, so an install that had picked "Sonnet" has to land on Anthropic with the Sonnet id, not on
+    /// this role's default of Opus. A fossil read with no write-back; see
+    /// <c>UiStateStore.LoadLegacyPromptWriterTier</c>.
+    /// </summary>
     PromptWrite,
 
     /// <summary>Mutation Engine: rewrite a whole structured caption toward a new direction.</summary>
@@ -99,16 +107,6 @@ public readonly record struct LlmTarget(ModelProvider Provider, string ModelId, 
 
     /// <summary>Short name for status text and log lines.</summary>
     public string ProviderLabel => Provider.ForProse();
-
-    /// <summary>The legacy tier → target translation, so the Sonnet/Opus/Local pickers that still ship
-    /// keep their exact behaviour while the pages move over to provider + model one at a time.
-    /// Sonnet/Opus carried both the provider AND the model ID; those two facts split here.</summary>
-    public static LlmTarget FromLegacyTier(ModelTier tier, string localModelId, string localBaseUrl) => tier switch
-    {
-        ModelTier.Opus => new LlmTarget(ModelProvider.Anthropic, AnthropicModels.Opus, string.Empty),
-        ModelTier.Local => new LlmTarget(ModelProvider.Local, localModelId, localBaseUrl),
-        _ => new LlmTarget(ModelProvider.Anthropic, AnthropicModels.Sonnet, string.Empty)
-    };
 
     /// <summary>
     /// The "you haven't chosen a model yet" sentence for this target. It lives on the target because all

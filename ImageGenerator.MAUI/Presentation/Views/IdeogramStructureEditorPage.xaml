@@ -391,31 +391,27 @@
                                        Text="{Binding IsVisible, Source={x:Reference EnrichmentSettingsBody}, Converter={StaticResource BoolToChevron}, x:DataType=View}" />
                             </Grid>
 
-                            <!-- Starts open on purpose: the tier defaults to a paid Anthropic model and the
-                                 Enrich button lives further down this pane, so a collapsed section here means
-                                 paying without ever seeing what is being paid for. -->
+                            <!-- Starts open on purpose: the Enrich button lives further down this pane, and
+                                 this section is the one that decides whether a click costs money. It used
+                                 to justify itself with "the tier defaults to a paid Anthropic model"; the
+                                 row now opens on Local, so that sentence is gone, and what is left is the
+                                 weaker and more permanent reason — a cost surface folded away is still a
+                                 cost surface. -->
                             <VerticalStackLayout x:Name="EnrichmentSettingsBody" Spacing="8">
-                                <Label Text="Enrichment model" Style="{StaticResource FieldLabel}" />
-                                <Picker Title="Model"
-                                        ItemsSource="{Binding EnrichTierOptions}"
-                                        SelectedItem="{Binding EnrichTier, Mode=TwoWay}"
-                                        IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
-                                        MaximumWidthRequest="220"
-                                        HorizontalOptions="Start"
-                                        AutomationId="EditorEnrichTierPicker" />
-                            <!-- Which local model enriches. Same shared row as the mutation page, so the
-                                 three ids stay this page's; IsBusy keeps the mid-enrichment greying out. -->
-                            <ctrl:ModelPickerRow IsVisible="{Binding ShowEnrichLocalModel}"
+                            <!-- The whole decision — who answers, which model, Refresh, status — in the
+                                 one shared row the other pages use, so a provider is spelled the same way
+                                 on every page. The ids are this page's, and they say what the control is
+                                 now: EditorEnrichTierPicker went out with the tier, and "Ollama" went out
+                                 of the names of the three that survived, because the row they sit on lists
+                                 Claude and OpenRouter models too. -->
+                            <ctrl:ModelPickerRow Choice="{Binding Enrichment}"
+                                                 TitleText="Enrichment model"
+                                                 PickerTitle="Refresh, then pick a model…"
                                                  IsBusy="{Binding IsEnriching}"
-                                                 TitleText="Local model (Ollama)"
-                                                 Models="{Binding Generator.Settings.OllamaModels}"
-                                                 SelectedModel="{Binding Generator.Settings.EnrichModel, Mode=TwoWay}"
-                                                 RefreshCommand="{Binding Generator.Settings.RefreshOllamaModelsCommand}"
-                                                 Helper="The Ollama server URL is shared with AI mutation and configured in Settings."
-                                                 Status="{Binding Generator.Settings.OllamaServerStatus}"
-                                                 ModelPickerAutomationId="EditorEnrichOllamaModelPicker"
-                                                 RefreshAutomationId="EditorEnrichOllamaRefreshButton"
-                                                 StatusAutomationId="EditorEnrichOllamaStatusLabel" />
+                                                 ModelPickerAutomationId="EditorEnrichModelPicker"
+                                                 ProviderPickerAutomationId="EditorEnrichProviderPicker"
+                                                 RefreshAutomationId="EditorEnrichModelRefreshButton"
+                                                 StatusAutomationId="EditorEnrichModelStatusLabel" />
 
                             </VerticalStackLayout>
 

@@ -2,19 +2,7 @@ using ImageGenerator.MAUI.Core.Domain.Ideogram;
 
 namespace ImageGenerator.MAUI.Infrastructure.Interfaces;
 
-/// <summary>Which model the AI caption mutator talks to for a run.</summary>
-public enum ModelTier
-{
-    /// <summary>Claude Sonnet 4.6 — the affordable default for directed mutation.</summary>
-    Sonnet,
 
-    /// <summary>Claude Opus 4.8 — the stronger (pricier) tier.</summary>
-    Opus,
-
-    /// <summary>A local Ollama model (e.g. on fireEngine) — FREE, for verifying the technical
-    /// round-trip; output quality is not a goal of this tier.</summary>
-    Local
-}
 
 /// <summary>
 /// LLM-driven caption mutation: rewrites a structured Ideogram V4 caption to a new creative direction,

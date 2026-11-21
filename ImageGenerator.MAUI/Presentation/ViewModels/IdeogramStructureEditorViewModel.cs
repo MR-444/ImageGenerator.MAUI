@@ -44,7 +44,8 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         IFileLauncher fileLauncher,
         ILogger<IdeogramStructureEditorViewModel> logger,
         GeneratorViewModel? generator = null,
-        IEnrichRegionsLlmService? enrich = null)
+        IEnrichRegionsLlmService? enrich = null,
+        IUiStateStore? uiStateStore = null)
     {
         _fileService = fileService ?? throw new ArgumentNullException(nameof(fileService));
         _fileLauncher = fileLauncher ?? throw new ArgumentNullException(nameof(fileLauncher));
@@ -52,6 +53,18 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         _generator = generator;
         _settings = new GeneratorSettingsReader(generator?.Settings);
         _enrich = enrich;
+
+        // The enrich role's decision, in the same shared row as the other three. It opens on Local
+        // because this page's Enrich button is one tap from a paid call and the role never remembered a
+        // choice at all: as a tier it reopened on Sonnet on every navigation, so the free path was the
+        // one that had to be chosen twice to be used once. It writes only ModelRole.Enrich keys.
+        if (uiStateStore is not null && generator?.Settings is { } settings)
+        {
+            Enrichment = new ModelChoiceState(
+                ModelRole.Enrich, uiStateStore, settings.TextModelSources, ModelProvider.Local,
+                EnrichmentHelperFor,
+                baseUrlFor: p => p == ModelProvider.Local ? _settings.OllamaBaseUrl : string.Empty);
+        }
 
         // Mode snapshot is safe: this VM is transient (fresh per navigation) and the singleton
         // generator's model can't change while the editor is open. On a ComfyUI workflow the
@@ -162,22 +175,33 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
     // facts (RegionGraph). The result lands in a preview the user accepts or discards; accept copies
     // ONLY the descs onto the live elements (bbox/text/palette/selection untouched).
 
-    /// <summary>Model tiers offered for enrichment (Sonnet default; Local = free round-trip).</summary>
-    public IReadOnlyList<ModelTier> EnrichTierOptions { get; } = (ModelTier[])[ModelTier.Sonnet, ModelTier.Opus, ModelTier.Local];
+    /// <summary>
+    /// Which model enriches, picked in one shared row: provider, model, refresh and status together, with
+    /// the choice remembered under <see cref="ModelRole.Enrich"/>. Null when the page was built without a
+    /// host generator to read settings from — enrichment then refuses rather than calling a model nobody
+    /// chose.
+    /// </summary>
+    public ModelChoiceState? Enrichment { get; }
 
-    [ObservableProperty]
-    private ModelTier _enrichTier = ModelTier.Sonnet;
-
-    /// <summary>True only when the Local (Ollama) tier is selected — gates the model-name hint.</summary>
-    public bool ShowEnrichLocalModel => EnrichTier == ModelTier.Local;
+    /// <summary>
+    /// What the row says about the provider currently picked. The sentence used to be hard-coded under a
+    /// Local-only picker ("the Ollama server URL is shared with AI mutation"), which stopped being true
+    /// the moment the row could pick a hosted model: it is the key that gets billed, and which key, is a
+    /// fact about the provider, not about the page.
+    /// </summary>
+    private static string? EnrichmentHelperFor(ModelProvider provider) => provider switch
+    {
+        ModelProvider.Local =>
+            "Free — runs on the Ollama server configured in Settings, the same server AI mutation uses. Nothing here leaves this machine.",
+        ModelProvider.Anthropic =>
+            "Set the Anthropic API key in Settings. The caption and its marked regions are sent to Anthropic and billed per token by the model you pick.",
+        ModelProvider.OpenRouter =>
+            "Set the OpenRouter API key in Settings. The caption and its marked regions are routed by OpenRouter; which models are offered comes from your key.",
+        _ => null
+    };
 
     /// <summary>The host generator, exposed so the page can reuse the shared Ollama model picker.</summary>
     public GeneratorViewModel? Generator => _generator;
-
-    partial void OnEnrichTierChanged(ModelTier value)
-    {
-        OnPropertyChanged(nameof(ShowEnrichLocalModel));
-    }
 
     /// <summary>True while a model call is in flight — gates the button + shows the cancel affordance.</summary>
     [ObservableProperty]
@@ -730,12 +754,33 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         var model = BuildModel();
         if (!ReportValidation(model)) return;
 
+        // Enrichment runs on the shared role row: provider and model read from it, the pick persists
+        // through it, and the service is handed a target instead of reaching into four settings for a model
+        // and a URL of its own - which is where a tier's two jobs (name a provider, name a model) stopped
+        // being one word.
+        //
+        // A row that does not exist is the one failure this page can name: no host to read settings through,
+        // so nobody to ask. A row with no model picked is deliberately NOT checked here. The service already
+        // answers that in words, worded per provider, and a page repeating the question in its own words is
+        // how two answers to one question start.
+        if (Enrichment is not { } row)
+        {
+            SetStatus(
+                "Model settings are unavailable in this build, so enrichment cannot tell who would answer. "
+                + "Open the generator and try again.", StatusKind.Error);
+            return;
+        }
+
         ClearEnrichPreview();
         IsEnriching = true;
         _enrichCts = new CancellationTokenSource();
         try
         {
-            var result = await _enrich.EnrichAsync(model, _settings.EnrichTarget(EnrichTier), _enrichCts.Token);
+            // Read once, at the moment of the call: the row beside this button can be moved while a run is
+            // in flight, and an enrichment must be answered by the model it was asked of. No running status
+            // is written here - enrichment never had one, and the row is where a run's model now shows.
+            var target = row.Target;
+            var result = await _enrich.EnrichAsync(model, target, _enrichCts.Token);
             if (!result.Success || result.Prompt is null)
             {
                 SetStatus(result.Error ?? "The enrichment didn't return a result.", StatusKind.Error);

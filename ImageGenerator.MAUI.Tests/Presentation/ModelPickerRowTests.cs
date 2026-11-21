@@ -141,7 +141,7 @@ public class ModelPickerRowTests
 
     /// <summary>
     /// A handle a host can set and no element carries is worse than no handle: the markup test here finds
-    /// the attribute and passes, the UI test outside this repository finds no control, and both sides
+    /// the attribute and passes, whoever is looking for that control finds nothing, and both sides
     /// believe the picker is on screen.
     /// </summary>
     [Theory]

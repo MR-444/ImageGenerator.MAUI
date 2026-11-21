@@ -6,6 +6,7 @@ using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.ViewModels;
 using ImageGenerator.MAUI.Tests.Core.Domain.Ideogram.Mutation;
+using ImageGenerator.MAUI.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -17,30 +18,11 @@ public class GalleryViewModelTests
     private readonly Mock<IFileLauncher> _fileLauncher = new();
     private readonly Mock<ICivitaiPostingService> _civitaiPostingService = new();
     private readonly Mock<IUiStateStore> _uiStateStore = new();
-    private readonly GeneratorViewModel _generator = BuildGenerator();
+    private readonly GeneratorViewModel _generator = BareGenerator.New();
 
     private GalleryViewModel CreateSut() => new(
         _galleryService.Object, _fileLauncher.Object, _civitaiPostingService.Object,
         _uiStateStore.Object, _generator, NullLogger<GalleryViewModel>.Instance);
-
-    // A GeneratorViewModel from bare mocks (mirrors GeneratorViewModelTests); breed only touches
-    // PendingBreedSet, so no mock setups are needed.
-    private static GeneratorViewModel BuildGenerator() =>
-        new(new Mock<IJobRunner>().Object,
-            new Mock<IApiTokenStore>().Object,
-            new Mock<IPollinationsTokenStore>().Object,
-            new Mock<IComfyUiAuthStore>().Object,
-            new Mock<ICivitaiTokenStore>().Object,
-            new Mock<IAnthropicTokenStore>().Object,
-            new Mock<ICivitaiPostingService>().Object,
-            new Mock<IUiStateStore>().Object,
-            new Mock<IModelCatalogCoordinator>().Object,
-            ModelDescriptorRegistry.Default(),
-            new Mock<IPromptBatchParser>().Object,
-            new Mock<IComfyUiCheckpointService>().Object,
-            new Mock<IGalleryService>().Object,
-            new Mock<IFolderPicker>().Object,
-            NullLogger<GeneratorViewModel>.Instance);
 
     private static GalleryItem MakeItem(string fileName, long size = 1234L, DateTime? createdAt = null) => new(
         FilePath: Path.Combine("C:", "fake", fileName),

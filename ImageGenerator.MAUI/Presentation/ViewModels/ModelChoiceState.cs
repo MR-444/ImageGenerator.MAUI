@@ -102,18 +102,30 @@ public sealed partial class ModelChoiceState : ObservableObject
     /// failure must not be readable as the answer to an Ollama button.</summary>
     [ObservableProperty] private string? _status;
 
-    /// <summary>The sentence under the pickers, if the host supplies one. Depends on the provider,
-    /// because what is worth warning about differs: one side is free and local, the other bills.</summary>
+    /// <summary>
+    /// The sentence under the pickers, if the host supplies one. Depends on the provider, because what is
+    /// worth warning about differs: one side is free and local, the other bills.
+    ///
+    /// <para>
+    /// Cost is spelt out in words rather than figures. Once a row lists whatever a provider actually
+    /// returns, a currency amount beside any entry is a guess about somebody else's catalogue and metering,
+    /// and a guess wearing a currency sign reads as measured. So a host says the two things that hold for
+    /// every model on either side — free and on this machine, or billed to the key set in Settings — plus
+    /// how many calls the operation makes. Nothing here can be inferred from a tier any more: the tier is
+    /// deleted, which is what turned these sentences from decoration into the cost surface.
+    /// </para>
+    /// </summary>
     public string? Helper => _helperFor?.Invoke(SelectedProvider);
 
     /// <summary>
     /// The call this selection amounts to, resolved the moment somebody asks to run it.
     ///
     /// <para>
-    /// This replaces <c>GeneratorSettingsReader.MutationTarget(tier)</c> and its siblings. They had to
+    /// This replaced <c>GeneratorSettingsReader.MutationTarget(tier)</c> and its siblings, which had to
     /// exist because the picker, the persisted value and the model id were three separate memories that a
-    /// tier name had to reconcile; with one selection there is nothing to reconcile, and the tier
-    /// translation - the last place where "Sonnet" meant both a provider and a model id - goes with them.
+    /// tier name had to reconcile. With one selection there is nothing to reconcile: the bridge, the tier
+    /// enum it took, and the last callers that passed one went together, so no path through this class can
+    /// still disagree with the row above it about which model a word meant.
     /// </para>
     /// </summary>
     /// <remarks>

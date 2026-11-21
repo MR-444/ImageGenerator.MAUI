@@ -15,7 +15,6 @@ public sealed class UiStateStore : IUiStateStore
     private const string UseSageAttentionKey = "imggen.use_sage_attention";
     private const string FreeVramAfterRenderingKey = "imggen.free_vram_after_rendering";
     private const string AppThemeKey = "imggen.app_theme";
-    private const string PromptWriterTierKey = "imggen.prompt_writer_tier";
     private const string ResolutionKey = "imggen.last_resolution";
     private const string ComfyUiResolutionKey = "imggen.last_resolution.comfyui";
     private const string AspectRatioKey = "imggen.last_aspect_ratio";
@@ -292,13 +291,13 @@ public sealed class UiStateStore : IUiStateStore
             return Enum.TryParse<ModelProvider>(LoadString(key), out var parsed) ? parsed : fallback;
         }
 
-        // First run after the provider split: inherit the prompt writer's persisted tier (the only role
-        // that ever remembered one) so "I run this on Ollama" survives the upgrade; every other role
-        // starts on the fallback its host asked for.
+        // First run after the provider split: inherit what the prompt writer used to remember as a tier
+        // (the only role that ever did), so "I run this on Ollama" and "I run this on Sonnet" survive the
+        // upgrade; every other role starts on the fallback its host asked for.
         ModelProvider? inherited = null;
-        if (role == ModelRole.PromptWrite && LoadPromptWriterTier() is { } legacyTier)
+        if (role == ModelRole.PromptWrite && LoadLegacyPromptWriterTier() is { } legacyTier)
         {
-            inherited = FromLegacyTier(legacyTier);
+            inherited = legacyTier == LegacyTierLocal ? ModelProvider.Local : ModelProvider.Anthropic;
             AdoptLegacyTierModel(role, legacyTier);
         }
         var adopted = inherited ?? fallback;
@@ -355,9 +354,34 @@ public sealed class UiStateStore : IUiStateStore
             LoadLlmModel(role, provider) ?? string.Empty,
             provider == ModelProvider.Local ? ModelConstants.Ollama.ResolveBaseUrl(LoadOllamaBaseUrl()) : string.Empty);
     }
-    private static ModelProvider FromLegacyTier(ModelTier tier) => tier == ModelTier.Local
-        ? ModelProvider.Local
-        : ModelProvider.Anthropic;
+    // --- The tier fossil ------------------------------------------------------------------
+    // Nothing in this app writes imggen.prompt_writer_tier since the tier pickers went: ModelTier is
+    // deleted, and each role now remembers a provider and a model separately. The key still exists on
+    // installs that ran a build before the role pickers, and it is read once, on that role's first read,
+    // so such an install resumes where it left off instead of on nothing. Stored as the old enum's int.
+    // When the owner decides those installs no longer matter, this whole block - key, reader, adopter and
+    // their tests - is one deletion.
+
+    private const string PromptWriterTierKey = "imggen.prompt_writer_tier";
+    private const int LegacyTierSonnet = 0;
+    private const int LegacyTierOpus = 1;
+    private const int LegacyTierLocal = 2;
+
+    /// <summary>The stored tier, or null when the key is absent, empty, holds the old "never picked" -1,
+    /// or holds something this app never wrote. Reading a fossil must not be able to break a startup.</summary>
+    private int? LoadLegacyPromptWriterTier()
+    {
+        try
+        {
+            var stored = _preferences.Get(PromptWriterTierKey, -1);
+            return stored is LegacyTierSonnet or LegacyTierOpus or LegacyTierLocal ? stored : null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Preferences.Get({Key}) failed", PromptWriterTierKey);
+            return null;
+        }
+    }
 
     /// <summary>
     /// A tier named a provider and a model in one word, so inheriting only the provider would be half a
@@ -366,12 +390,12 @@ public sealed class UiStateStore : IUiStateStore
     /// update. Write down the model the tier named, where no model has ever been written, and the upgrade
     /// keeps the model it already had.
     /// </summary>
-    private void AdoptLegacyTierModel(ModelRole role, ModelTier tier)
+    private void AdoptLegacyTierModel(ModelRole role, int tier)
     {
-        if (tier == ModelTier.Local) return;
+        if (tier == LegacyTierLocal) return;
         var key = AnthropicModelKey(role);
         if (RoleKeyIsStored(key)) return;
-        PersistString(key, tier == ModelTier.Opus ? AnthropicModels.Opus : AnthropicModels.Sonnet);
+        PersistString(key, tier == LegacyTierOpus ? AnthropicModels.Opus : AnthropicModels.Sonnet);
         _logger.LogDebug("UiStateStore.{Key} adopted the model its {Tier} tier named once", key, tier);
     }
 
@@ -537,42 +561,6 @@ public sealed class UiStateStore : IUiStateStore
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Preferences.Set({Key}) failed", AppThemeKey);
-        }
-    }
-
-    public ModelTier? LoadPromptWriterTier()
-    {
-        try
-        {
-            // Stored as the ModelTier enum int. Sentinel -1 = never picked, so the picker keeps its
-            // "Pick a prompt writer…" placeholder on first launch. A corrupt/foreign value (not a
-            // defined ModelTier) also degrades to null rather than feeding an undefined enum forward.
-            var stored = _preferences.Get(PromptWriterTierKey, -1);
-            var tier = stored >= 0 && Enum.IsDefined(typeof(ModelTier), stored) ? (ModelTier?)stored : null;
-            if (_logger.IsEnabled(LogLevel.Debug))
-                _logger.LogDebug("UiStateStore.LoadPromptWriterTier -> {Value}", tier);
-            return tier;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Preferences.Get({Key}) failed", PromptWriterTierKey);
-            return null;
-        }
-    }
-
-    public void PersistPromptWriterTier(ModelTier value)
-    {
-        try
-        {
-            if (_preferences.ContainsKey(PromptWriterTierKey)
-                && _preferences.Get(PromptWriterTierKey, -1) == (int)value) return;
-            _preferences.Set(PromptWriterTierKey, (int)value);
-            if (_logger.IsEnabled(LogLevel.Debug))
-                _logger.LogDebug("UiStateStore.PersistPromptWriterTier({Value})", value);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Preferences.Set({Key}) failed", PromptWriterTierKey);
         }
     }
 

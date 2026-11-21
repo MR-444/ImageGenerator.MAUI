@@ -595,61 +595,74 @@ public class UiStateStoreTests
         act.Should().NotThrow();
     }
 
-    // Prompt-writer tier: stored as the ModelTier enum int. Missing/foreign values degrade to null
-    // so the "Describe an idea" picker keeps its placeholder rather than surfacing a bad selection.
+    // The tier fossil: imggen.prompt_writer_tier. ModelTier is deleted and nothing in this app writes
+    // this key any more, so there is no round trip left to pin - there is one reader, and what it owes is
+    // an install that ran a build before the role pickers. It is read once, on that role's first read, and
+    // it must never be able to break a startup or overwrite a model someone picked.
     private const string PromptWriterTierKey = "imggen.prompt_writer_tier";
+    private const int LegacySonnet = 0;
+    private const int LegacyOpus = 1;
+    private const int LegacyLocal = 2;
 
     [Fact]
-    public void LoadPromptWriterTier_KeyMissing_ReturnsNull()
+    public void NoRolePickWritesTheTierKeyItNoLongerReads()
     {
-        _sut.LoadPromptWriterTier().Should().BeNull();
+        _preferences.Seed(PromptWriterTierKey, LegacyOpus);
+
+        _sut.PersistLlmProvider(ModelRole.Mutate, ModelProvider.OpenRouter);
+        _sut.PersistLlmModel(ModelRole.Mutate, ModelProvider.OpenRouter, "some/slug");
+        _sut.PersistLlmProvider(ModelRole.PromptWrite, ModelProvider.Local);
+
+        _preferences.Get(PromptWriterTierKey, -1).Should().Be(LegacyOpus,
+            "the fossil is read and left where it is; a store that rewrote a key it no longer owns would "
+            + "be writing a value nothing can read back");
+    }
+
+    [Fact]
+    public void AMissingFossil_LeavesTheRoleOnTheFallbackItsHostAskedFor_AndTheRoleKeepsThatAnswer()
+    {
+        _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.OpenRouter).Should().Be(ModelProvider.OpenRouter,
+            "nothing was ever picked, so the fallback the host asked for is the answer");
+
+        _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.Local).Should().Be(ModelProvider.OpenRouter,
+            "the role has answered once and for all; a second page arriving with a different fallback must not "
+            + "re-decide it, which is how a row could be reopened on somebody else's model");
+
+        // And the retired key was never written on the way past: a store that answered a question and then
+        // wrote down the answer it gave would be leaving behind a value nothing can read back.
+        _preferences.ContainsKey(PromptWriterTierKey).Should().BeFalse();
+    }
+
+    // The stored value is the old enum's int, so the numbers are written out rather than named: the enum
+    // they came from is deleted, and pinning the number is the whole point of a fossil reader.
+    [Theory]
+    [InlineData(LegacySonnet, ModelProvider.Anthropic)]
+    [InlineData(LegacyOpus, ModelProvider.Anthropic)]
+    [InlineData(LegacyLocal, ModelProvider.Local)]
+    public void AFossilNamesItsProviderOnTheFirstRead(int stored, ModelProvider expected)
+    {
+        _preferences.Seed(PromptWriterTierKey, stored);
+
+        _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.OpenRouter).Should().Be(expected);
     }
 
     [Theory]
-    [InlineData(ModelTier.Local)]
-    [InlineData(ModelTier.Sonnet)]
-    [InlineData(ModelTier.Opus)]
-    public void PromptWriterTier_RoundTripsThroughPreferences(ModelTier tier)
+    [InlineData(-1, "the old never-picked sentinel")]
+    [InlineData(99, "a value this app never wrote")]
+    public void AFossilThatMeansNothing_LeavesTheRoleOnItsFallback(int stored, string why)
     {
-        _sut.PersistPromptWriterTier(tier);
+        _preferences.Seed(PromptWriterTierKey, stored);
 
-        _sut.LoadPromptWriterTier().Should().Be(tier);
+        _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.Local).Should().Be(ModelProvider.Local, why);
     }
 
     [Fact]
-    public void PersistPromptWriterTier_WritesTheEnumIntUnderTheTierKey()
+    public void AThrowingFossilRead_DoesNotBreakTheRole()
     {
-        _sut.PersistPromptWriterTier(ModelTier.Local);
-
-        _preferences.Get(PromptWriterTierKey, -1).Should().Be((int)ModelTier.Local,
-            "the key shape and int encoding are pinned like the theme setting above");
-    }
-
-    [Fact]
-    public void LoadPromptWriterTier_OutOfRangeStoredValue_DegradesToNull()
-    {
-        _preferences.Seed(PromptWriterTierKey, 99);
-
-        _sut.LoadPromptWriterTier().Should().BeNull();
-    }
-
-    [Fact]
-    public void LoadPromptWriterTier_GetThrows_SwallowedAndReturnsNull()
-    {
-        _preferences.Seed(PromptWriterTierKey, (int)ModelTier.Opus);
+        _preferences.Seed(PromptWriterTierKey, LegacyOpus);
         _preferences.ThrowOnGet = new InvalidOperationException("backend down");
 
-        _sut.LoadPromptWriterTier().Should().BeNull();
-    }
-
-    [Fact]
-    public void PersistPromptWriterTier_SetThrows_IsSwallowed()
-    {
-        _preferences.ThrowOnSet = new InvalidOperationException("backend down");
-
-        var act = () => _sut.PersistPromptWriterTier(ModelTier.Sonnet);
-
-        act.Should().NotThrow();
+        _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.Local).Should().Be(ModelProvider.Local);
     }
 
     // What a tier has to leave behind. A tier named a provider and a model in one word, so carrying over
@@ -658,21 +671,41 @@ public class UiStateStoreTests
     // someone onto the pricier model on a launch where nobody chose anything.
 
     [Theory]
-    [InlineData(ModelTier.Sonnet, AnthropicModels.Sonnet)]
-    [InlineData(ModelTier.Opus, AnthropicModels.Opus)]
-    public void AWriterTierCarriesTheModelItNamedAndNotJustItsProvider(ModelTier tier, string expectedModel)
+    [InlineData(LegacySonnet, AnthropicModels.Sonnet)]
+    [InlineData(LegacyOpus, AnthropicModels.Opus)]
+    public void AWriterFossilCarriesTheModelItNamedAndNotJustItsProvider(int stored, string expectedModel)
     {
-        _sut.PersistPromptWriterTier(tier);
+        _preferences.Seed(PromptWriterTierKey, stored);
 
         _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.Local).Should().Be(ModelProvider.Anthropic);
         _sut.LoadLlmModel(ModelRole.PromptWrite, ModelProvider.Anthropic).Should().Be(expectedModel,
             "the tier named this model, so it is the model this install was already calling");
+
+        _preferences.ContainsKey(PromptWriterTierKey).Should().BeTrue(
+            "the read leaves the fossil where it lies; a migration that deletes on sight leaves a later "
+            + "build, or a user reporting a wrong model, with nothing to check against");
     }
 
     [Fact]
-    public void AWriterThatSaidLocalPutsNoClaudeModelInTheAnthropicKey()
+    public void AFossilIsAskedOnce_HoweverManyTimesTheRowIsOpened()
     {
-        _sut.PersistPromptWriterTier(ModelTier.Local);
+        _preferences.Seed(PromptWriterTierKey, LegacyOpus);
+        _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.Local);
+
+        // The way a page is really used: opened again, and again. A first-run read that stayed live would
+        // let a retired preference keep outvoting the user long after the user had an opinion.
+        _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.Local);
+        _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.Local).Should().Be(ModelProvider.Anthropic);
+
+        // The user changes their mind, and the answer sticks.
+        _sut.PersistLlmProvider(ModelRole.PromptWrite, ModelProvider.Local);
+        _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.Anthropic).Should().Be(ModelProvider.Local);
+    }
+
+    [Fact]
+    public void AFossilThatSaidLocalPutsNoClaudeModelInTheAnthropicKey()
+    {
+        _preferences.Seed(PromptWriterTierKey, LegacyLocal);
 
         _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.Anthropic).Should().Be(ModelProvider.Local);
         _preferences.ContainsKey("imggen.prompt_writer.anthropic_model").Should().BeFalse(
@@ -680,15 +713,40 @@ public class UiStateStoreTests
     }
 
     [Fact]
-    public void AModelSomeonePickedIsNotRewrittenByTheTierTheyLeftBehind()
+    public void APickMadeAfterAMigrationOutweighsTheMigration()
     {
-        _sut.PersistPromptWriterTier(ModelTier.Sonnet);
+        // The order the store alone cannot see: the fossil is adopted first, then the user says otherwise.
+        // A migration that reasserted itself on every read would undo that choice on the next navigation,
+        // which is a first-run convenience quietly becoming a policy nobody voted for.
+        _preferences.Seed(PromptWriterTierKey, LegacyOpus);
+        _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.Local);
+
+        _sut.PersistLlmModel(ModelRole.PromptWrite, ModelProvider.Anthropic, "claude-sonnet-4-6");
+
+        _sut.LoadLlmModel(ModelRole.PromptWrite, ModelProvider.Anthropic).Should().Be("claude-sonnet-4-6");
+    }
+
+    [Fact]
+    public void AModelSomeonePickedIsNotRewrittenByTheFossilTheyLeftBehind()
+    {
+        _preferences.Seed(PromptWriterTierKey, LegacySonnet);
         _sut.PersistLlmModel(ModelRole.PromptWrite, ModelProvider.Anthropic, "claude-haiku-4-5");
 
         _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.Local);
 
         _sut.LoadLlmModel(ModelRole.PromptWrite, ModelProvider.Anthropic).Should().Be("claude-haiku-4-5",
             "the inheritance happens once, on the first read after the split, and a written model is not that");
+    }
+
+    [Fact]
+    public void OnceTheRoleHasAnswered_TheFossilStopsBeingAsked()
+    {
+        _preferences.Seed(PromptWriterTierKey, LegacyOpus);
+        _sut.PersistLlmProvider(ModelRole.PromptWrite, ModelProvider.Local);
+
+        _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.OpenRouter).Should().Be(ModelProvider.Local);
+        _preferences.ContainsKey("imggen.prompt_writer.anthropic_model").Should().BeFalse(
+            "a role that has already said what it runs on has no unfinished upgrade left to apply");
     }
 
     // "Describe an idea" BuildJson checkbox: tri-state — null means "never toggled" so the page

@@ -94,71 +94,31 @@ public class UiMarkupContractTests
     }
 
     /// <summary>
-    /// Every place a model is chosen goes through the shared row, bound two-way to the property that
-    /// names the model this role actually calls. Each row is located by its own automation id, so a page
-    /// may host several (Idea to Prompt hosts one here and one below) and each is checked against its own
-    /// expectations instead of the page's first one.
-    ///   The per-row columns are the whole point: the defect this change set exists to kill was several
-    /// pickers writing one stored value, and a copy-paste of the wrong role property is exactly one
-    /// attribute away. A row wired to another role's model compiles, renders and passes every other
-    /// test — only this table notices.
-    ///   The status label is spelled out per row instead of derived from the prefix: Idea to Prompt's
-    /// writer row still answers to IdeaPromptTierOllamaStatusLabel, named in the era when the writer picked
-    /// a tier. Existing UI tests use that handle, so the table carries the wart rather than renaming it —
-    /// and it survives in the row below too, where the same handle now sits on a picker for three providers.
-    ///   Only the roles that still pick a provider somewhere other than the row belong in this table; a
-    /// role that handed its whole decision over is checked below, where the assertion is that none of
-    /// these attributes are present at all.
-    /// </summary>
-    [Theory]
-    [InlineData("IdeogramStructureEditorPage.xaml", "EditorEnrichOllama", "EnrichModel", "ShowEnrichLocalModel",
-                "OllamaModels", "RefreshOllamaModelsCommand", "OllamaServerStatus",
-                "EditorEnrichOllamaStatusLabel")]
-    public void EachRole_PicksItsModelThroughTheSharedRow(
-        string page, string idPrefix, string roleModel, string gate,
-        string modelsSource, string refreshCommand, string statusSource, string statusId)
-    {
-        var markup = Markup(page);
-        var row = XDocument.Parse(markup).Descendants()
-            .Single(element => element.Name.LocalName == "ModelPickerRow"
-                               && (string?)element.Attribute("ModelPickerAutomationId") == idPrefix + "ModelPicker");
-
-        ((string?)row.Attribute("Models")).Should().Be("{Binding Generator.Settings." + modelsSource + "}");
-        ((string?)row.Attribute("SelectedModel")).Should()
-            .Be("{Binding Generator.Settings." + roleModel + ", Mode=TwoWay}",
-                "a one-way binding here would let the user pick a model that is never used");
-        ((string?)row.Attribute("RefreshCommand")).Should()
-            .Be("{Binding Generator.Settings." + refreshCommand + "}");
-        ((string?)row.Attribute("Status")).Should()
-            .Be("{Binding Generator.Settings." + statusSource + "}",
-                "a refresh that fails silently is how a wrong server URL becomes a WARN in a log file "
-                + "nobody opens");
-        ((string?)row.Attribute("IsVisible")).Should().Be("{Binding " + gate + "}",
-            "two model rows on screen at once means the user can set one and pay with the other, and a "
-            + "row for a provider the user did not select should not be on screen at all");
-        ((string?)row.Attribute("ModelPickerAutomationId")).Should().Be(idPrefix + "ModelPicker");
-        ((string?)row.Attribute("RefreshAutomationId")).Should().Be(idPrefix + "RefreshButton");
-        ((string?)row.Attribute("StatusAutomationId")).Should().Be(statusId);
-
-        Count(markup, idPrefix + "ModelPicker").Should().Be(1,
-            "the id moves onto the row; a leftover hand-rolled picker would put a second picker on the "
-            + "same page under the same handle");
-    }
-
-    /// <summary>
     /// A role that has handed its whole decision to the row: one binding carries the provider list, the
     /// model list, the refresh, the status and the memory of what was picked, so there is nothing left in
     /// the page to mis-wire.
     ///
+    ///
+    /// <para>
+    /// The table that used to sit here policed the older shape — a row fed property by property from
+    /// the page's settings, with an IsVisible gate the page had to remember. No page uses it any
+    /// more, and the loop over hand-bound attributes below is what keeps it from coming back: a row
+    /// that takes a choice AND a hand-written model binding answers one question twice, which is the
+    /// original defect with two spellings rather than one.
+    /// </para>
     /// <para>
     /// What markup still has to be checked on is the opposite direction. A page that hands over a choice
     /// and also binds the old per-property shape would answer one question twice — the picker would show
     /// the choice's model and write the other one, which is the original defect with two spellings rather
     /// than one. And the handles move out here deliberately: the row is shared, the ids are not, because
-    /// they are what the UI tests outside this repository click.
+    /// an id is how a human points at a control — in a bug report, in a diff, in the next page's markup
+    /// test. There is no consumer to keep compatible; there is only a name worth getting right.
     /// </para>
     /// </summary>
     [Theory]
+    [InlineData("IdeogramStructureEditorPage.xaml", "{Binding Enrichment}",
+        "EditorEnrichProviderPicker", "EditorEnrichModelPicker",
+        "EditorEnrichModelRefreshButton", "EditorEnrichModelStatusLabel")]
     [InlineData("MutationEnginePage.xaml", "{Binding Model}",
         "MutationModelProviderPicker", "MutationOllamaModelPicker",
         "MutationOllamaRefreshButton", "MutationOllamaStatusLabel")]

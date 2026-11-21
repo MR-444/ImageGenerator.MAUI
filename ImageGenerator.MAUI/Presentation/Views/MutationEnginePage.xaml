@@ -222,9 +222,10 @@
                                  below it is always the list belonging to the provider above it.
 
                                  The model picker keeps the id it had when it only ever listed Ollama
-                                 models. It is now the picker for every provider, and the name is a lie we
-                                 are keeping on purpose: UI tests outside this repository click that handle,
-                                 and an id is a contract, not a comment. -->
+                                 models, and it now lists every provider. Nothing outside this repository reads
+                                 these ids, so the honest rename is open to anyone who wants it: the structure
+                                 editor took it in B2.3a-6, and this one stays only because a name two changes
+                                 old is also a name nobody has had reason to miss. -->
                             <ctrl:ModelPickerRow Choice="{Binding Model}"
                                                  TitleText="Model"
                                                  ModelPickerAutomationId="MutationOllamaModelPicker"
