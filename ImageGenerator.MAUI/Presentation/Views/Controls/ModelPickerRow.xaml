@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:ctrl="clr-namespace:ImageGenerator.MAUI.Presentation.Views.Controls"
@@ -15,30 +15,42 @@
                Style="{StaticResource FieldLabel}"
                IsVisible="{Binding TitleText, Converter={StaticResource NonEmptyStringToBool}}" />
 
+        <!-- Who answers, when the host hands over a choice with a say in the matter. Above the model
+             picker because that is the order the decision arrives in: the provider decides which list of
+             models is even on screen. Hidden for a single-provider role rather than showing a one-entry
+             picker, which is a label dressed up as a control. -->
+        <Picker ItemsSource="{Binding ProviderLabels}"
+                SelectedIndex="{Binding ProviderIndex, Mode=TwoWay}"
+                MaximumWidthRequest="220"
+                HorizontalOptions="Start"
+                IsVisible="{Binding ShowProviderPicker}"
+                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                AutomationId="{Binding ProviderPickerAutomationId}" />
+
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
             <Picker Grid.Column="0"
-                    ItemsSource="{Binding Models}"
-                    SelectedItem="{Binding SelectedModel, Mode=TwoWay}"
+                    ItemsSource="{Binding ModelsSource}"
+                    SelectedItem="{Binding PickedModel, Mode=TwoWay}"
                     Title="{Binding PickerTitle}"
                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                     AutomationId="{Binding ModelPickerAutomationId}" />
             <Button Grid.Column="1"
                     Text="Refresh"
-                    Command="{Binding RefreshCommand}"
+                    Command="{Binding RefreshModelsCommand}"
                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                     Style="{StaticResource SecondaryButton}"
                     AutomationId="{Binding RefreshAutomationId}" />
         </Grid>
 
-        <Label Text="{Binding Helper}"
+        <Label Text="{Binding ReportedHelper}"
                Style="{StaticResource HelperText}"
-               IsVisible="{Binding Helper, Converter={StaticResource NonEmptyStringToBool}}" />
+               IsVisible="{Binding ReportedHelper, Converter={StaticResource NonEmptyStringToBool}}" />
 
         <!-- The card reports its own server call: these pages have no status bar, so a wrong server
              URL would otherwise leave nothing behind but a WARN in the log file. -->
-        <Label Text="{Binding Status}"
+        <Label Text="{Binding ReportedStatus}"
                Style="{StaticResource HelperText}"
-               IsVisible="{Binding Status, Converter={StaticResource NonEmptyStringToBool}}"
+               IsVisible="{Binding ReportedStatus, Converter={StaticResource NonEmptyStringToBool}}"
                AutomationId="{Binding StatusAutomationId}" />
     </VerticalStackLayout>
 </ContentView>

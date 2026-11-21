@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -36,11 +36,6 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
     /// <summary>Bounded concurrency for the AI fan-out: one paid call per variant, a few at a time.</summary>
     private const int AiMaxConcurrency = 4;
 
-    // Rough one-call cost estimates (USD) — input+output of a typical mutation turn at each tier's rate
-    // (Sonnet $3/$15, Opus $5/$25 per MTok). Display only; the user sees N×rate before running.
-    private const decimal SonnetPerCallUsd = 0.017m;
-    private const decimal OpusPerCallUsd = 0.028m;
-
     private readonly GeneratorViewModel? _generator;
     private readonly GeneratorSettingsReader _settings;
     private readonly IMutationLibraryService _libraryService;
@@ -77,7 +72,8 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         IClipboardService? clipboard = null,
         ICaptionMutationLlmService? mutationLlm = null,
         IOllamaModelCatalog? ollamaCatalog = null,
-        IGpuGate? gpuGate = null)
+        IGpuGate? gpuGate = null,
+        IUiStateStore? uiStateStore = null)
     {
         _libraryService = libraryService ?? throw new ArgumentNullException(nameof(libraryService));
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
@@ -88,6 +84,22 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         _mutationLlm = mutationLlm;
         _ollamaCatalog = ollamaCatalog;
         _gpuGate = gpuGate;
+
+        // The mutate role's decision, remembered per role. Its lists and refresh come from the settings
+        // coordinator because that is what owns the catalogs; its persistence goes to the store, which is
+        // what makes the choice survive a navigation instead of resetting to Sonnet on every visit.
+        if (uiStateStore is not null && generator?.Settings is { } settings)
+        {
+            Model = new ModelChoiceState(
+                ModelRole.Mutate, uiStateStore, settings.TextModelSources, ModelProvider.Anthropic,
+                HelperFor,
+                baseUrlFor: p => p == ModelProvider.Local ? _settings.OllamaBaseUrl : string.Empty);
+            Model.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(ModelChoiceState.SelectedProvider))
+                    OnPropertyChanged(nameof(RunCostHint));
+            };
+        }
     }
 
     // --- Run configuration (bound to the page) ---------------------------------------------------
@@ -114,7 +126,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
     ];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CostEstimate))]
+    [NotifyPropertyChangedFor(nameof(RunCostHint))]
     private int _count = 4;
 
     partial void OnCountChanged(int value)
@@ -235,15 +247,50 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         if (value is not null && !ReferenceEquals(value, NoPreset)) Steer = value.Steer;
     }
 
-    public IReadOnlyList<ModelTier> ModelTierOptions { get; } = (ModelTier[])[ModelTier.Sonnet, ModelTier.Opus, ModelTier.Local];
+    /// <summary>
+    /// Which model this page calls, and on whose account — the whole decision in one object, which the
+    /// shared row renders and this page persists per role.
+    ///
+    /// <para>
+    /// It replaces the Sonnet/Opus/Local picker, which could only name two Anthropic models and Ollama, and
+    /// whose choice was thrown away on every navigation. Null only when the page has no settings to read
+    /// (no host generator), which the app never does and several unit tests used to.
+    /// </para>
+    /// </summary>
+    public ModelChoiceState? Model { get; }
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CostEstimate))]
-    [NotifyPropertyChangedFor(nameof(IsLocalTier))]
-    private ModelTier _selectedModelTier = ModelTier.Sonnet;
+    /// <summary>
+    /// What running costs, in the only units this app can state honestly: who gets billed and how many times.
+    ///
+    /// <para>
+    /// What it replaces multiplied two hard-coded rates ($0.017 / $0.028 per call, from a pricing page for
+    /// two specific models) by a variant count and printed the result as an estimate. It never looked at a
+    /// token count, and once the user can pick any model the provider exposes, multiplying a Sonnet rate by
+    /// an Opus-shaped request is not an estimate of anything. Free-versus-billed is still worth saying;
+    /// a number nobody measured is not.
+    /// </para>
+    /// </summary>
+    public string RunCostHint
+    {
+        get
+        {
+            var plural = Count == 1 ? "" : "s";
+            return Model?.SelectedProvider == ModelProvider.Local
+                ? $"Free — {Count} call{plural} on local Ollama. Quality not guaranteed; verifies the round-trip."
+                : $"{Count} call{plural} billed by {(Model?.SelectedProvider ?? ModelProvider.Anthropic).ForProse()} — "
+                  + "priced per token by the provider, so no estimate is shown here.";
+        }
+    }
 
-    /// <summary>True when the Local (Ollama) tier is picked — reveals the inline Ollama model picker.</summary>
-    public bool IsLocalTier => SelectedModelTier == ModelTier.Local;
+    /// <summary>What is worth warning about, per provider — the sentence the row writes under the pickers.
+    /// Replaces the tier legend, which explained tiers that no longer exist.</summary>
+    private static string? HelperFor(ModelProvider provider) => provider switch
+    {
+        ModelProvider.Local => "Free and local, one call at a time. Shares the GPU with ComfyUI, so it waits for any render in flight.",
+        ModelProvider.Anthropic => "One call per variant, billed per token by Anthropic.",
+        ModelProvider.OpenRouter => "One call per variant, routed by OpenRouter; which models are offered comes from your key.",
+        _ => null,
+    };
 
     /// <summary>The host generator, exposed so the page can bind the Ollama model picker (which lives on
     /// the generator with the other server settings) without duplicating that state here.</summary>
@@ -258,21 +305,6 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
     /// <summary>Banner text shown in breed mode (e.g. "Breeding from 3 winner(s) — …").</summary>
     [ObservableProperty]
     private string _breedSummary = string.Empty;
-
-    /// <summary>N × per-tier rate, shown before running. Local is free.</summary>
-    public string CostEstimate
-    {
-        get
-        {
-            var plural = Count == 1 ? "" : "s";
-            if (SelectedModelTier == ModelTier.Local)
-                return $"Free — local Ollama ({Count} call{plural}). Quality not guaranteed; verifies the round-trip.";
-
-            var per = SelectedModelTier == ModelTier.Opus ? OpusPerCallUsd : SonnetPerCallUsd;
-            var total = (per * Count).ToString("0.00", CultureInfo.InvariantCulture);
-            return $"Estimated cost ≈ ${total} for {Count} variant{plural} on {SelectedModelTier} (one paid call each).";
-        }
-    }
 
     [ObservableProperty]
     private string _statusMessage = string.Empty;
@@ -574,8 +606,16 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
             return;
         }
 
-        var tier = SelectedModelTier;
-        var target = _settings.MutationTarget(tier);
+        // Resolved once, here, and passed down: the variants this run produces keep calling the provider
+        // this run started on, even if the picker moves underneath them while they are in flight.
+        if (Model is null)
+        {
+            SetStatus("Model settings are unavailable — leave this screen and open it again.", StatusKind.Error);
+            return;
+        }
+
+        var target = Model.Target;
+        var isLocal = target.Provider == ModelProvider.Local;
         var steer = Steer;
         var baseCaption = _base;
         var count = Count;
@@ -597,7 +637,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
             {
                 _generator.IsAiMutationRunning = true;
                 _generator.AiMutationStatus =
-                    $"Mutating with {tier}… ({count} variant{(count == 1 ? "" : "s")} in flight)";
+                    $"Mutating with {target.ProviderLabel}… ({count} variant{(count == 1 ? "" : "s")} in flight)";
             });
 
         try
@@ -609,7 +649,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
             // call to its timeout). Cloud tiers hold no local VRAM, and a split-host setup needs no gate.
             // Held only across the LLM calls + unload, then released BEFORE dispatch so the renders we hand
             // off can take the gate in turn.
-            var gpuGated = tier == ModelTier.Local
+            var gpuGated = isLocal
                 && _gpuGate is not null
                 && _settings.SharesGpuWithComfyUi;
 
@@ -624,19 +664,19 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
             LlmVariantResult[] results;
             try
             {
-                SetStatus($"Asking {tier} to {verb} {count} variant{(count == 1 ? "" : "s")}…", StatusKind.Info);
+                SetStatus($"Asking {target.ProviderLabel} to {verb} {count} variant{(count == 1 ? "" : "s")}…", StatusKind.Info);
 
                 results = breedSet is { Count: > 0 }
-                    ? await FanOutAsync(count, ConcurrencyFor(tier),
+                    ? await FanOutAsync(count, ConcurrencyFor(target.Provider),
                         i => _mutationLlm.BreedAsync(breedSet, steer, i, target))
-                    : await FanOutAsync(count, ConcurrencyFor(tier),
+                    : await FanOutAsync(count, ConcurrencyFor(target.Provider),
                         i => _mutationLlm.MutateAsync(baseCaption, steer, i, target));
 
                 // Free the local GPU before the ComfyUI render: the 27B is done generating captions and
                 // both models won't fit. Fires once after the whole (sequential) Local batch; cloud tiers
                 // hold no local VRAM. Best-effort — the catalog swallows failures.
-                if (tier == ModelTier.Local && _ollamaCatalog is not null)
-                    await UnloadLocalModelAsync();
+                if (isLocal && _ollamaCatalog is not null)
+                    await UnloadLocalModelAsync(target);
             }
             finally
             {
@@ -681,14 +721,14 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
 
     /// <summary>Unload the Ollama model from the GPU after the Local batch, resolving the same endpoint/
     /// model the service used (generator settings, else the constants' defaults). Best-effort.</summary>
-    private async Task UnloadLocalModelAsync()
-    {
-        await _ollamaCatalog!.UnloadAsync(_settings.OllamaBaseUrl, _settings.MutationModel);
-    }
+    /// <summary>Frees the model this run actually called, at the endpoint it called it on. Reading the
+    /// page's old shared setting instead could keep a different model resident than the one just used.</summary>
+    private async Task UnloadLocalModelAsync(LlmTarget target) =>
+        await _ollamaCatalog!.UnloadAsync(target.BaseUrl, target.ModelId);
 
-    /// <summary>A local model on one GPU serves requests serially, so concurrent calls would queue
-    /// server-side and trip the per-call timeout; run the Local tier one-at-a-time. Cloud tiers fan out.</summary>
-    private static int ConcurrencyFor(ModelTier tier) => tier == ModelTier.Local ? 1 : AiMaxConcurrency;
+    /// <summary>Local runs on the same GPU as the renders, one at a time; hosted calls are network-bound
+    /// and can be fanned out.</summary>
+    private static int ConcurrencyFor(ModelProvider provider) => provider == ModelProvider.Local ? 1 : AiMaxConcurrency;
 
     /// <summary>Run <paramref name="count"/> LLM calls with bounded concurrency, preserving index order.</summary>
     private static async Task<LlmVariantResult[]> FanOutAsync(

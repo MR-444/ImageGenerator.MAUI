@@ -26,19 +26,25 @@ public sealed partial class ModelChoiceState : ObservableObject
     private readonly IUiStateStore _store;
     private readonly IReadOnlyDictionary<ModelProvider, IModelSource> _sources;
     private readonly Func<ModelProvider, string?>? _helperFor;
+    private readonly Func<ModelProvider, string?>? _baseUrlFor;
 
     /// <summary>Guards the write-back of a model this object just loaded. Showing a picker is not the
     /// user choosing: without this, opening a page rewrites the setting it came to display.</summary>
     private bool _suppressModelPersist;
 
+    private readonly ModelProvider[] _providers;
     private IModelSource _source;
 
+    /// <param name="helperFor">One sentence per provider, or null for none.</param>
+    /// <param name="baseUrlFor">Where the selected provider lives, for the roles that run against an
+    /// address the user typed (Local) rather than one the product knows (Anthropic, OpenRouter).</param>
     public ModelChoiceState(
         ModelRole role,
         IUiStateStore store,
         IReadOnlyDictionary<ModelProvider, IModelSource> sources,
         ModelProvider defaultProvider,
-        Func<ModelProvider, string?>? helperFor = null)
+        Func<ModelProvider, string?>? helperFor = null,
+        Func<ModelProvider, string?>? baseUrlFor = null)
     {
         if (sources.Count == 0)
             throw new ArgumentException(
@@ -48,16 +54,17 @@ public sealed partial class ModelChoiceState : ObservableObject
         _store = store;
         _sources = sources;
         _helperFor = helperFor;
+        _baseUrlFor = baseUrlFor;
 
         // Ordered by the enum, not by dictionary order: a picker whose entries reshuffle between
         // launches is a picker the user cannot learn. An array rather than a collection expression — the
         // WinRT analyzer needs the concrete type behind the read-only interface (CsWinRT1032).
-        Providers = Enum.GetValues<ModelProvider>().Where(sources.ContainsKey).ToArray();
+        _providers = Enum.GetValues<ModelProvider>().Where(sources.ContainsKey).ToArray();
 
         var stored = store.LoadLlmProvider(role, defaultProvider);
         // A stored provider this role is not offered must not survive as a selection with no list behind
         // it; a role that gained or lost a provider should fall back, not render an empty row.
-        _selectedProvider = Providers.Contains(stored) ? stored : Providers[0];
+        _selectedProvider = _providers.Contains(stored) ? stored : _providers[0];
 
         _source = sources[_selectedProvider];
         Attach(_source);
@@ -69,7 +76,12 @@ public sealed partial class ModelChoiceState : ObservableObject
 
     /// <summary>The providers this role can choose between. Roles differ: an observer sends images and a
     /// text-only role does not, so they are not offered the same list.</summary>
-    public IReadOnlyList<ModelProvider> Providers { get; }
+    public IReadOnlyList<ModelProvider> Providers => _providers;
+
+    /// <summary>Where a provider sits in this role's list. The row binds a picker, and a picker speaks in
+    /// positions; asking it to match on the spelled-out label instead would let two providers ever spelled
+    /// alike select each other.</summary>
+    public int IndexOfProvider(ModelProvider provider) => Array.IndexOf(_providers, provider);
 
     /// <summary>
     /// Who answers this role. The provider picker writes this directly, so everything that follows from
@@ -93,6 +105,24 @@ public sealed partial class ModelChoiceState : ObservableObject
     /// <summary>The sentence under the pickers, if the host supplies one. Depends on the provider,
     /// because what is worth warning about differs: one side is free and local, the other bills.</summary>
     public string? Helper => _helperFor?.Invoke(SelectedProvider);
+
+    /// <summary>
+    /// The call this selection amounts to, resolved the moment somebody asks to run it.
+    ///
+    /// <para>
+    /// This replaces <c>GeneratorSettingsReader.MutationTarget(tier)</c> and its siblings. They had to
+    /// exist because the picker, the persisted value and the model id were three separate memories that a
+    /// tier name had to reconcile; with one selection there is nothing to reconcile, and the tier
+    /// translation - the last place where "Sonnet" meant both a provider and a model id - goes with them.
+    /// </para>
+    /// </summary>
+    /// <remarks>
+    /// Nothing picked yields <see cref="LlmTarget.HasModel"/> false rather than an exception, because the
+    /// services already turn that into the "pick a model first" sentence, worded per provider. A second
+    /// way to fail the same missing pick would be one more place for the two wordings to disagree.
+    /// </remarks>
+    public LlmTarget Target => new(SelectedProvider, SelectedModel ?? string.Empty,
+        _baseUrlFor?.Invoke(SelectedProvider) ?? string.Empty);
 
     /// <summary>Ask the selected provider what it has. Delegated entirely — which endpoint, what to page
     /// through, what to do with the answer belongs to the source, not to a role.</summary>
@@ -124,6 +154,45 @@ public sealed partial class ModelChoiceState : ObservableObject
 
         RebuildModels();
         OnPropertyChanged(nameof(Helper));
+
+        AskIfNothingToList();
+    }
+
+    /// <summary>
+    /// Ask the provider that has just been chosen for its models, when it has none to show.
+    ///
+    /// <para>
+    /// A hosted list is empty until somebody asks, and asking used to be a button two centimetres from an
+    /// empty combo with nothing connecting the two. An untouched list and an empty answer look identical
+    /// from the user's side of the screen, which is how "the refresh does nothing" gets reported when
+    /// what happened was that nothing was ever asked.
+    /// </para>
+    /// <para>
+    /// Only a switch counts, and only when there is nothing to list: a role opened on a provider is not
+    /// an instruction to call anybody, and Local's list is already seeded from the cache plus the
+    /// once-per-session load before anyone can switch to it.
+    /// </para>
+    /// </summary>
+    private void AskIfNothingToList()
+    {
+        if (_source.Models.Count > 0) return;
+        _ = AskAsync(_source);
+    }
+
+    private async Task AskAsync(IModelSource source)
+    {
+        try
+        {
+            await source.RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            // A source is contracted to report its own failures on its status, so this is only the
+            // backstop for one that throws instead - and it says so on the row rather than leaving the
+            // exception on a task nobody is watching, which would vanish the way this bug did.
+            if (ReferenceEquals(source, _source))
+                Status = $"Couldn't ask for models: {ex.Message}";
+        }
     }
 
     partial void OnSelectedModelChanged(string? value)

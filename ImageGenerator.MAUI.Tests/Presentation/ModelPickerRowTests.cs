@@ -84,6 +84,8 @@ public class ModelPickerRowTests
     [InlineData("ModelPickerAutomationId")]
     [InlineData("RefreshAutomationId")]
     [InlineData("StatusAutomationId")]
+    [InlineData("Choice")]
+    [InlineData("ProviderPickerAutomationId")]
     public void Hosts_CanSetThisThroughABinding(string property)
     {
         typeof(ModelPickerRow)
@@ -100,5 +102,39 @@ public class ModelPickerRowTests
     {
         ModelPickerRow.SelectedModelProperty.DefaultBindingMode
             .Should().Be(BindingMode.TwoWay);
+    }
+
+    /// <summary>
+    /// A row whose host offered one provider gets no provider picker: a one-entry picker is a label
+    /// wearing a control, and every row that grows one is a row where the user can click and change
+    /// nothing. The picker writes by position, so the entries cannot be re-matched by spelling.
+    /// </summary>
+    [Fact]
+    public void TheProviderPicker_AppearsOnlyWhenThereIsMoreThanOneProvider()
+    {
+        var markup = File.ReadAllText(MarkupPath);
+
+        markup.Should().Contain("IsVisible=\"{Binding ShowProviderPicker}\"",
+            "one provider is not a choice, and a picker offering one thing is a label dressed as a control");
+        markup.Should().Contain("SelectedIndex=\"{Binding ProviderIndex, Mode=TwoWay}\"",
+            "the picker selects by position, so two providers spelled alike cannot select each other");
+        markup.Should().Contain("ItemsSource=\"{Binding ProviderLabels}\"",
+            "the entries are spelled by ModelProviderLabels, never by an enum's ToString");
+    }
+
+    /// <summary>
+    /// One set of elements for both wiring shapes. Two copies of the same picker in one control is the
+    /// duplication this control exists to remove, and the copy kept "just for the migration" is the copy
+    /// that outlives it.
+    /// </summary>
+    [Fact]
+    public void ThereIsExactlyOneModelPickerAndOneRefreshButton()
+    {
+        var markup = File.ReadAllText(MarkupPath);
+
+        System.Text.RegularExpressions.Regex.Matches(markup, "<Picker").Count
+            .Should().Be(2, "one for the provider, one for the model");
+        System.Text.RegularExpressions.Regex.Matches(markup, "<Button").Count
+            .Should().Be(1, "the model picker and its Refresh are written once, whichever shape fed them");
     }
 }

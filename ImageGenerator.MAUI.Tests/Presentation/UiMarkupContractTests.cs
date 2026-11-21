@@ -107,9 +107,6 @@ public class UiMarkupContractTests
     /// tier. Existing UI tests use that handle, so the table carries the wart rather than renaming it.
     /// </summary>
     [Theory]
-    [InlineData("MutationEnginePage.xaml", "MutationOllama", "MutationModel", "IsLocalTier",
-                "OllamaModels", "RefreshOllamaModelsCommand", "OllamaServerStatus",
-                "MutationOllamaStatusLabel")]
     [InlineData("IdeogramStructureEditorPage.xaml", "EditorEnrichOllama", "EnrichModel", "ShowEnrichLocalModel",
                 "OllamaModels", "RefreshOllamaModelsCommand", "OllamaServerStatus",
                 "EditorEnrichOllamaStatusLabel")]
@@ -151,6 +148,46 @@ public class UiMarkupContractTests
         Count(markup, idPrefix + "ModelPicker").Should().Be(1,
             "the id moves onto the row; a leftover hand-rolled picker would put a second picker on the "
             + "same page under the same handle");
+    }
+
+    /// <summary>
+    /// A role that has handed its whole decision to the row: one binding carries the provider list, the
+    /// model list, the refresh, the status and the memory of what was picked, so there is nothing left in
+    /// the page to mis-wire.
+    ///
+    /// <para>
+    /// What markup still has to be checked on is the opposite direction. A page that hands over a choice
+    /// and also binds the old per-property shape would answer one question twice — the picker would show
+    /// the choice's model and write the other one, which is the original defect with two spellings rather
+    /// than one. And the handles move out here deliberately: the row is shared, the ids are not, because
+    /// they are what the UI tests outside this repository click.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("MutationEnginePage.xaml", "{Binding Model}",
+        "MutationModelProviderPicker", "MutationOllamaModelPicker",
+        "MutationOllamaRefreshButton", "MutationOllamaStatusLabel")]
+    public void EachDecision_HandedToTheRowWhole(
+        string page, string choice, string providerPickerId, string modelPickerId,
+        string refreshButtonId, string statusId)
+    {
+        var markup = Markup(page);
+        var row = XDocument.Parse(markup).Descendants()
+            .Single(e => e.Name.LocalName == "ModelPickerRow");
+
+        ((string?)row.Attribute("Choice")).Should().Be(choice,
+            "the page owns which decision this is; everything the decision needs comes from there");
+
+        ((string?)row.Attribute("ModelPickerAutomationId")).Should().Be(modelPickerId);
+        ((string?)row.Attribute("RefreshAutomationId")).Should().Be(refreshButtonId);
+        ((string?)row.Attribute("StatusAutomationId")).Should().Be(statusId);
+        ((string?)row.Attribute("ProviderPickerAutomationId")).Should().Be(providerPickerId,
+            "a picker the tests cannot see is a picker nobody can prove works");
+
+        foreach (var handBound in new[] { "Models", "SelectedModel", "RefreshCommand", "Status" })
+            row.Attribute(handBound).Should().BeNull(
+                $"the choice already supplies {handBound}; binding it here as well gives the page two "
+                + "answers to one question, and only one of them is saved");
     }
     /// <summary>
     /// Enrichment has no queue and no status bar: change the model halfway through a run and the run

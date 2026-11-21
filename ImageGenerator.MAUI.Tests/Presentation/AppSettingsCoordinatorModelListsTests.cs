@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Presentation.Converters;
 using ImageGenerator.MAUI.Presentation.ViewModels;
@@ -81,28 +81,6 @@ public class AppSettingsCoordinatorModelListsTests
 
         labels.Should().NotContain("LocalOllama");
         ModelProvider.Local.ForList().Should().NotBe("Local", "a bare \"Local\" does not say what to install");
-    }
-
-    [Fact]
-    public void Converter_RendersTheLabelRuleForXaml()
-    {
-        var converter = new ModelProviderLabelConverter();
-
-        converter.Convert(ModelProvider.Local, typeof(string), null, System.Globalization.CultureInfo.CurrentCulture)
-            .Should().Be(ModelProvider.Local.ForList());
-        converter.Convert(null!, typeof(string), null, System.Globalization.CultureInfo.CurrentCulture)
-            .Should().Be(string.Empty, "a null selected item must not render the word null");
-    }
-
-    [Fact]
-    public void Converter_RefreshesNothingBecauseLabelsAreNotInput()
-    {
-        var converter = new ModelProviderLabelConverter();
-
-        var act = () => converter.ConvertBack("Anthropic", typeof(ModelProvider), null,
-            System.Globalization.CultureInfo.CurrentCulture);
-
-        act.Should().Throw<NotSupportedException>();
     }
 
     // ── OpenRouter's text list ────────────────────────────────────────────────────────

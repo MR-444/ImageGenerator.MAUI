@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Ideogram;
@@ -196,15 +196,44 @@ public class MutationEngineViewModelTests
 
     // ---- AI (LLM) mode -------------------------------------------------------------------
 
+    // A page that calls a model has a host generator (whose settings own the model lists) and a store
+    // (which remembers the pick). Both used to be omittable here, which let tests run the AI path with no
+    // model available at all — a state the app cannot reach.
     private static MutationEngineViewModel CreateSutWithAi(
         ICaptionMutationLlmService llm, IOllamaModelCatalog? ollamaCatalog = null) =>
         new(new StubLibraryService(),
             new CaptionMutationEngine(),
             NullLogger<MutationEngineViewModel>.Instance,
-            generator: null,
+            generator: BuildBareGenerator(),
             clipboard: null,
             mutationLlm: llm,
-            ollamaCatalog: ollamaCatalog);
+            ollamaCatalog: ollamaCatalog,
+            uiStateStore: Mock.Of<IUiStateStore>());
+
+    /// <summary>The page itself, with a model choice it can be pointed at.</summary>
+    private static MutationEngineViewModel CreateSutWithModel() =>
+        new(new StubLibraryService(),
+            new CaptionMutationEngine(),
+            NullLogger<MutationEngineViewModel>.Instance,
+            generator: BuildBareGenerator(),
+            mutationLlm: new StubMutationLlm(),
+            uiStateStore: Mock.Of<IUiStateStore>());
+
+    /// <summary>A page that can mutate but cannot see any model settings — no host generator to read them
+    /// from, which no page in the app can be.</summary>
+    private static MutationEngineViewModel CreateSutWithLlmOnly(ICaptionMutationLlmService llm) =>
+        new(new StubLibraryService(),
+            new CaptionMutationEngine(),
+            NullLogger<MutationEngineViewModel>.Instance,
+            mutationLlm: llm);
+
+    /// <summary>Choose the way the picker does. The store is a mock, so nothing was remembered from a
+    /// previous run and the model has to be handed over the way a user types it.</summary>
+    private static void Pick(MutationEngineViewModel sut, ModelProvider provider, string? model = null)
+    {
+        sut.Model!.SelectedProvider = provider;
+        sut.Model.SelectedModel = model;
+    }
 
     [Fact]
     public void IsAiMode_TogglesDeterministicOnlyVisibility()
@@ -235,25 +264,31 @@ public class MutationEngineViewModelTests
         sut.MutateWithAiCommand.CanExecute(null).Should().BeTrue();
     }
 
+    // What running costs, in the only units this app can state honestly. The test this replaces asserted
+    // "$0.17 for 10 on Sonnet" — a hard-coded per-call rate times a call count, never a token count, and
+    // meaningless the moment the picker can name any model the provider exposes.
     [Theory]
-    [InlineData(ModelTier.Sonnet, "0.17", "Sonnet")]
-    [InlineData(ModelTier.Opus, "0.28", "Opus")]
-    public void CostEstimate_ReflectsCountAndTier(ModelTier tier, string expectedAmount, string expectedTier)
+    [InlineData(ModelProvider.Anthropic, "billed by Claude")]
+    [InlineData(ModelProvider.OpenRouter, "billed by OpenRouter")]
+    public void TheCostHint_SaysWhoGetsBilledWithoutInventingAfigure(ModelProvider provider, string expected)
     {
-        var sut = CreateSut();
+        var sut = CreateSutWithModel();
+        Pick(sut, provider);
         sut.Count = 10;
-        sut.SelectedModelTier = tier;
 
-        sut.CostEstimate.Should().Contain(expectedAmount).And.Contain(expectedTier);
+        sut.RunCostHint.Should().Contain("10 calls").And.Contain(expected);
+        sut.RunCostHint.Should().NotContain("$", "no token count is known before the call, so no figure is honest");
     }
 
     [Fact]
-    public void CostEstimate_LocalTierIsFree()
+    public void TheCostHint_CallsLocalFree_AndStillCountsTheCalls()
     {
-        var sut = CreateSut();
-        sut.SelectedModelTier = ModelTier.Local;
+        var sut = CreateSutWithModel();
+        Pick(sut, ModelProvider.Local);
+        sut.Count = 1;
 
-        sut.CostEstimate.Should().Contain("Free");
+        sut.RunCostHint.Should().Contain("Free").And.Contain("1 call")
+            .And.NotContain("calls", "one call is not calls");
     }
 
     [Fact]
@@ -264,7 +299,9 @@ public class MutationEngineViewModelTests
         sut.SetBaseForTest(MutationTestData.BaseCaption());
         sut.IsAiMode = true;
         sut.Steer = "make it winter";
-        sut.SelectedModelTier = ModelTier.Opus;
+        // Picked the way the page does: the provider, then the model to call on it. The fan-out has to
+        // carry that same target on every variant, which is what the assertion below reads.
+        Pick(sut, ModelProvider.Anthropic, AnthropicModels.Opus);
         sut.Count = 5;
 
         await sut.MutateWithAiCommand.ExecuteAsync(null);
@@ -274,10 +311,107 @@ public class MutationEngineViewModelTests
         stub.MutateCalls.Should().OnlyContain(c => c.Steer == "make it winter"
             && c.Target.Provider == ModelProvider.Anthropic && c.Target.ModelId == AnthropicModels.Opus,
             "every fan-out call carries the same target the page was left on");
-        sut.StatusKind.Should().Be(StatusKind.Success); // no generator ⇒ "variants ready"
     }
 
+    /// <summary>
+    /// A page with nothing to pick from refuses, and says so, rather than calling the model it used to
+    /// hard-code. This is the one case where refusing is worth a test: the alternative is a silent call to
+    /// a model the user never chose, billed to a key they may not even have.
+    /// </summary>
     [Fact]
+    public async Task WithoutAChoiceToRead_ItRefusesInsteadOfCallingAGuessedModel()
+    {
+        var stub = new StubMutationLlm();
+        var sut = CreateSutWithLlmOnly(stub);
+        sut.SetBaseForTest(MutationTestData.BaseCaption());
+        sut.IsAiMode = true;
+        sut.Count = 2;
+
+        await sut.MutateWithAiCommand.ExecuteAsync(null);
+
+        stub.MutateCalls.Should().BeEmpty("nothing was picked, and guessing is what the picker replaced");
+        sut.StatusKind.Should().Be(StatusKind.Error);
+        sut.StatusMessage.Should().Contain("Model settings");
+    }
+
+    // Which provider is picked changes how the calls may be issued: a local model shares one GPU and
+    // answers one at a time, while hosted calls are network-bound and worth fanning out. Neither rule is
+    // visible in a result — only in how many calls were open at once — so this stub counts that.
+    [Theory]
+    [InlineData(ModelProvider.Local, 1, "one local model on one GPU queues anyway, and a queue the client can see is a timeout it can avoid")]
+    [InlineData(ModelProvider.Anthropic, 2, "hosted calls are network-bound; four at a time is the whole point of a paid call")]
+    public async Task TheProviderDecidesHowManyCallsMayBeOpenAtOnce(
+        ModelProvider provider, int expectedAtMost, string because)
+    {
+        var slow = new SlowMutationLlm();
+        var sut = CreateSutWithAi(slow);
+        sut.SetBaseForTest(MutationTestData.BaseCaption());
+        sut.IsAiMode = true;
+        Pick(sut, provider, AnthropicModels.Sonnet);
+        sut.Count = 4;
+
+        await sut.MutateWithAiCommand.ExecuteAsync(null);
+
+        slow.CallCount.Should().Be(4);
+        if (expectedAtMost == 1)
+            slow.MaxConcurrent.Should().Be(1, because);
+        else
+            slow.MaxConcurrent.Should().BeGreaterThan(1, because);
+    }
+
+    /// <summary>
+    /// A run resolves its model once and keeps it. The user is free to move the picker while four calls are
+    /// in flight; what must not happen is variants 1 and 2 answering from Claude and 3 and 4 from Ollama,
+    /// because the grid cannot say which of them cost money.
+    /// </summary>
+    [Fact]
+    public async Task ARunKeepsTheModelItStartedWith()
+    {
+        var slow = new SlowMutationLlm();
+        var sut = CreateSutWithAi(slow);
+        sut.SetBaseForTest(MutationTestData.BaseCaption());
+        sut.IsAiMode = true;
+        // Started on the serial provider deliberately: three hosted calls all leave within a millisecond,
+        // and a run that re-decided per variant would have nothing left to re-decide. Serial calls start
+        // after the picker has moved, which is the only way to tell the two implementations apart.
+        Pick(sut, ModelProvider.Local, "llama-started-on");
+        sut.Count = 3;
+
+        var run = sut.MutateWithAiCommand.ExecuteAsync(null);
+        await Task.Delay(10);
+        Pick(sut, ModelProvider.Anthropic, "moved-midway");
+        await run;
+
+        slow.CallCount.Should().Be(3);
+        slow.Targets.Should().OnlyContain(t => t.Provider == ModelProvider.Local && t.ModelId == "llama-started-on",
+            "the picker may move, but the calls already asked for are not the picker's to re-decide");
+    }
+
+    /// <summary>
+    /// The defect this whole change set was written to kill: several pickers saving into one value. The
+    /// state object is role-scoped, and this pins that the page hands it <em>its</em> role — a page wired
+    /// with another role's key still works, still saves, and quietly overwrites a different screen's pick.
+    /// </summary>
+    [Fact]
+    public void ThePagesChoiceIsRememberedUnderItsOwnRole()
+    {
+        var store = new Mock<IUiStateStore>();
+        var sut = new MutationEngineViewModel(
+            new StubLibraryService(), new CaptionMutationEngine(), NullLogger<MutationEngineViewModel>.Instance,
+            generator: BuildBareGenerator(), mutationLlm: new StubMutationLlm(), uiStateStore: store.Object);
+
+        sut.Model!.SelectedProvider = ModelProvider.OpenRouter;
+        sut.Model.SelectedModel = "deepseek/deepseek-chat";
+
+        store.Verify(s => s.PersistLlmProvider(ModelRole.Mutate, ModelProvider.OpenRouter), Times.Once);
+        store.Verify(s => s.PersistLlmModel(ModelRole.Mutate, ModelProvider.OpenRouter, "deepseek/deepseek-chat"), Times.Once);
+        store.Verify(s => s.PersistLlmProvider(It.Is<ModelRole>(r => r != ModelRole.Mutate), It.IsAny<ModelProvider>()),
+            Times.Never, "mutating a caption is not the idea page's decision to overwrite");
+        store.Verify(s => s.PersistLlmModel(It.Is<ModelRole>(r => r != ModelRole.Mutate), It.IsAny<ModelProvider>(), It.IsAny<string?>()),
+            Times.Never, "nor is the model it typed");
+    }
+
+        [Fact]
     public async Task MutateWithAi_PinnedStyle_RestylesTheBaseAndLocksTheStyleInTheSteer()
     {
         var stub = new StubMutationLlm();
@@ -366,7 +500,7 @@ public class MutationEngineViewModelTests
         var sut = CreateSutWithAi(stub);
         sut.SetBreedSetForTest([MutationTestData.BaseCaption(), MutationTestData.BaseCaption()]);
         sut.Steer = "blend them";
-        sut.SelectedModelTier = ModelTier.Sonnet;
+        Pick(sut, ModelProvider.Anthropic, AnthropicModels.Sonnet);
         sut.Count = 4;
 
         await sut.MutateWithAiCommand.ExecuteAsync(null);
@@ -516,7 +650,7 @@ public class MutationEngineViewModelTests
         var sut = CreateSutWithAi(new StubMutationLlm(), catalog);
         sut.SetBaseForTest(MutationTestData.BaseCaption());
         sut.IsAiMode = true;
-        sut.SelectedModelTier = ModelTier.Local;
+        Pick(sut, ModelProvider.Local);
         sut.Count = 3;
 
         await sut.MutateWithAiCommand.ExecuteAsync(null);
@@ -533,13 +667,12 @@ public class MutationEngineViewModelTests
     {
         var catalog = new StubOllamaCatalog();
         var generator = BuildGenerator("http://comfy.example:8188", "http://ollama.example:11434");
-        generator.Settings.MutationModel = "qwen2.5-vl:7b";
         generator.Settings.OllamaModel = "flux-schnell";
         var sut = CreateSutWithAiAndGate(
             new FailingMutationLlm(), catalog, new FakeGpuGate(), generator);
         sut.SetBaseForTest(MutationTestData.BaseCaption());
         sut.IsAiMode = true;
-        sut.SelectedModelTier = ModelTier.Local;
+        Pick(sut, ModelProvider.Local, "qwen2.5-vl:7b");
         sut.Count = 1;
 
         await sut.MutateWithAiCommand.ExecuteAsync(null);
@@ -558,12 +691,11 @@ public class MutationEngineViewModelTests
     {
         var catalog = new StubOllamaCatalog();
         var generator = BuildGenerator("http://comfy.example:8188", "");
-        generator.Settings.MutationModel = "qwen2.5-vl:7b";
         var sut = CreateSutWithAiAndGate(
             new FailingMutationLlm(), catalog, new FakeGpuGate(), generator);
         sut.SetBaseForTest(MutationTestData.BaseCaption());
         sut.IsAiMode = true;
-        sut.SelectedModelTier = ModelTier.Local;
+        Pick(sut, ModelProvider.Local, "qwen2.5-vl:7b");
         sut.Count = 1;
 
         await sut.MutateWithAiCommand.ExecuteAsync(null);
@@ -581,7 +713,7 @@ public class MutationEngineViewModelTests
         var sut = CreateSutWithAi(new StubMutationLlm(), catalog);
         sut.SetBaseForTest(MutationTestData.BaseCaption());
         sut.IsAiMode = true;
-        sut.SelectedModelTier = ModelTier.Sonnet;
+        Pick(sut, ModelProvider.Anthropic);
         sut.Count = 2;
 
         await sut.MutateWithAiCommand.ExecuteAsync(null);
@@ -600,7 +732,7 @@ public class MutationEngineViewModelTests
             BuildGenerator("http://fireEngine:8188", "http://fireengine:11434"));
         sut.SetBaseForTest(MutationTestData.BaseCaption());
         sut.IsAiMode = true;
-        sut.SelectedModelTier = ModelTier.Local;
+        Pick(sut, ModelProvider.Local);
         sut.Count = 2;
 
         await sut.MutateWithAiCommand.ExecuteAsync(null);
@@ -618,7 +750,7 @@ public class MutationEngineViewModelTests
             BuildGenerator("http://fireengine:8188", "http://fireengine:11434"));
         sut.SetBaseForTest(MutationTestData.BaseCaption());
         sut.IsAiMode = true;
-        sut.SelectedModelTier = ModelTier.Sonnet;
+        Pick(sut, ModelProvider.Anthropic);
         sut.Count = 2;
 
         await sut.MutateWithAiCommand.ExecuteAsync(null);
@@ -635,7 +767,8 @@ public class MutationEngineViewModelTests
             clipboard: null,
             mutationLlm: llm,
             ollamaCatalog: ollamaCatalog,
-            gpuGate: gate);
+            gpuGate: gate,
+            uiStateStore: Mock.Of<IUiStateStore>());
 
     // A generator just so the same-host check has a ComfyUI URL to compare; all variants fail in these
     // tests so DispatchAiResultsAsync returns before it ever touches the real render batch.
@@ -731,7 +864,40 @@ public class MutationEngineViewModelTests
         }
     }
 
-    private static MutationEngineViewModel CreateSut(GeneratorViewModel generator) =>
+    /// <summary>A model slow enough to still be answering when the test moves the picker, that reports how
+    /// many of its calls were open at the same moment.</summary>
+    private sealed class SlowMutationLlm : ICaptionMutationLlmService
+    {
+        private readonly object _gate = new();
+        private readonly List<LlmTarget> _targets = [];
+        private int _inFlight;
+        private int _maxInFlight;
+
+        public int MaxConcurrent { get { lock (_gate) return _maxInFlight; } }
+        public int CallCount { get { lock (_gate) return _targets.Count; } }
+        public IReadOnlyList<LlmTarget> Targets { get { lock (_gate) return _targets.ToArray(); } }
+
+        public async Task<LlmVariantResult> MutateAsync(
+            V4JsonPrompt baseCaption, string steer, int index, LlmTarget target, CancellationToken ct = default)
+        {
+            var opened = Interlocked.Increment(ref _inFlight);
+            lock (_gate)
+            {
+                _targets.Add(target);
+                _maxInFlight = Math.Max(_maxInFlight, opened);
+            }
+
+            try { await Task.Delay(30, ct); } catch (OperationCanceledException) { }
+            Interlocked.Decrement(ref _inFlight);
+            return LlmVariantResult.Ok(MutationTestData.BaseCaption(), $"v{index}");
+        }
+
+        public Task<LlmVariantResult> BreedAsync(
+            IReadOnlyList<V4JsonPrompt> winners, string steer, int index, LlmTarget target, CancellationToken ct = default)
+            => MutateAsync(winners[0], steer, index, target, ct);
+    }
+
+        private static MutationEngineViewModel CreateSut(GeneratorViewModel generator) =>
         new(new StubLibraryService(),
             new CaptionMutationEngine(),
             NullLogger<MutationEngineViewModel>.Instance,

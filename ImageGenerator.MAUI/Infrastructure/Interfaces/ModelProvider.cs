@@ -1,4 +1,4 @@
-using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
+﻿using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 
 namespace ImageGenerator.MAUI.Infrastructure.Interfaces;
 
@@ -49,8 +49,8 @@ public enum ModelRole
 /// so it uses the brand the user would search for. Before this existed both were done by letting an enum
 /// render itself, which is how one page came to read "Local" and its neighbour "LocalOllama": a bound
 /// enum shows <c>ToString()</c>, and <c>ToString()</c> is the identifier the compiler needed, not the
-/// word the user needed. Anything displaying a provider binds through here (see
-/// <c>ModelProviderLabelConverter</c>) rather than adding a third spelling.
+/// word the user needed. Anything displaying a provider asks this class, including the shared model
+/// picker row, which spells its entries here rather than letting a bound enum render itself bare.
 /// </summary>
 public static class ModelProviderLabels
 {

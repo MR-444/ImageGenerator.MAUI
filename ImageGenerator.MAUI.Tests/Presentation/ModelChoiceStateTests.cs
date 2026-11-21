@@ -45,8 +45,9 @@ public class ModelChoiceStateTests
     private ModelChoiceState Build(
         ModelProvider defaultProvider = ModelProvider.Anthropic,
         IReadOnlyDictionary<ModelProvider, IModelSource>? sources = null,
-        Func<ModelProvider, string?>? helperFor = null)
-        => new(Role, _store.Object, sources ?? TextSources(), defaultProvider, helperFor);
+        Func<ModelProvider, string?>? helperFor = null,
+        Func<ModelProvider, string?>? baseUrlFor = null)
+        => new(Role, _store.Object, sources ?? TextSources(), defaultProvider, helperFor, baseUrlFor);
 
     private Dictionary<ModelProvider, IModelSource> TextSources() => new()
     {
@@ -144,6 +145,20 @@ public class ModelChoiceStateTests
     // ── choosing a provider ───────────────────────────────────────────────────────────
 
     [Fact]
+    public void OpeningAPageAsksNobodyEvenWhenThereIsNothingToList()
+    {
+        var quiet = new FakeSource([]);
+
+        var sut = Build(
+            defaultProvider: ModelProvider.Anthropic,
+            sources: new Dictionary<ModelProvider, IModelSource> { [ModelProvider.Anthropic] = quiet });
+
+        quiet.Refreshes.Should().Be(0,
+            "a page being opened is not a question to a provider; only the user choosing one is");
+        sut.Models.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ChoosingAProviderSavesItAndSwitchesToThatProvidersMemory()
     {
         _models[(Role, ModelProvider.Local)] = "llama3:8b";
@@ -192,6 +207,53 @@ public class ModelChoiceStateTests
         var act = () => sut.SelectedProvider = ModelProvider.Anthropic;
 
         act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void SwitchingToAProviderWithNothingToListAsksIt()
+    {
+        var nothingYet = new FakeSource([]);
+        var sut = Build(
+            defaultProvider: ModelProvider.Local,
+            sources: new Dictionary<ModelProvider, IModelSource>
+            {
+                [ModelProvider.Local] = _local,
+                [ModelProvider.Anthropic] = nothingYet,
+            });
+
+        sut.SelectedProvider = ModelProvider.Anthropic;
+
+        nothingYet.Refreshes.Should().Be(1,
+            "an empty list is not an answer, and a list nobody asked for looks exactly like one that came back empty");
+    }
+
+    [Fact]
+    public void SwitchingToAProviderThatAlreadyHasModelsAsksNobody()
+    {
+        var sut = Build(defaultProvider: ModelProvider.Local);
+
+        sut.SelectedProvider = ModelProvider.Anthropic;
+
+        _anthropic.Refreshes.Should().Be(0,
+            "those rows are the answer to a question already asked; asking twice to see the same list is a way to earn a rate limit");
+    }
+
+    [Fact]
+    public void AnAutomaticRefreshThatThrowsSaysSoOnTheRow()
+    {
+        var throws = new FakeSource([]) { RefreshBody = () => throw new HttpRequestException("no route to host") };
+        var sut = Build(
+            defaultProvider: ModelProvider.Local,
+            sources: new Dictionary<ModelProvider, IModelSource>
+            {
+                [ModelProvider.Local] = _local,
+                [ModelProvider.Anthropic] = throws,
+            });
+
+        sut.SelectedProvider = ModelProvider.Anthropic;
+
+        sut.Status.Should().Contain("Couldn't ask for models").And.Contain("no route to host",
+            "a refresh nobody pressed can still fail, and a failure nobody can see is the bug this row is meant to end");
     }
 
     // ── choosing a model ──────────────────────────────────────────────────────────────
@@ -328,6 +390,72 @@ public class ModelChoiceStateTests
 
         _anthropic.Listeners.Should().Be(0);
         _local.Listeners.Should().Be(2, "coming back listens again rather than twice");
+    }
+
+    // ── what the selection amounts to when something asks to run ────────────────────
+
+    [Fact]
+    public void TheTargetIsTheSelection()
+    {
+        var urls = new Dictionary<ModelProvider, string?> { [ModelProvider.Local] = "http://box:11434" };
+        var sut = Build(defaultProvider: ModelProvider.Local, baseUrlFor: p => urls.GetValueOrDefault(p));
+        sut.SelectedModel = "llama3:8b";
+
+        sut.Target.Provider.Should().Be(ModelProvider.Local);
+        sut.Target.ModelId.Should().Be("llama3:8b");
+        sut.Target.BaseUrl.Should().Be("http://box:11434");
+    }
+
+    [Fact]
+    public void TheTargetAsksForTheAddressOfWhicheverProviderIsSelected()
+    {
+        var sut = Build(defaultProvider: ModelProvider.Local, baseUrlFor: p => p == ModelProvider.Local ? "http://box:11434" : null);
+        sut.SelectedModel = "llama3:8b";
+
+        sut.SelectedProvider = ModelProvider.Anthropic;
+        sut.SelectedModel = "claude-sonnet-4-6";
+
+        sut.Target.BaseUrl.Should().BeEmpty("the hosted providers answer at one address the product knows");
+        sut.Target.Provider.Should().Be(ModelProvider.Anthropic);
+    }
+
+    [Fact]
+    public void NothingPickedStaysNothingPicked()
+    {
+        var sut = Build(defaultProvider: ModelProvider.Local);
+
+        sut.Target.HasModel.Should().BeFalse();
+        sut.Target.ModelId.Should().BeEmpty(
+            "the services already turn a missing pick into the right sentence for the provider; a second "
+            + "path that guesses a model instead is how a 404 from a server that never had it gets written");
+    }
+
+    [Fact]
+    public void ATargetWrittenUnderOneProviderIsNotTheTargetUnderTheNext()
+    {
+        var sut = Build(defaultProvider: ModelProvider.Local);
+        sut.SelectedModel = "llama3:8b";
+        var local = sut.Target;
+
+        sut.SelectedProvider = ModelProvider.OpenRouter;
+
+        local.Provider.Should().Be(ModelProvider.Local,
+            "the run that started with Ollama keeps calling Ollama even if the picker moves underneath it");
+        sut.Target.Provider.Should().Be(ModelProvider.OpenRouter);
+    }
+
+    // ── the picker's position, which is how a Picker talks ──────────────────────────
+
+    [Fact]
+    public void ChoosingByPositionChoosesTheProviderAtThatPosition()
+    {
+        var sut = Build(defaultProvider: ModelProvider.Local);
+
+        sut.IndexOfProvider(ModelProvider.Local).Should().Be(0);
+        sut.IndexOfProvider(ModelProvider.OpenRouter).Should().Be(2);
+
+        sut.SelectedProvider = ModelProvider.OpenRouter;
+        sut.IndexOfProvider(sut.SelectedProvider).Should().Be(2, "a picker that reopens on the wrong row lies about what is picked");
     }
 
     private sealed class FakeSource(IEnumerable<string> models, string? status = null) : IModelSource

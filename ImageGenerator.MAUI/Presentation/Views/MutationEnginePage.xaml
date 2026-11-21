@@ -216,30 +216,23 @@
                     <Border Style="{StaticResource Card}" VerticalOptions="Start" IsVisible="{Binding IsAiMode}">
                         <VerticalStackLayout Spacing="8">
                             <Label Text="Model &amp; cost" Style="{StaticResource FieldLabel}" />
-                            <Picker ItemsSource="{Binding ModelTierOptions}"
-                                    SelectedItem="{Binding SelectedModelTier}"
-                                    MaximumWidthRequest="220"
-                                    HorizontalOptions="Start"
-                                    AutomationId="MutationModelTierPicker" />
-                            <Label Text="Sonnet = affordable default · Opus = stronger/pricier · Local = free Ollama (round-trip only)."
-                                   Style="{StaticResource HelperText}" />
 
-                            <!-- Local-only: which Ollama model. Type any tag, or Refresh to pick from the server.
-                                 The row is the shared four-control shape (label, picker + Refresh, helper,
-                                 status); the automation ids stay this page's, because they are what the UI
-                                 tests click. -->
-                            <ctrl:ModelPickerRow IsVisible="{Binding IsLocalTier}"
-                                                 TitleText="Local model (Ollama)"
-                                                 Models="{Binding Generator.Settings.OllamaModels}"
-                                                 SelectedModel="{Binding Generator.Settings.MutationModel, Mode=TwoWay}"
-                                                 RefreshCommand="{Binding Generator.Settings.RefreshOllamaModelsCommand}"
-                                                 Helper="Set the server URL on Settings. A 27B model takes a few minutes on the first (cold) call."
-                                                 Status="{Binding Generator.Settings.OllamaServerStatus}"
+                            <!-- One decision, one row: who answers, which model, refresh, and what the
+                                 provider last said. The provider picker is inside the row, so the list
+                                 below it is always the list belonging to the provider above it.
+
+                                 The model picker keeps the id it had when it only ever listed Ollama
+                                 models. It is now the picker for every provider, and the name is a lie we
+                                 are keeping on purpose: UI tests outside this repository click that handle,
+                                 and an id is a contract, not a comment. -->
+                            <ctrl:ModelPickerRow Choice="{Binding Model}"
+                                                 TitleText="Model"
                                                  ModelPickerAutomationId="MutationOllamaModelPicker"
+                                                 ProviderPickerAutomationId="MutationModelProviderPicker"
                                                  RefreshAutomationId="MutationOllamaRefreshButton"
                                                  StatusAutomationId="MutationOllamaStatusLabel" />
 
-                            <Label Text="{Binding CostEstimate}" Style="{StaticResource HelperText}"
+                            <Label Text="{Binding RunCostHint}" Style="{StaticResource HelperText}"
                                    AutomationId="MutationCostEstimateLabel" />
                         </VerticalStackLayout>
                     </Border>

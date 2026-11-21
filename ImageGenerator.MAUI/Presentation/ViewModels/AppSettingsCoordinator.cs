@@ -320,6 +320,11 @@ public sealed partial class AppSettingsCoordinator(
     {
         if (openRouterModelCatalog is null)
         {
+            // Logged as well as labelled: "unavailable in this build" is a sentence about the app, not
+            // about the user's network, and if it ever shows up on a customer's screen the log has to say
+            // which dependency was missing rather than leaving the claim unsupported.
+            _logger.LogWarning("OpenRouter text model list asked for with no {Catalog} registered.",
+                nameof(IOpenRouterModelCatalog));
             ReportOpenRouterText("OpenRouter model list is unavailable in this build.", StatusKind.Warning);
             return;
         }
@@ -350,6 +355,8 @@ public sealed partial class AppSettingsCoordinator(
     {
         if (anthropicModelCatalog is null || anthropicTokenStore is null)
         {
+            _logger.LogWarning("Anthropic model list asked for with no {Missing} registered.",
+                anthropicModelCatalog is null ? nameof(IAnthropicModelCatalog) : nameof(IAnthropicTokenStore));
             ReportAnthropic("Anthropic model list is unavailable in this build.", StatusKind.Warning);
             return;
         }

@@ -325,10 +325,40 @@ Modality is a measured fact, not an assumption: image-reference count per servic
     it counts listeners on the fake (`LeavingAProviderStopsListeningToIt`) — the only instrument that can.
     **Where a bug is made harmless by something other than the line you added, no existing test can tell
     you the line is load-bearing; delete it and watch what stays green.**
+41. **A picker writes a position, and a position cannot lie.** MAUI's `Picker` has no `ItemTemplate` in
+    this version, so the row's provider picker binds `ItemsSource` to labels spelled in C# and writes back
+    through `SelectedIndex`. Position was not only what compiled: two providers ever spelled alike can
+    select each other when the selection is matched by text, and cannot when it is matched by slot.
+    The same change made `ModelProviderLabelConverter` — a-2's XAML half — unnecessary, because a list
+    built in C# needs no converter to spell its own entries. It went back out with its two tests.
+    **A rule with one owner is worth more than a rule with one owner and a second, unused mechanism.**
+42. **A test that moves the picker mid-run has to move it while a call is still open.**
+    `ARunKeepsTheModelItStartedWith` first started on a hosted provider with three variants. Fan-out
+    issues every call in the same tick, so the flip ten milliseconds later arrived after all three had
+    their target, and the mutation that re-read the picker per variant passed clean. Started on the serial
+    provider instead, where the later calls genuinely begin after the flip, it catches the same mutation.
+    "Keeps the model it started with" is a claim about ordering, and it needs a run that is still running.
+43. **The old shared key had a second reader nobody mentioned.** After the run was made to resolve one
+    `LlmTarget`, unloading still freed `_settings.MutationModel`: two lines of code holding two ideas of
+    what this page had just called, one of them the key three pages used to fight over. Now the freed
+    model is the called model, and the two tests that pinned the endpoint pin the pick.
+    **Deleting a shared value means finding every reader of it, including the reader that only fires when
+    the run was local.**
+44. **A test builder can make an impossible state look ordinary.** `CreateSutWithAi(generator: null)` ran
+    the AI path with no settings to read — a page the app cannot construct. It was green for as long as the
+    VM fell back to a hard-coded model, and turned into a wall of red the moment the page had to have a
+    choice. The builders now hand over what the app always injects; the nothing-to-read state is tested on
+    purpose (`WithoutAChoiceToRead_ItRefusesInsteadOfCallingAGuessedModel`) rather than by accident.
+45. **An automation id is a contract, not a comment.** Deleting the tier picker deleted
+    `MutationModelTierPicker`, and no id replaces it faithfully, so it goes in the release note. The model
+    picker keeps the name `MutationOllamaModelPicker` although it now lists Anthropic and OpenRouter models
+    too, because tests outside this repository click it. Renaming it is free in this repo and expensive in
+    whichever repo has the UI tests; that trade is the owner's, not the refactor's.
 
 **Status.** B1 done, gate **1,605**. B2.0 (`8bffa9e`), B2.1 (`c2deff9` + `7ebe6e3`), B2.2a (`bd743c8`,
 gate **1,624**), B2.2b (`c8d736c`, gate **1,627**). B2.3 is split a-1 … a-6 below: a-1 (`d31b160`, gate
-**1,645**), a-2 (`1c80b24`, gate **1,666**), **a-3 done** (state object, gate **1,693**). B2 is not done
+**1,645**), a-2 (`1c80b24`, gate **1,666**), a-3 (`acba23f`, gate **1,693**), **a-4 done** (mutation page
+hands its whole decision to the row, gate **1,705**). B2 is not done
 until the tier is deleted and the transitional `GeneratorSettingsReader.*Target(tier)` bridge with it.
 Only Settings still hand-rolls pickers, and those go in Phase C.
 
@@ -572,8 +602,17 @@ predating the naming convention does not match a derived name (finding 28).
   27 tests (20 state rules, 7 source wiring), gate **1,693**. Nine mutations were tried; eight were caught and one survived and is finding
   40. The gate also caught `CsWinRT1032` on a collection expression assigned to `IReadOnlyList<T>` — the
   0-warning rule is what surfaced it, and the array form is the fix.
-- **a-4 · the row and its first host.** Provider picker inside `ModelPickerRow` through `Choice`; mutation
-  engine wired to it; that page's tier list, `MutationTarget(tier)` bridge and cost estimate deleted.
+- **a-4 · the row and its first host. DONE (2026-11-22).** `ModelPickerRow` grew a `Choice` property taking
+  the whole `ModelChoiceState`: provider picker, model picker, refresh, helper and status all come from it,
+  and the older per-property shape still works, so the two unmigrated pages are unaffected. One set of
+  elements serves both shapes through read-only members — no mirrored lists to drift.
+  `MutationEngineViewModel` now owns a `ModelChoiceState` for `ModelRole.Mutate` and resolves one
+  `LlmTarget` per run, so the picker may move mid-run without re-deciding what is in flight (finding 42).
+  Gone from the page: `ModelTierOptions`, `SelectedModelTier`, `IsLocalTier`, the `Sonnet/Opus` per-call
+  rates and the `≈ $0.07` estimate, replaced by a hint that says who is billed how many times (finding 45
+  covers the one id that could not survive). The row is fed by one binding, so the contract test gained a
+  second theory for choice-fed pages whose job is to fail when a page binds the old shape *as well*.
+  Gate **1,705**. Eight falsifications, all caught — one only on its second attempt, which is finding 42.
 - **a-5 · Idea to Prompt.** Writer and both vision rows move to `Choice`, and `VisionObservationProvider`
   folds into `ModelProvider` with a per-role subset — which retires the "LocalOllama" spelling on the one
   page that showed it.
