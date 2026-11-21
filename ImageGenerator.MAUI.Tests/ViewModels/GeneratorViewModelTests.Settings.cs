@@ -399,76 +399,9 @@ public partial class GeneratorViewModelTests
         _viewModel.StatusKind.Should().Be(StatusKind.Error);
     }
 
-    // ---- One model per LLM role (plan-model-picker-rows.md, Phase A) ---------------------
-    // Four pages bound Settings.OllamaModel two-way, so choosing a cheap tag to verify a caption
-    // mutation also changed the model the generate button renders with. These pin the split.
-
-    [Fact]
-    public void Settings_RoleModelPicks_AreSeparateValues()
-    {
-        var settings = _viewModel.Settings;
-
-        settings.OllamaModel = "flux-schnell";
-        settings.MutationModel = "llama3.1";
-        settings.PromptWriterModel = "qwen3";
-        settings.EnrichModel = "gemma3:27b";
-
-        settings.OllamaModel.Should().Be("flux-schnell");
-        settings.MutationModel.Should().Be("llama3.1");
-        settings.PromptWriterModel.Should().Be("qwen3");
-        settings.EnrichModel.Should().Be("gemma3:27b");
-    }
-
-    [Theory]
-    [InlineData("mutation")]
-    [InlineData("writer")]
-    [InlineData("enrich")]
-    public void RoleModel_WhenChanged_PersistsToItsOwnKeyOnly(string role)
-    {
-        // The cross-talk this plan exists for was four Pickers writing one key; a role quietly
-        // writing the GENERATION key instead is the same bug with the arrows reversed, and every
-        // other test here stays green through it. A falsification run proved exactly that.
-        var settings = _viewModel.Settings;
-        switch (role)
-        {
-            case "mutation": settings.MutationModel = "llama3.1"; break;
-            case "writer": settings.PromptWriterModel = "qwen3"; break;
-            default: settings.EnrichModel = "gemma3:27b"; break;
-        }
-
-        switch (role)
-        {
-            case "mutation":
-                _mockUiStateStore.Verify(s => s.PersistMutationModel("llama3.1"), Times.Once);
-                break;
-            case "writer":
-                _mockUiStateStore.Verify(s => s.PersistPromptWriterModel("qwen3"), Times.Once);
-                break;
-            default:
-                _mockUiStateStore.Verify(s => s.PersistEnrichModel("gemma3:27b"), Times.Once);
-                break;
-        }
-
-        _mockUiStateStore.Verify(s => s.PersistOllamaModel(It.IsAny<string>()), Times.Never,
-            "a role pick must never reach the key the generate button reads");
-    }
-
-    [Fact]
-    public void LoadSavedUiState_RestoresEachRolePickSeparately()
-    {
-        _mockUiStateStore.Setup(s => s.LoadPromptWriterModel()).Returns("qwen3");
-        _mockUiStateStore.Setup(s => s.LoadMutationModel()).Returns("llama3.1");
-        _mockUiStateStore.Setup(s => s.LoadEnrichModel()).Returns("gemma3:27b");
-
-        _viewModel.LoadSavedUiState();
-
-        _viewModel.Settings.PromptWriterModel.Should().Be("qwen3");
-        _viewModel.Settings.MutationModel.Should().Be("llama3.1");
-        _viewModel.Settings.EnrichModel.Should().Be("gemma3:27b");
-        // A Picker declines an item its ItemsSource does not contain, and startup has asked no server
-        // for a list yet — so a saved tag joins the options rather than being dropped.
-        _viewModel.Settings.OllamaModels.Should().Contain(["qwen3", "llama3.1", "gemma3:27b"]);
-    }
+    // ---- Role picks on a refresh ---------------------------------------------------------
+    // The roles' Local picks live in the store (each row's ModelChoiceState writes them); the refresh
+    // drops a tag the server no longer has and leaves every other pick alone.
 
     [Fact]
     public async Task RefreshOllamaModels_ClearsEveryRoleThatPickedAGoneModel()
@@ -476,14 +409,15 @@ public partial class GeneratorViewModelTests
         var vm = OllamaVm(out var catalog, out var store);
         catalog.Setup(c => c.ListModelInfosAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([Model("gemma3:27b", vision: true)]);
-        vm.Settings.MutationModel = "deleted-on-server";
-        vm.Settings.EnrichModel = "gemma3:27b";
+        store.Setup(s => s.LoadLlmModel(ModelRole.Mutate, ModelProvider.Local)).Returns("deleted-on-server");
+        store.Setup(s => s.LoadLlmModel(ModelRole.Enrich, ModelProvider.Local)).Returns("gemma3:27b");
 
         await vm.Settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
 
-        vm.Settings.MutationModel.Should().BeEmpty("a role naming a model the server dropped fails later as an opaque 404");
-        vm.Settings.EnrichModel.Should().Be("gemma3:27b", "the other role picked a model still installed");
-        store.Verify(s => s.PersistMutationModel(string.Empty), Times.Once);
+        store.Verify(s => s.PersistLlmModel(ModelRole.Mutate, ModelProvider.Local, string.Empty), Times.Once,
+            "a role naming a model the server dropped fails later as an opaque 404");
+        store.Verify(s => s.PersistLlmModel(ModelRole.Enrich, ModelProvider.Local, It.IsAny<string?>()), Times.Never,
+            "the other role picked a model still installed");
         vm.StatusMessage.Should().Contain("deleted-on-server").And.Contain("no longer installed");
     }
 

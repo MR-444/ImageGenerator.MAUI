@@ -142,8 +142,6 @@ public class IdeaToPromptViewModelTests
         var store = new Mock<IUiStateStore>();
         store.Setup(s => s.LoadLlmModel(ModelRole.PromptWrite, ModelProvider.Local)).Returns("row-writer-model");
         var generator = BuildGenerator();
-        // The legacy shared key, which used to be what the page freed afterwards.
-        generator.Settings.PromptWriterModel = "legacy-writer-model";
         var catalog = new Mock<IOllamaModelCatalog>();
         var vm = NewWriterVm(store, generator, catalog.Object);
         vm.Idea = "a red fox in snow";
@@ -152,9 +150,6 @@ public class IdeaToPromptViewModelTests
 
         catalog.Verify(
             c => c.UnloadAsync(It.IsAny<string>(), "row-writer-model", It.IsAny<CancellationToken>()), Times.Once);
-        catalog.Verify(
-            c => c.UnloadAsync(It.IsAny<string>(), "legacy-writer-model", It.IsAny<CancellationToken>()), Times.Never,
-            "freeing what a shared key remembers leaves the model that is holding the VRAM in place");
     }
 
     [Fact]
@@ -985,12 +980,7 @@ public class IdeaToPromptViewModelTests
         }
     }
 
-    private static GeneratorViewModel BuildGenerator(string ollamaModel = "llama3.1")
-    {
-        var generator = BuildBareGenerator();
-        generator.Settings.PromptWriterModel = ollamaModel;
-        return generator;
-    }
+    private static GeneratorViewModel BuildGenerator() => BuildBareGenerator();
 
     /// <summary>The host these pages read settings through; see <c>BareGenerator</c> in TestSupport.</summary>
     private static GeneratorViewModel BuildBareGenerator() => BareGenerator.New();

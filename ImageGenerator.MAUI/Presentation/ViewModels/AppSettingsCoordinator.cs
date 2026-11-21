@@ -185,41 +185,10 @@ public sealed partial class AppSettingsCoordinator(
     // One flag covers both pickers: they are always rebuilt together by the same refresh.
     private bool _suppressOllamaModelPersist;
 
-    // ---- One Local-tier model per LLM role -------------------------------------------------
-    // Three values, not three lists: all three pickers draw from OllamaModels. They are separate
-    // because they are three decisions, and until documents/plan-model-picker-rows.md they were one
-    // decision — every role read OllamaModel, so picking a cheap tag to verify a caption mutation
-    // also changed the model the generate button renders with.
-    //
-    // They share _suppressOllamaModelPersist with the two pickers above rather than getting flags of
-    // their own: they bind the SAME ItemsSource, so they take the same null back at the same moment
-    // when a refresh clears it, and unsuppressed that null persists an empty string.
-    [ObservableProperty]
-    private string _promptWriterModel = string.Empty;
-
-    partial void OnPromptWriterModelChanged(string value)
-    {
-        if (_suppressOllamaModelPersist) return;
-        _uiStateStore.PersistPromptWriterModel(value);
-    }
-
-    [ObservableProperty]
-    private string _mutationModel = string.Empty;
-
-    partial void OnMutationModelChanged(string value)
-    {
-        if (_suppressOllamaModelPersist) return;
-        _uiStateStore.PersistMutationModel(value);
-    }
-
-    [ObservableProperty]
-    private string _enrichModel = string.Empty;
-
-    partial void OnEnrichModelChanged(string value)
-    {
-        if (_suppressOllamaModelPersist) return;
-        _uiStateStore.PersistEnrichModel(value);
-    }
+    // The text roles' Local picks are NOT held here. Each role's ModelChoiceState reads and writes them
+    // through the store; a second copy here went stale the moment a row changed its pick, and the next
+    // refresh persisted the stale copy over it. The refresh reconciles against the store instead.
+    private static readonly ModelRole[] LocalTextRoles = [ModelRole.PromptWrite, ModelRole.Mutate, ModelRole.Enrich];
 
     [ObservableProperty]
     private string _openRouterVisionModel = string.Empty;
@@ -495,11 +464,6 @@ public sealed partial class AppSettingsCoordinator(
 
             var current = OllamaModel;
             var currentVision = OllamaVisionModel;
-            // The role pickers point at the list being rebuilt, so a tag the server dropped has to
-            // go from each of them too — a role naming a model this server no longer has fails at
-            // call time, as a 404 nobody would trace back to this card.
-            var (currentWriter, currentMutation, currentEnrich) =
-                (PromptWriterModel, MutationModel, EnrichModel);
 
             _suppressOllamaModelPersist = true;
             try
@@ -516,22 +480,25 @@ public sealed partial class AppSettingsCoordinator(
                 OllamaModel = OllamaModels.Contains(current) ? current : string.Empty;
                 OllamaVisionModel = string.Empty;
                 OllamaVisionModel = OllamaVisionModels.Contains(currentVision) ? currentVision : string.Empty;
-                PromptWriterModel = string.Empty;
-                PromptWriterModel = OllamaModels.Contains(currentWriter) ? currentWriter : string.Empty;
-                MutationModel = string.Empty;
-                MutationModel = OllamaModels.Contains(currentMutation) ? currentMutation : string.Empty;
-                EnrichModel = string.Empty;
-                EnrichModel = OllamaModels.Contains(currentEnrich) ? currentEnrich : string.Empty;
             }
             finally { _suppressOllamaModelPersist = false; }
 
             // Deliberate writes, outside the window: persist a restored pick and a genuine drop alike.
             _uiStateStore.PersistOllamaModel(OllamaModel);
             _uiStateStore.PersistOllamaVisionModel(OllamaVisionModel);
-            _uiStateStore.PersistPromptWriterModel(PromptWriterModel);
-            _uiStateStore.PersistMutationModel(MutationModel);
-            _uiStateStore.PersistEnrichModel(EnrichModel);
             _uiStateStore.PersistOllamaModels(OllamaBaseUrl, models, visionModels);
+
+            // A role naming a tag this server no longer has fails at call time, as a 404 nobody would
+            // trace back to this card — so drop it. Read from the store, which every row writes through,
+            // so only a genuinely gone tag is touched and a pick made this session is left alone.
+            var droppedRoles = new List<string>();
+            foreach (var role in LocalTextRoles)
+            {
+                var saved = _uiStateStore.LoadLlmModel(role, ModelProvider.Local);
+                if (string.IsNullOrWhiteSpace(saved) || models.Contains(saved, StringComparer.Ordinal)) continue;
+                _uiStateStore.PersistLlmModel(role, ModelProvider.Local, string.Empty);
+                droppedRoles.Add(saved);
+            }
 
             // Report exactly what the reconciliation above cleared, by comparing each pick against
             // its own list — a model that is still installed but stopped advertising vision is
@@ -540,10 +507,8 @@ public sealed partial class AppSettingsCoordinator(
                 {
                     OllamaModel.Length == 0 ? current : null,
                     OllamaVisionModel.Length == 0 ? currentVision : null,
-                    PromptWriterModel.Length == 0 ? currentWriter : null,
-                    MutationModel.Length == 0 ? currentMutation : null,
-                    EnrichModel.Length == 0 ? currentEnrich : null,
                 }
+                .Concat(droppedRoles)
                 .Where(m => !string.IsNullOrWhiteSpace(m))
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
@@ -674,11 +639,6 @@ public sealed partial class AppSettingsCoordinator(
 
         var savedOllamaModel = _uiStateStore.LoadOllamaModel();
         var savedOllamaVisionModel = _uiStateStore.LoadOllamaVisionModel();
-        // Each role's own pick, seeded by the store from the generation model the one time it has
-        // never been set on its own (IUiStateStore.LoadPromptWriterModel).
-        var savedWriterModel = _uiStateStore.LoadPromptWriterModel();
-        var savedMutationModel = _uiStateStore.LoadMutationModel();
-        var savedEnrichModel = _uiStateStore.LoadEnrichModel();
         // Seed the pickers from the last-known server list BEFORE assigning the selected
         // model so any attached Picker already sees the item in ItemsSource. The saved pick is
         // appended when the cache predates it; startup has verified nothing against the server yet,
@@ -703,19 +663,8 @@ public sealed partial class AppSettingsCoordinator(
                     OllamaVisionModels.Add(savedOllamaVisionModel);
                 OllamaVisionModel = savedOllamaVisionModel;
             }
-
-            // Same rule for the three role picks: show a saved tag even when the cache predates it,
-            // and make sure it is IN the list first, because a Picker silently declines an item its
-            // ItemsSource does not contain. The first successful refresh reconciles the lot.
-            foreach (var saved in new[] { savedWriterModel, savedMutationModel, savedEnrichModel })
-            {
-                if (!string.IsNullOrWhiteSpace(saved) && !OllamaModels.Contains(saved))
-                    OllamaModels.Add(saved);
-            }
-
-            PromptWriterModel = savedWriterModel ?? string.Empty;
-            MutationModel = savedMutationModel ?? string.Empty;
-            EnrichModel = savedEnrichModel ?? string.Empty;
+            // The role picks need no seeding here: each ModelChoiceState lists its own saved pick
+            // even when the cache predates it (ModelChoiceState.RebuildModels).
         }
         finally { _suppressOllamaModelPersist = false; }
 

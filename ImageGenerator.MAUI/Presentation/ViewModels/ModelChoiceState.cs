@@ -226,9 +226,8 @@ public sealed partial class ModelChoiceState : ObservableObject
     /// </summary>
     /// <remarks>
     /// Not reconciling a vanished pick against the store is deliberate for now: the coordinator's Ollama
-    /// refresh already drops every role's stale local tag, being the only place that can see all five
-    /// local picks at once. While both exist, that method owns clearing a local pick; this class never
-    /// fights it.
+    /// refresh drops every role's stale local tag from the store, being the only place that sees every
+    /// role at once. That method owns clearing a local pick; this class never fights it.
     /// </remarks>
     private void RebuildModels()
     {
