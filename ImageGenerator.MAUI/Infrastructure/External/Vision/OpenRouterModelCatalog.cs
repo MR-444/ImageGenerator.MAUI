@@ -26,6 +26,22 @@ public sealed class OpenRouterModelCatalog : IOpenRouterModelCatalog
         bool freeOnly,
         CancellationToken ct = default)
     {
+        return ParseVisionModels(await FetchBodyAsync(ct), freeOnly);
+    }
+
+    public async Task<IReadOnlyList<OpenRouterModelInfo>> ListChatModelsAsync(
+        bool freeOnly,
+        CancellationToken ct = default)
+    {
+        return ParseChatModels(await FetchBodyAsync(ct), freeOnly);
+    }
+
+    /// <summary>
+    /// Both lists come from one endpoint and one request shape, so the transport and its failure text
+    /// live once. The two filters differ; that difference is what the caller chooses between.
+    /// </summary>
+    private async Task<string> FetchBodyAsync(CancellationToken ct)
+    {
         using var client = _httpClientFactory.CreateClient(VisionObservationService.OpenRouterHttpClientName);
         using var response = await client.GetAsync(ModelsEndpoint, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
@@ -37,7 +53,7 @@ public sealed class OpenRouterModelCatalog : IOpenRouterModelCatalog
             throw new InvalidOperationException($"OpenRouter returned HTTP {(int)response.StatusCode} listing models.");
         }
 
-        return ParseVisionModels(body, freeOnly);
+        return body;
     }
 
     internal static IReadOnlyList<OpenRouterModelInfo> ParseVisionModels(string body, bool freeOnly)
@@ -55,6 +71,45 @@ public sealed class OpenRouterModelCatalog : IOpenRouterModelCatalog
 
             if (!SupportsModality(model, "input_modalities", "image")
                 || !SupportsModality(model, "output_modalities", "text"))
+                continue;
+
+            var name = model.TryGetProperty("name", out var nameProp)
+                ? nameProp.GetString() ?? id
+                : id;
+            var isFree = IsFree(model);
+            if (freeOnly && !isFree)
+                continue;
+
+            result.Add(new OpenRouterModelInfo(id, name, isFree));
+        }
+
+        return
+        (OpenRouterModelInfo[])[
+            .. result
+                .OrderByDescending(m => m.IsFree)
+                .ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(m => m.Id, StringComparer.OrdinalIgnoreCase)
+        ];
+    }
+
+    /// <summary>
+    /// Text-output models, regardless of what they accept as input. Kept as its own predicate rather
+    /// than a flag on the vision one, because the two rules are not the same rule with one knob turned.
+    /// </summary>
+    internal static IReadOnlyList<OpenRouterModelInfo> ParseChatModels(string body, bool freeOnly)
+    {
+        using var doc = JsonDocument.Parse(body);
+        var result = new List<OpenRouterModelInfo>();
+
+        if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            return result;
+
+        foreach (var model in data.EnumerateArray())
+        {
+            if (!model.TryGetProperty("id", out var idProp) || idProp.GetString() is not { Length: > 0 } id)
+                continue;
+
+            if (!SupportsModality(model, "output_modalities", "text"))
                 continue;
 
             var name = model.TryGetProperty("name", out var nameProp)

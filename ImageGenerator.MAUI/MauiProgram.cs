@@ -117,7 +117,11 @@ public static class MauiProgram
                 totalTimeout: TimeSpan.FromMinutes(5))
             .AddRemoteHttpLogging(CivitaiPostingService.HttpClientName);
 
-        // Claude tiers for the prompt builder and AI caption tools talk to api.anthropic.com. Adaptive
+        // Claude tiers for the prompt builder and AI caption tools talk to api.anthropic.com, and
+        // AnthropicModelCatalog reads the model list over the same named client (a 120 s attempt is
+        // generous for a GET /v1/models, but two clients with the same base, key header and retry
+        // policy would only invite one of them to drift).
+        // Adaptive
         // thinking at high effort can run well past the default 60 s, so the per-attempt timeout is
         // generous. These calls have no side effects, so the standard 5xx/429 retry is safe.
         builder.Services.AddHttpClient(AnthropicMessagesTransport.HttpClientName)
@@ -206,6 +210,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IPromptBuilderService, PromptBuilderService>();
         builder.Services.AddSingleton<IVisionObservationService, VisionObservationService>();
         builder.Services.AddSingleton<IOpenRouterModelCatalog, OpenRouterModelCatalog>();
+        builder.Services.AddSingleton<IAnthropicModelCatalog, AnthropicModelCatalog>();
         builder.Services.AddSingleton<ICaptionMutationLlmService, CaptionMutationLlmService>();
         builder.Services.AddSingleton<IEnrichRegionsLlmService, EnrichRegionsLlmService>();
         builder.Services.AddSingleton<IOllamaModelCatalog, OllamaModelCatalog>();

@@ -254,12 +254,34 @@ Modality is a measured fact, not an assumption: image-reference count per servic
     same class of defect as four pickers writing one value. Every row in the shared table declares the
     flag that shows it (`IsLocalTier`, `ShowEnrichLocalModel`, `IsLocalVisionProvider`,
     `IsOpenRouterVisionProvider`) and the test asserts it, so an always-visible row fails.
+30. **`GET /v1/models` pages at twenty by default, so the obvious implementation is silently wrong.**
+    "limit … Defaults to 20" means one request returns the twenty newest models with a 200 and no sign
+    that anything is missing: a picker built on it looks healthy and hides most of the catalogue.
+    `has_more` and `last_id` are both required to finish the job, and both are load-bearing — a server
+    that ignores `after_id` will answer `has_more` forever. Lifecycle is the second half of the trap:
+    **omitting `lifecycle` returns active and deprecated models but never retired ones**, which is
+    already the picker's rule — a retired model fails inference, so it must not be offered, while a
+    deprecated one is still callable by the keys that have it and is shown with the word on its label
+    rather than hidden. **A list endpoint's defaults are a claim about the whole list only if you
+    ask.**
+31. **A complete, compiling, never-called surface is not a feature.** `LoadLlmProvider` /
+    `PersistLlmProvider` / `LoadLlmModel(role, provider)` / `LoadLlmTarget(role)` — the per-role
+    persistence pair the rest of this plan is built on — had **zero callers in app and test alike**
+    from the day the Phase-B groundwork landed them, and the OpenRouter vision list, live since Phase
+    A, had no tests at all. Both were written inside a slice judged by "the suite passes", which has no
+    way to answer "is this type reachable".
+32. **A restored backup brings its own timestamp back, and MSBuild reads clocks.** The falsification
+    harness mutated a catalog, ran the tests, then moved the backup into place; `shutil.move` carries
+    the backup's older mtime, so the next build judged the *mutated* assembly up to date and re-ran the
+    suite against it. "Restored, gate green" was the mutation still in the binary — visible only
+    because one test failed for the wrong reason first. **A restore must leave the file newer than the
+    build it is meant to invalidate.**
 
-**Status.** B1 done, gate **1,605**. B2.0 done (`8bffa9e`), B2.1 done (`c2deff9` + `7ebe6e3`),
-**B2.2a done** (structure editor + the enrichment-visibility fix, gate **1,624**), **B2.2b done** (Idea
-to Prompt's three rows, gate **1,627**). B2 is not done until B2.3 deletes `ModelTier` and the
-transitional `GeneratorSettingsReader.*Target(tier)` bridge. Only Settings still hand-rolls pickers, and
-those go in Phase C.
+**Status.** B1 done, gate **1,605**. B2.0 (`8bffa9e`), B2.1 (`c2deff9` + `7ebe6e3`), B2.2a (`bd743c8`,
+gate **1,624**), B2.2b (Idea to Prompt's three rows, gate **1,627**). B2.3 is split a-1/a-2/a-3 below:
+**a-1 done** (the two missing model lists, gate **1,645**). B2 is not done until B2.3 deletes
+`ModelTier` and the transitional `GeneratorSettingsReader.*Target(tier)` bridge. Only Settings still
+hand-rolls pickers, and those go in Phase C.
 
 
 ## 5. Target design
@@ -331,8 +353,8 @@ Two measured facts decided the ordering, and both contradict the obvious way to 
 | provider | model list | refresh | credential |
 |---|---|---|---|
 | Local (Ollama) | `Settings.OllamaModels` (all) / `OllamaVisionModels` for `observe` — both already exist | `RefreshOllamaModelsCommand` | none |
-| Anthropic | *new*: `GET /v1/models` — lifecycle + capabilities (§4.8) | catalog call, key required | Anthropic row, Provider API keys |
-| OpenRouter | *new*: `ListModelsAsync(freeOnly, visionOnly)` — one call, filtered for `observe`, unfiltered + flagged for text roles | same command, per provider | OpenRouter row / token store |
+| Anthropic | **built (B2.3a-1)**: `IAnthropicModelCatalog` over `GET /v1/models` — paged past the 20-row default, retired dropped, deprecated labelled, capabilities read rather than assumed | catalog call, key required (a missing key answers with where to put it, not a 401) | Anthropic row, Provider API keys |
+| OpenRouter | **built (B2.3a-1)**: `ListVisionModelsAsync` (image in, text out) and `ListChatModelsAsync` (text out) — one fetch, two honest filters, not one filter with a `visionOnly` flag | same command, per provider | OpenRouter row / token store |
 
 The list itself stays a connection-side concern in `AppSettingsCoordinator`: sharing *a list of what a
 server has* is not the disease of §2; sharing *a choice* is.
@@ -376,8 +398,9 @@ run**; one of these "passed anyway" readings was a write that had not landed.
 
 ### Phase B1 — the seam · **DONE (2026-11-21)**
 
-`LlmTarget { Provider, ModelId, BaseUrl }` + `ModelRole { PromptWrite, Mutation, Enrich, Vision }` are
-now the contract every LLM service takes; `ICaptionMutationLlmService`, `IEnrichRegionsLlmService` and
+`LlmTarget { Provider, ModelId, BaseUrl }` + `ModelRole { PromptWrite, Mutate, Enrich }` are
+now the contract every LLM service takes (the image observer is deliberately **not** a member — it
+sends pixels and lives on `VisionObservationService`; folding it in is B2.3a-3); `ICaptionMutationLlmService`, `IEnrichRegionsLlmService` and
 `IPromptBuilderService` no longer read the store or know a single model id. `UiStateStore` persists a
 provider and a model per role (`LoadLlmTarget(role)`), Local memory mapping back onto the Phase A keys
 so a pick made before this change survives. Anthropic ids come from `AnthropicModels.DefaultFor(role)`
@@ -451,12 +474,50 @@ three. Falsified one row at a time: local observer writing `OllamaModel` (the or
 observer gated on `IsLocalVisionProvider` (the copy-paste next door), writer bound to `MutationModel` —
 each failed only its own row.
 
-### Phase B2.3 — delete the tier
-Provider selection moves into the row (`Providers` / `SelectedProvider`), `ModelTier` (52 app refs
-across 10 files, 116 test refs) and the `GeneratorSettingsReader.*Target(tier)` bridge (§4.18) go,
-with the cost copy (§4.6) resolved before the merge rather than after.
+### Phase B2.3 — provider in the row, and the tier deleted · **split; a-1 DONE (2026-11-21)**
+
+Owner decisions that set the shape (2026-11-21): provider selection moves **into** the row; one
+display-label rule for every provider picker; **no cost estimates** while any model id is selectable
+— `SonnetPerCallUsd` / `OpusPerCallUsd` come out rather than being re-worded; the Anthropic list comes
+from a small catalog over `GET /v1/models`, **not** from the SDK, so B1.5 stops being a prerequisite;
+and enrichment **starts on Local** and then persists whatever is picked.
+
+A row cannot own the provider without also owning the list, refresh command, status and helper of
+*whichever provider is selected*. Handing each host three sets of those bindings would relocate the
+duplication instead of deleting it, so a host binds one object per role:
+
+| member | meaning |
+|---|---|
+| `Providers` | the provider subset that role can use (the observer has no Anthropic today) |
+| `SelectedProvider` | persisted per role — the wiring these pages never had |
+| `Models` / `RefreshCommand` / `Status` / `Helper` | whichever provider is currently selected |
+| `SelectedModel` | persisted per role **and** per provider, so returning to Ollama finds the old tag |
+
+Automation ids stay host-side. They are the UI tests' handles, and B2.2b found the hard way that a page
+predating the naming convention does not match a derived name (finding 28).
+
+- **a-1 · the two missing lists · DONE.** `AnthropicModelCatalog` and `ListChatModelsAsync`; 18 tests,
+  six falsified mutations (findings 30–32), gate **1,645**. No page touched, `ModelTier` untouched.
+- **a-2 · coordinator surfaces.** Models / refresh command / status per provider for the two new lists,
+  arriving as optional constructor parameters the way the other catalogs do, with the §8 rule that a
+  `catch` which logs must also set the card's status.
+- **a-3 · `ModelChoiceState` + the row.** The state object and one label function, then one host per
+  commit (mutation first). `ModelTier`, `ModelTierOptions`, `VisionObservationProvider` and the
+  `GeneratorSettingsReader.*Target(tier)` bridge are deleted in the commit that removes their last
+  reader, cost copy included.
+
+`ModelChoiceState` is deliberately not a MAUI type, which is the point: every rule pinned so far as a
+markup string — which model does this role call, is the pick kept across a provider switch, is it
+persisted — becomes an ordinary unit test. Finding 24 accepted that a row can only be inspected
+statically because no MAUI control can be constructed in this suite; the state object is where that
+behaviour belongs instead.
 
 ### Phase B1.5 (new) — the official `Anthropic` package, before the Anthropic half of B2
+
+**The picker no longer waits on this (2026-11-21).** a-1 reads `GET /v1/models` over the existing named
+client without the package, so the catalog dependency that made B1.5 a prerequisite is gone. What is
+left here is the original question about *messages* bodies — version constant, error parsing, typed
+output config — and nothing in B2.3 depends on it.
 The hand-rolled transport pins `anthropic-version: 2023-06-01`, builds request bodies from anonymous
 objects and parses errors by string. The official SDK models all of that, exposes `HttpClient` /
 `Handlers` so the existing named client and the `FakeHttpMessageHandler` wire tests survive, and
@@ -486,10 +547,11 @@ notes.
 - **GPU colocation gate** reads `Settings.OllamaBaseUrl` for `SameHost`; base URLs are not moving, but
   any change here must leave that gate alone.
 - **`PromptBuilderService.ModelId` is public** — check its users before Phase B deletes it.
-- **Scripts write LF into a CRLF tree.** `core.autocrlf=true` with no `.gitattributes`, so an LF
-  working file neither fails a build nor shows in `git diff` — it just silently retrades line endings
-  on the next checkout. Every file touched here was re-normalised to CRLF; check the endings, do not
-  assume them.
+- **Line endings are per file, not per tree.** `core.autocrlf=true` with no `.gitattributes`, so the
+  index holds LF for every file while the working tree is mixed (280 LF / 116 CRLF / 3 mixed). A script
+  that writes the other ending trips no build and shows nothing in `git diff --numstat`. Write what the
+  file's own neighbours have (`git ls-files --eol`), and read a whole-file hunk with
+  `git diff --ignore-cr-at-eol --numstat` beside it before concluding the edit changed anything.
 
 ---
 
@@ -502,7 +564,8 @@ dotnet test ImageGenerator.MAUI.Tests/ImageGenerator.MAUI.Tests.csproj -c Debug
 ```
 
 Gate after the first adopted row and its fix: **1,620 passed / 0 failed / 0 skipped**, app builds at
-0 warnings and 0 `MAUIG2045`. Manual matrix per role, naming the handle and not the sentence
+0 warnings and 0 `MAUIG2045`. Current gate after B2.3a-1: **1,645 passed / 0 failed / 0 skipped**,
+same build hygiene. Manual matrix per role, naming the handle and not the sentence
 (§4.23): pick → restart → still picked; change another role → this one picked; change another role
 → this one unchanged; kill the server → the row explains it under its own `…StatusLabel`; **the
 row's own picker lists models after Refresh** — that last one is what silently died first time, and
@@ -528,10 +591,13 @@ Added while reading the Anthropic API (§4.8); each is a decision and not a disc
   `2026-10-21`. Nothing the app sends is rejected by the newer version (no `temperature`, `top_p` or
   `top_k` go to Anthropic), so the bump looks safe — but "safe" here is a decision with a migration
   page behind it, not a free change. Adopting the SDK (B1.5) hands the constant to somebody else.
-- **Cost copy.** Once an arbitrary model id is selectable,
-  `SelectedModelTier == Opus ? 0.028 : 0.017` is not an estimate, it is a guess with two inputs.
-  Recommend neutral wording ("billed per token by Anthropic") plus the model `line` where it is
-  informative, and dollar figures only for ids whose prices are actually known.
+- **Cost copy. DECIDED (2026-11-21): stop estimating.** Once an arbitrary model id is selectable,
+  `SelectedModelTier == Opus ? 0.028 : 0.017` is not an estimate, it is a guess with two inputs — and
+  `/v1/models` carries no pricing to replace it with. The constants and the dollar sentence come out in
+  a-3; what is said instead is what is actually known: free or paid, and how many calls.
+- **Enrichment's starting value. DECIDED (2026-11-21): Local, then persisted.** The role never stored a
+  tier and reopened on a paid Anthropic model on every navigation. It starts on the provider that
+  cannot bill anyone and remembers what is picked after that.
 - **Anthropic as a vision provider.** Capability says yes (`image_input.supported`), cost says not
   by default. Nothing in the target design blocks it: one enum member on `VisionObservationProvider`
   plus the Messages-with-image branch (§4.9).

@@ -22,7 +22,11 @@ internal static class AnthropicMessagesTransport
     public const string HttpClientName = "anthropic";
 
     private const string MessagesEndpoint = "https://api.anthropic.com/v1/messages";
-    private const string AnthropicVersion = "2023-06-01";
+    /// <summary>
+    /// Shared with <see cref="AnthropicModelCatalog"/>: one app makes one claim about which API
+    /// version it speaks. Bumping it is a deliberate change, not a per-endpoint accident.
+    /// </summary>
+    internal const string AnthropicVersion = "2023-06-01";
     private const int MaxOutputTokens = 16000;
 
     // Verbatim property names (no naming policy): the body uses the exact API field spellings.
