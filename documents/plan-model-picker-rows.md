@@ -431,10 +431,9 @@ Modality is a measured fact, not an assumption: image-reference count per servic
 **Status.** B1 done, gate **1,605**. B2.0 (`8bffa9e`), B2.1 (`c2deff9` + `7ebe6e3`), B2.2a (`bd743c8`,
 gate **1,624**), B2.2b (`c8d736c`, gate **1,627**). B2.3 is split a-1 … a-6 below: a-1 (`d31b160`, gate
 **1,645**), a-2 (`1c80b24`, gate **1,666**), a-3 (`acba23f`, gate **1,693**), a-4 (`4cfe657`, gate
-**1,709**) and **a-5** (both of the idea page's decisions in shared rows, observer and writer alike,
-gate **1,744**). B2 is not
-done until the tier is deleted and the transitional `GeneratorSettingsReader.*Target(tier)` bridge with it.
-Only Settings still hand-rolls pickers, and those go in Phase C.
+**1,709**) and a-5 (`53b2aa4`, gate **1,744**) — both of the idea page's decisions in shared rows.
+B2 is not done until the tier is deleted and the transitional `GeneratorSettingsReader.*Target(tier)`
+bridge with it. Only Settings still hand-rolls pickers, and those go in Phase C.
 
 
 ## 5. Target design
