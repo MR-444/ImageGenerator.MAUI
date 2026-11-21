@@ -20,10 +20,12 @@
                     ItemsSource="{Binding Models}"
                     SelectedItem="{Binding SelectedModel, Mode=TwoWay}"
                     Title="{Binding PickerTitle}"
+                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                     AutomationId="{Binding ModelPickerAutomationId}" />
             <Button Grid.Column="1"
                     Text="Refresh"
                     Command="{Binding RefreshCommand}"
+                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                     Style="{StaticResource SecondaryButton}"
                     AutomationId="{Binding RefreshAutomationId}" />
         </Grid>

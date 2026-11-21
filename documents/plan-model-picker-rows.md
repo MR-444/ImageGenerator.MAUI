@@ -1,8 +1,9 @@
 # Model choice by role — `Local | Anthropic | OpenRouter`, with the picker where the model is used
 
-**Status:** Phase A and Phase B1 **done**; Phase B2 **in progress** — `ModelPickerRow` exists, its first
-host is live and its second (structure editor) is next. Gate: **1,620 passed / 0 failed / 0 skipped**,
-app builds at 0 warnings and 0 `MAUIG2045`.
+**Status:** Phase A and Phase B1 **done**; Phase B2 **in progress** — `ModelPickerRow` is live on two
+of four pages (mutation, structure editor) and `IdeaToPromptPage` is next, blocked on OpenRouter text
+model plumbing (§6, B2.2b). Gate: **1,623 passed / 0 failed / 0 skipped**, app builds at 0 warnings and
+0 `MAUIG2045`.
 **Measured on:** `main` 2026-11-20, the tree that landed the inline server-status labels and
 `OllamaEndpointException` (test gate **1,575 passed / 0 failed / 0 skipped**).
 
@@ -168,12 +169,22 @@ Modality is a measured fact, not an assumption: image-reference count per servic
     exactly one live consumer in the whole app: `IntGreaterThanZero`, which no page declares. Left
     alone — deleting it is its own sweep — but it is why application scope was the established home
     here rather than a new convention invented for the control.
-21. **A second writer can rewrite a file mid-change, and this has now happened twice.** `App.xaml`
-    came back with additions missing, a comment duplicated and an mtime *older* than the write; the
-    whole of this plan was then reverted to its pre-edit state by the same mechanism and committed
-    that way, caught only by re-reading the file afterwards. Files the owner has open in the IDE are
-    two-writer surfaces: write the whole file, then re-read it (build, suite, byte-level BOM/CRLF
-    audit, and a grep for the text that was supposed to be there).
+21. **Content was lost twice and I do not know by what.** An edit to `App.xaml` came back with the
+    additions missing, the comment duplicated and an mtime *older* than the write; a whole set of edits to
+    this document was likewise gone afterwards, and that absence is what got committed. I blamed an editor
+    buffer holding the file open — the obvious story for an mtime that predates the write — and the owner
+    says the file was never open. So the mechanism behind these two losses is unknown, and with it goes the
+    "two-writer surface" conclusion and the instruction to close files that came from it.
+    What *is* established, from earlier in this repo's own history
+    (`documents/review-c525269-97fc36e.md` §6), is that an automated IDE inspection has rewritten source in
+    this tree unasked at least twice — "use primary constructor", and "remove unnecessary assignment"
+    eating test `act` statements. So an external writer is a fact here; but its recorded signature is a
+    quick-fix applied to C#, not a markdown file restored to an older version, so it does not explain the
+    two events above and must not be filed as its explanation.
+    What survives the not-knowing is the check, and it is cheap: after a scripted write, re-read the file
+    and grep for a string that exists only if the edit landed. Both losses cost minutes because of that
+    grep. Found later they would have been believed, because committed text is exactly what a lost update
+    looks like when nobody looks.
 
 ### Found while running the first adopted row (2026-11-21)
 
@@ -200,6 +211,18 @@ Modality is a measured fact, not an assumption: image-reference count per servic
     asserts the boundary statically — content names its own context, every internal binding path is
     a property the row itself declares, every host-facing member is a real `BindableProperty`,
     `SelectedModel` defaults to two-way — and the pixels stay on the manual list.
+25. **Contract tests read *built* markup, so a restore is not a rebuild.** Twice now a red
+    `UiMarkupContractTests` run meant the opposite of what it said: `TestAssets` holds copies made by
+    `CopyToOutputDirectory="PreserveNewest"`, so after putting a file back, `dotnet test --no-build`
+    re-runs against the copy of the *broken* version. A XAML cycle ends with a build of the test
+    project, not a test run.
+26. **A whole-file diff appeared out of a 50-line edit, and my explanation for it did not survive being
+    tested.** Rewriting this document through a script produced `@@ -1,446 +1,476 @@` plus
+    `git diff --check` complaints on lines nobody had touched; I concluded the file was LF in the repo and
+    my script had forced it to CRLF. Re-running the same edit at both endings gives the same +46/-11, so
+    that explanation is wrong and the cause is open. The durable part is the symptom to watch for: when a
+    hunk header spans the whole file, the diff is lying about the size of the change — stop and check
+    before committing it, because the real edit is then invisible.
 
 ## 5. Target design
 
@@ -239,12 +262,18 @@ service in Phase A, which is what actually breaks the cross-talk.
 ### 5.3 `ModelPickerRow` — one control, four pages · **first host landed 2026-11-21**
 
 As built, `Presentation/Views/Controls/ModelPickerRow.xaml`: `TitleText`, `PickerTitle`, `Models`,
-`SelectedModel`, `RefreshCommand`, `Helper`, `Status`, and three `*AutomationId` string properties.
+`SelectedModel`, `RefreshCommand`, `Helper`, `Status`, `IsBusy`, and three `*AutomationId` string properties.
 `SelectedModel` is two-way *by default* — a row that only read back would let the user pick a model
 that is then never used. It renders what the pages hand-rolled: field label, `Picker` + Refresh in a
 `*,Auto` grid, helper line, and a status line that collapses when empty. The automation ids are
 properties rather than fixed values because they are the owning page's UI-test handles, and two
-roles on one page cannot share one. Deliberately **not** in it yet: `Providers` /
+roles on one page cannot share one. `IsBusy` greys the picker and Refresh together — the structure
+editor passes it (mid-enrichment model changes are silently ignored) and the mutation page does not
+pass it, exactly as those two pages behaved by hand before the row existed; it is asserted per host,
+not in the shared theory, because a default-on rule would have changed mutation behaviour. A fourth
+host decides for itself.
+
+Deliberately **not** in it yet: `Providers` /
 `SelectedProvider` — each page still shows its own `ModelTier` picker above the row, and provider
 selection cannot move into the control in the same commit that deletes `ModelTier` (§6, B2.3).
 
@@ -348,12 +377,30 @@ not working, because neither check looked at where the binding source comes from
 catches it now is `ModelPickerRowTests` (§4.24) plus the manual matrix in §8. Gate after the fix:
 **1,620**.
 
-### Phase B2.2 — remaining hosts
-`IdeogramStructureEditorPage` (one row: `EditorEnrich*`), then `IdeaToPromptPage` (three rows:
-`IdeaPromptOllamaVision*`, `IdeaPromptOpenRouterVision*`, `IdeaPromptOllama*`). One page per commit;
-the ids are already distinct per role, which is what makes each swap mechanical. Still owed inside
-Phase B: the OpenRouter `visionOnly` text list, the coordinator's `OpenRouterModels` + refresh,
-persisting `SelectedVisionProvider`, and wiring the provider pickers to `LoadLlmTarget` / persist.
+### Phase B2.2a — structure editor · **DONE (2026-11-21)**
+26 hand-rolled lines → one `<ctrl:ModelPickerRow>`, three ids preserved. The shared markup test is now
+a theory over (page, role model, id prefix) so the next host is one `[InlineData]` line, and it is
+that shape which let the falsification matter: pointing the editor row at `MutationModel` — the original
+shared-state defect, one paste away — failed the editor case while mutation stayed green. `IsBusy`
+
+is asserted by its own page test for the same reason (§5.3).
+
+
+**Also in this slice,** because adopting the row put the cursor on the section around it. The enrichment
+section started collapsed behind a grey word with no chevron, while the tier defaults to a paid Anthropic
+model and the Enrich button sits further down the same pane — so the page could spend money on a model
+nobody had seen. It now opens by default and carries the same `BoolToChevron` disclosure as the page's
+three other accordion sections; `EnrichmentSettings_DoNotHideTheModelThatCostsMoney` pins both halves
+(falsified twice: re-collapsing, and putting the word "Configure" back). The tier default itself is still
+`ModelTier.Sonnet` and still not persisted — an owner decision, §9.
+
+Gate **1,624** after this slice.
+
+### Phase B2.2b — Idea to Prompt, remaining host
+Three rows: `IdeaPromptOllamaVision*`, `IdeaPromptOpenRouterVision*`, `IdeaPromptOllama*`. Still owed
+before that page can adopt: the OpenRouter `visionOnly` text list, the coordinator's
+`OpenRouterModels` + refresh, persisting `SelectedVisionProvider`, and wiring the provider pickers to
+`LoadLlmTarget` / persist.
 
 ### Phase B2.3 — delete the tier
 Provider selection moves into the row (`Providers` / `SelectedProvider`), `ModelTier` (52 app refs

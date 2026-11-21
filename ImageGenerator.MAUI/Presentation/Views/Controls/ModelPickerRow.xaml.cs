@@ -27,6 +27,13 @@ public partial class ModelPickerRow
         nameof(SelectedModel), typeof(object), typeof(ModelPickerRow),
         defaultBindingMode: BindingMode.TwoWay);
 
+    /// <summary>
+    /// True while the host is busy with its own call. Greys out the picker and Refresh, which is what
+    /// every host hand-rolled as IsEnabled + InverseBool before this control existed.
+    /// </summary>
+    public static readonly BindableProperty IsBusyProperty = BindableProperty.Create(
+        nameof(IsBusy), typeof(bool), typeof(ModelPickerRow), false);
+
     /// <summary>Repopulates <see cref="Models"/> from the provider; owned by the page's role.</summary>
     public static readonly BindableProperty RefreshCommandProperty = BindableProperty.Create(
         nameof(RefreshCommand), typeof(ICommand), typeof(ModelPickerRow));
@@ -78,6 +85,12 @@ public partial class ModelPickerRow
     {
         get => GetValue(SelectedModelProperty);
         set => SetValue(SelectedModelProperty, value);
+    }
+
+    public bool IsBusy
+    {
+        get => (bool)GetValue(IsBusyProperty);
+        set => SetValue(IsBusyProperty, value);
     }
 
     public ICommand RefreshCommand

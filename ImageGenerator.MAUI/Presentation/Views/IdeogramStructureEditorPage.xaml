@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:behaviors="clr-namespace:ImageGenerator.MAUI.Presentation.Behaviors"
+             xmlns:ctrl="clr-namespace:ImageGenerator.MAUI.Presentation.Views.Controls"
              xmlns:converters="clr-namespace:ImageGenerator.MAUI.Presentation.Converters"
              xmlns:common="clr-namespace:ImageGenerator.MAUI.Presentation.Common"
              xmlns:vm="clr-namespace:ImageGenerator.MAUI.Presentation.ViewModels"
@@ -383,10 +384,17 @@
                                     <TapGestureRecognizer Tapped="OnSectionHeaderTapped" CommandParameter="{x:Reference EnrichmentSettingsBody}" />
                                 </Grid.GestureRecognizers>
                                 <Label Text="Enrichment settings" Style="{StaticResource FieldLabel}" VerticalOptions="Center" />
-                                <Label Grid.Column="1" Text="Configure" Style="{StaticResource HelperText}" VerticalOptions="Center" />
+                                <!-- Same chevron as the Description / Style / Elements headers: a grey word in the corner
+                                     is not a visible affordance, and this section is the one that decides
+                                     whether a click costs money. -->
+                                <Label Grid.Column="1" VerticalOptions="Center" Style="{StaticResource FieldLabel}" Margin="0"
+                                       Text="{Binding IsVisible, Source={x:Reference EnrichmentSettingsBody}, Converter={StaticResource BoolToChevron}, x:DataType=View}" />
                             </Grid>
 
-                            <VerticalStackLayout x:Name="EnrichmentSettingsBody" Spacing="8" IsVisible="False">
+                            <!-- Starts open on purpose: the tier defaults to a paid Anthropic model and the
+                                 Enrich button lives further down this pane, so a collapsed section here means
+                                 paying without ever seeing what is being paid for. -->
+                            <VerticalStackLayout x:Name="EnrichmentSettingsBody" Spacing="8">
                                 <Label Text="Enrichment model" Style="{StaticResource FieldLabel}" />
                                 <Picker Title="Model"
                                         ItemsSource="{Binding EnrichTierOptions}"
@@ -395,32 +403,20 @@
                                         MaximumWidthRequest="220"
                                         HorizontalOptions="Start"
                                         AutomationId="EditorEnrichTierPicker" />
-                            <VerticalStackLayout Spacing="8" IsVisible="{Binding ShowEnrichLocalModel}">
-                                <Label Text="Local model (Ollama)" Style="{StaticResource FieldLabel}" />
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                    <Picker Grid.Column="0"
-                                            ItemsSource="{Binding Generator.Settings.OllamaModels}"
-                                            SelectedItem="{Binding Generator.Settings.EnrichModel, Mode=TwoWay}"
-                                            Title="Refresh, then pick a model…"
-                                            IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
-                                            AutomationId="EditorEnrichOllamaModelPicker" />
-                                    <Button Grid.Column="1"
-                                            Text="Refresh"
-                                            Command="{Binding Generator.Settings.RefreshOllamaModelsCommand}"
-                                            IsEnabled="{Binding IsEnriching, Converter={StaticResource InverseBool}}"
-                                            Style="{StaticResource SecondaryButton}"
-                                            AutomationId="EditorEnrichOllamaRefreshButton" />
-                                </Grid>
-                                <Label Text="The Ollama server URL is shared with AI mutation and configured in Settings."
-                                       Style="{StaticResource HelperText}" />
-                                <!-- Reports this card's server call inline: the page has no status bar of its
-                                     own and the generator's bar is drawn only on MainPage, so a wrong server URL
-                                     would otherwise leave nothing but a WARN in the log file. -->
-                                <Label Text="{Binding Generator.Settings.OllamaServerStatus}"
-                                       Style="{StaticResource HelperText}"
-                                       IsVisible="{Binding Generator.Settings.OllamaServerStatus, Converter={StaticResource NonEmptyStringToBool}}"
-                                       AutomationId="EditorEnrichOllamaStatusLabel" />
-                            </VerticalStackLayout>
+                            <!-- Which local model enriches. Same shared row as the mutation page, so the
+                                 three ids stay this page's; IsBusy keeps the mid-enrichment greying out. -->
+                            <ctrl:ModelPickerRow IsVisible="{Binding ShowEnrichLocalModel}"
+                                                 IsBusy="{Binding IsEnriching}"
+                                                 TitleText="Local model (Ollama)"
+                                                 Models="{Binding Generator.Settings.OllamaModels}"
+                                                 SelectedModel="{Binding Generator.Settings.EnrichModel, Mode=TwoWay}"
+                                                 RefreshCommand="{Binding Generator.Settings.RefreshOllamaModelsCommand}"
+                                                 Helper="The Ollama server URL is shared with AI mutation and configured in Settings."
+                                                 Status="{Binding Generator.Settings.OllamaServerStatus}"
+                                                 ModelPickerAutomationId="EditorEnrichOllamaModelPicker"
+                                                 RefreshAutomationId="EditorEnrichOllamaRefreshButton"
+                                                 StatusAutomationId="EditorEnrichOllamaStatusLabel" />
+
                             </VerticalStackLayout>
 
                             <Editor Text="{Binding JsonPreview, Mode=OneWay}"

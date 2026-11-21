@@ -96,28 +96,73 @@ public class UiMarkupContractTests
     /// <summary>
     /// Checks that the mutation engine page routes model selection through the shared row rather than a local hand-rolled picker. The row must receive the page's model source, a two-way bound selected mutation model, the catalog refresh command, and the server status, while preserving the automation identifiers that existing UI tests depend on. It also ensures no duplicate picker remains with the same automation identifier.
     /// </summary>
-    [Fact]
-    public void MutationEnginePage_PicksItsLocalModelThroughTheSharedRow()
+    [Theory]
+    [InlineData("MutationEnginePage.xaml", "MutationModel", "MutationOllama")]
+    [InlineData("IdeogramStructureEditorPage.xaml", "EnrichModel", "EditorEnrichOllama")]
+    public void EachLocalRole_PicksItsModelThroughTheSharedRow(string page, string roleModel, string idPrefix)
     {
-        var markup = Markup("MutationEnginePage.xaml");
+        var markup = Markup(page);
         var row = XDocument.Parse(markup)
             .Descendants()
             .Single(element => element.Name.LocalName == "ModelPickerRow");
 
         ((string?)row.Attribute("Models")).Should().Be("{Binding Generator.Settings.OllamaModels}");
         ((string?)row.Attribute("SelectedModel")).Should()
-            .Be("{Binding Generator.Settings.MutationModel, Mode=TwoWay}",
+            .Be("{Binding Generator.Settings." + roleModel + ", Mode=TwoWay}",
                 "a one-way binding here would let the user pick a model that is never used");
         ((string?)row.Attribute("RefreshCommand")).Should()
             .Be("{Binding Generator.Settings.RefreshOllamaModelsCommand}");
         ((string?)row.Attribute("Status")).Should().Be("{Binding Generator.Settings.OllamaServerStatus}");
-        ((string?)row.Attribute("ModelPickerAutomationId")).Should().Be("MutationOllamaModelPicker");
-        ((string?)row.Attribute("RefreshAutomationId")).Should().Be("MutationOllamaRefreshButton");
-        ((string?)row.Attribute("StatusAutomationId")).Should().Be("MutationOllamaStatusLabel");
+        ((string?)row.Attribute("ModelPickerAutomationId")).Should().Be(idPrefix + "ModelPicker");
+        ((string?)row.Attribute("RefreshAutomationId")).Should().Be(idPrefix + "RefreshButton");
+        ((string?)row.Attribute("StatusAutomationId")).Should().Be(idPrefix + "StatusLabel");
 
-        Count(markup, "MutationOllamaModelPicker").Should().Be(1,
+        Count(markup, idPrefix + "ModelPicker").Should().Be(1,
             "the id moves onto the row; a leftover hand-rolled picker would put a second picker on the "
             + "same page under the same handle");
+    }
+    /// <summary>
+    /// Enrichment has no queue and no status bar: change the model halfway through a run and the run
+    /// keeps the model it had already resolved, with nothing on screen saying so. So this row greys itself
+    /// out. The mutation host does not pass IsBusy and never did — that is this page's rule, not the
+    /// shared row's, which is why it is asserted here and not in the theory above.
+    /// </summary>
+    /// <summary>
+    /// The enrichment tier defaults to a paid Anthropic model, and the Enrich button is in the same pane
+    /// below this section. Collapsed behind a grey word with no chevron, the model choice was invisible to
+    /// the person about to spend money on it. Both halves are pinned: open by default, and a disclosure
+    /// chevron like the page's three other sections rather than a label that never changes.
+    /// </summary>
+    [Fact]
+    public void EnrichmentSettings_DoNotHideTheModelThatCostsMoney()
+    {
+        XNamespace x = "http://schemas.microsoft.com/winfx/2009/xaml";
+        var markup = Markup("IdeogramStructureEditorPage.xaml");
+        var body = XDocument.Parse(markup).Descendants()
+            .Single(e => (string?)e.Attribute(x + "Name") == "EnrichmentSettingsBody");
+
+        ((string?)body.Attribute("IsVisible")).Should().NotBe("False",
+            "a collapsed section hides which model the Enrich button is about to pay for");
+
+        markup.Should().Contain("x:Reference EnrichmentSettingsBody",
+            "the header has to show the chevron that says it opens something");
+        markup.Should().Contain("Converter={StaticResource BoolToChevron}, x:DataType=View}",
+            "the chevron follows the body's own IsVisible, as it does on the other three sections");
+        Count(markup, "Converter={StaticResource BoolToChevron}").Should().Be(4,
+            "every accordion header on this page discloses; a section that stops showing its chevron is a"
+            + " section nobody finds");
+    }
+
+    [Fact]
+    public void IdeogramStructureEditorPage_QuietsTheRowMidEnrichment()
+    {
+        var row = XDocument.Parse(Markup("IdeogramStructureEditorPage.xaml"))
+            .Descendants()
+            .Single(element => element.Name.LocalName == "ModelPickerRow");
+
+        ((string?)row.Attribute("IsBusy")).Should().Be(
+            "{Binding IsEnriching}",
+            "a model changed mid-enrichment is ignored, and this page has no status bar to say so");
     }
 
     [Fact]

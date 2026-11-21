@@ -60,8 +60,9 @@ public class ModelPickerRowTests
             .Select(m => m.Groups[1].Value)
             .Distinct();
 
-        paths.Should().NotBeEmpty("a row with no bindings would pass this test for the wrong reason");
-        paths.Should().OnlyContain(
+        var enumerable = paths.ToList();
+        enumerable.Should().NotBeEmpty("a row with no bindings would pass this test for the wrong reason");
+        enumerable.Should().OnlyContain(
             p => declared.Contains(p),
             "the row is its own binding source, so a path it cannot resolve is a silent hole at run time");
     }
@@ -79,6 +80,7 @@ public class ModelPickerRowTests
     [InlineData("RefreshCommand")]
     [InlineData("Helper")]
     [InlineData("Status")]
+    [InlineData("IsBusy")]
     [InlineData("ModelPickerAutomationId")]
     [InlineData("RefreshAutomationId")]
     [InlineData("StatusAutomationId")]
@@ -97,6 +99,6 @@ public class ModelPickerRowTests
     public void ThePickedModel_TravelsBothWays()
     {
         ModelPickerRow.SelectedModelProperty.DefaultBindingMode
-            .Should().Be(Microsoft.Maui.Controls.BindingMode.TwoWay);
+            .Should().Be(BindingMode.TwoWay);
     }
 }
