@@ -266,23 +266,23 @@ public sealed class UiStateStore : IUiStateStore
         _ => "imggen.enrich.openrouter_model"
     };
 
-    public ModelProvider LoadLlmProvider(ModelRole role)
+    public ModelProvider LoadLlmProvider(ModelRole role, ModelProvider fallback)
     {
         var key = ProviderKey(role);
         if (RoleKeyIsStored(key))
         {
-            // An enum written as text outlives renames; degrade to the default rather than throwing on
-            // startup, which is what the tier picker did with an unrecognised stored value.
-            return Enum.TryParse<ModelProvider>(LoadString(key), out var parsed) ? parsed : DefaultLlmProvider;
+            // An enum written as text outlives renames; degrade to the caller's fallback rather than
+            // throwing on startup, which is what the tier picker did with an unrecognised stored value.
+            return Enum.TryParse<ModelProvider>(LoadString(key), out var parsed) ? parsed : fallback;
         }
 
         // First run after the provider split: inherit the prompt writer's persisted tier (the only role
         // that ever remembered one) so "I run this on Ollama" survives the upgrade; every other role
-        // defaults to the provider its old tier name implied.
+        // starts on the fallback its host asked for.
         ModelProvider? inherited = null;
         if (role == ModelRole.PromptWrite && LoadPromptWriterTier() is { } legacyTier)
             inherited = FromLegacyTier(legacyTier);
-        var adopted = inherited ?? DefaultLlmProvider;
+        var adopted = inherited ?? fallback;
         PersistString(key, adopted.ToString());
         _logger.LogDebug("UiStateStore.{Key} adopted {Provider} once", key, adopted);
         return adopted;
@@ -322,19 +322,14 @@ public sealed class UiStateStore : IUiStateStore
         PersistString(key, value ?? string.Empty);
     }
 
-    public LlmTarget LoadLlmTarget(ModelRole role)
+    public LlmTarget LoadLlmTarget(ModelRole role, ModelProvider fallback)
     {
-        var provider = LoadLlmProvider(role);
+        var provider = LoadLlmProvider(role, fallback);
         return new LlmTarget(
             provider,
             LoadLlmModel(role, provider) ?? string.Empty,
             provider == ModelProvider.Local ? ModelConstants.Ollama.ResolveBaseUrl(LoadOllamaBaseUrl()) : string.Empty);
     }
-
-    /// <summary>What these roles ran on before providers were choosable: Anthropic for all three text
-    /// roles, matching the Sonnet/Opus defaults each page shipped with.</summary>
-    private const ModelProvider DefaultLlmProvider = ModelProvider.Anthropic;
-
     private static ModelProvider FromLegacyTier(ModelTier tier) => tier == ModelTier.Local
         ? ModelProvider.Local
         : ModelProvider.Anthropic;

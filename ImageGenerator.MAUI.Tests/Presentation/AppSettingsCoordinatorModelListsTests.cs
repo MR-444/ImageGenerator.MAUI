@@ -279,4 +279,90 @@ public class AppSettingsCoordinatorModelListsTests
 
     private static AnthropicModelInfo Active(string id)
         => new(id, id, AnthropicModelInfo.Active, false);
+
+    // ── the sources a ModelChoiceState is built from ───────────────────────────────
+    //
+    // Five entries in two dictionaries, each naming a list, a status property (as a string, because the
+    // statuses are source-generated) and a refresh command. That shape is an invitation to a copy-paste
+    // error in which one provider's row refreshes another's, which is why each entry is checked rather
+    // than assumed.
+
+    [Fact]
+    public void TheSourcesHandOverTheVeryCollectionsThePagesBind()
+    {
+        var sut = Build();
+
+        ReferenceEquals(sut.TextModelSources[ModelProvider.Local].Models, sut.OllamaModels).Should().BeTrue();
+        ReferenceEquals(sut.TextModelSources[ModelProvider.OpenRouter].Models, sut.OpenRouterTextModels).Should().BeTrue();
+        ReferenceEquals(sut.TextModelSources[ModelProvider.Anthropic].Models, sut.AnthropicTextModels).Should().BeTrue();
+        ReferenceEquals(sut.VisionModelSources[ModelProvider.Local].Models, sut.OllamaVisionModels).Should().BeTrue();
+        ReferenceEquals(sut.VisionModelSources[ModelProvider.OpenRouter].Models, sut.OpenRouterVisionModels).Should().BeTrue();
+    }
+
+    [Fact]
+    public void TheVisionRoleIsNotOfferedAnthropic()
+    {
+        var sut = Build();
+
+        sut.VisionModelSources.Should().NotContainKey(ModelProvider.Anthropic,
+            "an Anthropic vision call is a decision nobody has taken, and a source in this dictionary is an offer in the UI");
+        sut.TextModelSources.Should().ContainKey(ModelProvider.Anthropic);
+    }
+
+    [Fact]
+    public void ReadingTheSourcesTwiceGivesTheSameObjects()
+    {
+        var sut = Build();
+
+        ReferenceEquals(sut.TextModelSources, sut.TextModelSources).Should().BeTrue();
+        ReferenceEquals(
+            sut.TextModelSources[ModelProvider.Anthropic],
+            sut.TextModelSources[ModelProvider.Anthropic]).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(ModelProvider.Local)]
+    [InlineData(ModelProvider.Anthropic)]
+    [InlineData(ModelProvider.OpenRouter)]
+    public void AStatusWrittenForOneProviderReachesOnlyThatProvidersSource(ModelProvider provider)
+    {
+        var sut = Build();
+        var text = sut.TextModelSources;
+        var reached = new List<ModelProvider>();
+        foreach (var (key, source) in text)
+            source.StatusChanged += (_, _) => reached.Add(key);
+
+        // The names below are the string coupling in ModelSource: if one of these properties is renamed,
+        // the write still compiles and the row silently stops reporting. This is the only check.
+        switch (provider)
+        {
+            case ModelProvider.Local: sut.OllamaServerStatus = "local says hello"; break;
+            case ModelProvider.Anthropic: sut.AnthropicStatus = "anthropic says hello"; break;
+            default: sut.OpenRouterTextStatus = "openrouter says hello"; break;
+        }
+
+        reached.Should().Equal([provider]);
+        text[provider].Status.Should().Contain("says hello");
+    }
+
+    [Fact]
+    public async Task RefreshingThroughATextSourceFillsThatSourceAndNotItsNeighbour()
+    {
+        _openRouter.Setup(c => c.ListChatModelsAsync(false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new OpenRouterModelInfo("acme/writer", "Writer", false)]);
+        _anthropicKey.Setup(s => s.LoadAsync()).ReturnsAsync("sk-ant-test");
+        _anthropic.Setup(c => c.ListTextModelsAsync("sk-ant-test", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([Active("claude-sonnet-4-6")]);
+        var sut = Build();
+
+        await sut.TextModelSources[ModelProvider.OpenRouter].RefreshAsync();
+
+        sut.OpenRouterTextModels.Should().Equal("acme/writer");
+        sut.AnthropicTextModels.Should().BeEmpty();
+        sut.OpenRouterVisionModels.Should().BeEmpty();
+
+        await sut.TextModelSources[ModelProvider.Anthropic].RefreshAsync();
+
+        sut.AnthropicTextModels.Should().Equal("claude-sonnet-4-6");
+    }
 }

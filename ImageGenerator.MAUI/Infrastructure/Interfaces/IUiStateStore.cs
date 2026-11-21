@@ -158,13 +158,14 @@ public interface IUiStateStore
     void PersistEnrichModel(string value);
 
     /// <summary>
-    /// Which provider answers this role's calls. Defaults to <see cref="ModelProvider.Anthropic"/> —
-    /// the tier all three text roles ran on before a provider was something you could choose, so this
-    /// update moves nobody. A stored value that no longer parses also lands there rather than throwing:
-    /// an enum written as text is allowed to outlive a rename, and silently defaulting is what the
-    /// tier picker already did with an unknown selection.
+    /// Which provider answers this role's calls. <paramref name="fallback"/> is what a first run, or a
+    /// stored value that no longer parses, lands on — the caller supplies it because the right answer is
+    /// per role: the roles that used to run on Claude default to Anthropic, while enrichment starts on
+    /// the free local model rather than reopening on a paid call every navigation. An enum written as
+    /// text is allowed to outlive a rename, so an unparseable value degrades instead of throwing, which
+    /// is what the tier picker already did with an unknown selection.
     /// </summary>
-    ModelProvider LoadLlmProvider(ModelRole role);
+    ModelProvider LoadLlmProvider(ModelRole role, ModelProvider fallback);
     /// <inheritdoc cref="LoadLlmProvider" />
     void PersistLlmProvider(ModelRole role, ModelProvider value);
 
@@ -183,9 +184,11 @@ public interface IUiStateStore
     /// <summary>
     /// Provider + model + endpoint in one call: what a service is handed so it never has to work out
     /// which model its role wanted. The single place the "no URL typed means the default host" rule is
-    /// applied for an LLM call.
+    /// applied for an LLM call. <paramref name="fallback"/> is passed straight to
+    /// <see cref="LoadLlmProvider"/>, so a caller asking for a target and a caller asking for a provider
+    /// agree on what a first run means.
     /// </summary>
-    LlmTarget LoadLlmTarget(ModelRole role);
+    LlmTarget LoadLlmTarget(ModelRole role, ModelProvider fallback);
     /// <inheritdoc cref="LoadOpenRouterVisionModel"/>
     void PersistOpenRouterVisionModel(string value);
     /// <inheritdoc cref="LoadOpenRouterVisionFreeOnly"/>

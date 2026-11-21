@@ -1,4 +1,4 @@
-# Model choice by role — `Local | Anthropic | OpenRouter`, with the picker where the model is used
+﻿# Model choice by role — `Local | Anthropic | OpenRouter`, with the picker where the model is used
 
 **Status:** Phase A and Phase B1 **done**; Phase B2 **in progress** — `ModelPickerRow` is live on two
 of four pages (mutation, structure editor) and `IdeaToPromptPage` is next, blocked on OpenRouter text
@@ -294,17 +294,43 @@ Modality is a measured fact, not an assumption: image-reference count per servic
     reference: a red run that proved nothing about the case it named. The fix is two named builders, not
     an optional argument — **a parameter cannot distinguish "not supplied" from "deliberately absent",
     and only the second one is a test case.**
-36. **`Equal(a, b, "because…")` — the third string is an item, not a reason. Second time in this change
-    set.** FluentAssertions' `params string[]` overload on a string collection folds the reason into the
-    expected sequence, so the assertion compares three items to two and fails with a message about a
-    missing item. First seen in the catalog tests, again here. **Anything collection-equal that carries a
-    reason passes the items as one array.** A repeated trap is a convention, not a mistake.
+36. **`Equal(a, b, "because…")` — the third string is an item, not a reason. Third time in this change
+    set.** FluentAssertions' `params string[]` overload on a collection folds the reason into the expected
+    sequence. First the catalog tests, then the coordinator tests, then `ModelChoiceStateTests` — and only
+    the third attempt failed to *compile*, because with non-string elements the compiler can see a string
+    where a provider enum belongs. **Anything collection-equal that carries a reason passes the items as
+    one array.** A trap you have documented twice is a convention, not a mistake.
+37. **An `async` signature is a promise, and an adapter broke it.** The first `ModelSource` took the
+    coordinator's `ICommand` and `RefreshAsync()` was `command.Execute(null); return Task.CompletedTask;`
+    — correct-looking, compiles, and it makes every caller that awaits a refresh and then reads the list
+    read the *previous* answer. The adapter takes `Func<Task>` now, and
+    `RefreshCompletesWhenTheProviderHasAnswered` holds the line with a `TaskCompletionSource`.
+38. **A member initializer cannot hand over `this`, and that decided where the sources get built.** Each
+    model source watches this coordinator for its status property, so it needs `this`; an initializer has
+    no `this` to give. So the two dictionaries are built on first read — and the field cache is not a
+    micro-optimisation: building twice means two source objects subscribed to the same lists, and a row
+    that re-read the dictionary would find itself listening to two copies. `ReadingTheSourcesTwiceGivesThe
+    SameObjects` is the test, written *after* noticing that the comment alone was not the constraint.
+39. **Twice in one slice I wrote a placeholder into a product file because I was unsure of a language
+    rule** — a `new INotifyPropertyChangedProxy()` that has never existed, then two
+    `=> throw new NotSupportedException()` members invented to make an initializer type-check. Both were
+    one `dotnet build` from being caught, and both came from the same move: writing code that assumes a
+    rule instead of checking the rule first. When a construct fights the language, the construct is the
+    problem.
+40. **A surviving mutation is a specification of what the tests cannot see.** Deleting `Detach(previous)`
+    from the provider switch failed nothing. It failed because the handler reads `_source.Status` — the
+    *current* source — so a stale subscription writes a correct value a second time: the guard looked
+    unnecessary precisely because an unrelated indirection was covering for it. What actually leaks is
+    delegates, on a source owned by the coordinator and therefore older than any page. The test that sees
+    it counts listeners on the fake (`LeavingAProviderStopsListeningToIt`) — the only instrument that can.
+    **Where a bug is made harmless by something other than the line you added, no existing test can tell
+    you the line is load-bearing; delete it and watch what stays green.**
 
 **Status.** B1 done, gate **1,605**. B2.0 (`8bffa9e`), B2.1 (`c2deff9` + `7ebe6e3`), B2.2a (`bd743c8`,
-gate **1,624**), B2.2b (`c8d736c`, gate **1,627**). B2.3 is split a-1 … a-6 below: a-1 done (`d31b160`,
-gate **1,645**), **a-2 done** (labels + coordinator surfaces, gate **1,666**). B2 is not done until the
-tier is deleted and the transitional `GeneratorSettingsReader.*Target(tier)` bridge with it. Only
-Settings still hand-rolls pickers, and those go in Phase C.
+gate **1,624**), B2.2b (`c8d736c`, gate **1,627**). B2.3 is split a-1 … a-6 below: a-1 (`d31b160`, gate
+**1,645**), a-2 (`1c80b24`, gate **1,666**), **a-3 done** (state object, gate **1,693**). B2 is not done
+until the tier is deleted and the transitional `GeneratorSettingsReader.*Target(tier)` bridge with it.
+Only Settings still hand-rolls pickers, and those go in Phase C.
 
 
 ## 5. Target design
@@ -533,7 +559,19 @@ predating the naming convention does not match a derived name (finding 28).
   `LlmCredentials.MissingKeyMessage` — the sentence the services already say — instead of the second,
   near-identical one I had already written today. First **direct** tests of `AppSettingsCoordinator`,
   471 lines every existing test reached only through `GeneratorViewModel`. 21 tests, gate **1,666**.
-- **a-3 · `ModelChoiceState`.** The non-MAUI per-role state object and its unit tests. No XAML.
+- **a-3 · `ModelChoiceState` · DONE.** The non-MAUI per-role state object and its unit tests. No XAML.
+  It is what `ModelPickerRow` will bind to: `Providers` (the subset the role was given sources for, in
+  enum order), `SelectedProvider`, `SelectedModel`, `Models`, `Status`, `Helper`, `RefreshCommand`. The
+  rules that used to be markup strings are now ordinary tests — building a row persists nothing; a switch
+  of provider re-reads that provider's model memory instead of carrying an Ollama tag to a Claude
+  endpoint, and does not write what it merely loaded; a provider that listed nothing does not cost the
+  user their pick; a dropped pick stays visible rather than being silently replaced; status follows the
+  selected provider because the old provider is *detached*; and the two provider dictionaries on the
+  coordinator are checked entry by entry, because five near-identical entries are an invitation to wire
+  OpenRouter's row to OpenRouter's *vision* list.
+  27 tests (20 state rules, 7 source wiring), gate **1,693**. Nine mutations were tried; eight were caught and one survived and is finding
+  40. The gate also caught `CsWinRT1032` on a collection expression assigned to `IReadOnlyList<T>` — the
+  0-warning rule is what surfaced it, and the array form is the fix.
 - **a-4 · the row and its first host.** Provider picker inside `ModelPickerRow` through `Choice`; mutation
   engine wired to it; that page's tier list, `MutationTarget(tier)` bridge and cost estimate deleted.
 - **a-5 · Idea to Prompt.** Writer and both vision rows move to `Choice`, and `VisionObservationProvider`

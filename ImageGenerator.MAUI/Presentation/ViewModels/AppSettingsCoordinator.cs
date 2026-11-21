@@ -380,6 +380,49 @@ public sealed partial class AppSettingsCoordinator(
         }
     }
 
+    /// <summary>
+    /// The lists, status lines and refresh commands a text role needs, keyed by provider — the dictionary
+    /// a <see cref="ModelChoiceState"/> is built from. Assembled here because this class already owns all
+    /// three per provider, and pages assembling them by hand is how six copies of one picker ended up
+    /// disagreeing about what Refresh did.
+    /// </summary>
+    public IReadOnlyDictionary<ModelProvider, IModelSource> TextModelSources =>
+        _textModelSources ??= new Dictionary<ModelProvider, IModelSource>
+        {
+            [ModelProvider.Local] = new ModelSource(
+                OllamaModels, this, nameof(OllamaServerStatus), () => OllamaServerStatus,
+                () => RefreshOllamaModelsCommand.ExecuteAsync(null)),
+            [ModelProvider.Anthropic] = new ModelSource(
+                AnthropicTextModels, this, nameof(AnthropicStatus), () => AnthropicStatus,
+                () => RefreshAnthropicModelsCommand.ExecuteAsync(null)),
+            [ModelProvider.OpenRouter] = new ModelSource(
+                OpenRouterTextModels, this, nameof(OpenRouterTextStatus), () => OpenRouterTextStatus,
+                () => RefreshOpenRouterTextModelsCommand.ExecuteAsync(null)),
+        };
+
+    /// <summary>
+    /// As <see cref="TextModelSources"/>, for the role that sends images: two providers, because an
+    /// Anthropic vision call is a decision nobody has taken yet, and listing it here would offer it in
+    /// the UI whether anyone meant it or not.
+    /// </summary>
+    public IReadOnlyDictionary<ModelProvider, IModelSource> VisionModelSources =>
+        _visionModelSources ??= new Dictionary<ModelProvider, IModelSource>
+        {
+            [ModelProvider.Local] = new ModelSource(
+                OllamaVisionModels, this, nameof(OllamaServerStatus), () => OllamaServerStatus,
+                () => RefreshOllamaModelsCommand.ExecuteAsync(null)),
+            [ModelProvider.OpenRouter] = new ModelSource(
+                OpenRouterVisionModels, this, nameof(OpenRouterVisionStatus), () => OpenRouterVisionStatus,
+                () => RefreshOpenRouterVisionModelsCommand.ExecuteAsync(null)),
+        };
+
+    // Built on first read rather than in an initializer: a source watches this object for its status
+    // property, and "this object" is not available to an initializer. Built once, because a second set
+    // of sources would double-subscribe, and a page that re-read the dictionary would find its row
+    // listening to two copies of the same list.
+    private IReadOnlyDictionary<ModelProvider, IModelSource>? _textModelSources;
+    private IReadOnlyDictionary<ModelProvider, IModelSource>? _visionModelSources;
+
     /// <summary>Installed Ollama models for the Settings picker; filled by <see cref="RefreshOllamaModelsCommand"/>.</summary>
     public ObservableCollection<string> OllamaModels { get; } = [];
 
