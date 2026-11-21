@@ -175,35 +175,19 @@
                                    Style="{StaticResource HelperText}" />
 
                             <Label Text="Vision observer (image → observation)" Style="{StaticResource FieldLabel}" />
-                            <Picker ItemsSource="{Binding VisionProviderOptions}"
-                                    SelectedItem="{Binding SelectedVisionProvider}"
-                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                    MaximumWidthRequest="260"
-                                    HorizontalOptions="Start"
-                                    AutomationId="VisionProviderPicker" />
-
-                            <ctrl:ModelPickerRow IsVisible="{Binding IsLocalVisionProvider}"
+                            <!--
+                                One row for the whole decision. Before this there were two rows gated on which
+                                provider was selected plus a picker outside them, and the model that got called
+                                was read out of the settings store by the service rather than taken from here.
+                            -->
+                            <ctrl:ModelPickerRow Choice="{Binding Vision}"
+                                                 TitleText="Vision model"
                                                  PickerTitle="Refresh, then pick a vision model…"
-                                                 Models="{Binding Generator.Settings.OllamaVisionModels}"
-                                                 SelectedModel="{Binding Generator.Settings.OllamaVisionModel, Mode=TwoWay}"
-                                                 RefreshCommand="{Binding Generator.Settings.RefreshOllamaModelsCommand}"
-                                                 Helper="Only installed Ollama models advertising vision + completion appear after refresh."
-                                                 Status="{Binding Generator.Settings.OllamaServerStatus}"
                                                  IsBusy="{Binding IsBusy}"
                                                  ModelPickerAutomationId="IdeaPromptOllamaVisionModelPicker"
+                                                 ProviderPickerAutomationId="VisionProviderPicker"
                                                  RefreshAutomationId="IdeaPromptOllamaVisionRefreshButton"
                                                  StatusAutomationId="IdeaPromptOllamaVisionStatusLabel" />
-
-                            <ctrl:ModelPickerRow IsVisible="{Binding IsOpenRouterVisionProvider}"
-                                                 PickerTitle="Refresh, then pick a vision model…"
-                                                 Models="{Binding Generator.Settings.OpenRouterVisionModels}"
-                                                 SelectedModel="{Binding Generator.Settings.OpenRouterVisionModel, Mode=TwoWay}"
-                                                 RefreshCommand="{Binding Generator.Settings.RefreshOpenRouterVisionModelsCommand}"
-                                                 Status="{Binding Generator.Settings.OpenRouterVisionStatus}"
-                                                 IsBusy="{Binding IsBusy}"
-                                                 ModelPickerAutomationId="IdeaPromptOpenRouterVisionModelPicker"
-                                                 RefreshAutomationId="IdeaPromptOpenRouterVisionRefreshButton"
-                                                 StatusAutomationId="IdeaPromptOpenRouterVisionStatusLabel" />
                             <Grid ColumnDefinitions="*,Auto"
                                   ColumnSpacing="12"
                                   IsVisible="{Binding IsOpenRouterVisionProvider}">
@@ -218,9 +202,6 @@
                                         VerticalOptions="Center"
                                         AutomationId="IdeaPromptOpenRouterVisionFreeOnlySwitch" />
                             </Grid>
-                            <Label Text="Set the OpenRouter API key in Settings. The image is sent to the selected remote provider."
-                                   IsVisible="{Binding IsOpenRouterVisionProvider}"
-                                   Style="{StaticResource HelperText}" />
                         </VerticalStackLayout>
                     </Border>
 
@@ -245,17 +226,22 @@
                     <Border Style="{StaticResource Card}">
                         <VerticalStackLayout Spacing="8">
                             <Label Text="Prompt writer (observation/idea → prompt)" Style="{StaticResource CardTitle}" />
-                            <Picker ItemsSource="{Binding ModelTierOptions}"
-                                    SelectedItem="{Binding SelectedModelTier}"
-                                    Title="Pick a prompt writer…"
-                                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
-                                    MaximumWidthRequest="260"
-                                    HorizontalOptions="Start"
-                                    SemanticProperties.Description="Prompt writer model and cost tier"
-                                    AutomationId="IdeaPromptModelTierPicker" />
-                            <Label Text="{Binding ModelSummary}"
-                                   Style="{StaticResource HelperText}"
-                                   AutomationId="IdeaPromptModelSummaryLabel" />
+                            <!--
+                                One row, one decision, the same three providers the observer above offers.
+                                This card used to pick a ModelTier instead: Local / Sonnet / Opus, which said
+                                "Local" for what the card above calls "Local (Ollama)", named two Claude
+                                models instead of letting the catalog say what is there, and could not offer
+                                OpenRouter at all because a tier has no word for it.
+                            -->
+                            <ctrl:ModelPickerRow Choice="{Binding Writer}"
+                                                 TitleText="Prompt writer model"
+                                                 PickerTitle="Refresh, then pick a model…"
+                                                 IsBusy="{Binding IsBusy}"
+                                                 ModelPickerAutomationId="IdeaPromptOllamaModelPicker"
+                                                 ProviderPickerAutomationId="IdeaPromptWriterProviderPicker"
+                                                 RefreshAutomationId="IdeaPromptOllamaRefreshButton"
+                                                 StatusAutomationId="IdeaPromptTierOllamaStatusLabel"
+                                                 HelperAutomationId="IdeaPromptModelSummaryLabel" />
 
                             <!-- Output-format toggle lives with the writer (moved out of the source card). -->
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Margin="0,4,0,0">
@@ -270,18 +256,6 @@
                                 </VerticalStackLayout>
                             </Grid>
 
-                            <ctrl:ModelPickerRow IsVisible="{Binding IsLocalTier}"
-                                                 TitleText="Local model (Ollama)"
-                                                 PickerTitle="Refresh, then pick a model…"
-                                                 Models="{Binding Generator.Settings.OllamaModels}"
-                                                 SelectedModel="{Binding Generator.Settings.PromptWriterModel, Mode=TwoWay}"
-                                                 RefreshCommand="{Binding Generator.Settings.RefreshOllamaModelsCommand}"
-                                                 Helper="The Ollama server URL is shared with AI mutation and configured in Settings."
-                                                 Status="{Binding Generator.Settings.OllamaServerStatus}"
-                                                 IsBusy="{Binding IsBusy}"
-                                                 ModelPickerAutomationId="IdeaPromptOllamaModelPicker"
-                                                 RefreshAutomationId="IdeaPromptOllamaRefreshButton"
-                                                 StatusAutomationId="IdeaPromptTierOllamaStatusLabel" />
                         </VerticalStackLayout>
                     </Border>
 

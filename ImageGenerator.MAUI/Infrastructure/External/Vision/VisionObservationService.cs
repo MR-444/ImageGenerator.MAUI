@@ -11,8 +11,9 @@ namespace ImageGenerator.MAUI.Infrastructure.External.Vision;
 
 /// <summary>
 /// Factual image-observation pass used by "Describe an idea" when the idea source is a reference image.
-/// Routes to local Ollama and OpenRouter vision models; the provider enum leaves room for Claude without
-/// changing the ViewModel contract.
+/// Routes to local Ollama and OpenRouter vision models from the <see cref="LlmTarget"/> the caller
+/// resolved: which model and which address are answers supplied by the picker, not questions asked of
+/// the settings store. Claude is not wired for images, so the target's provider is checked, not assumed.
 /// </summary>
 public sealed class VisionObservationService : IVisionObservationService
 {
@@ -23,28 +24,30 @@ public sealed class VisionObservationService : IVisionObservationService
     private const int NumCtx = 8192;
     private const double Temperature = 0.2;
 
-    private readonly IUiStateStore _uiStateStore;
     private readonly IOpenRouterTokenStore? _openRouterTokenStore;
     private readonly ILogger<VisionObservationService> _logger;
     private readonly Func<string, Task<Stream>> _assetOpener;
     private readonly string _promptDirectory;
     private readonly ObservationCompletion _complete;
 
+    /// <param name="baseUrlOrApiKey">
+    /// What a completed call needs that is not in the target: the Ollama address for a local call, the
+    /// OpenRouter key for a remote one. Named for both jobs because it is one parameter serving two — a
+    /// wart kept deliberately, since splitting it would touch every test seam to no user-visible gain.
+    /// </param>
     internal delegate Task<string> ObservationCompletion(
-        VisionObservationProvider provider,
+        ModelProvider provider,
         string modelId,
-        string baseUrl,
+        string baseUrlOrApiKey,
         string systemPrompt,
         string base64Image,
         CancellationToken ct);
 
     public VisionObservationService(
-        IUiStateStore uiStateStore,
         ILogger<VisionObservationService> logger,
         IHttpClientFactory httpClientFactory,
         IOpenRouterTokenStore? openRouterTokenStore = null)
         : this(
-            uiStateStore,
             logger,
             httpClientFactory,
             BuildHttpCompletion(httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory)), logger),
@@ -53,7 +56,6 @@ public sealed class VisionObservationService : IVisionObservationService
     }
 
     internal VisionObservationService(
-        IUiStateStore uiStateStore,
         ILogger<VisionObservationService> logger,
         IHttpClientFactory httpClientFactory,
         ObservationCompletion completion,
@@ -61,7 +63,6 @@ public sealed class VisionObservationService : IVisionObservationService
         string? promptDirectoryOverride = null,
         Func<string, Task<Stream>>? assetOpener = null)
     {
-        _uiStateStore = uiStateStore ?? throw new ArgumentNullException(nameof(uiStateStore));
         _openRouterTokenStore = openRouterTokenStore;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         ArgumentNullException.ThrowIfNull(httpClientFactory);
@@ -79,9 +80,20 @@ public sealed class VisionObservationService : IVisionObservationService
         if (string.IsNullOrWhiteSpace(request.Base64Image))
             return VisionObservationResult.Fail("Pick a reference image first.");
 
-        if (request.Provider != VisionObservationProvider.LocalOllama
-            && request.Provider != VisionObservationProvider.OpenRouter)
-            return VisionObservationResult.Fail("That vision provider is not available yet.");
+        var target = request.Target;
+        if (target.Provider is not (ModelProvider.Local or ModelProvider.OpenRouter))
+        {
+            // Named in the log as well as on screen: "not available in this build" is only worth reading
+            // if the log can tell a missing capability apart from a broken network.
+            _logger.LogWarning(
+                "VisionObservation: asked to observe with {Provider}, which cannot take an image in this build",
+                target.Provider);
+            return VisionObservationResult.Fail(
+                $"{target.ProviderLabel} cannot observe images in this build — pick Ollama or OpenRouter.");
+        }
+
+        if (!target.HasModel)
+            return VisionObservationResult.Fail(target.MissingModelError("in the vision model row above"));
 
         string systemPrompt;
         try
@@ -94,7 +106,7 @@ public sealed class VisionObservationService : IVisionObservationService
             return VisionObservationResult.Fail("Couldn't load the image-observation instructions. See app.log.");
         }
 
-        var (modelId, baseUrl, credentialError) = await ResolveBackendAsync(request.Provider, request.ModelId);
+        var (baseUrlOrApiKey, credentialError) = await ResolveCredentialAsync(target);
         if (credentialError is not null)
             return VisionObservationResult.Fail(credentialError);
 
@@ -102,9 +114,9 @@ public sealed class VisionObservationService : IVisionObservationService
         try
         {
             raw = await _complete(
-                request.Provider,
-                modelId,
-                baseUrl,
+                target.Provider,
+                target.ModelId,
+                baseUrlOrApiKey,
                 systemPrompt,
                 StripDataUriPrefix(request.Base64Image),
                 ct);
@@ -115,51 +127,42 @@ public sealed class VisionObservationService : IVisionObservationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "VisionObservation: model call failed Provider={Provider}", request.Provider);
+            _logger.LogError(ex, "VisionObservation: model call failed Provider={Provider}", target.Provider);
             return VisionObservationResult.Fail(
-                $"The image observer couldn't reach {ProviderLabel(request.Provider)}: {ex.Message}");
+                $"The image observer couldn't reach {target.ProviderLabel}: {ex.Message}");
         }
 
         var observation = raw.Trim();
         return string.IsNullOrEmpty(observation)
-            ? VisionObservationResult.Fail($"{ProviderLabel(request.Provider)} returned an empty image observation. Try another vision model.")
+            ? VisionObservationResult.Fail($"{target.ProviderLabel} returned an empty image observation. Try another vision model.")
             : VisionObservationResult.Ok(observation);
     }
 
-    private async Task<(string ModelId, string BaseUrl, string? Error)> ResolveBackendAsync(
-        VisionObservationProvider provider,
-        string? requestedModel)
+    /// <summary>
+    /// The one thing the caller cannot supply: the secret. Which model and which address used to be
+    /// resolved here too, out of the settings store, which left the picker on screen and the model being
+    /// called as two separate memories.
+    /// </summary>
+    private async Task<(string BaseUrlOrApiKey, string? Error)> ResolveCredentialAsync(LlmTarget target)
     {
-        if (provider == VisionObservationProvider.OpenRouter)
+        if (target.Provider == ModelProvider.OpenRouter)
         {
-            var model = requestedModel?.Trim();
-            if (string.IsNullOrWhiteSpace(model))
-                return (string.Empty, string.Empty, "Pick an OpenRouter vision model first.");
-
             if (_openRouterTokenStore is null)
-                return (model, string.Empty, "OpenRouter support is not registered in this build.");
+            {
+                _logger.LogWarning(
+                    "VisionObservation: OpenRouter was asked to observe with no {Store} registered.",
+                    nameof(IOpenRouterTokenStore));
+                return (string.Empty, "OpenRouter support is not registered in this build.");
+            }
 
             var apiKey = await _openRouterTokenStore.LoadAsync();
             return string.IsNullOrWhiteSpace(apiKey)
-                ? (model, string.Empty, "No OpenRouter API key - add it on the Settings page.")
-                : (model, apiKey, null);
+                ? (string.Empty, LlmCredentials.MissingKeyMessage("OpenRouter"))
+                : (apiKey, null);
         }
 
-        var baseUrl = _uiStateStore.LoadOllamaBaseUrl() is { Length: > 0 } u
-            ? u
-            : ModelConstants.Ollama.DefaultBaseUrl;
-        // The chain ends at "nothing picked", not at a hardcoded model: the old fallback named a
-        // model most servers don't have, and a non-vision one at that, so it failed as an opaque
-        // 404 instead of telling the user to pick a vision model. It then went one step further and
-        // borrowed LoadOllamaModel() — the IMAGE GENERATION model, which cannot answer a chat request
-        // about a picture and failed exactly as opaquely. "Pick a vision model" is the honest end of
-        // this chain.
-        var modelId = requestedModel is { Length: > 0 } m
-            ? m
-            : _uiStateStore.LoadOllamaVisionModel() ?? string.Empty;
-        return string.IsNullOrWhiteSpace(modelId)
-            ? (string.Empty, baseUrl, "Pick a local vision model first — refresh the list, then choose one.")
-            : (modelId, baseUrl, null);
+        // Local needs no secret, only an address; the target already carries the configured one.
+        return (ModelConstants.Ollama.ResolveBaseUrl(target.BaseUrl), null);
     }
 
     private async Task<string> LoadPromptAsync()
@@ -202,12 +205,12 @@ public sealed class VisionObservationService : IVisionObservationService
     }
 
     private static ObservationCompletion BuildHttpCompletion(IHttpClientFactory httpClientFactory, ILogger logger) =>
-        (provider, modelId, baseUrl, systemPrompt, base64Image, ct) => provider switch
+        (provider, modelId, baseUrlOrApiKey, systemPrompt, base64Image, ct) => provider switch
         {
-            VisionObservationProvider.LocalOllama =>
-                SendOllamaVisionAsync(httpClientFactory, logger, baseUrl, modelId, systemPrompt, base64Image, ct),
-            VisionObservationProvider.OpenRouter =>
-                SendOpenRouterVisionAsync(httpClientFactory, logger, apiKey: baseUrl, modelId, systemPrompt, base64Image, ct),
+            ModelProvider.Local =>
+                SendOllamaVisionAsync(httpClientFactory, logger, baseUrlOrApiKey, modelId, systemPrompt, base64Image, ct),
+            ModelProvider.OpenRouter =>
+                SendOpenRouterVisionAsync(httpClientFactory, logger, apiKey: baseUrlOrApiKey, modelId, systemPrompt, base64Image, ct),
             _ => throw new InvalidOperationException($"Unsupported vision provider: {provider}")
         };
 
@@ -407,10 +410,4 @@ public sealed class VisionObservationService : IVisionObservationService
 
     private static string Truncate(string value, int max) =>
         string.IsNullOrEmpty(value) || value.Length <= max ? value : value[..max] + "...";
-
-    private static string ProviderLabel(VisionObservationProvider provider) => provider switch
-    {
-        VisionObservationProvider.OpenRouter => "OpenRouter",
-        _ => "Ollama"
-    };
 }

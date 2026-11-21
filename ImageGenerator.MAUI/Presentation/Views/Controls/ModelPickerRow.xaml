@@ -44,7 +44,8 @@
 
         <Label Text="{Binding ReportedHelper}"
                Style="{StaticResource HelperText}"
-               IsVisible="{Binding ReportedHelper, Converter={StaticResource NonEmptyStringToBool}}" />
+               IsVisible="{Binding ReportedHelper, Converter={StaticResource NonEmptyStringToBool}}"
+               AutomationId="{Binding HelperAutomationId}" />
 
         <!-- The card reports its own server call: these pages have no status bar, so a wrong server
              URL would otherwise leave nothing behind but a WARN in the log file. -->

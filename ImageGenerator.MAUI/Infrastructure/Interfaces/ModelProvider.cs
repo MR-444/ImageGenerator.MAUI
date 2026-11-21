@@ -40,7 +40,15 @@ public enum ModelRole
     Mutate,
 
     /// <summary>Ideogram Structure Editor: rewrite the marked regions of one caption.</summary>
-    Enrich
+    Enrich,
+
+    /// <summary>
+    /// Idea to Prompt: describe a reference image before the prose pass. The only role that sends an
+    /// image, and the only one whose model list is filtered to models that accept one — which is why it
+    /// is offered fewer providers than the text roles and used to spell its own provider choice in its
+    /// own words.
+    /// </summary>
+    Observe
 }
 
 /// <summary>

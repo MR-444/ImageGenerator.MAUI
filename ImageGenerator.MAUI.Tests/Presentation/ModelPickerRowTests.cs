@@ -86,6 +86,7 @@ public class ModelPickerRowTests
     [InlineData("StatusAutomationId")]
     [InlineData("Choice")]
     [InlineData("ProviderPickerAutomationId")]
+    [InlineData("HelperAutomationId")]
     public void Hosts_CanSetThisThroughABinding(string property)
     {
         typeof(ModelPickerRow)
@@ -136,5 +137,23 @@ public class ModelPickerRowTests
             .Should().Be(2, "one for the provider, one for the model");
         System.Text.RegularExpressions.Regex.Matches(markup, "<Button").Count
             .Should().Be(1, "the model picker and its Refresh are written once, whichever shape fed them");
+    }
+
+    /// <summary>
+    /// A handle a host can set and no element carries is worse than no handle: the markup test here finds
+    /// the attribute and passes, the UI test outside this repository finds no control, and both sides
+    /// believe the picker is on screen.
+    /// </summary>
+    [Theory]
+    [InlineData("ModelPickerAutomationId")]
+    [InlineData("ProviderPickerAutomationId")]
+    [InlineData("RefreshAutomationId")]
+    [InlineData("StatusAutomationId")]
+    [InlineData("HelperAutomationId")]
+    public void EveryHandleAHostCanSet_SitsOnAnElement(string handle)
+    {
+        File.ReadAllText(MarkupPath).Should().Contain(
+            "AutomationId=\"{Binding " + handle + "}\"",
+            "a settable id that nothing binds is a handle nobody can click");
     }
 }

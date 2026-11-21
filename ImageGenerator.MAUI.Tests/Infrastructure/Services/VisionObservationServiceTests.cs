@@ -2,6 +2,7 @@ using System.Text;
 using FluentAssertions;
 using ImageGenerator.MAUI.Infrastructure.External.Vision;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
+using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -19,20 +20,18 @@ public sealed class VisionObservationServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ObserveAsync_LocalOllama_UsesConfiguredVisionModelAndBaseUrl()
+    public async Task ObserveAsync_Local_CallsTheModelAndAddressTheCallerResolved()
     {
-        var ui = new Mock<IUiStateStore>();
-        ui.Setup(s => s.LoadOllamaBaseUrl()).Returns("http://host:11434");
-        ui.Setup(s => s.LoadOllamaVisionModel()).Returns("qwen3-vl");
         string? seenModel = null;
         string? seenBaseUrl = null;
         string? seenPrompt = null;
         string? seenImage = null;
+        ModelProvider? seenProvider = null;
 
-        var sut = CreateSut(ui,
+        var sut = CreateSut(
             (provider, modelId, baseUrl, systemPrompt, base64Image, _) =>
             {
-                provider.Should().Be(VisionObservationProvider.LocalOllama);
+                seenProvider = provider;
                 seenModel = modelId;
                 seenBaseUrl = baseUrl;
                 seenPrompt = systemPrompt;
@@ -40,17 +39,32 @@ public sealed class VisionObservationServiceTests : IDisposable
                 return Task.FromResult("  factual observation  ");
             });
 
-        var result = await sut.ObserveAsync(new VisionObservationRequest(
-            VisionObservationProvider.LocalOllama,
-            "data:image/png;base64,abcd",
-            "ref.png"));
+        var result = await sut.ObserveAsync(Request(
+            new LlmTarget(ModelProvider.Local, "qwen3-vl", "http://host:11434")));
 
         result.Success.Should().BeTrue();
         result.Observation.Should().Be("factual observation");
+        seenProvider.Should().Be(ModelProvider.Local);
         seenModel.Should().Be("qwen3-vl");
         seenBaseUrl.Should().Be("http://host:11434");
         seenPrompt.Should().Be("BUNDLED OBSERVATION PROMPT");
         seenImage.Should().Be("abcd", "Ollama expects raw base64, not a data URI");
+    }
+
+    [Fact]
+    public async Task ObserveAsync_LocalWithNoAddressAsksTheServerEveryOllamaAddressDefaultsTo()
+    {
+        // A target built by a page whose base-url box was cleared is not a request to POST to "".
+        string? seenBaseUrl = null;
+        var sut = CreateSut((_, _, baseUrl, _, _, _) =>
+        {
+            seenBaseUrl = baseUrl;
+            return Task.FromResult("ok");
+        });
+
+        await sut.ObserveAsync(Request(new LlmTarget(ModelProvider.Local, "qwen3-vl", string.Empty)));
+
+        seenBaseUrl.Should().Be(ModelConstants.Ollama.DefaultBaseUrl);
     }
 
     [Fact]
@@ -60,18 +74,13 @@ public sealed class VisionObservationServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(_tempDir, "image-observation.md"), "PRIVATE OBSERVER");
         string? seenPrompt = null;
 
-        var sut = CreateSut(new Mock<IUiStateStore>(),
-            (_, _, _, systemPrompt, _, _) =>
-            {
-                seenPrompt = systemPrompt;
-                return Task.FromResult("ok");
-            });
+        var sut = CreateSut((_, _, _, systemPrompt, _, _) =>
+        {
+            seenPrompt = systemPrompt;
+            return Task.FromResult("ok");
+        });
 
-        await sut.ObserveAsync(new VisionObservationRequest(
-            VisionObservationProvider.LocalOllama,
-            "abcd",
-            "ref.png",
-            ModelId: "qwen3-vl"));
+        await sut.ObserveAsync(Request(new LlmTarget(ModelProvider.Local, "qwen3-vl", "http://host:11434")));
 
         seenPrompt.Should().Be("PRIVATE OBSERVER");
     }
@@ -82,7 +91,7 @@ public sealed class VisionObservationServiceTests : IDisposable
         var tokenStore = new Mock<IOpenRouterTokenStore>();
         tokenStore.Setup(s => s.LoadAsync()).ReturnsAsync((string?)null);
         var called = false;
-        var sut = CreateSut(new Mock<IUiStateStore>(),
+        var sut = CreateSut(
             (_, _, _, _, _, _) =>
             {
                 called = true;
@@ -90,14 +99,12 @@ public sealed class VisionObservationServiceTests : IDisposable
             },
             tokenStore);
 
-        var result = await sut.ObserveAsync(new VisionObservationRequest(
-            VisionObservationProvider.OpenRouter,
-            "abcd",
-            "ref.png",
-            ModelId: "openai/some-vision-model"));
+        var result = await sut.ObserveAsync(Request(
+            new LlmTarget(ModelProvider.OpenRouter, "openai/some-vision-model", string.Empty)));
 
         result.Success.Should().BeFalse();
         result.Error.Should().Contain("OpenRouter API key");
+        result.Error.Should().Contain("Settings page", "the sentence has to say where to fix it");
         called.Should().BeFalse();
     }
 
@@ -107,7 +114,7 @@ public sealed class VisionObservationServiceTests : IDisposable
         var tokenStore = new Mock<IOpenRouterTokenStore>();
         tokenStore.Setup(s => s.LoadAsync()).ReturnsAsync("sk-or");
         var called = false;
-        var sut = CreateSut(new Mock<IUiStateStore>(),
+        var sut = CreateSut(
             (_, _, _, _, _, _) =>
             {
                 called = true;
@@ -115,14 +122,13 @@ public sealed class VisionObservationServiceTests : IDisposable
             },
             tokenStore);
 
-        var result = await sut.ObserveAsync(new VisionObservationRequest(
-            VisionObservationProvider.OpenRouter,
-            "abcd",
-            "ref.png"));
+        var result = await sut.ObserveAsync(Request(
+            new LlmTarget(ModelProvider.OpenRouter, string.Empty, string.Empty)));
 
         result.Success.Should().BeFalse();
-        result.Error.Should().Contain("OpenRouter vision model");
-        called.Should().BeFalse();
+        result.Error.Should().Contain("OpenRouter model selected");
+        result.Error.Should().NotContain("Ollama", "the miss belongs to the provider on screen");
+        called.Should().BeFalse("an empty model id must not be sent and hoped over");
     }
 
     [Fact]
@@ -130,11 +136,11 @@ public sealed class VisionObservationServiceTests : IDisposable
     {
         var tokenStore = new Mock<IOpenRouterTokenStore>();
         tokenStore.Setup(s => s.LoadAsync()).ReturnsAsync("sk-or");
-        VisionObservationProvider? seenProvider = null;
+        ModelProvider? seenProvider = null;
         string? seenModel = null;
         string? seenCredential = null;
 
-        var sut = CreateSut(new Mock<IUiStateStore>(),
+        var sut = CreateSut(
             (provider, modelId, baseUrl, _, _, _) =>
             {
                 seenProvider = provider;
@@ -144,17 +150,35 @@ public sealed class VisionObservationServiceTests : IDisposable
             },
             tokenStore);
 
-        var result = await sut.ObserveAsync(new VisionObservationRequest(
-            VisionObservationProvider.OpenRouter,
-            "abcd",
-            "ref.png",
-            ModelId: "google/gemini-3.1-flash-image"));
+        var result = await sut.ObserveAsync(Request(
+            new LlmTarget(ModelProvider.OpenRouter, "google/gemini-3.1-flash-image", string.Empty)));
 
         result.Success.Should().BeTrue();
         result.Observation.Should().Be("remote observation");
-        seenProvider.Should().Be(VisionObservationProvider.OpenRouter);
+        seenProvider.Should().Be(ModelProvider.OpenRouter);
         seenModel.Should().Be("google/gemini-3.1-flash-image");
         seenCredential.Should().Be("sk-or");
+    }
+
+    [Fact]
+    public async Task ObserveAsync_AnthropicTarget_RefusesBecauseNothingCanSendItAnImage()
+    {
+        // The provider enum is shared now, so a role that gains a provider can point an image at a
+        // provider that cannot take one. Refusing in words beats a 400 from the endpoint.
+        var called = false;
+        var sut = CreateSut((_, _, _, _, _, _) =>
+        {
+            called = true;
+            return Task.FromResult("must never run");
+        });
+
+        var result = await sut.ObserveAsync(Request(
+            new LlmTarget(ModelProvider.Anthropic, "claude-sonnet-4-6", string.Empty)));
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("Claude");
+        result.Error.Should().Contain("cannot observe images");
+        called.Should().BeFalse();
     }
 
     [Fact]
@@ -162,19 +186,51 @@ public sealed class VisionObservationServiceTests : IDisposable
     {
         var tokenStore = new Mock<IOpenRouterTokenStore>();
         tokenStore.Setup(s => s.LoadAsync()).ReturnsAsync("sk-or");
-        var sut = CreateSut(new Mock<IUiStateStore>(),
+        var sut = CreateSut(
             (_, _, _, _, _, _) => throw new HttpRequestException("rate limited"),
             tokenStore);
 
-        var result = await sut.ObserveAsync(new VisionObservationRequest(
-            VisionObservationProvider.OpenRouter,
-            "abcd",
-            "ref.png",
-            ModelId: "google/gemma-4-31b-it:free"));
+        var result = await sut.ObserveAsync(Request(
+            new LlmTarget(ModelProvider.OpenRouter, "google/gemma-4-31b-it:free", string.Empty)));
 
         result.Success.Should().BeFalse();
         result.Error.Should().Contain("OpenRouter");
         result.Error.Should().NotContain("Ollama");
+    }
+
+    [Fact]
+    public async Task ObserveAsync_TransportAnswersNothing_NamesTheProviderThatSaidNothing()
+    {
+        var tokenStore = new Mock<IOpenRouterTokenStore>();
+        tokenStore.Setup(s => s.LoadAsync()).ReturnsAsync("sk-or");
+        var sut = CreateSut((_, _, _, _, _, _) => Task.FromResult("   "), tokenStore);
+
+        var result = await sut.ObserveAsync(Request(
+            new LlmTarget(ModelProvider.OpenRouter, "google/gemma-4-31b-it:free", string.Empty)));
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("OpenRouter returned an empty image observation");
+    }
+
+    [Fact]
+    public async Task ObserveAsync_LocalWithNoModel_RefusesRatherThanBorrowingSomething()
+    {
+        // The end of the old resolution chain was LoadOllamaModel(): the model the generate button renders
+        // WITH, which cannot answer a chat request about a picture. The settings store is gone from this
+        // service, so there is nothing left to borrow — this pins that the refusal still happens, in words,
+        // and names the server the user has to pick from.
+        var called = false;
+        var sut = CreateSut((_, _, _, _, _, _) =>
+        {
+            called = true;
+            return Task.FromResult("must never run");
+        });
+
+        var result = await sut.ObserveAsync(Request(new LlmTarget(ModelProvider.Local, string.Empty, "http://host:11434")));
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("No local Ollama model selected");
+        called.Should().BeFalse("no model call is made against a model that was never picked");
     }
 
     [Fact]
@@ -187,42 +243,22 @@ public sealed class VisionObservationServiceTests : IDisposable
         message.Should().Contain("temporarily rate-limited upstream");
     }
 
-    [Fact]
-    public async Task ObserveAsync_LocalWithNoVisionPick_RefusesRatherThanBorrowingTheGenerationModel()
-    {
-        // The end of the resolution chain used to be LoadOllamaModel(): the model the generate button
-        // renders WITH, which cannot answer a chat request about a picture — the same opaque failure
-        // the hardcoded default above it had been removed for, one layer further down.
-        var ui = new Mock<IUiStateStore>();
-        ui.Setup(s => s.LoadOllamaBaseUrl()).Returns("http://host:11434");
-        ui.Setup(s => s.LoadOllamaModel()).Returns("flux-schnell");
-        var called = false;
+    private static VisionObservationRequest Request(LlmTarget target) =>
+        new(target, "data:image/png;base64,abcd", "ref.png");
 
-        var sut = CreateSut(ui, (_, _, _, _, _, _) =>
-        {
-            called = true;
-            return Task.FromResult("must never run");
-        });
-
-        var result = await sut.ObserveAsync(new VisionObservationRequest(
-            VisionObservationProvider.LocalOllama,
-            "data:image/png;base64,abcd",
-            "ref.png"));
-
-        result.Success.Should().BeFalse();
-        result.Error.Should().Contain("Pick a local vision model first");
-        called.Should().BeFalse("no model call is made against a model that was never picked");
-    }
-
+    /// <param name="tokenStore">
+    /// Pass the same mock the test configured. There is deliberately no settings-store parameter: this
+    /// service used to take one and go and read the model and the server address out of it, which is how
+    /// the model on screen and the model called became two different answers.
+    /// </param>
     private VisionObservationService CreateSut(
-        Mock<IUiStateStore> uiStore,
         VisionObservationService.ObservationCompletion completion,
-        Mock<IOpenRouterTokenStore>? openRouterTokenStore = null) =>
-        new(uiStore.Object,
+        Mock<IOpenRouterTokenStore>? tokenStore = null) =>
+        new(
             NullLogger<VisionObservationService>.Instance,
             Mock.Of<IHttpClientFactory>(),
             completion,
-            openRouterTokenStore?.Object,
+            tokenStore?.Object,
             promptDirectoryOverride: _tempDir,
             assetOpener: FakeBundledAsset);
 

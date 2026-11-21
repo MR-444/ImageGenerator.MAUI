@@ -1,4 +1,5 @@
 using FluentAssertions;
+using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
 using ImageGenerator.MAUI.Infrastructure.Services;
 using ImageGenerator.MAUI.Tests.TestSupport;
@@ -17,6 +18,9 @@ public class UiStateStoreTests
     private const string PromptWriterModelKey = "imggen.prompt_writer_model";
     private const string MutationModelKey = "imggen.mutation_model";
     private const string EnrichModelKey = "imggen.enrich_model";
+    private const string OllamaVisionModelKey = "imggen.ollama_vision_model";
+    private const string OpenRouterVisionModelKey = "imggen.openrouter_vision_model";
+    private const string ObserveProviderKey = "imggen.observe_provider";
 
     // Real (tiny) debounce window for the prompt writer; prompt tests wait comfortably
     // past it so slow CI runners don't race the background write — same numbers as
@@ -648,6 +652,45 @@ public class UiStateStoreTests
         act.Should().NotThrow();
     }
 
+    // What a tier has to leave behind. A tier named a provider and a model in one word, so carrying over
+    // only the provider is half a migration - and the expensive half: "Sonnet" becomes "Anthropic", the
+    // model falls to this role's default, and that default is Opus. An app update would otherwise move
+    // someone onto the pricier model on a launch where nobody chose anything.
+
+    [Theory]
+    [InlineData(ModelTier.Sonnet, AnthropicModels.Sonnet)]
+    [InlineData(ModelTier.Opus, AnthropicModels.Opus)]
+    public void AWriterTierCarriesTheModelItNamedAndNotJustItsProvider(ModelTier tier, string expectedModel)
+    {
+        _sut.PersistPromptWriterTier(tier);
+
+        _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.Local).Should().Be(ModelProvider.Anthropic);
+        _sut.LoadLlmModel(ModelRole.PromptWrite, ModelProvider.Anthropic).Should().Be(expectedModel,
+            "the tier named this model, so it is the model this install was already calling");
+    }
+
+    [Fact]
+    public void AWriterThatSaidLocalPutsNoClaudeModelInTheAnthropicKey()
+    {
+        _sut.PersistPromptWriterTier(ModelTier.Local);
+
+        _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.Anthropic).Should().Be(ModelProvider.Local);
+        _preferences.ContainsKey("imggen.prompt_writer.anthropic_model").Should().BeFalse(
+            "a tier that never named a Claude model has no business writing one under an Anthropic key");
+    }
+
+    [Fact]
+    public void AModelSomeonePickedIsNotRewrittenByTheTierTheyLeftBehind()
+    {
+        _sut.PersistPromptWriterTier(ModelTier.Sonnet);
+        _sut.PersistLlmModel(ModelRole.PromptWrite, ModelProvider.Anthropic, "claude-haiku-4-5");
+
+        _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.Local);
+
+        _sut.LoadLlmModel(ModelRole.PromptWrite, ModelProvider.Anthropic).Should().Be("claude-haiku-4-5",
+            "the inheritance happens once, on the first read after the split, and a written model is not that");
+    }
+
     // "Describe an idea" BuildJson checkbox: tri-state — null means "never toggled" so the page
     // can default from the active model exactly once, then the stored choice wins.
 
@@ -786,5 +829,85 @@ public class UiStateStoreTests
         _preferences.Get<string>(MutationModelKey, string.Empty).Should().Be("llama3.1");
         _preferences.ContainsKey(OllamaModelKey).Should().BeFalse(
             "the mutation pick must never reach the key the generate button reads");
+    }
+
+    // ---- Which role writes which key --------------------------------------------------------
+    //
+    // Every page-level test of per-role model memory runs against a mocked store, so the mapping
+    // underneath them — the thing that decides whether four pages remember four choices or one choice
+    // four times — had no test of its own. These are those tests.
+
+    [Fact]
+    public void EachRoleRemembersItsOwnLocalModel()
+    {
+        _sut.PersistLlmModel(ModelRole.PromptWrite, ModelProvider.Local, "writer-model");
+        _sut.PersistLlmModel(ModelRole.Mutate, ModelProvider.Local, "mutation-model");
+        _sut.PersistLlmModel(ModelRole.Enrich, ModelProvider.Local, "enrich-model");
+        _sut.PersistLlmModel(ModelRole.Observe, ModelProvider.Local, "vision-model");
+
+        _sut.LoadLlmModel(ModelRole.PromptWrite, ModelProvider.Local).Should().Be("writer-model");
+        _sut.LoadLlmModel(ModelRole.Mutate, ModelProvider.Local).Should().Be("mutation-model");
+        _sut.LoadLlmModel(ModelRole.Enrich, ModelProvider.Local).Should().Be("enrich-model");
+        _sut.LoadLlmModel(ModelRole.Observe, ModelProvider.Local).Should().Be("vision-model");
+
+        // The same four facts through the keys the pickers that came before these roles used. Reading
+        // them back that way is what proves the roles are views over the old storage rather than a
+        // second copy of it, which is why moving a page to a role needs no migration.
+        _sut.LoadPromptWriterModel().Should().Be("writer-model");
+        _sut.LoadMutationModel().Should().Be("mutation-model");
+        _sut.LoadEnrichModel().Should().Be("enrich-model");
+        _sut.LoadOllamaVisionModel().Should().Be("vision-model");
+    }
+
+    [Fact]
+    public void TheObserverSharesTheKeysTheVisionPickerAlwaysUsed()
+    {
+        _sut.PersistOllamaVisionModel("gemma3:27b");
+        _sut.PersistOpenRouterVisionModel("google/gemini-3.1-flash-image");
+
+        _sut.LoadLlmModel(ModelRole.Observe, ModelProvider.Local).Should().Be("gemma3:27b");
+        _sut.LoadLlmModel(ModelRole.Observe, ModelProvider.OpenRouter)
+            .Should().Be("google/gemini-3.1-flash-image");
+    }
+
+    [Fact]
+    public void TheObserverWritesNoOtherRolesModelWhenItPicksOne()
+    {
+        _sut.PersistLlmModel(ModelRole.Observe, ModelProvider.OpenRouter, "google/gemini-3.1-flash-image");
+
+        _preferences.ContainsKey(OpenRouterVisionModelKey).Should().BeTrue();
+        _preferences.ContainsKey("imggen.prompt_writer.openrouter_model").Should().BeFalse(
+            "the writer's OpenRouter pick belongs to the page that shows the writer");
+        _preferences.ContainsKey(MutationModelKey).Should().BeFalse();
+        _preferences.ContainsKey(OllamaModelKey).Should().BeFalse(
+            "the observer picks a model that reads pictures; the generate button's tag is not its key to write");
+    }
+
+    [Fact]
+    public void TheObserverRemembersWhichProviderItWasPointedAt()
+    {
+        // The old picker had no key at all, which is why it answered in Ollama on every navigation however
+        // often OpenRouter had been used. First run adopts the page's fallback and writes it down; every
+        // later launch reads back what the user last chose.
+        _sut.LoadLlmProvider(ModelRole.Observe, ModelProvider.Local).Should().Be(ModelProvider.Local);
+
+        _sut.PersistLlmProvider(ModelRole.Observe, ModelProvider.OpenRouter);
+        _preferences.Get<string>(ObserveProviderKey, string.Empty).Should().Be("OpenRouter");
+
+        var again = new UiStateStore(NullLogger<UiStateStore>.Instance, _preferences, PromptDebounce);
+        again.LoadLlmProvider(ModelRole.Observe, ModelProvider.Local).Should().Be(ModelProvider.OpenRouter);
+    }
+
+    [Fact]
+    public void TheObserverHasNoAnthropicModelAndSaysSoInsteadOfWritingSomewhereElse()
+    {
+        // Nothing in this build can send an image to Claude. A key invented for that case would be a
+        // pref nobody wrote and nobody can clear; an unlisted role landing on another role's keys is the
+        // failure this file exists to catch.
+        var persist = () => _sut.PersistLlmModel(ModelRole.Observe, ModelProvider.Anthropic, "claude-sonnet-4-6");
+        var load = () => _sut.LoadLlmModel(ModelRole.Observe, ModelProvider.Anthropic);
+
+        persist.Should().Throw<ArgumentOutOfRangeException>();
+        load.Should().Throw<ArgumentOutOfRangeException>();
     }
 }

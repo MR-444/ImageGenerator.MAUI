@@ -354,12 +354,86 @@ Modality is a measured fact, not an assumption: image-reference count per servic
     picker keeps the name `MutationOllamaModelPicker` although it now lists Anthropic and OpenRouter models
     too, because tests outside this repository click it. Renaming it is free in this repo and expensive in
     whichever repo has the UI tests; that trade is the owner's, not the refactor's.
+46. **The observer was the last service still reading application settings to find out what the user had
+    picked.** `VisionObservationService` resolved the provider, the model and the Ollama address from
+    `IUiStateStore` inside `ObserveAsync`, which meant the row on screen could not be the truth: the page
+    could show one model and call another, and both would still be correctly remembered. The request now
+    carries a caller-resolved `LlmTarget` and the service resolves *credentials* only — the contract every
+    other LLM service in this change set was already moved to. A service that goes looking for the model is
+    a service its caller cannot be specific to, and a caller that cannot be specific cannot be tested.
+47. **A path with no tests can hold a feature that has never worked.** `IVisionObservationService` was
+    referenced by exactly zero test files before this slice, and no view-model test touched the observation
+    path. Under that cover it carried two live defects: the observer's provider lived in a VM property that
+    was never persisted, so every navigation answered in Ollama however often OpenRouter had been used;
+    and the model called came from the settings store rather than from the picker. Coverage is not only a
+    regression tax — on an untested path it is also the only thing that can notice a feature is dead.
+48. **A role that is not in the list should say so, not take the default.** Every key switch in
+    `UiStateStore` sent an unlisted role to the enrichment keys, because that is what a `switch` does when
+    its last arm is `=> EnrichModelKey`. `ModelRole.Observe` now has its own arm and everything unlisted
+    throws: a new role quietly writing a different page's memory is the exact defect this plan exists to
+    remove, and it arrives as "my settings keep changing themselves". Related, same slice: the free-only
+    switch is *not* part of the shared row and keeps its `IsOpenRouterVisionProvider` gate, now with a
+    contract test — a pricing filter that is on screen over the list it cannot filter gets clicked, which
+    is worse than the filter being missing.
+49. **Reusing the old keys is what made this migration free.** The observer reads and writes
+    `imggen.ollama_vision_model` and `imggen.openrouter_vision_model`, the two keys the pickers it replaces
+    already used; only the provider is new storage (`imggen.observe_provider`). A fresh pair of model keys
+    would have needed seeding or a migration and, until whichever of them ran, every existing install would
+    have opened with no vision model chosen — a silent reset of a choice somebody had already made, shipped
+    as a refactor. Both round-trips are pinned in `UiStateStoreTests`.
+50. **Two names for one decision is how it drifted.** `ModelProvider.Local` and
+    `VisionObservationProvider.LocalOllama` were the same answer spelled twice, which is why the Idea page
+    could offer "Local (Ollama)" in one row and "Local" in another while meaning one thing. The enums are
+    folded; the provider subset a role gets is decided by which entries its source dictionary has, so the
+    observer offering exactly Local and OpenRouter is now a test rather than a dictionary literal someone
+    might add a line to.
+51. **Switching a role to a provider that has nothing to list should ask that provider; opening a page must
+    not.** An untouched hosted list and a provider that answered "no models" look identical from where the
+    user is sitting, and both look like a dead button. `ModelChoiceState` now refreshes on a provider switch
+    when the list is empty, and reports an automatic failure on the row (`Couldn't ask for models: …`) rather
+    than dropping it on a fire-and-forget task. It still asks nothing on construction: opening a page is not
+    a question to a provider, and four pages built at launch is four unasked-for network calls. This landed
+    beside a-4 while chasing "the Anthropic list never fills"; the request now goes out and returns 200, and
+    the one guard that could still swallow the press without a trace logs which dependency was missing — a
+    message that says "unavailable in this build" has no business being quiet about which part of the build
+    it means.
+52. **A mock that answers null is not an empty store.** `ModelChoiceState` opens on what the store hands
+    back, and `UiStateStore.LoadLlmProvider(role, fallback)` hands back the caller's fallback the first
+    time a role is read. A bare `Mock<IUiStateStore>` answers *null*, and then the row falls through to
+    `_providers[0]` — Local, for its own enum-order reasons. So every "opens on X" test written against
+    the bare mock was grading the row's last-ditch fallback, and passed whatever the page had asked for:
+    moving the writer's first-run provider to Anthropic failed nothing until the fake was made to honour
+    the contract (`EmptyStore()` in the idea tests; `ModelChoiceStateTests`' fake already did). A fake
+    that answers more quietly than the real thing turns the tests above it into decoration.
+53. **An edit batch is atomic, and the sibling that failed takes the ones that would have worked with
+    it.** Two test bodies I believed rewritten were still the old code, and one whole view-model test
+    disappeared from the slice because a replacement text dropped the block above it. Neither shows up
+    as a build error — deleted tests do not fail. `git diff | grep "^-.*public void"` before believing a
+    green suite, and check a new test name reached the assembly before using it as a falsification
+    probe: `No test matches the given testcase filter` is a harness error, not a pass.
+54. **A tier named two things in one word, so migrating only the provider is half a migration.** The
+    writer's old `SelectedModelTier` said who *and* what: `Sonnet` meant Anthropic + `claude-sonnet-4-6`.
+    Inheriting the provider alone puts that install on Anthropic's *role default*, which for
+    `PromptWrite` is Opus — an update quietly moving someone onto the pricier model on a launch where
+    nobody chose anything. `UiStateStore` now adopts the model the tier named, once, and only where no
+    model has been written under that role yet.
+55. **When a default stops being dangerous, the refusal it justified has to change shape.** "Pick a
+    prompt writer first" existed because a tier named a paid Claude model the instant it was read;
+    opening the row on Local removes the thing the placeholder was guarding. Build now refuses with
+    `LlmTarget.MissingModelError` — the sentence every other page uses — and lights up the moment the row
+    has a model. A refusal that has outlived its reason is a tax on every visit.
+56. **A helper line that moves onto a shared control needs a handle, or it dies.** The page's "which
+    model am I about to pay" label was `IdeaPromptModelSummaryLabel`; the row's helper label had no
+    automation id at all. `ModelPickerRow` gained `HelperAutomationId` for exactly that, and the row's
+    own tests now require every id a host can set to be sitting on an element — a settable id that
+    nothing binds passes the markup test and hands a UI test outside this repository nothing to click.
 
 **Status.** B1 done, gate **1,605**. B2.0 (`8bffa9e`), B2.1 (`c2deff9` + `7ebe6e3`), B2.2a (`bd743c8`,
 gate **1,624**), B2.2b (`c8d736c`, gate **1,627**). B2.3 is split a-1 … a-6 below: a-1 (`d31b160`, gate
-**1,645**), a-2 (`1c80b24`, gate **1,666**), a-3 (`acba23f`, gate **1,693**), **a-4 done** (mutation page
-hands its whole decision to the row, gate **1,705**). B2 is not done
-until the tier is deleted and the transitional `GeneratorSettingsReader.*Target(tier)` bridge with it.
+**1,645**), a-2 (`1c80b24`, gate **1,666**), a-3 (`acba23f`, gate **1,693**), a-4 (`4cfe657`, gate
+**1,709**) and **a-5** (both of the idea page's decisions in shared rows, observer and writer alike,
+gate **1,744**). B2 is not
+done until the tier is deleted and the transitional `GeneratorSettingsReader.*Target(tier)` bridge with it.
 Only Settings still hand-rolls pickers, and those go in Phase C.
 
 
@@ -602,7 +676,7 @@ predating the naming convention does not match a derived name (finding 28).
   27 tests (20 state rules, 7 source wiring), gate **1,693**. Nine mutations were tried; eight were caught and one survived and is finding
   40. The gate also caught `CsWinRT1032` on a collection expression assigned to `IReadOnlyList<T>` — the
   0-warning rule is what surfaced it, and the array form is the fix.
-- **a-4 · the row and its first host. DONE (2026-11-22).** `ModelPickerRow` grew a `Choice` property taking
+- **a-4 · the row and its first host. DONE (`4cfe657`, 2026-11-22).** `ModelPickerRow` grew a `Choice` property taking
   the whole `ModelChoiceState`: provider picker, model picker, refresh, helper and status all come from it,
   and the older per-property shape still works, so the two unmigrated pages are unaffected. One set of
   elements serves both shapes through read-only members — no mirrored lists to drift.
@@ -613,12 +687,47 @@ predating the naming convention does not match a derived name (finding 28).
   covers the one id that could not survive). The row is fed by one binding, so the contract test gained a
   second theory for choice-fed pages whose job is to fail when a page binds the old shape *as well*.
   Gate **1,705**. Eight falsifications, all caught — one only on its second attempt, which is finding 42.
-- **a-5 · Idea to Prompt.** Writer and both vision rows move to `Choice`, and `VisionObservationProvider`
-  folds into `ModelProvider` with a per-role subset — which retires the "LocalOllama" spelling on the one
-  page that showed it.
+  It landed together with finding 51's behaviour change, the one part of that commit which is not a
+  refactor; worth knowing when reading the diff.
+- **a-5 · Idea to Prompt. DONE (2026-11-22) — both rows on the page.**
+  The observer is a role now — `ModelRole.Observe`, offered Local and OpenRouter only — and one
+  `ModelPickerRow` fed by `Choice="{Binding Vision}"` replaces two provider-gated rows plus a separate
+  provider picker. `VisionObservationService` receives the target and resolves credentials only (finding
+  46); a provider that cannot take an image is refused in words rather than at the wire; a build resolves
+  its vision target once, so moving the row mid-run cannot change who is billed or which model gets freed
+  afterwards; and the provider choice is persisted at last, which is the fix for the observer answering in
+  Ollama on every navigation (finding 47). Automation ids went 38 → 35, losing exactly
+  `IdeaPromptOpenRouterVisionModelPicker`, `…RefreshButton` and `…StatusLabel`, whose control no longer
+  exists; the surviving row keeps the `IdeaPromptOllamaVision*` handles for every provider, the same trade
+  as finding 45. Release note material, with `MutationModelTierPicker`.
+  18 tests (8 view model, 5 store keys, 5 service) and 12 falsifications, all caught, gate **1,727**.
+  The writer is this page's other row, and it is what made the naming fix worth doing: the observer
+  answered `Local (Ollama)` / `OpenRouter` while the writer two cards below still answered `Local` /
+  `Sonnet` / `Opus`. `IdeaToPromptViewModel` owns a `ModelChoiceState` for `ModelRole.PromptWrite` fed by
+  `Choice="{Binding Writer}"`, so the writer gets all three text providers and the same
+  refresh/status/persistence rules as every other role. Four things in it are decisions, not moves:
+  **first run opens on Local** — the provider that cannot bill anyone (finding 55); **no pricing prose**
+  — the copy says who is billed, over how many calls, and where the key lives, because a picker that can
+  list whatever a key reaches cannot be priced out of constants (finding 56); **a left-behind tier
+  carries its model, not only its provider** (finding 54); and **a run resolves its writer once**, so a
+  pointer that lands on Claude mid-build does not send the second pass to Claude.
+  Handles: `IdeaPromptModelTierPicker` died with the tier picker and `IdeaPromptWriterProviderPicker` is
+  new; `IdeaPromptOllamaModelPicker`, `IdeaPromptOllamaRefreshButton`, `IdeaPromptTierOllamaStatusLabel`
+  and `IdeaPromptModelSummaryLabel` all survive on the shared row, three of them under names that predate
+  what the control now does (finding 45 again, finding 56 for the summary label). The page holds 35 ids
+  either side of this half, and the 38 → 35 belongs to the whole of a-5.
+  22 test methods in, 7 tier-shaped ones out, theories carrying the extra rows: net **+17**, gate
+  **1,744**, app still 0 warnings. 13 falsifications, all caught; the first round reported a survivor
+  that was really a test never written (finding 53) and a fake store that would have caught nothing had
+  it been real (finding 52).
+  `GeneratorSettingsReader` is down to one tier-shaped bridge, `EnrichTarget`, which goes with the
+  structure editor in a-6.
 - **a-6 · structure editor, then delete the tier.** `ModelTier`, `ModelTierOptions`,
   `GeneratorSettingsReader.*Target(tier)` and the tier keys go in the commit that removes their last
-  reader.
+  reader, and after a-5 that reader is one line: the structure editor's `EnrichTarget`. Enrichment opens
+  on Local and persists the choice, like the other three roles. Nothing else in the app offers `Sonnet`
+  or `Opus` as a choice any more, so a-6 is where the enum, its keys and its round-trip tests get deleted
+  rather than deprecated.
 
 Split this way so no commit sits unwired longer than it must: a slice judged by "the suite passes" cannot
 say whether its types are reachable (finding 31), so every slice from here either gains a caller in the
@@ -682,12 +791,13 @@ dotnet test ImageGenerator.MAUI.Tests/ImageGenerator.MAUI.Tests.csproj -c Debug
 ```
 
 Gate after the first adopted row and its fix: **1,620 passed / 0 failed / 0 skipped**, app builds at
-0 warnings and 0 `MAUIG2045`. Current gate after B2.3a-1: **1,645 passed / 0 failed / 0 skipped**,
-same build hygiene. Manual matrix per role, naming the handle and not the sentence
+0 warnings and 0 `MAUIG2045`. Current gate after B2.3a-5 (both rows on the idea page): **1,744 passed /
+0 failed / 0 skipped**, same build hygiene. Manual matrix per role, naming the handle and not the sentence
 (§4.23): pick → restart → still picked; change another role → this one picked; change another role
 → this one unchanged; kill the server → the row explains it under its own `…StatusLabel`; **the
 row's own picker lists models after Refresh** — that last one is what silently died first time, and
-nothing saw it.
+nothing saw it. For the observer add: pick a model → build → the model named on screen is the one the
+status line names, and after a local observation the same model is the one freed.
 
 Pre-existing and not from this work: `ComfyUiImageGenerationServiceTests.Ws_CanceledDuringReceive_
 StillNotifiesServerCancel` fails every time it is run alone and passes inside the full run — an
@@ -703,6 +813,17 @@ the page where generation happens; under §1.1 `generate` is out of scope. Until
 picker stays and is relabelled as the generation model only. Recommend moving it onto the generate
 card in Phase C.
 
+**Release notes owed by B2.** Five automation ids are gone and two are new, all of them the deliberate
+consequence of one row per decision: gone — `MutationModelTierPicker`, `IdeaPromptModelTierPicker`,
+`IdeaPromptOpenRouterVisionModelPicker`, `IdeaPromptOpenRouterVisionRefreshButton`,
+`IdeaPromptOpenRouterVisionStatusLabel`; new — `MutationModelProviderPicker`,
+`IdeaPromptWriterProviderPicker`. Every other id a page had before still resolves, because
+the shared rows kept the legacy handles (`MutationOllamaModelPicker` now offers three providers under a
+name that names one — finding 45). Two behaviour notes belong with them: switching a role to a provider
+with nothing listed now asks that provider (finding 51), and the OpenRouter *free-only* switch filters
+the observer's vision list only — text roles are listed in full, deliberately, because the switch is not
+on their pages.
+
 Added while reading the Anthropic API (§4.8); each is a decision and not a discovery:
 
 - **`anthropic-version`.** The transport pins `2023-06-01`; the documented current version is
@@ -717,8 +838,9 @@ Added while reading the Anthropic API (§4.8); each is a decision and not a disc
   tier and reopened on a paid Anthropic model on every navigation. It starts on the provider that
   cannot bill anyone and remembers what is picked after that.
 - **Anthropic as a vision provider.** Capability says yes (`image_input.supported`), cost says not
-  by default. Nothing in the target design blocks it: one enum member on `VisionObservationProvider`
-  plus the Messages-with-image branch (§4.9).
+  by default. Nothing in the target design blocks it: one entry in the observer's source dictionary
+  (`AppSettingsCoordinator.VisionModelSources`) plus the Messages-with-image branch (§4.9). Adding it is
+  an offer in the UI, so it is a decision and not a capability flag — see finding 48.
 
 ## 10. Non-goals
 

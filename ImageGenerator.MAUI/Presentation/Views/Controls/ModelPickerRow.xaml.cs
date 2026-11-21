@@ -79,6 +79,12 @@ public partial class ModelPickerRow
     public static readonly BindableProperty ProviderPickerAutomationIdProperty = BindableProperty.Create(
         nameof(ProviderPickerAutomationId), typeof(string), typeof(ModelPickerRow), string.Empty);
 
+    /// <summary>Automation id of the helper sentence. Pages had a label of their own under the picker and
+    /// UI tests that read it; the row says the same thing, so the handle moves here rather than dying. See
+    /// <see cref="ModelPickerAutomationIdProperty"/> for why the page owns it.</summary>
+    public static readonly BindableProperty HelperAutomationIdProperty = BindableProperty.Create(
+        nameof(HelperAutomationId), typeof(string), typeof(ModelPickerRow), string.Empty);
+
     public ModelPickerRow()
     {
         InitializeComponent();
@@ -154,6 +160,12 @@ public partial class ModelPickerRow
     {
         get => (string)GetValue(ProviderPickerAutomationIdProperty);
         set => SetValue(ProviderPickerAutomationIdProperty, value);
+    }
+
+    public string HelperAutomationId
+    {
+        get => (string)GetValue(HelperAutomationIdProperty);
+        set => SetValue(HelperAutomationIdProperty, value);
     }
 
     public ModelChoiceState Choice

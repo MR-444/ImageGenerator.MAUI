@@ -58,20 +58,12 @@ internal sealed class GeneratorSettingsReader(AppSettingsCoordinator? settings)
         settings?.OpenRouterVisionModel is { Length: > 0 } m ? m : string.Empty;
 
     /// <summary>
-    /// The target an LLM service should be handed for one of the page's still tier-shaped pickers:
-    /// Local becomes "call this Ollama tag at this endpoint", Sonnet/Opus become "call that Claude
-    /// model". Transitional on purpose — the pages keep their three-value picker until
-    /// documents/plan-model-picker-rows.md Phase B replaces it with provider + model, at which point the
-    /// page builds the target directly and this trio goes away.
+    /// The target the structure editor's enrichment call is handed while that page still picks a tier:
+    /// Local becomes "call this Ollama tag at this endpoint", Sonnet/Opus become "call that Claude model".
+    /// The last of its kind — the prompt writer and the mutator both moved to a <c>ModelChoiceState</c>,
+    /// which resolves its own target — and it goes with the structure editor's picker, which is the point
+    /// of documents/plan-model-picker-rows.md Phase B2.3.
     /// </summary>
-    public LlmTarget PromptWriterTarget(ModelTier tier) =>
-        TargetForTier(tier, PromptWriterModel);
-
-    /// <inheritdoc cref="PromptWriterTarget" />
-    public LlmTarget MutationTarget(ModelTier tier) =>
-        TargetForTier(tier, MutationModel);
-
-    /// <inheritdoc cref="PromptWriterTarget" />
     public LlmTarget EnrichTarget(ModelTier tier) =>
         TargetForTier(tier, EnrichModel);
 

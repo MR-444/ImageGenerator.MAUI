@@ -245,25 +245,41 @@ public sealed class UiStateStore : IUiStateStore
 
     // Which provider each text role calls, and the model it calls per provider. See
     // IUiStateStore.LoadLlmProvider / LoadLlmModel for why the model is keyed by provider too.
+    //
+    // Every arm is written out, and an unlisted role throws. These keys are the difference between four
+    // pages remembering four choices and one page overwriting another's, so a fifth role quietly landing
+    // on the enrich keys is not a failure this file should be able to have.
     private static string ProviderKey(ModelRole role) => role switch
     {
         ModelRole.PromptWrite => "imggen.prompt_writer_provider",
         ModelRole.Mutate => "imggen.mutation_provider",
-        _ => "imggen.enrich_provider"
+        ModelRole.Enrich => "imggen.enrich_provider",
+        // The observer used to have no provider key at all: its picker reset to Ollama on every
+        // navigation, however often it was used, because nothing was ever written.
+        ModelRole.Observe => "imggen.observe_provider",
+        _ => throw new ArgumentOutOfRangeException(nameof(role), role, "No provider key for this role.")
     };
 
     private static string AnthropicModelKey(ModelRole role) => role switch
     {
         ModelRole.PromptWrite => "imggen.prompt_writer.anthropic_model",
         ModelRole.Mutate => "imggen.mutation.anthropic_model",
-        _ => "imggen.enrich.anthropic_model"
+        ModelRole.Enrich => "imggen.enrich.anthropic_model",
+        // Unreachable by design, so it is a fault rather than a key: nothing in this build can send an
+        // image to Claude, so the observe role is never offered Anthropic. A role that gains a provider
+        // should fail here rather than invent a pref nobody wrote and nobody can clear.
+        _ => throw new ArgumentOutOfRangeException(nameof(role), role, "This role has no Anthropic model.")
     };
 
     private static string OpenRouterModelKey(ModelRole role) => role switch
     {
         ModelRole.PromptWrite => "imggen.prompt_writer.openrouter_model",
         ModelRole.Mutate => "imggen.mutation.openrouter_model",
-        _ => "imggen.enrich.openrouter_model"
+        ModelRole.Enrich => "imggen.enrich.openrouter_model",
+        // The observer keeps the key it has always used. A role that names the same decision as the old
+        // picker needs no migration, and none of the seeding that would have come with a new key.
+        ModelRole.Observe => OpenRouterVisionModelKey,
+        _ => throw new ArgumentOutOfRangeException(nameof(role), role, "No OpenRouter key for this role.")
     };
 
     public ModelProvider LoadLlmProvider(ModelRole role, ModelProvider fallback)
@@ -281,7 +297,10 @@ public sealed class UiStateStore : IUiStateStore
         // starts on the fallback its host asked for.
         ModelProvider? inherited = null;
         if (role == ModelRole.PromptWrite && LoadPromptWriterTier() is { } legacyTier)
+        {
             inherited = FromLegacyTier(legacyTier);
+            AdoptLegacyTierModel(role, legacyTier);
+        }
         var adopted = inherited ?? fallback;
         PersistString(key, adopted.ToString());
         _logger.LogDebug("UiStateStore.{Key} adopted {Provider} once", key, adopted);
@@ -298,7 +317,11 @@ public sealed class UiStateStore : IUiStateStore
         {
             ModelRole.PromptWrite => LoadPromptWriterModel(),
             ModelRole.Mutate => LoadMutationModel(),
-            _ => LoadEnrichModel()
+            ModelRole.Enrich => LoadEnrichModel(),
+            // Same argument as the generation models: the observer's tag is an Ollama tag, and it is the
+            // one the old vision picker already remembered. Reusing it is why this role needs no seeding.
+            ModelRole.Observe => LoadOllamaVisionModel(),
+            _ => throw new ArgumentOutOfRangeException(nameof(role), role, "No local model key for this role.")
         },
         // A default Claude model is honest — the app has always named one. There is no default
         // OpenRouter slug: the catalog is hundreds deep and any guess bills a credit to someone.
@@ -314,7 +337,9 @@ public sealed class UiStateStore : IUiStateStore
             {
                 ModelRole.PromptWrite => PromptWriterModelKey,
                 ModelRole.Mutate => MutationModelKey,
-                _ => EnrichModelKey
+                ModelRole.Enrich => EnrichModelKey,
+                ModelRole.Observe => OllamaVisionModelKey,
+                _ => throw new ArgumentOutOfRangeException(nameof(role), role, "No local model key for this role.")
             },
             ModelProvider.Anthropic => AnthropicModelKey(role),
             _ => OpenRouterModelKey(role)
@@ -333,6 +358,22 @@ public sealed class UiStateStore : IUiStateStore
     private static ModelProvider FromLegacyTier(ModelTier tier) => tier == ModelTier.Local
         ? ModelProvider.Local
         : ModelProvider.Anthropic;
+
+    /// <summary>
+    /// A tier named a provider and a model in one word, so inheriting only the provider would be half a
+    /// migration. "Sonnet" became "Anthropic", and the model then fell to this role's default — Opus —
+    /// which is a silent upgrade to the pricier model made by a reader, on the first launch after an
+    /// update. Write down the model the tier named, where no model has ever been written, and the upgrade
+    /// keeps the model it already had.
+    /// </summary>
+    private void AdoptLegacyTierModel(ModelRole role, ModelTier tier)
+    {
+        if (tier == ModelTier.Local) return;
+        var key = AnthropicModelKey(role);
+        if (RoleKeyIsStored(key)) return;
+        PersistString(key, tier == ModelTier.Opus ? AnthropicModels.Opus : AnthropicModels.Sonnet);
+        _logger.LogDebug("UiStateStore.{Key} adopted the model its {Tier} tier named once", key, tier);
+    }
 
     /// <summary>
     /// Read-through seeding, and the only reason a Load ever writes: a role with a value of its own

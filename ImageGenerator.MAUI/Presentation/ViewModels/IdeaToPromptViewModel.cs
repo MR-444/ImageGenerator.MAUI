@@ -72,11 +72,42 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         // re-defaulted per page visit — that silently undid the user's uncheck every time.
         BuildJson = _uiStateStore?.LoadIdeaBuildJson() ?? generator?.SupportsJsonPromptEditor ?? false;
 
-        // Restore the last-used prompt writer so the picker survives an app restart (null = never
-        // picked → the "Pick a prompt writer…" placeholder stays). The assignment echoes back through
-        // OnSelectedModelTierChanged as a harmless skip-identical persist.
-        if (_uiStateStore?.LoadPromptWriterTier() is { } savedTier)
-            SelectedModelTier = savedTier;
+        // The observer's decision, remembered per role. It used to be two facts kept in two places: a
+        // provider the page held and never persisted (so every navigation answered in Ollama, however
+        // often OpenRouter was used), and a model the service re-read from the settings store itself, so
+        // the model on screen and the model called were separate memories.
+        if (uiStateStore is not null && generator?.Settings is { } settings)
+        {
+            Vision = new ModelChoiceState(
+                ModelRole.Observe, uiStateStore, settings.VisionModelSources, ModelProvider.Local,
+                VisionHelperFor,
+                baseUrlFor: p => p == ModelProvider.Local ? _settings.OllamaBaseUrl : string.Empty);
+            Vision.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(ModelChoiceState.SelectedProvider))
+                    OnPropertyChanged(nameof(IsOpenRouterVisionProvider));
+            };
+
+            // The writer's decision, same shape. It used to be a tier: one word naming a provider and a
+            // model at once, which is why this card said "Local" two cards below "Local (Ollama)", why
+            // Sonnet and Opus were the only hosted names it could offer, and why OpenRouter could not be
+            // added to it at all. It opens on Local because that is the provider that cannot bill anyone;
+            // the old "pick a writer first" refusal existed to stop a silent Claude call, and a stored
+            // tier is still inherited as provider and model, so neither now needs a placeholder guarding
+            // the user's wallet.
+            Writer = new ModelChoiceState(
+                ModelRole.PromptWrite, uiStateStore, settings.TextModelSources, ModelProvider.Local,
+                WriterHelperFor,
+                baseUrlFor: p => p == ModelProvider.Local ? _settings.OllamaBaseUrl : string.Empty);
+            // Whether Build may run depends on this object having a model, and that changes while the page
+            // sits open: a refresh filling the list, a switch of provider, a pick.
+            Writer.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName is nameof(ModelChoiceState.SelectedModel)
+                    or nameof(ModelChoiceState.SelectedProvider))
+                    BuildCommand.NotifyCanExecuteChanged();
+            };
+        }
     }
 
     [ObservableProperty]
@@ -103,16 +134,49 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
 
     partial void OnBuildJsonChanged(bool value) => _uiStateStore?.PersistIdeaBuildJson(value);
 
-    public IReadOnlyList<VisionObservationProvider> VisionProviderOptions { get; } =
-        (VisionObservationProvider[])[VisionObservationProvider.LocalOllama, VisionObservationProvider.OpenRouter];
+    /// <summary>
+    /// Who observes the reference image, with which model, remembered per role — the one decision the
+    /// page used to make twice, once in a picker that was never saved and once inside the service.
+    /// Null only when the page has no settings to read, which the app never does.
+    /// </summary>
+    public ModelChoiceState? Vision { get; }
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsLocalVisionProvider))]
-    [NotifyPropertyChangedFor(nameof(IsOpenRouterVisionProvider))]
-    private VisionObservationProvider _selectedVisionProvider = VisionObservationProvider.LocalOllama;
+    /// <summary>
+    /// Who writes the prompt, with which model, remembered per role. Three providers, so this card answers
+    /// the same question the card above it answers; a tier could not, having two names for one provider and
+    /// no name at all for OpenRouter.
+    /// </summary>
+    public ModelChoiceState? Writer { get; }
 
-    public bool IsLocalVisionProvider => SelectedVisionProvider == VisionObservationProvider.LocalOllama;
-    public bool IsOpenRouterVisionProvider => SelectedVisionProvider == VisionObservationProvider.OpenRouter;
+    /// <summary>
+    /// Gates the OpenRouter-only controls beside the row: the free-only switch and its explanation. The
+    /// row itself needs no gate — it shows whichever provider is selected.
+    /// </summary>
+    public bool IsOpenRouterVisionProvider => Vision?.SelectedProvider == ModelProvider.OpenRouter;
+
+    private static string VisionHelperFor(ModelProvider provider) => provider switch
+    {
+        ModelProvider.OpenRouter =>
+            "Set the OpenRouter API key in Settings. The image is sent to the selected remote provider.",
+        _ => "Only installed Ollama models advertising vision + completion appear after refresh."
+    };
+
+    /// <summary>
+    /// One sentence per provider, and no figures. What this replaces compared Sonnet and Opus by price
+    /// ("faster and cheaper") from a constant nobody had read off an API, and said nothing about the key
+    /// the call needs. What is known: who gets billed, where the key lives, and whether the idea leaves
+    /// this machine.
+    /// </summary>
+    private static string? WriterHelperFor(ModelProvider provider) => provider switch
+    {
+        ModelProvider.Local =>
+            "Free — runs on the Ollama server configured in Settings. Nothing you type leaves this machine.",
+        ModelProvider.Anthropic =>
+            "Set the Anthropic API key in Settings. The idea is sent to Anthropic and billed per token by the model you pick.",
+        ModelProvider.OpenRouter =>
+            "Set the OpenRouter API key in Settings. The idea is routed by OpenRouter; which models are offered comes from your key.",
+        _ => null
+    };
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasReferenceImage))]
@@ -156,7 +220,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
     private string? _observationFingerprint;
 
     private string CurrentObservationFingerprint() =>
-        $"{SelectedVisionProvider}|{ResolveVisionModel(SelectedVisionProvider)}|" +
+        $"{Vision?.SelectedProvider}|{Vision?.SelectedModel}|" +
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(ReferenceImageBase64)));
 
     // Writes the observation without tripping the hand-edit detector, and re-keys it in one step.
@@ -191,33 +255,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
     [ObservableProperty]
     private bool _buildJson;
 
-    public IReadOnlyList<ModelTier> ModelTierOptions { get; } = (ModelTier[])[ModelTier.Local, ModelTier.Sonnet, ModelTier.Opus];
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsLocalTier))]
-    [NotifyPropertyChangedFor(nameof(ModelSummary))]
-    [NotifyCanExecuteChangedFor(nameof(BuildCommand))]
-    private ModelTier? _selectedModelTier;
-
-    public bool IsLocalTier => SelectedModelTier == ModelTier.Local;
-
-    public string ModelSummary => SelectedModelTier switch
-    {
-        ModelTier.Sonnet => "Claude Sonnet: paid Anthropic call, faster and cheaper than Opus.",
-        ModelTier.Local => "Local Ollama: free, uses the configured Ollama server/model from Settings.",
-        null => "Pick a prompt writer before building. Local is free; Claude tiers are paid.",
-        _ => "Claude Opus: paid Anthropic call, strongest prompt-builder default."
-    };
-
-    // Persist the picked tier so it survives an app restart, mirroring GeneratorViewModel's vision-model
-    // hook. Only persist a real selection — a Picker can't return to null, so we never overwrite a saved
-    // tier with the placeholder.
-    partial void OnSelectedModelTierChanged(ModelTier? value)
-    {
-        if (value is { } tier) _uiStateStore?.PersistPromptWriterTier(tier);
-    }
-
-    /// <summary>Expose the host generator so the page can reuse the shared Ollama model picker.</summary>
+    /// <summary>Expose the host generator so the page can reuse shared settings surfaces.</summary>
     public GeneratorViewModel? Generator => _generator;
 
     /// <summary>The pass-1 prose prompt. Shown on the page, copyable, and applyable on its own.</summary>
@@ -241,9 +279,13 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
     /// <summary>Drives the result card's visibility — prose exists once a build has succeeded.</summary>
     public bool HasProse => !string.IsNullOrEmpty(Prose);
 
+    /// <summary>A build needs something to build from and a model to send it to. What it does not need is a
+    /// second confirmation that the user meant to spend nothing: the row opens on the provider that cannot
+    /// bill anyone, so refusing to run until something is clicked teaches the user to click whatever makes
+    /// the message go away.</summary>
     private bool CanBuild() =>
         !IsBusy
-        && SelectedModelTier is not null
+        && Writer is { Target.HasModel: true }
         && (IsTextSource
             ? !string.IsNullOrWhiteSpace(Idea)
             : HasReferenceImage);
@@ -438,17 +480,19 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
     [RelayCommand(CanExecute = nameof(CanBuild))]
     private async Task BuildAsync()
     {
-        if (SelectedModelTier is not { } tier)
+        if (Writer is not { } writer)
         {
-            SetStatus("Pick a prompt writer first. Local is free; Claude tiers are paid.", StatusKind.Error);
+            SetStatus("Model settings are unavailable — leave this screen and open it again.", StatusKind.Error);
             return;
         }
 
-        // There is no default Ollama model — guessing one only produced an opaque 404 from a server
-        // that never had it. Same contract as the OpenRouter vision picker below.
-        if (tier == ModelTier.Local && string.IsNullOrWhiteSpace(_settings.PromptWriterModel))
+        // Resolved once, before anything is asked of it: the row can move while a build runs, and a call
+        // already in flight must not change who it is billed to or which model gets freed afterwards. The
+        // service words the "nothing picked" sentence per provider, so this page does not guess at one.
+        var writerTarget = writer.Target;
+        if (!writerTarget.HasModel)
         {
-            SetStatus("Pick a local Ollama model first. Refresh the list, then choose a model.", StatusKind.Error);
+            SetStatus(writerTarget.MissingModelError("in the prompt writer row below"), StatusKind.Error);
             return;
         }
 
@@ -463,10 +507,13 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         // observation is NOT dropped — see the reuse check below.
         ResetPromptResults();
 
-        var usesLocalVision = IsImageSource && SelectedVisionProvider == VisionObservationProvider.LocalOllama;
-        var gpuGated = (tier == ModelTier.Local || usesLocalVision)
+        var usesLocalVision = IsImageSource && Vision?.SelectedProvider == ModelProvider.Local;
+        var gpuGated = (writerTarget.Provider == ModelProvider.Local || usesLocalVision)
             && _gpuGate is not null
             && _settings.SharesGpuWithComfyUi;
+        // Resolved once, before anything is asked of it: the picker may move while a build runs, and a
+        // call already in flight must not change who it is billed to.
+        var visionTarget = Vision?.Target;
         IDisposable? gpuLease = null;
         try
         {
@@ -486,14 +533,15 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
                     return;
                 }
 
-                var visionModel = ResolveVisionModel(SelectedVisionProvider);
-                if (string.IsNullOrWhiteSpace(visionModel))
+                if (Vision is null || visionTarget is not { } target)
                 {
-                    SetStatus(
-                        SelectedVisionProvider == VisionObservationProvider.OpenRouter
-                            ? "Pick an OpenRouter vision model first. Refresh the list, then choose a model."
-                            : "Pick a local vision model first. Refresh the list, then choose a model.",
-                        StatusKind.Error);
+                    SetStatus("Model settings are unavailable — leave this screen and open it again.", StatusKind.Error);
+                    return;
+                }
+
+                if (!target.HasModel)
+                {
+                    SetStatus(target.MissingModelError("in the vision model row above"), StatusKind.Error);
                     return;
                 }
 
@@ -505,13 +553,12 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
                 var fingerprint = CurrentObservationFingerprint();
                 if (!HasObservation || (_observationFingerprint != fingerprint && !ObservationEdited))
                 {
-                    SetStatus($"Asking {VisionProviderDisplay(SelectedVisionProvider)} to observe the reference image…", StatusKind.Info);
+                    SetStatus($"Asking {target.ProviderLabel} to observe the reference image…", StatusKind.Info);
                     var observationResult = await _visionObserver.ObserveAsync(
                         new VisionObservationRequest(
-                            SelectedVisionProvider,
+                            target,
                             ReferenceImageBase64,
-                            ReferenceImageFileName,
-                            visionModel),
+                            ReferenceImageFileName),
                         token);
 
                     if (!observationResult.Success || observationResult.Observation is null)
@@ -534,10 +581,10 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
                 ideaForPrompt = BuildIdeaFromObservation(ObservedImageDescription, Idea);
             }
 
-            SetStatus($"Asking {ModelDisplay(tier)} to write a prompt…", StatusKind.Info);
+            SetStatus($"Asking {writerTarget.ModelId} on {writerTarget.ProviderLabel} to write a prompt…", StatusKind.Info);
 
             // Pass 1 (always): idea → prose.
-            var proseResult = await _builder.BuildProseAsync(ideaForPrompt, _settings.PromptWriterTarget(tier), token);
+            var proseResult = await _builder.BuildProseAsync(ideaForPrompt, writerTarget, token);
             if (!proseResult.Success || proseResult.Prose is null)
             {
                 SetStatus(proseResult.Error ?? "Couldn't build a prompt.", StatusKind.Error);
@@ -554,7 +601,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
 
             // Pass 2 (optional): prose → Ideogram V4 JSON. On failure the prose above stays usable.
             SetStatus("Prose ready — building the Ideogram V4 JSON prompt…", StatusKind.Info);
-            var jsonResult = await _builder.BuildJsonAsync(Prose, _settings.PromptWriterTarget(tier), token);
+            var jsonResult = await _builder.BuildJsonAsync(Prose, writerTarget, token);
             if (!jsonResult.Success || jsonResult.Prompt is null)
             {
                 SetStatus(
@@ -583,11 +630,12 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
             {
                 if (_ollamaCatalog is not null)
                 {
-                    // Pass CancellationToken.None so a user cancel still unloads local models from VRAM.
-                    if (tier == ModelTier.Local)
-                        await _ollamaCatalog.UnloadAsync(_settings.OllamaBaseUrl, _settings.PromptWriterModel, CancellationToken.None);
+                    // Pass CancellationToken.None so a user cancel still unloads local models from VRAM —
+                    // and free the model this build called, not whatever the legacy shared key remembers.
+                    if (writerTarget.Provider == ModelProvider.Local)
+                        await _ollamaCatalog.UnloadAsync(writerTarget.BaseUrl, writerTarget.ModelId, CancellationToken.None);
                     if (usesLocalVision)
-                        await _ollamaCatalog.UnloadAsync(_settings.OllamaBaseUrl, _settings.OllamaVisionModel, CancellationToken.None);
+                        await _ollamaCatalog.UnloadAsync(visionTarget!.Value.BaseUrl, visionTarget!.Value.ModelId, CancellationToken.None);
                 }
             }
             catch (Exception ex)
@@ -699,24 +747,6 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         StatusMessage = message;
         StatusKind = kind;
     }
-
-    private static string ModelDisplay(ModelTier tier) => tier switch
-    {
-        ModelTier.Sonnet => "Claude Sonnet",
-        ModelTier.Local => "local Ollama",
-        _ => "Claude Opus"
-    };
-
-    private string ResolveVisionModel(VisionObservationProvider provider) =>
-        provider == VisionObservationProvider.OpenRouter
-            ? _settings.OpenRouterVisionModel
-            : _settings.OllamaVisionModel;
-
-    private static string VisionProviderDisplay(VisionObservationProvider provider) => provider switch
-    {
-        VisionObservationProvider.OpenRouter => "OpenRouter",
-        _ => "local Ollama"
-    };
 
     private static string BuildIdeaFromObservation(string observation, string userNotes)
     {

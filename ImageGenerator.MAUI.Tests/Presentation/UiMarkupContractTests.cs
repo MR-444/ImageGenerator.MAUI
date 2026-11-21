@@ -96,29 +96,24 @@ public class UiMarkupContractTests
     /// <summary>
     /// Every place a model is chosen goes through the shared row, bound two-way to the property that
     /// names the model this role actually calls. Each row is located by its own automation id, so a page
-    /// may host several (Idea to Prompt hosts three: two observers and a writer) and each is checked
-    /// against its own expectations instead of the page's first one.
+    /// may host several (Idea to Prompt hosts one here and one below) and each is checked against its own
+    /// expectations instead of the page's first one.
     ///   The per-row columns are the whole point: the defect this change set exists to kill was several
     /// pickers writing one stored value, and a copy-paste of the wrong role property is exactly one
     /// attribute away. A row wired to another role's model compiles, renders and passes every other
     /// test — only this table notices.
     ///   The status label is spelled out per row instead of derived from the prefix: Idea to Prompt's
-    /// writer row answers to IdeaPromptTierOllamaStatusLabel, named in the era when the writer picked a
-    /// tier. Existing UI tests use that handle, so the table carries the wart rather than renaming it.
+    /// writer row still answers to IdeaPromptTierOllamaStatusLabel, named in the era when the writer picked
+    /// a tier. Existing UI tests use that handle, so the table carries the wart rather than renaming it —
+    /// and it survives in the row below too, where the same handle now sits on a picker for three providers.
+    ///   Only the roles that still pick a provider somewhere other than the row belong in this table; a
+    /// role that handed its whole decision over is checked below, where the assertion is that none of
+    /// these attributes are present at all.
     /// </summary>
     [Theory]
     [InlineData("IdeogramStructureEditorPage.xaml", "EditorEnrichOllama", "EnrichModel", "ShowEnrichLocalModel",
                 "OllamaModels", "RefreshOllamaModelsCommand", "OllamaServerStatus",
                 "EditorEnrichOllamaStatusLabel")]
-    [InlineData("IdeaToPromptPage.xaml", "IdeaPromptOllamaVision", "OllamaVisionModel", "IsLocalVisionProvider",
-                "OllamaVisionModels", "RefreshOllamaModelsCommand", "OllamaServerStatus",
-                "IdeaPromptOllamaVisionStatusLabel")]
-    [InlineData("IdeaToPromptPage.xaml", "IdeaPromptOpenRouterVision", "OpenRouterVisionModel", "IsOpenRouterVisionProvider",
-                "OpenRouterVisionModels", "RefreshOpenRouterVisionModelsCommand", "OpenRouterVisionStatus",
-                "IdeaPromptOpenRouterVisionStatusLabel")]
-    [InlineData("IdeaToPromptPage.xaml", "IdeaPromptOllama", "PromptWriterModel", "IsLocalTier",
-                "OllamaModels", "RefreshOllamaModelsCommand", "OllamaServerStatus",
-                "IdeaPromptTierOllamaStatusLabel")]
     public void EachRole_PicksItsModelThroughTheSharedRow(
         string page, string idPrefix, string roleModel, string gate,
         string modelsSource, string refreshCommand, string statusSource, string statusId)
@@ -167,13 +162,22 @@ public class UiMarkupContractTests
     [InlineData("MutationEnginePage.xaml", "{Binding Model}",
         "MutationModelProviderPicker", "MutationOllamaModelPicker",
         "MutationOllamaRefreshButton", "MutationOllamaStatusLabel")]
+    [InlineData("IdeaToPromptPage.xaml", "{Binding Vision}",
+        "VisionProviderPicker", "IdeaPromptOllamaVisionModelPicker",
+        "IdeaPromptOllamaVisionRefreshButton", "IdeaPromptOllamaVisionStatusLabel")]
+    [InlineData("IdeaToPromptPage.xaml", "{Binding Writer}",
+        "IdeaPromptWriterProviderPicker", "IdeaPromptOllamaModelPicker",
+        "IdeaPromptOllamaRefreshButton", "IdeaPromptTierOllamaStatusLabel")]
     public void EachDecision_HandedToTheRowWhole(
         string page, string choice, string providerPickerId, string modelPickerId,
         string refreshButtonId, string statusId)
     {
         var markup = Markup(page);
+        // Located by its own handle, not by being the page's only row: Idea to Prompt hosts two decisions,
+        // and both readings have to be able to say which row they looked at.
         var row = XDocument.Parse(markup).Descendants()
-            .Single(e => e.Name.LocalName == "ModelPickerRow");
+            .Single(e => e.Name.LocalName == "ModelPickerRow"
+                         && (string?)e.Attribute("ModelPickerAutomationId") == modelPickerId);
 
         ((string?)row.Attribute("Choice")).Should().Be(choice,
             "the page owns which decision this is; everything the decision needs comes from there");
@@ -188,6 +192,54 @@ public class UiMarkupContractTests
             row.Attribute(handBound).Should().BeNull(
                 $"the choice already supplies {handBound}; binding it here as well gives the page two "
                 + "answers to one question, and only one of them is saved");
+
+        Count(markup, modelPickerId).Should().Be(1,
+            "the id moves onto the row; a leftover hand-rolled picker would put a second picker on the "
+            + "same page under the same handle");
+    }
+
+    /// <summary>
+    /// The writer card used to carry a label of its own under the picker, spelling out what a tier cost,
+    /// and UI tests read it by name. The row says the same kind of thing per provider, so the handle moves
+    /// onto the row's helper instead of dying — and the page must not keep a second sentence answering the
+    /// same question the row already answers.
+    /// </summary>
+    [Fact]
+    public void TheWritersHelperSitsOnTheRowThatReplacedThePageOwnLabel()
+    {
+        var markup = Markup("IdeaToPromptPage.xaml");
+        var doc = XDocument.Parse(markup);
+
+        var row = doc.Descendants()
+            .Single(e => e.Name.LocalName == "ModelPickerRow"
+                         && (string?)e.Attribute("ModelPickerAutomationId") == "IdeaPromptOllamaModelPicker");
+        ((string?)row.Attribute("HelperAutomationId")).Should().Be("IdeaPromptModelSummaryLabel",
+            "the handle survives; what it points at is now the row's own helper");
+
+        Count(markup, "IdeaPromptModelSummaryLabel").Should().Be(1,
+            "one sentence about who is billed, in one place");
+        Count(markup, "IdeaPromptModelTierPicker").Should().Be(0,
+            "the tier picker is what said Local where the card above it said Local (Ollama)");
+    }
+
+    /// <summary>
+    /// The row is one control now instead of one per provider, so the controls beside it have to keep
+    /// their own gate. This switch filters a pricing rule that only exists at OpenRouter: shown while the
+    /// row is set to a local server, it offers a filter it cannot apply and hides nothing — and a switch
+    /// that does nothing is worse than one that is missing, because it gets clicked.
+    /// </summary>
+    [Fact]
+    public void TheFreeOnlySwitch_OnlyAppearsOverTheListItFilters()
+    {
+        var doc = XDocument.Parse(Markup("IdeaToPromptPage.xaml"));
+        var toggle = doc.Descendants()
+            .Single(e => (string?)e.Attribute("AutomationId") == "IdeaPromptOpenRouterVisionFreeOnlySwitch");
+
+        var gated = toggle.Ancestors()
+            .FirstOrDefault(a => a.Attribute("IsVisible") is not null);
+
+        ((string?)gated?.Attribute("IsVisible")).Should().Be("{Binding IsOpenRouterVisionProvider}",
+            "the switch has to disappear with the list it filters, not stay on screen over Ollama");
     }
     /// <summary>
     /// Enrichment has no queue and no status bar: change the model halfway through a run and the run
