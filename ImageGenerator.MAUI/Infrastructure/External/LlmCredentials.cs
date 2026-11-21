@@ -23,14 +23,22 @@ internal static class LlmCredentials
         {
             ModelProvider.Anthropic => (store: (ITokenStore?)anthropic, name: "Anthropic"),
             ModelProvider.OpenRouter => (store: (ITokenStore?)openRouter, name: "OpenRouter"),
-            _ => (null, null)
+            _ => (store: (ITokenStore?)null, name: (string?)null)
         };
-        if (store is null)
+        if (store is null || name is null)
             return (null, null);
 
         var apiKey = await store.LoadAsync();
         return string.IsNullOrWhiteSpace(apiKey)
-            ? (null, $"No {name} API key — add it on the Settings page.")
+            ? (null, MissingKeyMessage(name))
             : (apiKey, null);
     }
+
+    /// <summary>
+    /// The one wording for "this provider needs a key and this machine has none". The model list needs
+    /// to say it too, and a second sentence meaning the same thing is how a user ends up reading two
+    /// different instructions for one problem.
+    /// </summary>
+    public static string MissingKeyMessage(string providerName)
+        => $"No {providerName} API key — add it on the Settings page.";
 }

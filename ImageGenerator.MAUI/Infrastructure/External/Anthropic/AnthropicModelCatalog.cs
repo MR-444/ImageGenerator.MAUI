@@ -44,9 +44,10 @@ public sealed class AnthropicModelCatalog : IAnthropicModelCatalog
         CancellationToken ct = default)
     {
         // Checked here because the alternative is a 401 whose text says nothing a user can act on,
-        // and the caller shows that text verbatim in the row's status line.
+        // and the caller shows that text verbatim in the row's status line. Wording comes from
+        // LlmCredentials so a missing key says one sentence whether it was a call or a list that asked.
         if (string.IsNullOrWhiteSpace(apiKey))
-            throw new InvalidOperationException("No Anthropic API key is set — add it on Settings.");
+            throw new InvalidOperationException(LlmCredentials.MissingKeyMessage("Anthropic"));
 
         using var client = _httpClientFactory.CreateClient(AnthropicMessagesTransport.HttpClientName);
         var all = new List<AnthropicModelInfo>();

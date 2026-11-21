@@ -601,7 +601,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         IGpuGate? gpuGate = null,
         IOpenRouterTokenStore? openRouterTokenStore = null,
         IOpenRouterModelCatalog? openRouterModelCatalog = null,
-        IComfyUiLoraService? comfyUiLoraService = null)
+        IComfyUiLoraService? comfyUiLoraService = null,
+        IAnthropicModelCatalog? anthropicModelCatalog = null)
     {
         _jobRunner = jobRunner ?? throw new ArgumentNullException(nameof(jobRunner));
         var tokenStore1 = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
@@ -622,7 +623,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         // resolved, never called, so a hand-written one cannot be unit-tested) and the coordinator
         // takes the three dependencies no generator member touches any more.
         Settings = new AppSettingsCoordinator(
-            uiStateStore, folderPicker, ollamaModelCatalog, openRouterModelCatalog, SetStatus, logger);
+            uiStateStore, folderPicker, ollamaModelCatalog, openRouterModelCatalog,
+            anthropicModelCatalog, anthropicTokenStore, SetStatus, logger);
         if (promptBatchParser is null) throw new ArgumentNullException(nameof(promptBatchParser));
 
         Jobs.CollectionChanged += OnJobsCollectionChanged;

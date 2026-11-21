@@ -25,6 +25,8 @@ public sealed partial class AppSettingsCoordinator(
     IFolderPicker folderPicker,
     IOllamaModelCatalog? ollamaModelCatalog,
     IOpenRouterModelCatalog? openRouterModelCatalog,
+    IAnthropicModelCatalog? anthropicModelCatalog,
+    IAnthropicTokenStore? anthropicTokenStore,
     Action<string, StatusKind> setStatus,
     ILogger logger)
     : ObservableObject
@@ -76,6 +78,21 @@ public sealed partial class AppSettingsCoordinator(
     private void ReportOpenRouter(string message, StatusKind kind)
     {
         OpenRouterVisionStatus = message;
+        SetStatus(message, kind);
+    }
+
+    // One funnel per card, as above. The text roles' OpenRouter list and the observer's vision list
+    // refresh independently, so a failure on one must not overwrite the answer to a card the user did
+    // not press.
+    private void ReportOpenRouterText(string message, StatusKind kind)
+    {
+        OpenRouterTextStatus = message;
+        SetStatus(message, kind);
+    }
+
+    private void ReportAnthropic(string message, StatusKind kind)
+    {
+        AnthropicStatus = message;
         SetStatus(message, kind);
     }
 
@@ -267,6 +284,99 @@ public sealed partial class AppSettingsCoordinator(
         {
             _logger.LogWarning(ex, "Couldn't list OpenRouter vision models");
             ReportOpenRouter($"Couldn't refresh OpenRouter models: {ex.Message}", StatusKind.Error);
+        }
+    }
+
+    // ── Model lists for the text roles ────────────────────────────────────────────────
+    //
+    // One list per provider per KIND of caller, shared by every role that talks to that provider. A
+    // shared list is not the cross-talk this plan exists to kill — a shared *choice* is, and the choice
+    // belongs to the role. Which models a server happens to have is one fact, the same on every page.
+
+    /// <summary>
+    /// OpenRouter models that answer in text, for the roles that only ever send text.
+    /// Deliberately not filtered by free pricing the way the observer's list is: the free-only switch
+    /// lives on the observer's card, and honouring it here would hide paid models behind a control that
+    /// is not on the page. A long list is an honest cost; a quietly short one is not.
+    /// </summary>
+    public ObservableCollection<string> OpenRouterTextModels { get; } = [];
+
+    [ObservableProperty] private string? _openRouterTextStatus;
+
+    /// <summary>Anthropic models this key can see, read from <c>GET /v1/models</c>.</summary>
+    /// <remarks>
+    /// Ids, not display strings: the value a role persists is the id, so the "deprecated" marker rides
+    /// the refresh line below rather than a suffix that would be stored as part of a model id. Retired
+    /// models never reach here at all — see <c>AnthropicModelCatalog</c>.
+    /// </remarks>
+    public ObservableCollection<string> AnthropicTextModels { get; } = [];
+
+    [ObservableProperty] private string? _anthropicStatus;
+
+    /// <summary>Ask OpenRouter which models answer in text. No selection is reconciled here: these lists
+    /// serve every text role at once, and which model a role wants is that role's state, not this list's.</summary>
+    [RelayCommand]
+    private async Task RefreshOpenRouterTextModelsAsync()
+    {
+        if (openRouterModelCatalog is null)
+        {
+            ReportOpenRouterText("OpenRouter model list is unavailable in this build.", StatusKind.Warning);
+            return;
+        }
+
+        OpenRouterTextStatus = "Checking OpenRouter…";
+        try
+        {
+            var models = await openRouterModelCatalog.ListChatModelsAsync(freeOnly: false);
+            OpenRouterTextModels.Clear();
+            foreach (var model in models)
+                OpenRouterTextModels.Add(model.Id);
+
+            ReportOpenRouterText(models.Count > 0
+                ? $"Found {models.Count} OpenRouter model(s) that answer in text."
+                : "No OpenRouter model answered in text.",
+                models.Count > 0 ? StatusKind.Success : StatusKind.Warning);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Couldn't list OpenRouter text models");
+            ReportOpenRouterText($"Couldn't refresh OpenRouter models: {ex.Message}", StatusKind.Error);
+        }
+    }
+
+    /// <summary>Ask Anthropic which models this key can use, paging past the endpoint's 20-row default.</summary>
+    [RelayCommand]
+    private async Task RefreshAnthropicModelsAsync()
+    {
+        if (anthropicModelCatalog is null || anthropicTokenStore is null)
+        {
+            ReportAnthropic("Anthropic model list is unavailable in this build.", StatusKind.Warning);
+            return;
+        }
+
+        AnthropicStatus = "Checking Anthropic…";
+        try
+        {
+            // An empty key is not checked here on purpose: the catalog refuses with the same sentence the
+            // services use for a missing key, and this card's job is to put that sentence on screen.
+            var apiKey = await anthropicTokenStore.LoadAsync();
+            var models = await anthropicModelCatalog.ListTextModelsAsync(apiKey ?? string.Empty);
+            var deprecated = models.Count(m => m.IsDeprecated);
+
+            AnthropicTextModels.Clear();
+            foreach (var model in models)
+                AnthropicTextModels.Add(model.Id);
+
+            ReportAnthropic(models.Count > 0
+                ? $"Found {models.Count} Anthropic model(s)"
+                  + (deprecated > 0 ? $", {deprecated} of them deprecated." : ".")
+                : "Anthropic returned no models for this key.",
+                models.Count > 0 ? StatusKind.Success : StatusKind.Warning);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Couldn't list Anthropic models");
+            ReportAnthropic($"Couldn't refresh Anthropic models: {ex.Message}", StatusKind.Error);
         }
     }
 

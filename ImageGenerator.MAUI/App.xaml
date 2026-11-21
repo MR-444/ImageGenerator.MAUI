@@ -13,6 +13,7 @@
             <converters:IntGreaterThanZeroConverter x:Key="IntGreaterThanZero" />
             <converters:NonEmptyStringToBoolConverter x:Key="NonEmptyStringToBool" />
             <converters:InverseBoolConverter x:Key="InverseBool" />
+            <converters:ModelProviderLabelConverter x:Key="ModelProviderLabel" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -276,12 +276,35 @@ Modality is a measured fact, not an assumption: image-reference count per servic
     suite against it. "Restored, gate green" was the mutation still in the binary — visible only
     because one test failed for the wrong reason first. **A restore must leave the file newer than the
     build it is meant to invalidate.**
+33. **A `Picker` bound to an enum shows that enum's `ToString()`, and that is the whole "Local vs
+    LocalOllama" report.** `ModelTierOptions` is an `IReadOnlyList<ModelTier>`; the vision picker's source
+    is a `VisionObservationProvider[]`. Neither page chose those words, the runtime did. And the app
+    already carried a *second* provider-spelling function doing the opposite job: `LlmTarget.ProviderLabel`
+    answers "Ollama" / "Claude", which is right inside a sentence and wrong in a list of choices. Two
+    spellings were always needed; what was missing was one owner for both. **A bound enum is a label rule
+    you don't control.**
+34. **A per-item marker cannot live inside the item's value, because the value gets persisted.** The
+    Anthropic list wants "Claude Sonnet 4.6 (claude-sonnet-4-6) — deprecated" on the row while the role
+    stores the bare id; a string list carrying that suffix would store the suffix as a model id. So the
+    list holds ids, the refresh line carries the deprecated count, and the per-item label waits for the
+    row to grow an item template — which is why `AnthropicModelInfo.Display` ships unused.
+35. **A test helper that defaults a null dependency can only ever test the wired path.**
+    `Build(openRouterCatalog: null)` against a signature reading `openRouterCatalog ?? _openRouter.Object`
+    handed the test its fake, and the "no catalog" case then failed on an unconfigured-mock null
+    reference: a red run that proved nothing about the case it named. The fix is two named builders, not
+    an optional argument — **a parameter cannot distinguish "not supplied" from "deliberately absent",
+    and only the second one is a test case.**
+36. **`Equal(a, b, "because…")` — the third string is an item, not a reason. Second time in this change
+    set.** FluentAssertions' `params string[]` overload on a string collection folds the reason into the
+    expected sequence, so the assertion compares three items to two and fails with a message about a
+    missing item. First seen in the catalog tests, again here. **Anything collection-equal that carries a
+    reason passes the items as one array.** A repeated trap is a convention, not a mistake.
 
 **Status.** B1 done, gate **1,605**. B2.0 (`8bffa9e`), B2.1 (`c2deff9` + `7ebe6e3`), B2.2a (`bd743c8`,
-gate **1,624**), B2.2b (Idea to Prompt's three rows, gate **1,627**). B2.3 is split a-1/a-2/a-3 below:
-**a-1 done** (the two missing model lists, gate **1,645**). B2 is not done until B2.3 deletes
-`ModelTier` and the transitional `GeneratorSettingsReader.*Target(tier)` bridge. Only Settings still
-hand-rolls pickers, and those go in Phase C.
+gate **1,624**), B2.2b (`c8d736c`, gate **1,627**). B2.3 is split a-1 … a-6 below: a-1 done (`d31b160`,
+gate **1,645**), **a-2 done** (labels + coordinator surfaces, gate **1,666**). B2 is not done until the
+tier is deleted and the transitional `GeneratorSettingsReader.*Target(tier)` bridge with it. Only
+Settings still hand-rolls pickers, and those go in Phase C.
 
 
 ## 5. Target design
@@ -496,15 +519,33 @@ duplication instead of deleting it, so a host binds one object per role:
 Automation ids stay host-side. They are the UI tests' handles, and B2.2b found the hard way that a page
 predating the naming convention does not match a derived name (finding 28).
 
-- **a-1 · the two missing lists · DONE.** `AnthropicModelCatalog` and `ListChatModelsAsync`; 18 tests,
-  six falsified mutations (findings 30–32), gate **1,645**. No page touched, `ModelTier` untouched.
-- **a-2 · coordinator surfaces.** Models / refresh command / status per provider for the two new lists,
-  arriving as optional constructor parameters the way the other catalogs do, with the §8 rule that a
-  `catch` which logs must also set the card's status.
-- **a-3 · `ModelChoiceState` + the row.** The state object and one label function, then one host per
-  commit (mutation first). `ModelTier`, `ModelTierOptions`, `VisionObservationProvider` and the
-  `GeneratorSettingsReader.*Target(tier)` bridge are deleted in the commit that removes their last
-  reader, cost copy included.
+- **a-1 · the two missing lists · DONE (`d31b160`).** `AnthropicModelCatalog` and `ListChatModelsAsync`;
+  18 tests, six falsified mutations (findings 30–32), gate **1,645**. No page touched, `ModelTier` untouched.
+- **a-2 · one label rule, then the coordinator surfaces · DONE.** `ModelProviderLabels` (`ForList` /
+  `ForProse`)
+  becomes the only place either spelling exists, `LlmTarget.ProviderLabel` delegates into it instead of
+  keeping its own switch, and `ModelProviderLabelConverter` is registered in the root `App.xaml` beside
+  the B2.0 converters. `AppSettingsCoordinator` gains `OpenRouterTextModels` and `AnthropicTextModels`
+  with their own refresh commands and status lines. Three rules worth writing down, because each is a
+  place a later reader will be tempted to "improve": the OpenRouter text list is **not**
+  free-only-filtered (the switch lives on the observer's card, and filtering by a control that is not on
+  the page hides models silently); the Anthropic list is ids only (finding 34); and a missing key says
+  `LlmCredentials.MissingKeyMessage` — the sentence the services already say — instead of the second,
+  near-identical one I had already written today. First **direct** tests of `AppSettingsCoordinator`,
+  471 lines every existing test reached only through `GeneratorViewModel`. 21 tests, gate **1,666**.
+- **a-3 · `ModelChoiceState`.** The non-MAUI per-role state object and its unit tests. No XAML.
+- **a-4 · the row and its first host.** Provider picker inside `ModelPickerRow` through `Choice`; mutation
+  engine wired to it; that page's tier list, `MutationTarget(tier)` bridge and cost estimate deleted.
+- **a-5 · Idea to Prompt.** Writer and both vision rows move to `Choice`, and `VisionObservationProvider`
+  folds into `ModelProvider` with a per-role subset — which retires the "LocalOllama" spelling on the one
+  page that showed it.
+- **a-6 · structure editor, then delete the tier.** `ModelTier`, `ModelTierOptions`,
+  `GeneratorSettingsReader.*Target(tier)` and the tier keys go in the commit that removes their last
+  reader.
+
+Split this way so no commit sits unwired longer than it must: a slice judged by "the suite passes" cannot
+say whether its types are reachable (finding 31), so every slice from here either gains a caller in the
+same commit or deletes something that had one.
 
 `ModelChoiceState` is deliberately not a MAUI type, which is the point: every rule pinned so far as a
 markup string — which model does this role call, is the pick kept across a provider switch, is it
