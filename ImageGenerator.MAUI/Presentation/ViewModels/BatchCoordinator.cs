@@ -4,6 +4,7 @@ using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.Services;
 using ImageGenerator.MAUI.Shared.Constants;
+using Microsoft.Extensions.Logging;
 using static ImageGenerator.MAUI.Presentation.Common.UiDispatcher;
 
 namespace ImageGenerator.MAUI.Presentation.ViewModels;
@@ -26,6 +27,7 @@ public sealed partial class BatchCoordinator : ObservableObject
     private readonly Action<string, StatusKind> _setStatus;
     private readonly Func<string, Task> _addAsInputAsync;
     private readonly Func<string, Task> _mutateFromImageAsync;
+    private readonly ILogger? _logger;
 
     // Non-null only while a batch is actively running. CancelBatch flips it; RunBatchAsync
     // disposes and clears it in a finally so a second batch always starts with a fresh CTS.
@@ -41,7 +43,8 @@ public sealed partial class BatchCoordinator : ObservableObject
         Func<GenerationJob, Task> runJob,
         Action<string, StatusKind> setStatus,
         Func<string, Task> addAsInputAsync,
-        Func<string, Task> mutateFromImageAsync)
+        Func<string, Task> mutateFromImageAsync,
+        ILogger? logger = null)
     {
         _promptBatchParser = promptBatchParser ?? throw new ArgumentNullException(nameof(promptBatchParser));
         _parametersAccessor = parametersAccessor ?? throw new ArgumentNullException(nameof(parametersAccessor));
@@ -50,6 +53,7 @@ public sealed partial class BatchCoordinator : ObservableObject
         _setStatus = setStatus ?? throw new ArgumentNullException(nameof(setStatus));
         _addAsInputAsync = addAsInputAsync ?? throw new ArgumentNullException(nameof(addAsInputAsync));
         _mutateFromImageAsync = mutateFromImageAsync ?? throw new ArgumentNullException(nameof(mutateFromImageAsync));
+        _logger = logger;
     }
 
     /// <summary>
@@ -83,6 +87,9 @@ public sealed partial class BatchCoordinator : ObservableObject
         }
         catch (Exception ex)
         {
+            // Also raised after the user picked: the picker brokers the file to the app, which
+            // fails (0x80004005) for a file in a folder with unusual permissions.
+            _logger?.LogWarning(ex, "Prompt-file picker failed HResult=0x{HResult:X8}", ex.HResult);
             _setStatus($"Couldn't open file picker: {ex.Message}", StatusKind.Error);
             return null;
         }
@@ -112,6 +119,7 @@ public sealed partial class BatchCoordinator : ObservableObject
         }
         catch (Exception ex)
         {
+            _logger?.LogWarning(ex, "Prompt file read failed Path={Path}", result.FullPath);
             _setStatus($"Couldn't read prompt file: {ex.Message}", StatusKind.Error);
             return null;
         }

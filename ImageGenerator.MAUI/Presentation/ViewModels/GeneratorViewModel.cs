@@ -407,7 +407,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             runJob: Queue.RunBatchJobAsync,
             setStatus: SetStatus,
             addAsInputAsync: InputImages.AddAsInputAsync,
-            mutateFromImageAsync: path => Navigation.MutateFromImageAsync(path));
+            mutateFromImageAsync: path => Navigation.MutateFromImageAsync(path),
+            logger: logger);
 
         Batch.PropertyChanged += (sender, e) =>
         {
