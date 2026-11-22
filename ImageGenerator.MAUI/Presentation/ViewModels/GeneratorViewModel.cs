@@ -275,11 +275,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
     public GeneratorViewModel(
         IJobRunner jobRunner,
-        IApiTokenStore tokenStore,
-        IPollinationsTokenStore pollinationsTokenStore,
-        IComfyUiAuthStore comfyUiAuthStore,
-        ICivitaiTokenStore civitaiTokenStore,
-        IAnthropicTokenStore anthropicTokenStore,
+        TokenCoordinator tokens,
+        AppSettingsCoordinator settings,
         ICivitaiPostingService civitaiPostingService,
         IUiStateStore uiStateStore,
         IModelCatalogCoordinator catalogCoordinator,
@@ -287,22 +284,14 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         IPromptBatchParser promptBatchParser,
         IComfyUiCheckpointService checkpointService,
         IGalleryService galleryService,
-        IFolderPicker folderPicker,
         ILogger<GeneratorViewModel> logger,
-        IOllamaModelCatalog? ollamaModelCatalog = null,
         IComfyUiVramService? comfyVram = null,
         IGpuGate? gpuGate = null,
-        IOpenRouterTokenStore? openRouterTokenStore = null,
-        IOpenRouterModelCatalog? openRouterModelCatalog = null,
-        IComfyUiLoraService? comfyUiLoraService = null,
-        IAnthropicModelCatalog? anthropicModelCatalog = null)
+        IComfyUiLoraService? comfyUiLoraService = null)
     {
         ArgumentNullException.ThrowIfNull(jobRunner);
-        ArgumentNullException.ThrowIfNull(tokenStore);
-        ArgumentNullException.ThrowIfNull(pollinationsTokenStore);
-        ArgumentNullException.ThrowIfNull(comfyUiAuthStore);
-        ArgumentNullException.ThrowIfNull(civitaiTokenStore);
-        ArgumentNullException.ThrowIfNull(anthropicTokenStore);
+        ArgumentNullException.ThrowIfNull(tokens);
+        ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(civitaiPostingService);
         ArgumentNullException.ThrowIfNull(uiStateStore);
         ArgumentNullException.ThrowIfNull(catalogCoordinator);
@@ -316,17 +305,14 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         _galleryService = galleryService;
         _logger = logger;
 
-        // Coordinators are composed here rather than resolved from DI, so the tests exercise
-        // the same constructor the app runs.
-        Settings = new AppSettingsCoordinator(
-            uiStateStore, folderPicker, ollamaModelCatalog, openRouterModelCatalog,
-            anthropicModelCatalog, anthropicTokenStore, SetStatus, logger);
+        // Settings and Tokens are DI singletons that need nothing from this class; the other
+        // coordinators are composed here because they read Parameters, Capabilities or each other.
+        Settings = settings;
+        Settings.StatusRaised += SetStatus;
 
         // Writes go through the Parameters property, never the field, so a replaced instance
         // receives them.
-        Tokens = new TokenCoordinator(
-            tokenStore, pollinationsTokenStore, comfyUiAuthStore, civitaiTokenStore,
-            anthropicTokenStore, openRouterTokenStore, civitaiPostingService);
+        Tokens = tokens;
         Tokens.ReplicateTokenChanged += token => Parameters.ApiToken = token;
         Tokens.PollinationsTokenChanged += token => Parameters.PollinationsApiToken = token;
         Tokens.StatusRaised += SetStatus;

@@ -65,11 +65,8 @@ public partial class GeneratorViewModelTests
     /// </summary>
     private GeneratorViewModel CreateViewModel(IModelDescriptorRegistry registry) => new(
         _mockJobRunner.Object,
-        _mockTokenStore.Object,
-        _mockPollinationsTokenStore.Object,
-        _mockComfyUiAuthStore.Object,
-        _mockCivitaiTokenStore.Object,
-        _mockAnthropicTokenStore.Object,
+        FixtureTokens(),
+        FixtureSettings(_mockUiStateStore.Object, _mockOpenRouterModelCatalog.Object),
         _mockCivitaiPostingService.Object,
         _mockUiStateStore.Object,
         _mockCatalogCoordinator.Object,
@@ -77,10 +74,19 @@ public partial class GeneratorViewModelTests
         _mockPromptBatchParser.Object,
         _mockCheckpointService.Object,
         _mockGalleryService.Object,
-        _mockFolderPicker.Object,
         NullLogger<GeneratorViewModel>.Instance,
-        openRouterModelCatalog: _mockOpenRouterModelCatalog.Object,
         comfyUiLoraService: _mockLoraService.Object);
+
+    // The two DI-built coordinators, wired to this fixture's mocks so tests can verify against them.
+    private TokenCoordinator FixtureTokens() => TestCoordinators.Tokens(
+        _mockTokenStore.Object, _mockPollinationsTokenStore.Object, _mockComfyUiAuthStore.Object,
+        _mockCivitaiTokenStore.Object, _mockAnthropicTokenStore.Object,
+        civitaiPosting: _mockCivitaiPostingService.Object);
+
+    private AppSettingsCoordinator FixtureSettings(
+        IUiStateStore store, IOpenRouterModelCatalog? openRouter = null, IOllamaModelCatalog? ollama = null) =>
+        TestCoordinators.Settings(store, _mockFolderPicker.Object, ollama, openRouter,
+            anthropicTokenStore: _mockAnthropicTokenStore.Object);
 
     [Fact]
     public void AllModels_ShouldContainExpectedSeed()
@@ -184,12 +190,10 @@ public partial class GeneratorViewModelTests
     // --- Free GPU memory after rendering ---
 
     private GeneratorViewModel BuildViewModelWithVram(IComfyUiVramService vram) =>
-        new(_mockJobRunner.Object, _mockTokenStore.Object, _mockPollinationsTokenStore.Object,
-            _mockComfyUiAuthStore.Object, _mockCivitaiTokenStore.Object, _mockAnthropicTokenStore.Object,
+        new(_mockJobRunner.Object, FixtureTokens(), FixtureSettings(_mockUiStateStore.Object),
             _mockCivitaiPostingService.Object, _mockUiStateStore.Object, _mockCatalogCoordinator.Object,
             ModelDescriptorRegistry.Default(), _mockPromptBatchParser.Object, _mockCheckpointService.Object,
-            _mockGalleryService.Object, _mockFolderPicker.Object, NullLogger<GeneratorViewModel>.Instance,
-            ollamaModelCatalog: null, comfyVram: vram);
+            _mockGalleryService.Object, NullLogger<GeneratorViewModel>.Instance, comfyVram: vram);
 
     [Fact]
     public async Task MaybeFreeComfyUiVram_FreesOnlyWhenEnabled_ComfyModel_AndIdle()
@@ -265,11 +269,8 @@ public partial class GeneratorViewModelTests
     private GeneratorViewModel BuildGatedViewModel(IGpuGate gate) =>
         new(
             _mockJobRunner.Object,
-            _mockTokenStore.Object,
-            _mockPollinationsTokenStore.Object,
-            _mockComfyUiAuthStore.Object,
-            _mockCivitaiTokenStore.Object,
-            _mockAnthropicTokenStore.Object,
+            FixtureTokens(),
+            FixtureSettings(_mockUiStateStore.Object),
             _mockCivitaiPostingService.Object,
             _mockUiStateStore.Object,
             _mockCatalogCoordinator.Object,
@@ -277,10 +278,7 @@ public partial class GeneratorViewModelTests
             _mockPromptBatchParser.Object,
             _mockCheckpointService.Object,
             _mockGalleryService.Object,
-            _mockFolderPicker.Object,
             NullLogger<GeneratorViewModel>.Instance,
-            ollamaModelCatalog: null,
-            comfyVram: null,
             gpuGate: gate);
 
     [Fact]
@@ -1249,11 +1247,8 @@ public partial class GeneratorViewModelTests
         // Session 1: hydrate catalog, user picks gpt-image-2.
         var vm1 = new GeneratorViewModel(
             new Mock<IJobRunner>().Object,
-            new Mock<IApiTokenStore>().Object,
-            new Mock<IPollinationsTokenStore>().Object,
-            new Mock<IComfyUiAuthStore>().Object,
-            new Mock<ICivitaiTokenStore>().Object,
-            new Mock<IAnthropicTokenStore>().Object,
+            TestCoordinators.Tokens(),
+            TestCoordinators.Settings(sharedStore.Object),
             new Mock<ICivitaiPostingService>().Object,
             sharedStore.Object,
             coordinator1.Object,
@@ -1261,7 +1256,6 @@ public partial class GeneratorViewModelTests
             new Mock<IPromptBatchParser>().Object,
             new Mock<IComfyUiCheckpointService>().Object,
             new Mock<IGalleryService>().Object,
-            new Mock<IFolderPicker>().Object,
             NullLogger<GeneratorViewModel>.Instance);
 
         await vm1.LoadCachedCatalogAsync();
@@ -1278,11 +1272,8 @@ public partial class GeneratorViewModelTests
 
         var vm2 = new GeneratorViewModel(
             new Mock<IJobRunner>().Object,
-            new Mock<IApiTokenStore>().Object,
-            new Mock<IPollinationsTokenStore>().Object,
-            new Mock<IComfyUiAuthStore>().Object,
-            new Mock<ICivitaiTokenStore>().Object,
-            new Mock<IAnthropicTokenStore>().Object,
+            TestCoordinators.Tokens(),
+            TestCoordinators.Settings(sharedStore.Object),
             new Mock<ICivitaiPostingService>().Object,
             sharedStore.Object,
             coordinator2.Object,
@@ -1290,7 +1281,6 @@ public partial class GeneratorViewModelTests
             new Mock<IPromptBatchParser>().Object,
             new Mock<IComfyUiCheckpointService>().Object,
             new Mock<IGalleryService>().Object,
-            new Mock<IFolderPicker>().Object,
             NullLogger<GeneratorViewModel>.Instance);
 
         await vm2.LoadCachedCatalogAsync();

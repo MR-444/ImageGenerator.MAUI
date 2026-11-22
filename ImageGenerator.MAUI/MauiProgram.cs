@@ -217,6 +217,10 @@ public static class MauiProgram
         builder.Services.AddSingleton<IJobRunner, JobRunner>();
         builder.Services.AddSingleton<IModelCatalogCoordinator, ModelCatalogCoordinator>();
         builder.Services.AddSingleton<IPromptBatchParser, PromptBatchParser>();
+        // The generator's two coordinators that need nothing from it: SettingsPage and the
+        // sibling pages reach them through GeneratorViewModel.Settings / .Tokens.
+        builder.Services.AddSingleton<TokenCoordinator>();
+        builder.Services.AddSingleton<AppSettingsCoordinator>();
 
         // GeneratorViewModel is registered as Singleton because it owns session state
         // (Jobs collection, SelectedImages, IsBatchRunning) that must survive

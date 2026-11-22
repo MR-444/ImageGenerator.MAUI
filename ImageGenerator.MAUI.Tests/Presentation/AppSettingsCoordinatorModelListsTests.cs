@@ -38,15 +38,18 @@ public class AppSettingsCoordinatorModelListsTests
         IOpenRouterModelCatalog? openRouterCatalog,
         IAnthropicModelCatalog? anthropicCatalog,
         IAnthropicTokenStore? anthropicKey)
-        => new(
+    {
+        var sut = new AppSettingsCoordinator(
             _store.Object,
             new Mock<IFolderPicker>().Object,
             ollamaModelCatalog: null,
             openRouterModelCatalog: openRouterCatalog,
             anthropicModelCatalog: anthropicCatalog,
             anthropicTokenStore: anthropicKey,
-            setStatus: (message, kind) => _reported.Add((message, kind)),
-            logger: NullLogger.Instance);
+            logger: NullLogger<AppSettingsCoordinator>.Instance);
+        sut.StatusRaised += (message, kind) => _reported.Add((message, kind));
+        return sut;
+    }
 
     // ── provider labels ───────────────────────────────────────────────────────────────
 

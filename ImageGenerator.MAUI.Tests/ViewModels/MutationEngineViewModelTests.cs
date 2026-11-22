@@ -933,11 +933,8 @@ public class MutationEngineViewModelTests
 
     private static GeneratorViewModel BuildBareGenerator() =>
         new(new Mock<IJobRunner>().Object,
-            new Mock<IApiTokenStore>().Object,
-            new Mock<IPollinationsTokenStore>().Object,
-            new Mock<IComfyUiAuthStore>().Object,
-            new Mock<ICivitaiTokenStore>().Object,
-            new Mock<IAnthropicTokenStore>().Object,
+            TestCoordinators.Tokens(),
+            TestCoordinators.Settings(new Mock<IUiStateStore>().Object),
             new Mock<ICivitaiPostingService>().Object,
             new Mock<IUiStateStore>().Object,
             new Mock<IModelCatalogCoordinator>().Object,
@@ -945,7 +942,6 @@ public class MutationEngineViewModelTests
             new Mock<IPromptBatchParser>().Object,
             new Mock<IComfyUiCheckpointService>().Object,
             new Mock<IGalleryService>().Object,
-            new Mock<IFolderPicker>().Object,
             NullLogger<GeneratorViewModel>.Instance);
 
     private sealed record MutationRunVariantCaptions(IReadOnlyList<string> Captions);

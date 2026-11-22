@@ -15,14 +15,14 @@ namespace ImageGenerator.MAUI.Tests.ViewModels;
 /// </summary>
 public partial class GeneratorViewModelTests
 {
-    private GeneratorViewModel RealStoreVm(StubPreferences preferences) => new(
-        _mockJobRunner.Object, _mockTokenStore.Object, _mockPollinationsTokenStore.Object,
-        _mockComfyUiAuthStore.Object, _mockCivitaiTokenStore.Object, _mockAnthropicTokenStore.Object,
-        _mockCivitaiPostingService.Object,
-        new UiStateStore(NullLogger<UiStateStore>.Instance, preferences, TimeSpan.FromMilliseconds(1)),
-        _mockCatalogCoordinator.Object, ModelDescriptorRegistry.Default(), _mockPromptBatchParser.Object,
-        _mockCheckpointService.Object, _mockGalleryService.Object, _mockFolderPicker.Object,
-        NullLogger<GeneratorViewModel>.Instance);
+    private GeneratorViewModel RealStoreVm(StubPreferences preferences)
+    {
+        var store = new UiStateStore(NullLogger<UiStateStore>.Instance, preferences, TimeSpan.FromMilliseconds(1));
+        return new(
+            _mockJobRunner.Object, FixtureTokens(), FixtureSettings(store), _mockCivitaiPostingService.Object,
+            store, _mockCatalogCoordinator.Object, ModelDescriptorRegistry.Default(), _mockPromptBatchParser.Object,
+            _mockCheckpointService.Object, _mockGalleryService.Object, NullLogger<GeneratorViewModel>.Instance);
+    }
 
     private static void Select(GeneratorViewModel vm, string modelId) =>
         vm.ProviderFilter.SelectedModel = vm.ProviderFilter.AllModels.First(m => m.Value == modelId);

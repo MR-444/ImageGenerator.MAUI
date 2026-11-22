@@ -35,7 +35,7 @@ public class AppSettingsCoordinatorRolePickTests
     private AppSettingsCoordinator Build() => new(
         _store, new Mock<IFolderPicker>().Object, _ollama.Object,
         _openRouter.Object, anthropicModelCatalog: null, anthropicTokenStore: null,
-        setStatus: (_, _) => { }, logger: NullLogger.Instance);
+        logger: NullLogger<AppSettingsCoordinator>.Instance);
 
     [Theory]
     [InlineData(ModelRole.PromptWrite)]

@@ -385,11 +385,9 @@ public partial class GeneratorViewModelTests
         catalog = new Mock<IOllamaModelCatalog>();
         store = new Mock<IUiStateStore>();
         return new GeneratorViewModel(
-            _mockJobRunner.Object, _mockTokenStore.Object, _mockPollinationsTokenStore.Object,
-            _mockComfyUiAuthStore.Object, _mockCivitaiTokenStore.Object, _mockAnthropicTokenStore.Object,
+            _mockJobRunner.Object, FixtureTokens(), FixtureSettings(store.Object, ollama: catalog.Object),
             _mockCivitaiPostingService.Object, store.Object, _mockCatalogCoordinator.Object,
             ModelDescriptorRegistry.Default(), _mockPromptBatchParser.Object, _mockCheckpointService.Object,
-            _mockGalleryService.Object, _mockFolderPicker.Object, NullLogger<GeneratorViewModel>.Instance,
-            ollamaModelCatalog: catalog.Object);
+            _mockGalleryService.Object, NullLogger<GeneratorViewModel>.Instance);
     }
 }

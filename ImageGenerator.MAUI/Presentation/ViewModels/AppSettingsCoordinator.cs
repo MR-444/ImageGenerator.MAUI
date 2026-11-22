@@ -15,10 +15,11 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 /// 
 /// This coordinator exposes bindable state for settings screens, keeps model picker collections
 /// available to the view, loads saved preferences from the application state store, refreshes catalog
-/// data when required, and forwards user-visible status messages to the host page or shell.
-/// 
+/// data when required, and reports user-visible status messages through <see cref="StatusRaised"/>.
+///
 /// It keeps presentation concerns such as output locations, catalog choices, and other persisted
-/// preferences separate from the parameters passed to image generation.
+/// preferences separate from the parameters passed to image generation. A DI singleton, shared
+/// with GeneratorViewModel, which exposes it as Settings.
 /// </summary>
 public sealed partial class AppSettingsCoordinator(
     IUiStateStore uiStateStore,
@@ -27,8 +28,7 @@ public sealed partial class AppSettingsCoordinator(
     IOpenRouterModelCatalog? openRouterModelCatalog,
     IAnthropicModelCatalog? anthropicModelCatalog,
     IAnthropicTokenStore? anthropicTokenStore,
-    Action<string, StatusKind> setStatus,
-    ILogger logger)
+    ILogger<AppSettingsCoordinator> logger)
     : ObservableObject
 {
     private readonly IUiStateStore
@@ -39,19 +39,12 @@ public sealed partial class AppSettingsCoordinator(
 
     private readonly ILogger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-    private readonly Action<string, StatusKind> _setStatus =
-        setStatus ?? throw new ArgumentNullException(nameof(setStatus));
+    // The catalogs are optional: each reader no-ops when its catalog is absent (tests pass null).
 
-    // Both optional by design: MauiProgram binds whatever IOllamaModelCatalog /
-    // IOpenRouterModelCatalog Resolve returned, so they are null on any platform where the
-    // implementation threw at registration. Each reader no-ops when its catalog is absent.
+    /// <summary>A message for the owner's status line.</summary>
+    public event Action<string, StatusKind>? StatusRaised;
 
-    // The host hands over its own logger rather than an ILogger<AppSettingsCoordinator>: this
-    // class is composed by GeneratorViewModel, not resolved, so there is no generic logger to
-    // inject. Category therefore reads as the generator — acceptable, and it keeps the host's
-    // 21-parameter constructor from growing.
-
-    private void SetStatus(string message, StatusKind kind) => _setStatus(message, kind);
+    private void SetStatus(string message, StatusKind kind) => StatusRaised?.Invoke(message, kind);
 
     // Inline, per-card result of the two server-backed pickers. The host's StatusMessage bar is
     // rendered only by MainPage.xaml, and the sibling pages bind their OWN view model's status, so
