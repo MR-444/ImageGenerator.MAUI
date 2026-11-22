@@ -4,10 +4,9 @@ using ImageGenerator.MAUI.Core.Domain.Descriptors;
 namespace ImageGenerator.MAUI.Tests.Descriptors;
 
 /// <summary>
-/// What this build can claim about a Replicate model it has no descriptor for. The class used to
-/// build a request too; that half is gone, because not knowing a model's fields is not a reason to
-/// send it one — see ReplicateImageGenerationServiceTests for the refusal itself, which is the
-/// behaviour these capabilities exist to explain in the UI.
+/// What this build can claim about a Replicate model it has no descriptor for. Such a model is
+/// never sent a request — see ReplicateImageGenerationServiceTests for the refusal itself, which
+/// is the behaviour these capabilities exist to explain in the UI.
 ///
 /// Both tests here are about the pickers, not about the model: a hidden knob is a claim ("this model
 /// has no such field") that must not be mistaken for a guess, and one of them is keeping a two-way
@@ -37,9 +36,8 @@ public class FallbackReplicateDescriptorTests
         // it here would have the user attach a picture to a model this build refuses to call.
         caps.ImagePrompt.Should().BeFalse();
         caps.MaxImageInputs.Should().Be(0);
-        // Output format is honoured by the app's own transcode on save, so offering it asks the
-        // model nothing — the only knob that stays live for a model we will not call.
-        caps.OutputFormatSelectable.Should().BeTrue();
+        // Nothing is ever generated for such a model, so there is nothing to save in a chosen format.
+        caps.OutputFormatSelectable.Should().BeFalse();
     }
 
     [Fact]

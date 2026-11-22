@@ -93,7 +93,7 @@ public sealed class ReplicateImageGenerationService : IImageGenerationService
                 ImageData = imageData
             };
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             return new GeneratedImage
             {
@@ -135,7 +135,8 @@ public sealed class ReplicateImageGenerationService : IImageGenerationService
     /// </summary>
     private static string? ValueOutsideTheModelVocabulary(ImageGenerationParameters p, ModelCapabilities caps) =>
         caps.AspectRatio && caps.AspectRatios.Count > 0 && !caps.AspectRatios.Contains(p.AspectRatio, StringComparer.Ordinal)
-            ? $"aspect ratio {p.AspectRatio}" // "custom" is legal here: descriptors that take it list it.
+            // "custom" is legal here: descriptors that take it list it.
+            ? (string.IsNullOrEmpty(p.AspectRatio) ? "an empty aspect ratio" : $"aspect ratio {p.AspectRatio}")
             : Outside(p.GptQuality, caps.GptQualityOptions, "quality")
             ?? Outside(p.GptModeration, caps.GptModerationOptions, "moderation")
             ?? Outside(p.GptComplexity, caps.GptComplexityOptions, "complexity")
@@ -209,10 +210,14 @@ public sealed class ReplicateImageGenerationService : IImageGenerationService
             cancellationToken
         );
 
+        // An empty id would poll GET /v1/predictions/, which lists predictions instead of failing.
+        if (string.IsNullOrWhiteSpace(response?.Id))
+            throw new InvalidOperationException("Replicate did not return a prediction id.");
+
         return await ReplicateHelper.PollForOutputAsync(
             _replicateApi,
             bearerToken,
-            response.Id ?? string.Empty,
+            response.Id,
             cancellationToken
         );
     }

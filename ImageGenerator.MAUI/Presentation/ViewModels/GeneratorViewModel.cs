@@ -367,7 +367,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         }
         finally { _suppressResolutionPersist = false; }
 
-        // Models that hide the output-format picker (Ideogram) only emit PNG — pin the save format.
+        // Models that hide the output-format picker (Ideogram, unknown Replicate models) pin PNG.
         if (!caps.OutputFormatSelectable) Parameters.OutputFormat = ImageOutputFormat.Png;
         // Clear the structured-JSON toggle when leaving a JSON-capable model (Ideogram V4 /
         // ComfyUI workflows) so a stale flag can't gate validation (or alter Build) on a model

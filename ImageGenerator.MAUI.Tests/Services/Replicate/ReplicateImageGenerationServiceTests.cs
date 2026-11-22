@@ -455,8 +455,10 @@ public class ReplicateImageGenerationServiceTests
                 It.IsAny<ReplicatePredictionRequest>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new OperationCanceledException());
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
 
-        var result = await _service.GenerateImageAsync(parameters, CancellationToken.None);
+        var result = await _service.GenerateImageAsync(parameters, cts.Token);
 
         result.Should().NotBeNull();
         result.Message.Should().Be("Image generation was canceled.");
@@ -529,5 +531,57 @@ public class ReplicateImageGenerationServiceTests
                 StatusCode = HttpStatusCode.OK,
                 Content = new ByteArrayContent([1, 2, 3])
             });
+    }
+
+    [Fact]
+    public async Task GenerateImageAsync_CanceledWithoutTheCallersToken_IsReportedAsAnError()
+    {
+        _mockReplicateApi.Setup(x => x.CreatePredictionAsync(
+                It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<ReplicatePredictionRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TaskCanceledException("The request timed out."));
+
+        var result = await _service.GenerateImageAsync(new ImageGenerationParameters
+        {
+            Model = ModelConstants.Flux.Klein4b, Prompt = "x", ApiToken = "test-token"
+        });
+
+        result.ImageData.Should().BeNull();
+        result.Message.Should().NotBe("Image generation was canceled.").And.Contain("timed out");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task GenerateImageAsync_NoPredictionId_FailsWithoutPolling(string? id)
+    {
+        _mockReplicateApi.Setup(x => x.CreatePredictionAsync(
+                It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<ReplicatePredictionRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ReplicatePredictionResponse { Id = id, Status = "starting" });
+
+        var result = await _service.GenerateImageAsync(new ImageGenerationParameters
+        {
+            Model = ModelConstants.Flux.Klein4b, Prompt = "x", ApiToken = "test-token"
+        });
+
+        result.ImageData.Should().BeNull();
+        result.Message.Should().Contain("did not return a prediction id");
+        _mockReplicateApi.Verify(x => x.GetPredictionAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GenerateImageAsync_EmptyAspectRatio_IsRefusedInWords()
+    {
+        var result = await _service.GenerateImageAsync(new ImageGenerationParameters
+        {
+            Model = ModelConstants.Flux.Klein4b, Prompt = "x", ApiToken = "test-token", AspectRatio = ""
+        });
+
+        result.Message.Should().Contain("it does not accept an empty aspect ratio");
+        _mockReplicateApi.Verify(x => x.CreatePredictionAsync(
+            It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<ReplicatePredictionRequest>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }
