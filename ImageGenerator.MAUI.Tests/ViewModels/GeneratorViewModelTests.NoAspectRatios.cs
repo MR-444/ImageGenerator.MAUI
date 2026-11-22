@@ -42,7 +42,7 @@ public partial class GeneratorViewModelTests
         // Keeping the value beats inventing one: any size picked from a list this model does not have
         // is a size the model never declared. The row is hidden by the capability anyway.
         selected.Parameters.AspectRatio.Should().Be("3:2");
-        selected.AspectRatioOptions.Should().BeEmpty();
+        selected.AspectRatioChoice.Options.Should().BeEmpty();
     }
 
     /// <summary>A model that has no aspect-ratio knob.</summary>

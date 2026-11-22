@@ -2,6 +2,7 @@ using FluentAssertions;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Shared.Constants;
 using ImageGenerator.MAUI.Presentation.ViewModels;
+using Moq;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
 
@@ -67,6 +68,30 @@ public partial class GeneratorViewModelTests
 
         raised.Should().BeGreaterThan(0);
         _viewModel.ModelFieldsNote.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void SwitchingToAnUnknownModelAndBack_KeepsTheRatio_AndSavesNothing()
+    {
+        _viewModel.ProviderFilter.ApplyCatalog(
+            [new ModelOption("Known model", ModelConstants.Flux.Pro11, ProviderConstants.Replicate),
+             new ModelOption("Unknown model", "stability-ai/some-new-model", ProviderConstants.Replicate)]);
+        _viewModel.ProviderFilter.SelectedModel =
+            _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.AspectRatioChoice.Selected = "21:9";
+        _mockUiStateStore.Invocations.Clear();
+
+        _viewModel.ProviderFilter.SelectedModel =
+            _viewModel.ProviderFilter.AllModels.First(m => m.Value == "stability-ai/some-new-model");
+        _viewModel.AspectRatioChoice.Options.Should().BeEmpty();
+        // The swap to an empty list makes the Picker push null.
+        _viewModel.AspectRatioChoice.Selected = null;
+
+        _viewModel.Parameters.AspectRatio.Should().Be("21:9");
+        _viewModel.ProviderFilter.SelectedModel =
+            _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
+        _viewModel.Parameters.AspectRatio.Should().Be("21:9");
+        _mockUiStateStore.Verify(s => s.PersistAspectRatio(It.IsAny<string>(), It.IsAny<string?>()), Times.Never);
     }
 
     [Fact]

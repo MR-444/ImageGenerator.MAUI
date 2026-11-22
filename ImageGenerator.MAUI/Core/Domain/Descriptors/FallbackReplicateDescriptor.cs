@@ -19,15 +19,6 @@ namespace ImageGenerator.MAUI.Core.Domain.Descriptors;
 /// </summary>
 public sealed class FallbackReplicateDescriptor : ICapabilityProvider
 {
-    // Never shown: AspectRatio is false below, which hides the whole aspect-ratio block.
-    // It still has to be a broad list, because the aspect-ratio Picker is two-way bound straight
-    // to Parameters.AspectRatio and swapping ItemsSource overwrites that source whenever the
-    // current value is missing from the new list. Broad, so switching TO an unknown model leaves
-    // the user's saved ratio alone: nothing is sent to such a model, so this class has no opinion
-    // worth persisting.
-    private static readonly string[] AspectRatios =
-        ["1:1", "16:9", "9:16", "21:9", "9:21", "3:2", "2:3", "4:3", "3:4", "4:5", "5:4"];
-
     // Sentinel — the registry never indexes the fallback by id; it's invoked when a lookup misses.
     public string ModelId => "_fallback";
 
@@ -37,6 +28,7 @@ public sealed class FallbackReplicateDescriptor : ICapabilityProvider
         // model at all, so showing any of them would be a lie — and an expensive-looking one, since
         // accepting a reference image is how a user comes to expect an edit.
         AspectRatio: false, CustomDimensions: false, Seed: false, ImagePrompt: false,
-        AspectRatioLabel: "Aspect ratio", AspectRatios: AspectRatios,
+        // No ratios either: the generator keeps the current ratio for a model that offers none.
+        AspectRatioLabel: "Aspect ratio", AspectRatios: [],
         MaxImageInputs: 0, OutputFormatSelectable: false);
 }

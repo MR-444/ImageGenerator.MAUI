@@ -108,27 +108,16 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         $"{Queue.JobStatusSummary} · {SelectedModelSummary} · {Queue.TotalImagesGeneratedText}"
         + (IsGpuBusy ? " · GPU busy" : string.Empty);
 
-    [ObservableProperty]
-    private List<string> _aspectRatioOptions;  // hydrated from registry in ctor
-
-    [ObservableProperty]
-    private List<string> _resolutionOptions = [];
-
-    [ObservableProperty]
-    private List<string> _gptQualityOptions = [];
-
-    [ObservableProperty]
-    private List<string> _gptBackgroundOptions = [];
-
-    [ObservableProperty]
-    private List<string> _gptModerationOptions = [];
-
-    [ObservableProperty]
-    private List<string> _gptInputFidelityOptions = [];
-
+    // The Pickers bind these, not Parameters: a pick reaches Parameters (and storage) through
+    // onPicked, and every other change to Parameters is mirrored back with Show.
+    public PickerChoice AspectRatioChoice { get; }
+    public PickerChoice ResolutionChoice { get; }
+    public PickerChoice GptQualityChoice { get; }
+    public PickerChoice GptBackgroundChoice { get; }
+    public PickerChoice GptModerationChoice { get; }
+    public PickerChoice GptInputFidelityChoice { get; }
     // gpt-image-2.6-sunburst only; the list is empty (picker hidden) on every other model.
-    [ObservableProperty]
-    private List<string> _gptComplexityOptions = [];
+    public PickerChoice GptComplexityChoice { get; }
 
     [ObservableProperty]
     private List<string> _outputFormats = [nameof(ImageOutputFormat.Png).ToLowerInvariant(), nameof(ImageOutputFormat.Jpg).ToLowerInvariant(), nameof(ImageOutputFormat.Webp).ToLowerInvariant()];
@@ -163,23 +152,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     private bool _cachedCatalogLoaded;
     private bool _uiStateLoaded;
 
-    // Programmatic aspect-ratio writes (model fallback, auto-AR from an input image) must not
-    // become the sticky preferred ratio; only user picks do.
-    private bool _suppressPreferredArUpdate;
-
-    // The persist-suppression flags below keep capability fallbacks, restores and Picker
-    // ItemsSource-swap pushes from overwriting a saved user choice.
+    // Keeps the capability auto-clear and restores of UseJsonPrompt from overwriting the saved toggle.
     private bool _suppressJsonPromptPersist;
-    private bool _suppressResolutionPersist;
-
-    // The AR Picker pushes a valid first option on an ItemsSource swap, which the membership
-    // check cannot tell from a user pick.
-    private bool _suppressAspectRatioPersist;
-
-    // The last Resolution that was in ResolutionOptions. After an ItemsSource swap the WinUI
-    // ComboBox pushes null on a later dispatcher tick, outside any suppression window; this
-    // value is restored when that happens.
-    private string _lastValidResolution = string.Empty;
 
     partial void OnCapabilitiesChanged(ModelCapabilities value) => InputImages.OnCapabilitiesChanged();
 
@@ -210,6 +184,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         // A replacement instance has empty token slots, and the token rows push only on change,
         // so re-seed from the rows before revalidating.
         Tokens.PushAll();
+        ShowParametersInPickers();
         UpdateCustomAspectRatio(value.AspectRatio);
         ValidateParameters();
         ProviderFilter.SyncSelectionFromParameters(value.Model);
@@ -220,53 +195,36 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         var caps = _registry.CapabilitiesFor(modelValue ?? string.Empty).Capabilities;
 
         // The option lists change before Capabilities, so the binding cascade from the
-        // Capabilities setter sees consistent state. Each ItemsSource swap sits inside its
-        // persist-suppression window: the two-way-bound Picker pushes a value synchronously
-        // during the swap, and that push is not a user pick.
-        _suppressAspectRatioPersist = true;
-        try
-        {
-            AspectRatioOptions = [.. caps.AspectRatios];
-            // Sticky AR: the user's last pick if this model offers it, else the current value,
-            // else the model's first ratio. With no ratios at all, keep the current value rather
-            // than invent a size the model never offered.
-            var current = Parameters.AspectRatio;
-            var fallback = caps.AspectRatios.Count > 0 ? caps.AspectRatios[0] : current;
-            var target =
-                (InputImages.PreferredAspectRatio is { } pref && caps.AspectRatios.Contains(pref)) ? pref :
-                caps.AspectRatios.Contains(current) ? current :
-                fallback;
-            if (!string.Equals(target, current, StringComparison.Ordinal))
-            {
-                SetAspectRatioProgrammatically(target);
-            }
-        }
-        finally { _suppressAspectRatioPersist = false; }
+        // Capabilities setter sees consistent state.
+        AspectRatioChoice.SetOptions(caps.AspectRatios);
+        // Sticky AR: the user's last pick if this model offers it, else the current value, else
+        // the model's first ratio. With no ratios at all, keep the current value rather than
+        // invent a size the model never offered.
+        var current = Parameters.AspectRatio;
+        var fallback = caps.AspectRatios.Count > 0 ? caps.AspectRatios[0] : current;
+        var target =
+            (InputImages.PreferredAspectRatio is { } pref && caps.AspectRatios.Contains(pref)) ? pref :
+            caps.AspectRatios.Contains(current) ? current :
+            fallback;
+        SetAspectRatioProgrammatically(target);
 
-        // Exactly ONE Picker may bind Parameters.Resolution: two bound at once livelock the UI
-        // thread in a synchronous null/value ping-pong during this swap.
-        _suppressResolutionPersist = true;
-        try
+        ResolutionChoice.SetOptions(caps.Resolutions);
+        var resolutions = ResolutionChoice.Options;
+        if (resolutions.Count > 0)
         {
-            // Read before the swap, which pushes null into Parameters.Resolution.
+            // Sticky resolution: the current value if offered, else the saved choice for this
+            // model, else the first option.
             var previousResolution = Parameters.Resolution;
-            ResolutionOptions = caps.Resolutions?.ToList() ?? [];
-            if (ResolutionOptions.Count > 0)
-            {
-                // Sticky resolution: the current value if offered, else the saved choice for
-                // this model, else the first option.
-                var savedResolution = _uiStateStore.LoadResolution(modelValue);
-                var targetResolution =
-                    ResolutionOptions.Contains(previousResolution) ? previousResolution :
-                    savedResolution is not null && ResolutionOptions.Contains(savedResolution) ? savedResolution :
-                    ResolutionOptions[0];
-                _logger.LogDebug(
-                    "RefreshCapabilities({Model}): resolution prev=\"{Prev}\" saved=\"{Saved}\" -> \"{Target}\" ({Count} options)",
-                    modelValue, previousResolution, savedResolution, targetResolution, ResolutionOptions.Count);
-                Parameters.Resolution = targetResolution;
-            }
+            var savedResolution = _uiStateStore.LoadResolution(modelValue);
+            var targetResolution =
+                resolutions.Contains(previousResolution) ? previousResolution :
+                savedResolution is not null && resolutions.Contains(savedResolution) ? savedResolution :
+                resolutions[0];
+            _logger.LogDebug(
+                "RefreshCapabilities({Model}): resolution prev=\"{Prev}\" saved=\"{Saved}\" -> \"{Target}\" ({Count} options)",
+                modelValue, previousResolution, savedResolution, targetResolution, resolutions.Count);
+            Parameters.Resolution = targetResolution;
         }
-        finally { _suppressResolutionPersist = false; }
 
         // Models without an output-format picker (Ideogram, unknown Replicate models) pin PNG.
         if (!caps.OutputFormatSelectable) Parameters.OutputFormat = ImageOutputFormat.Png;
@@ -282,27 +240,25 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         // The GPT knob enums differ per model and host (2.6-sunburst adds quality xhigh/max and a
         // complexity field), and a value the new model does not offer comes back as a 422. Snap
         // it to the app's default where offered, else the first option. The first option is no
-        // default: quality and moderation lists open with "auto", the priced end. Assign the
-        // options first: an empty list makes the two-way-bound Picker write null into the knob.
-        void Knob(IReadOnlyList<string>? offered, Action<List<string>> setOptions,
-            Func<string?> current, string appDefault, Action<string> select)
+        // default: quality and moderation lists open with "auto", the priced end.
+        static void Knob(PickerChoice choice, IReadOnlyList<string>? offered,
+            string? current, string appDefault, Action<string> select)
         {
-            var options = offered?.ToList() ?? [];
-            setOptions(options);
-            var value = current();
-            if (options.Count == 0 || (value is not null && options.Contains(value))) return;
+            choice.SetOptions(offered);
+            var options = choice.Options;
+            if (options.Count == 0 || (current is not null && options.Contains(current))) return;
             select(options.Contains(appDefault, StringComparer.Ordinal) ? appDefault : options[0]);
         }
 
-        Knob(caps.GptQualityOptions, o => GptQualityOptions = o, () => Parameters.GptQuality,
+        Knob(GptQualityChoice, caps.GptQualityOptions, Parameters.GptQuality,
             ImageGenerationParameters.DefaultGptQuality, v => Parameters.GptQuality = v);
-        Knob(caps.GptBackgroundOptions, o => GptBackgroundOptions = o, () => Parameters.GptBackground,
+        Knob(GptBackgroundChoice, caps.GptBackgroundOptions, Parameters.GptBackground,
             ImageGenerationParameters.DefaultGptBackground, v => Parameters.GptBackground = v);
-        Knob(caps.GptModerationOptions, o => GptModerationOptions = o, () => Parameters.GptModeration,
+        Knob(GptModerationChoice, caps.GptModerationOptions, Parameters.GptModeration,
             ImageGenerationParameters.DefaultGptModeration, v => Parameters.GptModeration = v);
-        Knob(caps.GptInputFidelityOptions, o => GptInputFidelityOptions = o, () => Parameters.GptInputFidelity,
+        Knob(GptInputFidelityChoice, caps.GptInputFidelityOptions, Parameters.GptInputFidelity,
             ImageGenerationParameters.DefaultGptInputFidelity, v => Parameters.GptInputFidelity = v);
-        Knob(caps.GptComplexityOptions, o => GptComplexityOptions = o, () => Parameters.GptComplexity,
+        Knob(GptComplexityChoice, caps.GptComplexityOptions, Parameters.GptComplexity,
             ImageGenerationParameters.DefaultGptComplexity, v => Parameters.GptComplexity = v);
 
         // Drop attached images beyond the new model's cap now rather than at generation time.
@@ -320,11 +276,34 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         ComfyUi.RefreshForModel(modelValue);
     }
 
-    private void SetAspectRatioProgrammatically(string aspectRatio)
+    // A fallback or restore: not persisted and not the preferred ratio. User picks arrive
+    // through AspectRatioChoice instead.
+    private void SetAspectRatioProgrammatically(string aspectRatio) => Parameters.AspectRatio = aspectRatio;
+
+    private void ShowParametersInPickers()
     {
-        _suppressPreferredArUpdate = true;
-        try { Parameters.AspectRatio = aspectRatio; }
-        finally { _suppressPreferredArUpdate = false; }
+        AspectRatioChoice.Show(Parameters.AspectRatio);
+        ResolutionChoice.Show(Parameters.Resolution);
+        GptQualityChoice.Show(Parameters.GptQuality);
+        GptBackgroundChoice.Show(Parameters.GptBackground);
+        GptModerationChoice.Show(Parameters.GptModeration);
+        GptInputFidelityChoice.Show(Parameters.GptInputFidelity);
+        GptComplexityChoice.Show(Parameters.GptComplexity);
+    }
+
+    private void OnAspectRatioPicked(string aspectRatio)
+    {
+        Parameters.AspectRatio = aspectRatio;
+        InputImages.RecordExplicitAspectRatioPick(aspectRatio);
+        // "custom" is not persisted: its width and height aren't either.
+        if (aspectRatio != "custom") _uiStateStore.PersistAspectRatio(aspectRatio, Parameters.Model);
+    }
+
+    private void OnResolutionPicked(string resolution)
+    {
+        Parameters.Resolution = resolution;
+        _logger.LogDebug("Resolution picked -> \"{Value}\"", resolution);
+        _uiStateStore.PersistResolution(resolution, Parameters.Model);
     }
 
     private void MirrorImagePromptsToParameters()
@@ -467,7 +446,16 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
         // Seeded from the starting model, so the coordinators built below see its capabilities.
         _capabilities = _registry.CapabilitiesFor(_parameters.Model).Capabilities;
-        _aspectRatioOptions = [.. _capabilities.AspectRatios];
+
+        AspectRatioChoice = new PickerChoice(OnAspectRatioPicked);
+        ResolutionChoice = new PickerChoice(OnResolutionPicked);
+        GptQualityChoice = new PickerChoice(v => Parameters.GptQuality = v);
+        GptBackgroundChoice = new PickerChoice(v => Parameters.GptBackground = v);
+        GptModerationChoice = new PickerChoice(v => Parameters.GptModeration = v);
+        GptInputFidelityChoice = new PickerChoice(v => Parameters.GptInputFidelity = v);
+        GptComplexityChoice = new PickerChoice(v => Parameters.GptComplexity = v);
+        AspectRatioChoice.SetOptions(_capabilities.AspectRatios);
+        ShowParametersInPickers();
 
         // The starting ratio is the first preferred ratio, so early model swaps keep it.
         InputImages = new InputImagesCoordinator(
@@ -533,19 +521,26 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         switch (e.PropertyName)
         {
             case nameof(ImageGenerationParameters.AspectRatio):
+                AspectRatioChoice.Show(Parameters.AspectRatio);
                 UpdateCustomAspectRatio(Parameters.AspectRatio);
-                if (!_suppressPreferredArUpdate)
-                {
-                    InputImages.RecordExplicitAspectRatioPick(Parameters.AspectRatio);
-                    // "custom" is not persisted: its width and height aren't either.
-                    if (!_suppressAspectRatioPersist
-                        && !string.IsNullOrEmpty(Parameters.AspectRatio)
-                        && Parameters.AspectRatio != "custom"
-                        && AspectRatioOptions.Contains(Parameters.AspectRatio))
-                    {
-                        _uiStateStore.PersistAspectRatio(Parameters.AspectRatio, Parameters.Model);
-                    }
-                }
+                break;
+            case nameof(ImageGenerationParameters.Resolution):
+                ResolutionChoice.Show(Parameters.Resolution);
+                break;
+            case nameof(ImageGenerationParameters.GptQuality):
+                GptQualityChoice.Show(Parameters.GptQuality);
+                break;
+            case nameof(ImageGenerationParameters.GptBackground):
+                GptBackgroundChoice.Show(Parameters.GptBackground);
+                break;
+            case nameof(ImageGenerationParameters.GptModeration):
+                GptModerationChoice.Show(Parameters.GptModeration);
+                break;
+            case nameof(ImageGenerationParameters.GptInputFidelity):
+                GptInputFidelityChoice.Show(Parameters.GptInputFidelity);
+                break;
+            case nameof(ImageGenerationParameters.GptComplexity):
+                GptComplexityChoice.Show(Parameters.GptComplexity);
                 break;
             case nameof(ImageGenerationParameters.ApiToken):
             case nameof(ImageGenerationParameters.PollinationsApiToken):
@@ -558,43 +553,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             case nameof(ImageGenerationParameters.UseJsonPrompt):
                 ValidateParameters();
                 if (!_suppressJsonPromptPersist) _uiStateStore.PersistUseJsonPrompt(Parameters.UseJsonPrompt);
-                break;
-            case nameof(ImageGenerationParameters.Resolution):
-                // The deferred null push (see _lastValidResolution); the Picker itself only
-                // offers list members.
-                if (!_suppressResolutionPersist
-                    && string.IsNullOrEmpty(Parameters.Resolution)
-                    && ResolutionOptions.Contains(_lastValidResolution))
-                {
-                    _logger.LogDebug(
-                        "Resolution null push reverted -> \"{Value}\"", _lastValidResolution);
-                    _suppressResolutionPersist = true;
-                    try { Parameters.Resolution = _lastValidResolution; }
-                    finally { _suppressResolutionPersist = false; }
-                    break;
-                }
-
-                if (!string.IsNullOrEmpty(Parameters.Resolution)
-                    && ResolutionOptions.Contains(Parameters.Resolution))
-                {
-                    _lastValidResolution = Parameters.Resolution;
-                }
-
-                // Only a value the current model offers can be a user pick.
-                var resolutionPersistable = !_suppressResolutionPersist
-                    && !string.IsNullOrEmpty(Parameters.Resolution)
-                    && ResolutionOptions.Contains(Parameters.Resolution);
-                if (_logger.IsEnabled(LogLevel.Debug))
-                    _logger.LogDebug(
-                        "Resolution changed -> \"{Value}\" (suppressed={Suppressed}, inOptions={InOptions}, persisting={Persisting})",
-                        Parameters.Resolution,
-                        _suppressResolutionPersist,
-                        ResolutionOptions.Contains(Parameters.Resolution),
-                        resolutionPersistable);
-                if (resolutionPersistable)
-                {
-                    _uiStateStore.PersistResolution(Parameters.Resolution, Parameters.Model);
-                }
                 break;
             case nameof(ImageGenerationParameters.CivitaiModelRef):
                 // The store skips identical writes, so the launch restore costs nothing.
@@ -808,22 +766,17 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
         // After the model, which settled the option lists. Restores are not persisted.
         var savedResolution = _uiStateStore.LoadResolution(Parameters.Model);
-        var adoptResolution = !string.IsNullOrEmpty(savedResolution) && ResolutionOptions.Contains(savedResolution);
+        var adoptResolution = !string.IsNullOrEmpty(savedResolution) && ResolutionChoice.Options.Contains(savedResolution);
         _logger.LogDebug(
             "LoadSavedUiState: resolution saved=\"{Saved}\" current=\"{Current}\" adopting={Adopting}",
             savedResolution, Parameters.Resolution, adoptResolution);
-        if (adoptResolution)
-        {
-            _suppressResolutionPersist = true;
-            try { Parameters.Resolution = savedResolution!; }
-            finally { _suppressResolutionPersist = false; }
-        }
+        if (adoptResolution) Parameters.Resolution = savedResolution!;
 
         // Recorded explicitly so the restored ratio is also the session's preferred one.
         var savedAspectRatio = _uiStateStore.LoadAspectRatio(Parameters.Model);
         if (!string.IsNullOrEmpty(savedAspectRatio)
             && savedAspectRatio != "custom"
-            && AspectRatioOptions.Contains(savedAspectRatio))
+            && AspectRatioChoice.Options.Contains(savedAspectRatio))
         {
             SetAspectRatioProgrammatically(savedAspectRatio);
             InputImages.RecordExplicitAspectRatioPick(savedAspectRatio);
@@ -912,15 +865,10 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
                 Parameters.OutputQuality = quality;
             }
 
-            // Per-model extras. A restore must not overwrite the persisted picks.
-            _suppressResolutionPersist = true;
+            // Per-model extras. A restore must not overwrite the saved JSON toggle.
             _suppressJsonPromptPersist = true;
             try { _registry.MetadataFor(modelId!)?.Apply(Parameters, meta); }
-            finally
-            {
-                _suppressResolutionPersist = false;
-                _suppressJsonPromptPersist = false;
-            }
+            finally { _suppressJsonPromptPersist = false; }
 
             SetStatus("Recipe loaded from image.", StatusKind.Success);
         }

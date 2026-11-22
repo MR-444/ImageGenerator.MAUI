@@ -41,18 +41,13 @@ public class FallbackReplicateDescriptorTests
     }
 
     [Fact]
-    public void Capabilities_HideTheAspectRatioPicker_ButKeepAListWideEnoughToBeLeftAlone()
+    public void Capabilities_OfferNoAspectRatios()
     {
-        // Three things pull on this list at once, and only one of them is about aspect ratios:
-        // the Output block hides on AspectRatio false, so nothing here is ever displayed;
-        // GeneratorViewModel.RefreshCapabilities reads AspectRatios[0] before consulting that flag;
-        // and the aspect-ratio Picker is two-way bound to Parameters.AspectRatio, so an ItemsSource
-        // swap that drops the current value pushes null into it and persists that. Hence a broad
-        // list: selecting a model this build refuses to call must not rewrite the saved ratio to
-        // something else, which the user would only notice after switching back.
+        // Nothing is sent to this model, so it has no ratios to offer. What that does to the
+        // generator's ratio is pinned in GeneratorViewModelTests.UnknownModel.
         var caps = _descriptor.Capabilities;
 
         caps.AspectRatio.Should().BeFalse();
-        caps.AspectRatios.Should().Contain(["1:1", "16:9", "9:16"]);
+        caps.AspectRatios.Should().BeEmpty();
     }
 }

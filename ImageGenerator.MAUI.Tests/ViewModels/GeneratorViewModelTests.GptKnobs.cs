@@ -30,11 +30,11 @@ public partial class GeneratorViewModelTests
         _viewModel.SupportsGptQuality.Should().BeTrue();
         _viewModel.SupportsGptComplexity.Should().BeTrue();
         _viewModel.SupportsGptInputFidelity.Should().BeFalse();
-        _viewModel.GptComplexityOptions.Should().BeEquivalentTo("low", "medium", "high");
+        _viewModel.GptComplexityChoice.Options.Should().BeEquivalentTo("low", "medium", "high");
         // Empty list, hidden row — not a labelled Picker with nothing in it.
-        _viewModel.GptInputFidelityOptions.Should().BeEmpty();
-        _viewModel.GptQualityOptions.Should().Contain("xhigh").And.Contain("max");
-        _viewModel.AspectRatioOptions.Should().HaveCount(18).And.Contain("1024x1024").And.Contain("auto");
+        _viewModel.GptInputFidelityChoice.Options.Should().BeEmpty();
+        _viewModel.GptQualityChoice.Options.Should().Contain("xhigh").And.Contain("max");
+        _viewModel.AspectRatioChoice.Options.Should().HaveCount(18).And.Contain("1024x1024").And.Contain("auto");
     }
 
     [Fact]
@@ -44,8 +44,8 @@ public partial class GeneratorViewModelTests
 
         _viewModel.SupportsGptInputFidelity.Should().BeTrue();
         _viewModel.SupportsGptComplexity.Should().BeFalse();
-        _viewModel.GptComplexityOptions.Should().BeEmpty();
-        _viewModel.AspectRatioOptions.Should().BeEquivalentTo("1:1", "3:2", "2:3");
+        _viewModel.GptComplexityChoice.Options.Should().BeEmpty();
+        _viewModel.AspectRatioChoice.Options.Should().BeEquivalentTo("1:1", "3:2", "2:3");
     }
 
     [Fact]
@@ -92,10 +92,10 @@ public partial class GeneratorViewModelTests
     public void SwitchingToSunburst_KeepsEveryKnobTheModelAlsoOffers()
     {
         SelectModel(ModelConstants.OpenAI.GptImage15OnReplicate);
-        _viewModel.Parameters.GptQuality = "high";
-        _viewModel.Parameters.GptBackground = "transparent";
-        _viewModel.Parameters.GptModeration = "low";
-        _viewModel.Parameters.AspectRatio = "3:2";
+        _viewModel.GptQualityChoice.Selected = "high";
+        _viewModel.GptBackgroundChoice.Selected = "transparent";
+        _viewModel.GptModerationChoice.Selected = "low";
+        _viewModel.AspectRatioChoice.Selected = "3:2";
 
         SelectModel(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
 

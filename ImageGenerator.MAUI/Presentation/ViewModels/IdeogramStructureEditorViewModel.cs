@@ -73,7 +73,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         IsAspectRatioMode = generator is not null
                             && Shared.Constants.ModelConstants.ComfyUi.IsId(generator.Parameters.Model);
         ResolutionOptions = IsAspectRatioMode
-            ? (string[])[.. generator!.AspectRatioOptions]
+            ? (string[])[.. generator!.AspectRatioChoice.Options]
             : IdeogramV4Descriptor.AllResolutions;
         if (IsAspectRatioMode && ResolutionOptions.Count > 0)
         {
@@ -254,21 +254,14 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         CanvasInvalidated?.Invoke();
 
         // Write the pick through to the generator immediately so it survives leaving the
-        // editor WITHOUT Apply (back navigation carries nothing). Membership guards mirror
-        // ApplyToGenerator. In AR mode the pick is an aspect-ratio combo string and lands
-        // on Parameters.AspectRatio — never on Resolution.
+        // editor WITHOUT Apply (back navigation carries nothing). It goes in as a user pick on
+        // the generator's own picker, which persists it and ignores a value that model does not
+        // offer. In AR mode the pick is an aspect-ratio combo string, never a resolution.
         if (_suppressGeneratorSync || _generator is null) return;
         if (IsAspectRatioMode)
-        {
-            if (_generator.AspectRatioOptions.Contains(value))
-            {
-                _generator.Parameters.AspectRatio = value;
-            }
-        }
-        else if (_generator.ResolutionOptions.Contains(value))
-        {
-            _generator.Parameters.Resolution = value;
-        }
+            _generator.AspectRatioChoice.Selected = value;
+        else
+            _generator.ResolutionChoice.Selected = value;
     }
 
     public void SetCanvasFitBox(double fitBox)
@@ -686,17 +679,16 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
     /// <summary>
     /// The Apply hand-off: compact JSON becomes the prompt, the structured-JSON toggle turns
     /// on so the descriptor ships it as json_prompt. Internal so tests can pin the contract
-    /// without Shell. In AR mode SelectedResolution is an aspect-ratio combo string that isn't
-    /// in ResolutionOptions — the membership guard drops it harmlessly; the live write-through
-    /// already delivered the pick.
+    /// without Shell. In AR mode SelectedResolution is an aspect-ratio combo string that the
+    /// generator's resolution picker does not offer, so it is ignored there; the live
+    /// write-through already delivered the pick.
     /// </summary>
     internal void ApplyToGenerator(string compactJson)
     {
         if (_generator is null) return;
         _generator.Parameters.Prompt = compactJson;
         _generator.Parameters.UseJsonPrompt = true;
-        if (_generator.ResolutionOptions.Contains(SelectedResolution))
-            _generator.Parameters.Resolution = SelectedResolution;
+        _generator.ResolutionChoice.Selected = SelectedResolution;
     }
 
     /// <summary>

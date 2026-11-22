@@ -19,8 +19,7 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 /// AR sticky: tracks the user's last explicit AR pick so a model swap that lands on a model
 /// supporting it can restore it; also auto-switches AR to "match_input_image" on 0→1 image
 /// transitions and back to the preferred AR on 1→0. All automatic AR writes go through the
-/// host's setAspectRatioProgrammatically callback, which is responsible for suspending the
-/// host's RecordExplicitAspectRatioPick capture during the write.
+/// host's setAspectRatioProgrammatically callback; only the host's picker records a pick.
 /// </summary>
 public sealed partial class InputImagesCoordinator : ObservableObject
 {
@@ -106,8 +105,8 @@ public sealed partial class InputImagesCoordinator : ObservableObject
 
         // Auto-select match_input_image on 0→1, fall back on 1→0. Models without the option
         // in their AR list (Flux 1.1 Pro/Pro Ultra) no-op the first branch. Both writes are
-        // automatic and must not pollute _preferredAspectRatio — the host's
-        // setAspectRatioProgrammatically callback owns the suppression.
+        // automatic, so they go through setAspectRatioProgrammatically and never become
+        // _preferredAspectRatio.
         var count = SelectedImages.Count;
         var caps = _capsAccessor();
         if (_lastImageCount == 0 && count > 0 && caps.AspectRatios.Contains("match_input_image"))
