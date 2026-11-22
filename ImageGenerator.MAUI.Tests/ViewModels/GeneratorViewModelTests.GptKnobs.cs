@@ -4,6 +4,7 @@ using ImageGenerator.MAUI.Core.Domain.Descriptors.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Shared.Constants;
+using Moq;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
 
@@ -136,6 +137,57 @@ public partial class GeneratorViewModelTests
         vm.Parameters.GptBackground.Should().Be("transparent");
         vm.Parameters.GptModeration.Should().Be("low");
         vm.Parameters.GptInputFidelity.Should().Be("high");
+    }
+
+    [Fact]
+    public void GptOptionPick_IsSavedForThatModel()
+    {
+        SelectModel(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
+
+        _viewModel.GptModerationChoice.Selected = "auto";
+
+        _viewModel.Parameters.GptModeration.Should().Be("auto");
+        _mockUiStateStore.Verify(s => s.PersistGptOption(
+            "moderation", "auto", ModelConstants.OpenAI.GptImage26SunburstOnReplicate), Times.Once);
+    }
+
+    [Fact]
+    public void SwitchingToAModel_TakesItsSavedGptOption_OverTheCurrentValue()
+    {
+        // This is also the restart path: LoadSavedUiState restores the model, which lands here.
+        _mockUiStateStore
+            .Setup(s => s.LoadGptOption("moderation", ModelConstants.OpenAI.GptImage26SunburstOnReplicate))
+            .Returns("auto");
+        SelectModel(ModelConstants.OpenAI.GptImage15OnReplicate);
+        _viewModel.Parameters.GptModeration.Should().Be("low");
+
+        SelectModel(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
+
+        _viewModel.Parameters.GptModeration.Should().Be("auto");
+        _viewModel.GptModerationChoice.Selected.Should().Be("auto");
+    }
+
+    [Fact]
+    public void SavedGptOption_TheModelNoLongerOffers_IsIgnored()
+    {
+        _mockUiStateStore
+            .Setup(s => s.LoadGptOption("quality", ModelConstants.OpenAI.GptImage15OnReplicate))
+            .Returns("xhigh"); // a 2.6-sunburst value, saved under the wrong model or from an old list
+
+        SelectModel(ModelConstants.OpenAI.GptImage15OnReplicate);
+
+        _viewModel.Parameters.GptQuality.Should().Be(ImageGenerationParameters.DefaultGptQuality);
+    }
+
+    [Fact]
+    public void ModelSwitchAndProgrammaticWrites_SaveNoGptOption()
+    {
+        SelectModel(ModelConstants.OpenAI.GptImage15OnReplicate);
+        SelectModel(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
+        _viewModel.Parameters.GptQuality = "high"; // e.g. Remix restoring a recipe
+
+        _mockUiStateStore.Verify(s => s.PersistGptOption(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()), Times.Never);
     }
 
     /// <summary>A model that declares a deliberately narrower knob vocabulary than any real one.</summary>

@@ -137,6 +137,15 @@ public sealed class UiStateStore : IUiStateStore
     private static string AspectRatioKeyFor(string? modelId) =>
         Shared.Constants.ModelConstants.ComfyUi.IsId(modelId) ? ComfyUiAspectRatioKey : AspectRatioKey;
 
+    public string? LoadGptOption(string field, string? modelId) =>
+        LoadString(GptOptionKeyFor(field, modelId));
+
+    public void PersistGptOption(string field, string value, string? modelId) =>
+        PersistString(GptOptionKeyFor(field, modelId), value);
+
+    private static string GptOptionKeyFor(string field, string? modelId) =>
+        $"imggen.gpt_option.{field}.{modelId}";
+
     public string? LoadComfyUiPreset(string workflowName)
     {
         var key = ComfyUiPresetKeyFor(workflowName);

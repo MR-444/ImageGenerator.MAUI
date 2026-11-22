@@ -24,6 +24,13 @@ public interface IUiStateStore
     /// never persisted (its width/height aren't), so this never returns it.
     /// </summary>
     string? LoadAspectRatio(string? modelId);
+    /// <summary>
+    /// Last pick of one GPT image option (<paramref name="field"/>: "quality", "background",
+    /// "moderation", "input_fidelity", "complexity"), persisted PER MODEL: each gpt-image model
+    /// declares its own value lists, so a value saved for one is never sent to another that
+    /// rejects it. Null when never persisted.
+    /// </summary>
+    string? LoadGptOption(string field, string? modelId);
     /// <summary>False when never persisted — the toggle is opt-in per session by default.</summary>
     bool LoadUseJsonPrompt();
     /// <summary>
@@ -96,6 +103,8 @@ public interface IUiStateStore
     void PersistResolution(string value, string? modelId);
     /// <inheritdoc cref="LoadAspectRatio"/>
     void PersistAspectRatio(string value, string? modelId);
+    /// <inheritdoc cref="LoadGptOption"/>
+    void PersistGptOption(string field, string value, string? modelId);
     void PersistUseJsonPrompt(bool value);
     /// <inheritdoc cref="LoadUseSageAttention"/>
     void PersistUseSageAttention(bool value);

@@ -238,27 +238,33 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         }
 
         // The GPT knob enums differ per model and host (2.6-sunburst adds quality xhigh/max and a
-        // complexity field), and a value the new model does not offer comes back as a 422. Snap
-        // it to the app's default where offered, else the first option. The first option is no
-        // default: quality and moderation lists open with "auto", the priced end.
-        static void Knob(PickerChoice choice, IReadOnlyList<string>? offered,
+        // complexity field), and a value the new model does not offer comes back as a 422. Take
+        // the user's saved pick for this model, else keep the current value, else the app's
+        // default, else the first option. The first option is no default: quality and moderation
+        // lists open with "auto", the priced end.
+        void Knob(PickerChoice choice, IReadOnlyList<string>? offered, string field,
             string? current, string appDefault, Action<string> select)
         {
             choice.SetOptions(offered);
             var options = choice.Options;
-            if (options.Count == 0 || (current is not null && options.Contains(current))) return;
-            select(options.Contains(appDefault, StringComparer.Ordinal) ? appDefault : options[0]);
+            if (options.Count == 0) return;
+            var saved = _uiStateStore.LoadGptOption(field, modelValue);
+            select(
+                saved is not null && options.Contains(saved) ? saved :
+                current is not null && options.Contains(current) ? current :
+                options.Contains(appDefault, StringComparer.Ordinal) ? appDefault :
+                options[0]);
         }
 
-        Knob(GptQualityChoice, caps.GptQualityOptions, Parameters.GptQuality,
+        Knob(GptQualityChoice, caps.GptQualityOptions, GptFields.Quality, Parameters.GptQuality,
             ImageGenerationParameters.DefaultGptQuality, v => Parameters.GptQuality = v);
-        Knob(GptBackgroundChoice, caps.GptBackgroundOptions, Parameters.GptBackground,
+        Knob(GptBackgroundChoice, caps.GptBackgroundOptions, GptFields.Background, Parameters.GptBackground,
             ImageGenerationParameters.DefaultGptBackground, v => Parameters.GptBackground = v);
-        Knob(GptModerationChoice, caps.GptModerationOptions, Parameters.GptModeration,
+        Knob(GptModerationChoice, caps.GptModerationOptions, GptFields.Moderation, Parameters.GptModeration,
             ImageGenerationParameters.DefaultGptModeration, v => Parameters.GptModeration = v);
-        Knob(GptInputFidelityChoice, caps.GptInputFidelityOptions, Parameters.GptInputFidelity,
+        Knob(GptInputFidelityChoice, caps.GptInputFidelityOptions, GptFields.InputFidelity, Parameters.GptInputFidelity,
             ImageGenerationParameters.DefaultGptInputFidelity, v => Parameters.GptInputFidelity = v);
-        Knob(GptComplexityChoice, caps.GptComplexityOptions, Parameters.GptComplexity,
+        Knob(GptComplexityChoice, caps.GptComplexityOptions, GptFields.Complexity, Parameters.GptComplexity,
             ImageGenerationParameters.DefaultGptComplexity, v => Parameters.GptComplexity = v);
 
         // Drop attached images beyond the new model's cap now rather than at generation time.
@@ -298,6 +304,22 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         // "custom" is not persisted: its width and height aren't either.
         if (aspectRatio != "custom") _uiStateStore.PersistAspectRatio(aspectRatio, Parameters.Model);
     }
+
+    // The store's field names for the GPT options; saved per model (see IUiStateStore.LoadGptOption).
+    private static class GptFields
+    {
+        public const string Quality = "quality";
+        public const string Background = "background";
+        public const string Moderation = "moderation";
+        public const string InputFidelity = "input_fidelity";
+        public const string Complexity = "complexity";
+    }
+
+    private PickerChoice GptChoice(string field, Action<string> write) => new(value =>
+    {
+        write(value);
+        _uiStateStore.PersistGptOption(field, value, Parameters.Model);
+    });
 
     private void OnResolutionPicked(string resolution)
     {
@@ -449,11 +471,11 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
         AspectRatioChoice = new PickerChoice(OnAspectRatioPicked);
         ResolutionChoice = new PickerChoice(OnResolutionPicked);
-        GptQualityChoice = new PickerChoice(v => Parameters.GptQuality = v);
-        GptBackgroundChoice = new PickerChoice(v => Parameters.GptBackground = v);
-        GptModerationChoice = new PickerChoice(v => Parameters.GptModeration = v);
-        GptInputFidelityChoice = new PickerChoice(v => Parameters.GptInputFidelity = v);
-        GptComplexityChoice = new PickerChoice(v => Parameters.GptComplexity = v);
+        GptQualityChoice = GptChoice(GptFields.Quality, v => Parameters.GptQuality = v);
+        GptBackgroundChoice = GptChoice(GptFields.Background, v => Parameters.GptBackground = v);
+        GptModerationChoice = GptChoice(GptFields.Moderation, v => Parameters.GptModeration = v);
+        GptInputFidelityChoice = GptChoice(GptFields.InputFidelity, v => Parameters.GptInputFidelity = v);
+        GptComplexityChoice = GptChoice(GptFields.Complexity, v => Parameters.GptComplexity = v);
         AspectRatioChoice.SetOptions(_capabilities.AspectRatios);
         ShowParametersInPickers();
 

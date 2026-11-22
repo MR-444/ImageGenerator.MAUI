@@ -181,6 +181,21 @@ public class UiStateStoreTests
     private const string ComfyAspectRatioKey = "imggen.last_aspect_ratio.comfyui";
 
     [Fact]
+    public void GptOption_IsKeptPerFieldAndPerModel()
+    {
+        _sut.PersistGptOption("moderation", "auto", "openai/gpt-image-2.6-sunburst");
+        _sut.PersistGptOption("moderation", "low", "openai/gpt-image-1.5");
+        _sut.PersistGptOption("quality", "high", "openai/gpt-image-2.6-sunburst");
+
+        _sut.LoadGptOption("moderation", "openai/gpt-image-2.6-sunburst").Should().Be("auto");
+        _sut.LoadGptOption("moderation", "openai/gpt-image-1.5").Should().Be("low");
+        _sut.LoadGptOption("quality", "openai/gpt-image-2.6-sunburst").Should().Be("high");
+        _sut.LoadGptOption("quality", "openai/gpt-image-1.5").Should().BeNull();
+        _preferences.Get("imggen.gpt_option.moderation.openai/gpt-image-2.6-sunburst", string.Empty)
+            .Should().Be("auto", "the key is part of what survives an update");
+    }
+
+    [Fact]
     public void LoadAspectRatio_KeyMissing_ReturnsNull()
     {
         _sut.LoadAspectRatio(IdeogramModel).Should().BeNull();
