@@ -35,9 +35,13 @@
 - Upgraded to **.NET 11** (app, tests, CI), all NuGet packages updated; `actions/checkout` v6
 - Anthropic API version **2026-10-21**
 - `GeneratorViewModel` split further: app settings moved to their own coordinator (continuing)
-- Publish script checks hardened; unused code removed
+- Publish script checks hardened and tidied; unused code and template leftovers removed
 
 ### Automation ids (UI test scripts)
 
 - Removed: `OllamaModelPicker`, `OllamaVisionModelPicker`, `OllamaModelRefreshButton`, `OpenRouterVisionModelPicker`, `OpenRouterVisionModelRefreshButton`, `OpenRouterVisionStatusLabel`, `MutationModelTierPicker`, `IdeaPromptModelTierPicker`, `IdeaPromptOpenRouterVisionModelPicker`, `IdeaPromptOpenRouterVisionRefreshButton`, `IdeaPromptOpenRouterVisionStatusLabel`, `EditorEnrichTierPicker`, `EditorEnrichOllamaModelPicker`, `EditorEnrichOllamaRefreshButton`, `EditorEnrichOllamaStatusLabel`
 - Added: `OllamaCheckServerButton`, `MutationModelProviderPicker`, `IdeaPromptWriterProviderPicker`, `EditorEnrichProviderPicker`, `EditorEnrichModelPicker`, `EditorEnrichModelRefreshButton`, `EditorEnrichModelStatusLabel`
+
+## Good to know
+
+- **First start of a new version is slower**: the single-file exe unpacks its runtime (about 440 MB) to `%TEMP%\.net\Emberforge\` once per version. Folders left by older versions are not removed automatically; you can delete them while Emberforge is closed

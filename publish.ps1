@@ -47,6 +47,11 @@ if (-not $SkipClean) {
     }
 }
 
+# The NETSDK1244 warning (IncludeAllContentForSelfExtract is legacy) is expected.
+# Microsoft.WindowsAppSDK.SingleFile.targets sets IncludeAllContentForSelfExtract=true and
+# fails the build without it (DLL SxS redirection), and the SDK then derives
+# IncludeNativeLibrariesForSelfExtract=true from it. As a result the exe extracts its full
+# content (~440 MB) to %TEMP%\.net\Emberforge\<hash> on the first start of each version.
 Write-Host 'Publishing self-contained single-file exe...' -ForegroundColor Cyan
 dotnet publish $project `
     -c Release `
@@ -56,7 +61,6 @@ dotnet publish $project `
     -p:WindowsPackageType=None `
     -p:WindowsAppSDKSelfContained=true `
     -p:PublishSingleFile=true `
-    -p:IncludeNativeLibrariesForSelfExtract=true `
     -p:EnableCompressionInSingleFile=true
 
 if ($LASTEXITCODE -ne 0) {
@@ -76,11 +80,16 @@ if ($extraFiles) {
     $extraFiles | ForEach-Object { Write-Warning ("  " + $_.FullName.Substring($publishDir.Length + 1)) }
 }
 
+$version = ([xml]$csprojText).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+if (-not $version) {
+    throw "No <Version> found in $project"
+}
+
 $sizeMb = [math]::Round((Get-Item $exe).Length / 1MB, 1)
 Write-Host ""
 Write-Host "Published: $exe" -ForegroundColor Green
 Write-Host "Size:      $sizeMb MB" -ForegroundColor Green
 Write-Host ""
-Write-Host 'Next: gh release create vX.Y.Z "' -NoNewline
+Write-Host "Next: gh release create v$version `"" -NoNewline
 Write-Host $exe -NoNewline -ForegroundColor Yellow
 Write-Host '" --target master --title "..." --notes "..."'
