@@ -31,7 +31,7 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
 
     private FileSystemWatcher? _watcher;
     private CancellationTokenSource? _debounceCts;
-    private readonly object _debounceGate = new();
+    private readonly Lock _debounceGate = new();
 
     public ObservableCollection<GalleryItem> Items { get; } = [];
 
@@ -180,7 +180,7 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
             }
 
             _lastSnapshot = snapshot;
-            ApplySnapshotToItems();
+            ApplySnapshotToItems(SelectedSortMode);
         }
         catch (OperationCanceledException)
         {
@@ -200,12 +200,12 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
     {
         // Re-sort the cached snapshot rather than re-walking the disk. Lighter-weight than
         // a full Refresh — and a Refresh is only one click away if the user wants both.
-        ApplySnapshotToItems();
+        ApplySnapshotToItems(value);
     }
 
-    private void ApplySnapshotToItems()
+    private void ApplySnapshotToItems(string sortMode)
     {
-        var sorted = SortSnapshot(_lastSnapshot, SelectedSortMode);
+        var sorted = SortSnapshot(_lastSnapshot, sortMode);
         DispatchToUi(() =>
         {
             Items.Clear();
@@ -495,7 +495,7 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
             {
                 _logger.LogError(ex, "GalleryVM.{Op}", "DebouncedRefresh");
             }
-        });
+        }, cts.Token);
     }
 
     private void CancelDebounce()
