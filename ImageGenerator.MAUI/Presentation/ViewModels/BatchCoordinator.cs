@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Entities;
+using ImageGenerator.MAUI.Core.Domain.Services;
 using ImageGenerator.MAUI.Shared.Constants;
 using static ImageGenerator.MAUI.Presentation.Common.UiDispatcher;
 
@@ -60,11 +61,7 @@ public sealed partial class BatchCoordinator : ObservableObject
     {
         var parameters = _parametersAccessor();
 
-        // Pollinations and ComfyUI models don't use a Replicate token; only require it when
-        // the currently-selected model actually needs one.
-        if (!ModelConstants.Pollinations.IsId(parameters.Model)
-            && !ModelConstants.ComfyUi.IsId(parameters.Model)
-            && string.IsNullOrWhiteSpace(parameters.ApiToken))
+        if (!GenerationReadiness.HasRequiredToken(parameters))
         {
             _setStatus("Enter an API token before running a batch.", StatusKind.Error);
             return null;
@@ -127,7 +124,7 @@ public sealed partial class BatchCoordinator : ObservableObject
     /// </summary>
     public async Task RunBatchAsync(IReadOnlyList<string> prompts, IReadOnlyList<string>? labels = null)
     {
-        if (prompts is null || prompts.Count == 0) return;
+        if (prompts.Count == 0) return;
         if (IsBatchRunning) return; // re-entrancy guard
 
         _batchCts = new CancellationTokenSource();

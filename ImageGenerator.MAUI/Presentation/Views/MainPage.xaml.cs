@@ -294,7 +294,8 @@ public partial class MainPage
         try
         {
             var prompts = await _viewModel.Batch.PickAndParsePromptsAsync();
-            if (prompts is null || prompts.Count == 0) return;
+            // Null on cancel or error (an empty file is reported and returns null too).
+            if (prompts is null) return;
 
             var modelName = _viewModel.ProviderFilter.SelectedModel?.Display ?? _viewModel.Parameters.Model;
             var confirm = await DisplayAlertAsync(

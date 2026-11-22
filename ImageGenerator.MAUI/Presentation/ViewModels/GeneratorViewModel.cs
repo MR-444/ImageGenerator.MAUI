@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
-using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
@@ -381,38 +380,15 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
     private void ValidateParameters()
     {
-        var tokenOk = TokenlessModel(Parameters.Model)
-            || !string.IsNullOrWhiteSpace(Parameters.ApiToken);
-        var jsonModeActive = Capabilities.JsonPromptEditor && Parameters.UseJsonPrompt;
-        var jsonError = jsonModeActive ? JsonErrorDetail(Parameters.Prompt) : null;
-        var jsonOk = !jsonModeActive || jsonError is null;
+        var jsonModeActive = GenerationReadiness.IsJsonModeActive(Parameters, Capabilities.JsonPromptEditor);
+        var jsonError = jsonModeActive ? GenerationReadiness.JsonErrorDetail(Parameters.Prompt) : null;
         JsonPromptStateText = jsonModeActive
             ? jsonError is null ? "Structured JSON: valid ✓" : $"Structured JSON: not valid — {jsonError}"
             : null;
         // MainPage's Ctrl+Enter handler reads this flag too.
-        IsValid = ModelIsSupported && tokenOk && !string.IsNullOrWhiteSpace(Parameters.Prompt) && jsonOk;
-    }
-
-    // Pollinations works anonymously and ComfyUI is the user's own server; Replicate needs a token.
-    private static bool TokenlessModel(string? model) =>
-        ModelConstants.Pollinations.IsId(model) || ModelConstants.ComfyUi.IsId(model);
-
-    // Null for valid JSON, else a short reason with line and position, so the user can find the
-    // break in a long single-line blob.
-    private static string? JsonErrorDetail(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return "prompt is empty";
-        try { using var _ = JsonDocument.Parse(text); return null; }
-        catch (JsonException ex)
-        {
-            // Drop the " LineNumber: … | BytePositionInLine: …" tail; the suffix below says it better.
-            var msg = ex.Message;
-            var cut = msg.IndexOf(" LineNumber:", StringComparison.Ordinal);
-            if (cut > 0) msg = msg[..cut].TrimEnd();
-            return ex is { LineNumber: { } line, BytePositionInLine: { } pos }
-                ? $"{msg} (line {line + 1}, pos {pos})"
-                : msg;
-        }
+        IsValid = ModelIsSupported
+                  && GenerationReadiness.MissingFields(Parameters).Count == 0
+                  && jsonError is null;
     }
 
     public bool IsPollinationsSelected => ModelConstants.Pollinations.IsId(Parameters.Model);
@@ -746,17 +722,15 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task GenerateImageAsync()
     {
-        var missing = new List<string>();
-        if (!TokenlessModel(Parameters.Model) && string.IsNullOrWhiteSpace(Parameters.ApiToken)) missing.Add("API Token");
-        if (string.IsNullOrWhiteSpace(Parameters.Prompt)) missing.Add("Prompt");
+        var missing = GenerationReadiness.MissingFields(Parameters);
         if (missing.Count > 0)
         {
             SetStatus($"Missing required field(s): {string.Join(", ", missing)}.", StatusKind.Error);
             return;
         }
 
-        if (Capabilities.JsonPromptEditor && Parameters.UseJsonPrompt
-            && JsonErrorDetail(Parameters.Prompt) is { } jsonError)
+        if (GenerationReadiness.IsJsonModeActive(Parameters, Capabilities.JsonPromptEditor)
+            && GenerationReadiness.JsonErrorDetail(Parameters.Prompt) is { } jsonError)
         {
             SetStatus($"Structured JSON prompt is not valid JSON: {jsonError}", StatusKind.Error);
             return;
