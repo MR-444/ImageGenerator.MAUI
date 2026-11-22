@@ -125,6 +125,12 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
             {
                 throw;
             }
+            catch (LlmRefusalException ex)
+            {
+                // Not retried: the same request meets the same classifier and is billed again.
+                _logger.LogWarning("{Service}: {Provider} declined ({Category})", "CaptionMutationLlm", target.ProviderLabel, ex.Category);
+                return LlmVariantResult.Fail(ex.Message);
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "CaptionMutationLlm: model call failed ({Provider} {Model}, attempt {Attempt})", target.ProviderLabel, target.ModelId, attempt);

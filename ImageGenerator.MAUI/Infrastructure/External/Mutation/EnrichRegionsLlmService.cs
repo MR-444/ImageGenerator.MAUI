@@ -116,6 +116,12 @@ public sealed class EnrichRegionsLlmService : IEnrichRegionsLlmService
             {
                 throw;
             }
+            catch (LlmRefusalException ex)
+            {
+                // Not retried: the same request meets the same classifier and is billed again.
+                _logger.LogWarning("{Service}: {Provider} declined ({Category})", "EnrichRegionsLlm", target.ProviderLabel, ex.Category);
+                return LlmVariantResult.Fail(ex.Message);
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "EnrichRegionsLlm: model call failed ({Provider} {Model}, attempt {Attempt})", target.ProviderLabel, target.ModelId, attempt);

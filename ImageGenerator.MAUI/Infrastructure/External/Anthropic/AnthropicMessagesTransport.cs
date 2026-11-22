@@ -12,10 +12,11 @@ internal readonly record struct ChatTurn(string Role, string Content);
 /// <summary>
 /// The raw <see cref="HttpClient"/> + System.Text.Json transport against api.anthropic.com's Messages
 /// API, with native structured outputs (<c>output_config.format = json_schema</c>, GA — no beta header).
-/// Extracted from <see cref="PromptBuilderService"/> so the prompt builder and the caption
-/// mutator share one body shape; <paramref name="modelId"/> is a parameter (Sonnet 4.6 / Opus 4.8), no
-/// longer hardcoded. The official <c>Anthropic</c> NuGet SDK can replace this later without touching the
-/// callers — once its publish behaviour is verified on the trimmed win-x64 single-file target.
+/// Extracted from <see cref="PromptBuilderService"/> so the prompt builder, the caption mutator and the
+/// region enricher share one body shape; the model is whatever the role's row picked.
+/// Kept hand-rolled on purpose rather than the official <c>Anthropic</c> SDK: it matches the Ollama and
+/// OpenRouter transports beside it, and keeps the per-request logging tags and the HttpRequestException
+/// contract the callers rely on. Worth revisiting if the app needs streaming, tools or batches.
 /// </summary>
 internal static class AnthropicMessagesTransport
 {
@@ -25,8 +26,10 @@ internal static class AnthropicMessagesTransport
     /// <summary>
     /// Shared with <see cref="AnthropicModelCatalog"/>: one app makes one claim about which API
     /// version it speaks. Bumping it is a deliberate change, not a per-endpoint accident.
+    /// 2026-10-21 rejects <c>temperature</c>/<c>top_p</c>/<c>top_k</c>, a <c>document</c> block in an
+    /// assistant turn and <c>citations</c> on user text; this app sends none of them.
     /// </summary>
-    internal const string AnthropicVersion = "2023-06-01";
+    internal const string AnthropicVersion = "2026-10-21";
     private const int MaxOutputTokens = 16000;
 
     // Verbatim property names (no naming policy): the body uses the exact API field spellings.
@@ -39,8 +42,9 @@ internal static class AnthropicMessagesTransport
     /// One Messages call: assemble the body, POST it, return the model's first text block. When
     /// <paramref name="schema"/> is non-null the call is constrained to that JSON schema (structured
     /// outputs); when null it's a plain text call. Throws <see cref="HttpRequestException"/> (carrying the
-    /// <see cref="System.Net.HttpStatusCode"/>) on a non-2xx status, or <see cref="InvalidOperationException"/>
-    /// on a 2xx response carrying no text block.
+    /// <see cref="System.Net.HttpStatusCode"/>) on a non-2xx status, <see cref="LlmRefusalException"/> when
+    /// the model declined (a 2xx with <c>stop_reason: "refusal"</c>), or <see cref="InvalidOperationException"/>
+    /// on any other 2xx response carrying no text block.
     /// </summary>
     public static async Task<string> SendAsync(
         IHttpClientFactory httpClientFactory,
@@ -98,14 +102,31 @@ internal static class AnthropicMessagesTransport
                 statusCode: response.StatusCode);
         }
 
-        return ExtractText(responseBody);
+        return ExtractText(responseBody, logger);
     }
 
     /// <summary>Pull the first text content block out of a Messages response (a thinking block may
-    /// precede it).</summary>
-    private static string ExtractText(string responseBody)
+    /// precede it). A refusal is checked first: it arrives as a 200 and may still carry partial text,
+    /// which must not be mistaken for an answer.</summary>
+    private static string ExtractText(string responseBody, ILogger logger)
     {
         using var doc = JsonDocument.Parse(responseBody);
+        if (doc.RootElement.TryGetProperty("stop_reason", out var stopReason)
+            && stopReason.ValueKind == JsonValueKind.String
+            && stopReason.GetString() == "refusal")
+        {
+            string? category = null, explanation = null;
+            if (doc.RootElement.TryGetProperty("stop_details", out var details)
+                && details.ValueKind == JsonValueKind.Object)
+            {
+                category = ReadString(details, "category");
+                explanation = ReadString(details, "explanation");
+            }
+
+            logger.LogWarning("Anthropic declined the request: category={Category}", category ?? "<none>");
+            throw new LlmRefusalException("Anthropic", category, explanation);
+        }
+
         if (doc.RootElement.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.Array)
         {
             foreach (var block in content.EnumerateArray())
@@ -139,6 +160,11 @@ internal static class AnthropicMessagesTransport
 
         return null;
     }
+
+    private static string? ReadString(JsonElement obj, string name) =>
+        obj.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     private static string Truncate(string value, int max) =>
         string.IsNullOrEmpty(value) || value.Length <= max ? value : value[..max] + "…";
