@@ -1,102 +1,136 @@
-# 🔥 Emberforge
+# Emberforge
 
-> **Why "Emberforge"?** It started as a plain image generator and grew into a *forge* — a desktop workbench where you don't just press "generate", you heat raw ideas into shape. It melts together many engines (cloud APIs **and** your own local ComfyUI/Ollama rig), hammers prompts into structured, spatially-aware Ideogram V4 captions, and lets variants *evolve* through a mutation/breeding engine. *Forge* for the craft and heat; *ember* nods to the home GPU box ("fireEngine") that does the local rendering. *(The repo and project keep their original `ImageGenerator.MAUI` identity; only the app name, the shipped binary — `Emberforge.exe` — and the icon are Emberforge.)*
+A Windows desktop app (.NET MAUI) for generating images through several backends, with LLM-assisted prompt tools on top.
 
-A Windows desktop (.NET MAUI) image-generation workbench that routes one prompt to many backends — **Replicate** (Flux, Replicate-hosted OpenAI, Google, Ideogram V4), **Pollinations.ai** (Flux, Zimage, Qwen, plus anything their `/models` lists), and **ComfyUI** (your own local/LAN server, any API-format workflow becomes a model) — and adds an LLM-assisted prompt pipeline on top.
+The repository and project are named `ImageGenerator.MAUI`; the app and the shipped binary are called Emberforge (`Emberforge.exe`).
 
-## What makes it interesting
+![Main page](<documents/MainPage_Screenshot 2026-06-12.png>)
 
-- **Three providers, one app.** Pick a model and the request routes itself; each provider's token lives in its own OS-secure slot. New Replicate/Pollinations models appear via **Refresh Models** without recompiling.
-- **Your own ComfyUI as a first-class backend.** Drop an API-format workflow JSON in a folder and it becomes a selectable model. The app patches prompt / seed / resolution / checkpoint / quality-preset into the graph and streams live per-step progress over the server WebSocket. No cloud, no cost beyond your GPU. → [details](#your-own-comfyui-server)
-- **Describe an idea → prompt (Claude or Ollama).** Type a plain idea; **Claude Opus/Sonnet** or a **local Ollama** model writes a polished prose prompt that works with any model, and optionally maps it to a schema-valid **Ideogram V4 structured caption**. → [details](#describe-an-idea-claude-or-ollama)
-- **Visual structured-prompt editor.** Build Ideogram V4's `json_prompt` in a three-pane workspace with an inspector, responsive canvas, and live JSON output — drag/resize element boxes on the 0–1000 grid, set style/palette, and **Enrich from layout**: a geometry-grounded LLM rewrites each element's description to reflect its real spatial relationships (what it rests on, sits beside, or is behind). → [details](#mutation--enrichment)
-- **Mutation & breeding engine.** Turn any structured caption into a batch of one-change variants along a **LOOK** (style) or **SCENE** (composition) axis — fully deterministic, seeded, offline, no key. Or switch on **AI mode** to steer mutations and breed from your favourites via Claude (Sonnet/Opus) or a **local Ollama** model. → [details](#mutation--enrichment)
-- **Post to CivitAI.** One checkbox publishes a finished image — optionally into a specific model's gallery with structured generation data attached. → [details](#posting-to-civitai)
+## Features
 
-**Everything else, briefly:** a self-contained single-file exe (no installer); a concurrent generation queue with per-job cancel; batch a `.txt` of prompts sequentially; an in-app gallery (sortable, live-watched, multi-select, copyable metadata, *use as input*, *remix*); every saved file embeds its full prompt + parameters (PNG `Comment` / EXIF `UserComment`) so any output is reproducible; per-provider tokens in Windows `SecureStorage` (DPAPI); persisted prompt/model/resolution/window bounds; and a diagnostics log at `%LOCALAPPDATA%\Emberforge\app.log` (NLog, rolls at 5 MB).
+- **Image providers:** Replicate (Flux 1.1 Pro / Ultra, Flux 2, GPT Image, Nano Banana 2, Ideogram V4), Pollinations, and your own ComfyUI server. **Refresh Models** loads each provider's current model list.
+- **ComfyUI workflows as models:** every API-format workflow in the workflows folder shows up as a model. See [ComfyUI](#comfyui).
+- **Describe an idea:** turns a plain idea or a reference image into a prose prompt, and optionally into an Ideogram V4 structured (JSON) caption.
+- **Structure editor:** a visual editor for Ideogram V4 structured captions. You place element boxes on a grid, and *Enrich from layout* rewrites element descriptions from their positions.
+- **Mutation engine:** makes batches of one-change variants of a structured caption. The default mode is deterministic and offline. AI mode lets you steer mutations in plain language and breed new captions from favourites.
+- **Gallery:** shows saved images with their metadata. From there you can *Use as input*, *Remix*, mutate, or post to CivitAI.
+- **CivitAI posting:** publishes finished images, optionally into a model's gallery.
+- **Reproducible output:** each saved image embeds its prompt and parameters (PNG `Comment` / EXIF `UserComment`).
+- **Generation:** a queue with per-job cancel, and batch runs from a `.txt` file of prompts.
 
-## 📸 Screenshots
+## Getting started
 
-![Main page — settings cards left, latest-result hero and generation queue right](<documents/MainPage_Screenshot 2026-06-12.png>)
+Download `Emberforge.exe` from the latest [release](https://github.com/MR-444/ImageGenerator.MAUI/releases). It is a self-contained single file and needs no installer or runtime. The exe is unsigned, so on first run Windows SmartScreen shows *"Windows protected your PC"*: choose **More info → Run anyway**.
 
-![Ideogram structure editor — visual builder for the structured JSON prompt with a layout grid for element placement](<documents/Ideogram_structure_editor.png>)
+On the first start of each new version, the exe unpacks its runtime (about 440 MB) to `%TEMP%\.net\Emberforge\`, so that start is slower. Folders left by older versions are not removed automatically; you can delete them while the app is closed.
 
-## 🖥️ Getting started
+### Settings
 
-**Download.** Grab `Emberforge.exe` from the latest [release](https://github.com/MR-444/ImageGenerator.MAUI/releases) — self-contained, no installer or runtime prerequisite. It ships unsigned, so on first run Windows SmartScreen shows *"Windows protected your PC"* → **More info → Run anyway**. (Or [build from source](#-building-from-source).)
+The Settings page holds connections only: API keys, server URLs, and a few switches. Each tool picks its own model on its own page. Keys are stored per provider in Windows secure storage.
 
-**Tokens & providers.** The **Settings** page has one API-Tokens picker with an independent, DPAPI-secured slot per provider — set whichever you use and switch models freely on the main page:
-
-| Provider | What it's for | Where to get it |
+| Connection | Used for | Where to get it |
 |---|---|---|
-| **Replicate** | Flux · OpenAI `gpt-image` · Google `nano-banana-2` · Ideogram V4 | [replicate.com/account/api-tokens](https://replicate.com/account/api-tokens) |
-| **Pollinations** | `flux` / `zimage` / `qwen-image` etc. — works anonymously (rate-limited); a token raises the limit | [auth.pollinations.ai](https://auth.pollinations.ai) |
-| **Anthropic** | Claude tiers for *Describe an idea* + AI mutation/enrichment (never image gen) | [console.anthropic.com](https://console.anthropic.com) |
-| **CivitAI** | publishing finished images (Media-Write scope) | [civitai.com/user/account](https://civitai.com/user/account) |
-| **ComfyUI** | a server base URL (and optional `Authorization` header) instead of a token | your own server |
+| Replicate | Image generation | [replicate.com/account/api-tokens](https://replicate.com/account/api-tokens) |
+| Pollinations | Image generation (a key is required) | [auth.pollinations.ai](https://auth.pollinations.ai) |
+| ComfyUI | Image generation on your own server: base URL, optional `Authorization` header | your server |
+| Ollama | Local text and vision models for the prompt tools: base URL | your server |
+| Anthropic | Claude models for the prompt tools (text only) | [console.anthropic.com](https://console.anthropic.com) |
+| OpenRouter | Hosted text and vision models for the prompt tools; *Free models only* limits every OpenRouter list to free models | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| CivitAI | Posting images (needs the Media Write scope) | [civitai.com/user/account](https://civitai.com/user/account) |
 
-> Reproducibility note: Pollinations honours `seed` only on `flux`, `zimage`, `seedream`, `klein`, `seedance`, `nova-reel`; other models ignore it.
+Replicate, Pollinations, Anthropic and OpenRouter (except free models) bill per request. ComfyUI and Ollama run on your own hardware.
 
-### Your own ComfyUI server
+### Folders
 
-The ComfyUI provider talks to a [ComfyUI](https://github.com/comfyanonymous/ComfyUI) instance you run (localhost or LAN — start it with `--listen` for LAN, and don't expose a bare port to the internet). The app never builds graphs; you bring your own. In ComfyUI use **Workflow → Export (API)** and save the JSON into your data folder's `comfy-workflows\` subfolder (default `Pictures\Emberforge\comfy-workflows\`, or `<output folder>\comfy-workflows\` when you've set one in Settings) — every file there becomes a model entry, re-scanned on launch / Refresh Models. (Normal Ctrl+S saves are the UI format and can't be queued; the app tells you to re-export.)
+- **Data folder:** `Pictures\Emberforge\` by default. You can change it under Settings → Output. It contains `pictures\`, `json-prompts\`, `comfy-workflows\`, `mutation-library\` and `prompt-builder\`.
+- **Log:** `%LOCALAPPDATA%\Emberforge\app.log`. It rolls over at 5 MB and keeps 5 archives.
 
-At submit time the app patches the graph: your **prompt** into the lowest-id `CLIPTextEncode` (or, in structured mode, into `Ideogram4PromptBuilderKJ` / a JSON-literal `CLIPTextEncode`); re-rolls every literal `seed` / `noise_seed`; writes **aspect-ratio + megapixels** into a `ResolutionSelector` if present; offers a **checkpoint** picker for a baked `CheckpointLoaderSimple` or single literal `UNETLoader` (multi-UNET pairings keep their models); offers a **quality-preset** picker for a single `CustomCombo`; and expands `%date:…%` filename tokens app-side. Minimum a workflow needs: a `CLIPTextEncode` with literal text and a `SaveImage`.
+## ComfyUI
 
-[`comfy-workflows/Ideogram4-Sample.json`](comfy-workflows/Ideogram4-Sample.json) is a ready-to-use Ideogram 4 workflow using **stock ComfyUI nodes only**; it needs the usual Ideogram 4 model files on the server (`ideogram4_fp8_scaled` + `ideogram4_unconditional_fp8_scaled`, `qwen3vl_8b_fp8_scaled` text encoder, `flux2-vae`). Canceling in the app drains pending jobs and interrupts the active render when it's the app's own.
+Emberforge talks to a [ComfyUI](https://github.com/comfyanonymous/ComfyUI) server that you run, either on localhost or on your LAN (start ComfyUI with `--listen`). Don't expose the port to the internet. The app doesn't build graphs; it uses workflows that you export.
 
-**Upscaling.** A workflow containing a `LoadImage` node is an image-to-image workflow: the app shows the Input Image card for it, uploads your image to the server (`/upload/image`) and patches the stored name into every `LoadImage`. When such a workflow's file name contains *upscale*, it also becomes the target of the **Upscale after render** checkbox (ComfyUI models only): the finished render is fed straight into it and both files are kept, the second one with an `_upscaled` suffix. [`comfy-workflows/Upscale-Sample.json`](comfy-workflows/Upscale-Sample.json) is a ready-to-use tiled [Ultimate SD Upscale](https://github.com/ssitu/ComfyUI_UltimateSDUpscale) 2× pass (SDXL `zavychromaxl` + TTPlanet tile ControlNet + `4x_foolhardy_Remacri`); to upscale an existing image, select it as the model and use **Use as input** on any gallery image.
+1. In ComfyUI, use **Workflow → Export (API)**. A normal save produces the UI format, which the app rejects with a message.
+2. Save the JSON in `<data folder>\comfy-workflows\`. Each file becomes a model, and the folder is rescanned on launch and on Refresh Models.
 
-**Krea-2 LoRAs.** A workflow whose `CLIPLoader` has `type: "krea2"` gets a LoRA picker in the Output card. The picker reads the configured host's native `GET /models/loras` catalog (including subfolders), offers **None**, and remembers the selection per workflow. At queue time Emberforge injects ComfyUI's built-in `LoraLoaderModelOnly` with the selected model strength; the workflow JSON on disk is never modified. Only choose LoRAs trained for Krea-2—the ComfyUI catalog contains every file in `models/loras` and does not label model compatibility.
+When a job is queued, the app patches a copy of the graph; the file on disk is never changed:
 
-### Describe an idea (Claude or Ollama)
+- **Prompt:** written into the lowest-id `CLIPTextEncode`. In structured mode it goes into `Ideogram4PromptBuilderKJ` or a JSON-literal `CLIPTextEncode` instead.
+- **Seed:** every literal `seed` / `noise_seed` is re-rolled.
+- **Resolution:** aspect ratio and megapixels go into a `ResolutionSelector`, if the workflow has one. The resolution is remembered per workflow.
+- **Quality preset:** a picker appears for a single `CustomCombo`.
+- **File names:** `%date:…%` tokens in file names are expanded by the app.
+- **Shown, not editable:** the checkpoint or diffusion model baked into the workflow is displayed and recorded in the image metadata.
 
-**Describe an idea…** runs two passes: Pass 1 always turns a plain-English idea into a polished **prose** prompt (good for any model); Pass 2 optionally maps that onto a schema-valid **Ideogram V4 JSON** caption. The result card lets you copy the prose, use it as the prompt, or use the JSON. Pick **Claude Opus**, **Claude Sonnet**, or **Local** (your configured Ollama server/model). Anthropic tiers are billed per pass; Local needs no token and quality depends on the installed model. Power users can override the bundled clean-room instructions with private `vpe-prompt.md` / `system-prompt.md` files in your data folder's `prompt-builder\` subfolder (default `Pictures\Emberforge\prompt-builder\`) (read fresh, never enter the repo — an open-core split).
+At minimum, a workflow needs a `CLIPTextEncode` with literal text and a `SaveImage`.
 
-### Mutation & enrichment
+The app also handles a few special cases:
 
-From any Ideogram V4 *structured* caption (hand-built, from *Describe an idea*, or remixed from a saved image):
+- **Image-to-image:** a workflow with a `LoadImage` node shows the Input Image card. The image is uploaded to the server and patched into every `LoadImage`.
+- **Upscaling:** a `LoadImage` workflow whose file name contains *upscale* is the target of **Upscale after render**. The finished render is fed into it, and both files are kept (the second with an `_upscaled` suffix). If the workflow has a single literal `upscale_by`, a factor picker appears.
+- **Krea-2 LoRAs:** a workflow whose `CLIPLoader` has `type: "krea2"` gets a LoRA picker and a strength slider. The list comes from the server's `/models/loras`, and the LoRA is injected as `LoraLoaderModelOnly`. The catalog lists every file in `models/loras` without compatibility labels, so pick only LoRAs trained for Krea-2.
+- **SageAttention:** an optional Settings switch injects the KJNodes SageAttention patch into compatible model loaders. This requires KJNodes and the `sageattention` library on the server.
+- **Free GPU memory after rendering:** an optional Settings switch that unloads ComfyUI models when idle, so Ollama has VRAM.
 
-- **Mutate** it into a batch of one-change variants — **LOOK** (style/ornament; 24 built-in style fragments) or **SCENE** (background, placement, element presence; aspect-ratio-aware bbox moves) — one axis per run so every difference is traceable. Deterministic, seeded, offline by default. Per-element **slot tags** decide what a mutation may touch; the subject's identity is always preserved.
-- **AI mode** (optional, needs an Anthropic key or a local Ollama endpoint) lets you steer mutations in plain language and **breed** new captions from the variants you liked.
-- **Enrich from layout** (in the structure editor) rewrites each element's description to read its spatial place in the scene. A deterministic pass computes the geometry (relative position, support/contact, background band, overlap) and the LLM turns it into natural relational prose — deciding *front/behind* from the geometry **and** each description's own wording, never from list order. You preview before/after per element and accept or discard.
+Sample workflows are in [`comfy-workflows/`](comfy-workflows/) (Ideogram 4, Krea-2, Moss-Image, upscale). Each one needs the model files it references on your server.
 
-Render a batch at one fixed seed (so only the change differs), pick winners in the gallery, and promote one with **Remix**.
+## Prompt tools
 
-### Posting to CivitAI
+Describe an idea, the mutation engine's AI mode, and the structure editor's enrichment each have their own provider and model choice: Local (Ollama), Anthropic or OpenRouter. Image observation in Describe an idea uses Ollama or OpenRouter. Each tool remembers its choice.
 
-Check **Post to CivitAI** and a finished image is published the moment it's saved — optionally into a model's gallery (paste the model URL or version id) with prompt/seed/model attached as structured metadata (CivitAI ignores file metadata on API uploads, so this is how generation data reaches a post). It runs after the file is on disk and never blocks or fails the generation; the checkbox resets off each launch. Uses CivitAI's official [MCP server](https://mcp.civitai.com/) for the upload plus one direct API call for the post.
+**Describe an idea** runs up to three passes:
 
-### Costs
+1. Observe a reference image (image mode only).
+2. Write a prose prompt that works with any model.
+3. Optionally, map the prose onto an Ideogram V4 structured caption.
 
-**Replicate** is pay-as-you-go, roughly **$0.003–$0.05** per image by model ([pricing](https://replicate.com/pricing)). **Pollinations** free models stay free; `paid_only` models are filtered out of the picker. **Anthropic** applies only when you pick a Claude tier for the prompt builder / AI mutation, billed per call.
+You can replace the bundled instructions for each pass with your own files in `<data folder>\prompt-builder\`: `image-observation.md`, `vpe-prompt.md` and `system-prompt.md`. The files are read fresh on every run, and a `README.txt` in that folder explains them.
 
-## 🚀 Building from source
+**Mutation engine** works on any Ideogram V4 structured caption:
 
-Needs the **.NET 10 SDK** + the MAUI workload (VS 2022 17.12+ or Rider), Windows 10 1809+.
+- **Axes:** each run changes one axis. *LOOK* covers style and ornament; *SCENE* covers background, placement and element presence.
+- **Deterministic:** the default mode is seeded, offline and needs no key. Per-element slot tags control what a mutation may change, and the subject's identity is kept.
+- **AI mode:** steer mutations in plain language, or breed new captions from selected variants.
+- **Testing variants:** render a batch at one fixed seed so only the change differs, then pick winners in the gallery and *Remix* one.
+
+**Enrich from layout** (in the structure editor) works in two steps:
+
+1. A deterministic pass computes each element's geometry: relative position, contact, background band and overlap.
+2. The LLM rewrites each description to match.
+
+You review the result before and after for each element, then accept or discard it.
+
+![Structure editor](<documents/Ideogram_structure_editor.png>)
+
+## CivitAI posting
+
+With **Post to CivitAI** checked, each image is posted after it is saved, optionally into a model's gallery (paste the model URL or version id). The prompt, seed and model are attached as structured data, because CivitAI ignores file metadata on API uploads. Posting never blocks or fails the generation, and the checkbox is off on every launch. Gallery images can also be posted afterwards.
+
+The upload goes through CivitAI's [MCP server](https://mcp.civitai.com/), plus one direct API call that creates the post.
+
+## Building from source
+
+Requirements: Windows 10 1809 or later, the .NET 11 SDK, and the MAUI Windows workload (`dotnet workload restore`).
+
+ImageSharp 4 is a licensed build. Supply the key through the `SIXLABORS_LICENSE_KEY` environment variable / MSBuild property, or a local `sixlabors.lic` (git-ignored).
 
 ```bash
 git clone https://github.com/MR-444/ImageGenerator.MAUI.git
+cd ImageGenerator.MAUI
+dotnet build ImageGenerator.MAUI.sln
+dotnet test ImageGenerator.MAUI.sln
 ```
 
-Open `ImageGenerator.MAUI.sln`, restore, build, run. For the self-contained single-file release exe, run `pwsh ./publish.ps1` from the repo root. Tests: `dotnet test` (1368 tests — provider payloads, the ComfyUI patcher, catalog filtering/persistence, the V4 structured-prompt model + validator, the deterministic mutation operators and the RegionGraph geometry, the LLM seams via fakes, CivitAI posting, gallery + UI-state persistence).
+For the release exe, run `powershell -File ./publish.ps1`, or `pwsh ./publish.ps1` with PowerShell 7. It writes `ImageGenerator.MAUI/bin/Release/net11.0-windows10.0.22621.0/win-x64/publish/Emberforge.exe`.
 
-## 🛠️ Stack
+Stack: .NET MAUI 11 (Windows), CommunityToolkit.Mvvm, Refit + `System.Text.Json`, Microsoft.Extensions.Http.Resilience, SixLabors.ImageSharp 4, NLog, plain `HttpClient` for Anthropic / Ollama / OpenRouter. Tests use xUnit, Moq and FluentAssertions.
 
-.NET MAUI 10 (Windows) · CommunityToolkit.Mvvm · Refit + `System.Text.Json` · Microsoft.Extensions.Http.Resilience (Polly) · SixLabors.ImageSharp 3 · raw `HttpClient` for the Anthropic/Ollama LLM calls · xUnit + Moq + FluentAssertions.
+## Known limitations
 
-## ⚠️ Known issues
+- The gallery has no delete, rename or search. Manage files in Explorer; the gallery picks up changes within about a second.
+- Windows only; other platforms are not built or tested.
 
-- Error-path UX (401s, mid-generation network drops, 5xx/quota) isn't exhaustively audited — happy path, Cancel, and concurrent jobs work as expected.
-- Gallery has no in-app delete/rename/search yet (manage files in Explorer; the watcher picks changes up within ~1 s).
-- Pollinations `kontext` (image-to-image) has no input-image plumbing — use a Replicate Flux model for image-prompted edits.
+To report a problem, [open an issue](https://github.com/MR-444/ImageGenerator.MAUI/issues). Include the relevant lines from `%LOCALAPPDATA%\Emberforge\app.log` and what you were generating.
 
-Hitting something? [Open an issue](https://github.com/MR-444/ImageGenerator.MAUI/issues) with the status text from `%LOCALAPPDATA%\Emberforge\app.log` (i.e. `C:\Users\<you>\AppData\Local\Emberforge\app.log`) and what you were generating.
+## License
 
-## 🔭 Roadmap
-
-Directions under consideration (a small side project, not commitments): one-click upscale (via a Replicate/ComfyUI upscaler) · saved parameter presets · finer per-element control in the enrichment preview.
-
-## 📄 License
-
-MIT — see [LICENSE](LICENSE). Initial work by **Silmas**. Thanks to the .NET MAUI team and the image-generation API providers.
+MIT, see [LICENSE](LICENSE).
