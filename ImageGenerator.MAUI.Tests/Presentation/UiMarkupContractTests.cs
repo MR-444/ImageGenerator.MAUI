@@ -275,8 +275,8 @@ public class UiMarkupContractTests
             .Single(element =>
                 (string?)element.Attribute("AutomationId") == "Krea2LoraStrengthSlider");
 
-        markup.Should().Contain("ItemsSource=\"{Binding ComfyUi.Krea2LoraOptions}\"")
-            .And.Contain("SelectedItem=\"{Binding ComfyUi.SelectedKrea2Lora}\"")
+        markup.Should().Contain("ItemsSource=\"{Binding ComfyUi.Krea2LoraChoice.Options}\"")
+            .And.Contain("SelectedItem=\"{Binding ComfyUi.Krea2LoraChoice.Selected}\"")
             .And.Contain("AutomationId=\"Krea2LoraPicker\"")
             .And.Contain("AutomationId=\"Krea2LoraStrengthSlider\"")
             .And.Contain("Command=\"{Binding ComfyUi.RefreshKrea2LorasCommand}\"");

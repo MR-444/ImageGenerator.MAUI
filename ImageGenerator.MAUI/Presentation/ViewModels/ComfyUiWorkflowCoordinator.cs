@@ -24,11 +24,9 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 /// completion re-checks its token both before and inside the DispatchToUi hop. Do not merge
 /// the tokens and do not await the probes sequentially.
 ///
-/// Suppression contract: a MAUI/WinUI Picker with a two-way-bound SelectedItem pushes null —
-/// or a valid first option — back into its source whenever its ItemsSource is swapped. Every
-/// programmatic options swap here therefore runs inside a persist-suppression window, and the
-/// null guards in the OnSelected*Changed hooks catch the deferred pushes that land after the
-/// window has closed. Both are real platform binding quirks, not defensive noise.
+/// The three Pickers bind <see cref="PickerChoice"/>s, so a WinUI Picker's own pushes during
+/// and after an ItemsSource swap never count as picks. A pick applies and persists; a restore
+/// shows its value with <c>Show</c> and applies it explicitly, and is never persisted.
 /// </summary>
 public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
 {
@@ -66,6 +64,14 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
         _capsSetter = capsSetter ?? throw new ArgumentNullException(nameof(capsSetter));
         _truncateInputImages = truncateInputImages ?? throw new ArgumentNullException(nameof(truncateInputImages));
         _comfyUiLoraService = comfyUiLoraService;
+
+        QualityPresetChoice = new PickerChoice(OnQualityPresetPicked);
+        Krea2LoraChoice = new PickerChoice(OnKrea2LoraPicked);
+        Krea2LoraChoice.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PickerChoice.Selected)) OnPropertyChanged(nameof(IsKrea2LoraSelected));
+        };
+        UpscaleFactorChoice = new PickerChoice(OnUpscaleFactorPicked);
     }
 
     /// <summary>
@@ -140,17 +146,12 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
     // ComfyUI quality-preset picker (the workflow's single CustomCombo node). Options come
     // from the file itself — option1..option4 — with the baked-in choice first (= no patch);
     // no server fetch. Hidden whenever the workflow has no unambiguous CustomCombo.
-    [ObservableProperty]
-    private List<string> _qualityPresetOptions = [];
-
-    [ObservableProperty]
-    private string? _selectedQualityPreset;
+    public PickerChoice QualityPresetChoice { get; }
 
     [ObservableProperty]
     private bool _supportsQualityPreset;
 
     private string? _workflowDefaultPreset;
-    private bool _suppressPresetPersist;
     // Monotonic token, same role as _checkpointRefreshVersion.
     private int _presetRefreshVersion;
 
@@ -160,12 +161,7 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
     internal const string NoKrea2LoraOption = "No LoRA";
     private const string LegacyNoKrea2LoraOption = "None";
 
-    [ObservableProperty]
-    private List<string> _krea2LoraOptions = [];
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsKrea2LoraSelected))]
-    private string? _selectedKrea2Lora;
+    public PickerChoice Krea2LoraChoice { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsKrea2LoraSelected))]
@@ -179,10 +175,9 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
 
     public bool IsKrea2LoraSelected =>
         SupportsKrea2Lora
-        && SelectedKrea2Lora is { Length: > 0 }
-        && SelectedKrea2Lora != NoKrea2LoraOption;
+        && Krea2LoraChoice.Selected is { Length: > 0 } lora
+        && lora != NoKrea2LoraOption;
 
-    private bool _suppressLoraPersist;
     private int _loraRefreshVersion;
     private string? _activeLoraWorkflow;
 
@@ -205,11 +200,7 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
     // Options come from the workflow's baked value (first, = no patch) plus common factors.
     // The card's IsVisible binds to IsUpscaleFactorVisible, not SupportsUpscaleFactor: a factor
     // whose slot lives in the chain workflow is meaningless while "Upscale after render" is off.
-    [ObservableProperty]
-    private List<string> _upscaleFactorOptions = [];
-
-    [ObservableProperty]
-    private string? _selectedUpscaleFactor;
+    public PickerChoice UpscaleFactorChoice { get; }
 
     [ObservableProperty]
     private bool _supportsUpscaleFactor;
@@ -224,7 +215,6 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
     // The picker's intent, kept even while it cannot apply (chain off) so re-checking the box
     // re-arms the factor without asking the user to pick it again.
     private double? _pickedUpscaleFactor;
-    private bool _suppressUpscaleFactorPersist;
 
     private static readonly double[] CommonUpscaleFactors = [1.5, 2.0, 3.0, 4.0];
 
@@ -238,26 +228,19 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
             ? factor
             : null;
 
-    partial void OnSelectedUpscaleFactorChanged(string? value)
+    private void OnUpscaleFactorPicked(string value)
     {
-        // The WinUI ComboBox pushes SelectedItem=null on ItemsSource swaps; ignore it like
-        // OnSelectedQualityPresetChanged does.
-        if (value is null) return;
-
-        var factor = ParseUpscaleFactor(value);
-        if (factor is null) return;
+        if (ParseUpscaleFactor(value) is not { } factor) return;
 
         // Remembered as intent first: with the chain off this pick is inert, but it must not be
         // forgotten — checking "Upscale after render" later arms it.
         _pickedUpscaleFactor = factor;
         ApplyUpscaleFactor();
 
-        if (!_suppressUpscaleFactorPersist
-            && _upscaleFactorWorkflow is { } workflow
-            && UpscaleFactorOptions.Contains(value))
+        if (_upscaleFactorWorkflow is { } workflow)
         {
             _uiStateStore.PersistComfyUiUpscaleFactor(
-                factor.Value.ToString(CultureInfo.InvariantCulture), workflow);
+                factor.ToString(CultureInfo.InvariantCulture), workflow);
         }
     }
 
@@ -287,45 +270,35 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
     public bool IsUpscaleFactorVisible =>
         SupportsUpscaleFactor && (_upscaleFactorOwnsRender || Parameters.UpscaleAfterRender);
 
-    partial void OnSelectedQualityPresetChanged(string? value)
+    private void OnQualityPresetPicked(string value)
     {
-        // The WinUI ComboBox pushes SelectedItem=null on ItemsSource swaps; ignore it like
-        // OnSelectedModelChanged does — the real selection lands on a later tick.
-        if (value is null) return;
+        ApplyQualityPreset(value);
+        if (ModelConstants.ComfyUi.IsId(Parameters.Model))
+            _uiStateStore.PersistComfyUiPreset(value, ModelConstants.ComfyUi.WorkflowName(Parameters.Model));
+    }
 
-        Parameters.ComfyUiPreset =
-            value == _workflowDefaultPreset ? string.Empty : value;
+    private void ApplyQualityPreset(string value)
+    {
+        Parameters.ComfyUiPreset = value == _workflowDefaultPreset ? string.Empty : value;
 
         // Display-only: record the resolved preset (default OR picked) so the metadata and job
         // card report which preset rendered the image. Unlike ComfyUiPreset (empty = no patch),
         // this is set even when the pick equals the baked default — mirrors ComfyUiModelDisplay.
         Parameters.ComfyUiPresetDisplay = value;
-
-        if (!_suppressPresetPersist
-            && QualityPresetOptions.Contains(value)
-            && ModelConstants.ComfyUi.IsId(Parameters.Model))
-        {
-            _uiStateStore.PersistComfyUiPreset(
-                value, ModelConstants.ComfyUi.WorkflowName(Parameters.Model));
-        }
     }
 
-    partial void OnSelectedKrea2LoraChanged(string? value)
+    private void OnKrea2LoraPicked(string value)
     {
-        // ItemsSource swaps make the Windows Picker push null; preserve the real selection.
-        if (value is null) return;
+        ApplyKrea2Lora(value);
+        if (ModelConstants.ComfyUi.IsId(Parameters.Model))
+            _uiStateStore.PersistComfyUiLora(value, ModelConstants.ComfyUi.WorkflowName(Parameters.Model));
+    }
 
+    private void ApplyKrea2Lora(string value)
+    {
         var loraName = value == NoKrea2LoraOption ? string.Empty : value;
         Parameters.ComfyUiLora = loraName;
         Parameters.ComfyUiLoraDisplay = loraName;
-
-        if (!_suppressLoraPersist
-            && Krea2LoraOptions.Contains(value)
-            && ModelConstants.ComfyUi.IsId(Parameters.Model))
-        {
-            _uiStateStore.PersistComfyUiLora(
-                value, ModelConstants.ComfyUi.WorkflowName(Parameters.Model));
-        }
     }
 
     /// <summary>
@@ -430,31 +403,25 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
             DispatchToUi(() =>
             {
                 if (version != _upscaleRefreshVersion) return;
-                _suppressUpscaleFactorPersist = true;
-                try
-                {
-                    _workflowDefaultUpscaleFactor = bakedFactor.Value;
-                    _upscaleFactorWorkflow = factorWorkflow;
-                    // Whose slot gets patched decides when the factor is live: own workflow →
-                    // always; chain target → only while the chain is checked.
-                    _upscaleFactorOwnsRender = ownFactor is not null;
-                    var factors = new List<double> { bakedFactor.Value };
-                    factors.AddRange(CommonUpscaleFactors.Where(f => !factors.Contains(f)));
-                    UpscaleFactorOptions = [.. factors.Select(FormatUpscaleFactor)];
-                    // Restore a previous explicit pick for THIS workflow — but only when it's
-                    // still on offer; never invent a selection.
-                    var saved = ParseUpscaleFactor(_uiStateStore.LoadComfyUiUpscaleFactor(factorWorkflow));
-                    var target = saved is { } s && factors.Contains(s) ? s : bakedFactor.Value;
-                    SelectedUpscaleFactor = FormatUpscaleFactor(target);
-                    _pickedUpscaleFactor = target;
-                    // Explicit, not only via the changed-handler: an unchanged label across a
-                    // workflow switch fires no event, but the baked default (= null sentinel)
-                    // and the slot ownership may differ between the two workflows.
-                    ApplyUpscaleFactor();
-                    SupportsUpscaleFactor = true;
-                    OnPropertyChanged(nameof(IsUpscaleFactorVisible));
-                }
-                finally { _suppressUpscaleFactorPersist = false; }
+                _workflowDefaultUpscaleFactor = bakedFactor.Value;
+                _upscaleFactorWorkflow = factorWorkflow;
+                // Whose slot gets patched decides when the factor is live: own workflow →
+                // always; chain target → only while the chain is checked.
+                _upscaleFactorOwnsRender = ownFactor is not null;
+                var factors = new List<double> { bakedFactor.Value };
+                factors.AddRange(CommonUpscaleFactors.Where(f => !factors.Contains(f)));
+                UpscaleFactorChoice.SetOptions(factors.Select(FormatUpscaleFactor));
+                // Restore a previous explicit pick for THIS workflow — but only when it's
+                // still on offer; never invent a selection.
+                var saved = ParseUpscaleFactor(_uiStateStore.LoadComfyUiUpscaleFactor(factorWorkflow));
+                var target = saved is { } s && factors.Contains(s) ? s : bakedFactor.Value;
+                UpscaleFactorChoice.Show(FormatUpscaleFactor(target));
+                _pickedUpscaleFactor = target;
+                // The baked default (= null sentinel) and the slot ownership may differ between
+                // two workflows even when the label is the same.
+                ApplyUpscaleFactor();
+                SupportsUpscaleFactor = true;
+                OnPropertyChanged(nameof(IsUpscaleFactorVisible));
             });
         }
         catch (Exception ex)
@@ -467,21 +434,16 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
     private void HideUpscaleFactorPicker(int? expectedVersion = null) => DispatchToUi(() =>
     {
         if (expectedVersion is { } v && v != _upscaleRefreshVersion) return;
-        _suppressUpscaleFactorPersist = true;
-        try
-        {
-            SupportsUpscaleFactor = false;
-            UpscaleFactorOptions = [];
-            _workflowDefaultUpscaleFactor = null;
-            _upscaleFactorWorkflow = null;
-            _upscaleFactorOwnsRender = false;
-            _pickedUpscaleFactor = null;
-            SelectedUpscaleFactor = null;
-            // A stale factor must not linger in Clone() snapshots of other models.
-            Parameters.ComfyUiUpscaleFactor = null;
-            OnPropertyChanged(nameof(IsUpscaleFactorVisible));
-        }
-        finally { _suppressUpscaleFactorPersist = false; }
+        SupportsUpscaleFactor = false;
+        UpscaleFactorChoice.SetOptions([]);
+        UpscaleFactorChoice.Show(null);
+        _workflowDefaultUpscaleFactor = null;
+        _upscaleFactorWorkflow = null;
+        _upscaleFactorOwnsRender = false;
+        _pickedUpscaleFactor = null;
+        // A stale factor must not linger in Clone() snapshots of other models.
+        Parameters.ComfyUiUpscaleFactor = null;
+        OnPropertyChanged(nameof(IsUpscaleFactorVisible));
     });
 
     private void HideUpscaleOption(int? expectedVersion = null) => DispatchToUi(() =>
@@ -585,20 +547,17 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
             DispatchToUi(() =>
             {
                 if (version != _presetRefreshVersion) return;
-                _suppressPresetPersist = true;
-                try
-                {
-                    _workflowDefaultPreset = baked;
-                    QualityPresetOptions =
-                        [baked, .. slot.Options.Where(o => !string.Equals(o, baked, StringComparison.Ordinal))];
-                    // Restore a previous explicit pick for THIS workflow — but only when the
-                    // workflow still offers it; never invent a selection.
-                    var saved = _uiStateStore.LoadComfyUiPreset(workflowName);
-                    SelectedQualityPreset =
-                        saved is not null && QualityPresetOptions.Contains(saved) ? saved : baked;
-                    SupportsQualityPreset = true;
-                }
-                finally { _suppressPresetPersist = false; }
+                _workflowDefaultPreset = baked;
+                QualityPresetChoice.SetOptions(
+                    (string[])[baked, .. slot.Options.Where(o => !string.Equals(o, baked, StringComparison.Ordinal))]);
+                // Restore a previous explicit pick for THIS workflow — but only when the
+                // workflow still offers it; never invent a selection.
+                var saved = _uiStateStore.LoadComfyUiPreset(workflowName);
+                var target = saved is not null && QualityPresetChoice.Options.Contains(saved) ? saved : baked;
+                QualityPresetChoice.Show(target);
+                // Explicit: the same label on two workflows can mean "no patch" on one of them.
+                ApplyQualityPreset(target);
+                SupportsQualityPreset = true;
             });
         }
         catch (Exception ex)
@@ -611,18 +570,13 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
     private void HideQualityPresetPicker(int? expectedVersion = null) => DispatchToUi(() =>
     {
         if (expectedVersion is { } v && v != _presetRefreshVersion) return;
-        _suppressPresetPersist = true;
-        try
-        {
-            SupportsQualityPreset = false;
-            QualityPresetOptions = [];
-            _workflowDefaultPreset = null;
-            SelectedQualityPreset = null;
-            // A stale preset must not linger in Clone() snapshots of other models.
-            Parameters.ComfyUiPreset = string.Empty;
-            Parameters.ComfyUiPresetDisplay = string.Empty;
-        }
-        finally { _suppressPresetPersist = false; }
+        SupportsQualityPreset = false;
+        QualityPresetChoice.SetOptions([]);
+        QualityPresetChoice.Show(null);
+        _workflowDefaultPreset = null;
+        // A stale preset must not linger in Clone() snapshots of other models.
+        Parameters.ComfyUiPreset = string.Empty;
+        Parameters.ComfyUiPresetDisplay = string.Empty;
     });
 
     internal async Task RefreshKrea2LoraOptionsAsync(string? modelValue)
@@ -645,14 +599,9 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
                 DispatchToUi(() =>
                 {
                     if (version != _loraRefreshVersion) return;
-                    _suppressLoraPersist = true;
-                    try
-                    {
-                        Parameters.ComfyUiLora = string.Empty;
-                        Parameters.ComfyUiLoraDisplay = string.Empty;
-                        SelectedKrea2Lora = null;
-                    }
-                    finally { _suppressLoraPersist = false; }
+                    Parameters.ComfyUiLora = string.Empty;
+                    Parameters.ComfyUiLoraDisplay = string.Empty;
+                    Krea2LoraChoice.Show(null);
                 });
             }
             krea2Confirmed = await _checkpointService.GetWorkflowIsKrea2Async(workflowName);
@@ -677,30 +626,22 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
             DispatchToUi(() =>
             {
                 if (version != _loraRefreshVersion) return;
-                _suppressLoraPersist = true;
-                try
-                {
-                    Krea2LoraOptions = [NoKrea2LoraOption, .. names];
-                    var saved = _uiStateStore.LoadComfyUiLora(workflowName);
-                    var target = string.Equals(saved, LegacyNoKrea2LoraOption, StringComparison.Ordinal)
-                        ? NoKrea2LoraOption
-                        : saved is not null && Krea2LoraOptions.Contains(saved)
-                            ? saved
-                            : NoKrea2LoraOption;
+                Krea2LoraChoice.SetOptions((string[])[NoKrea2LoraOption, .. names]);
+                var saved = _uiStateStore.LoadComfyUiLora(workflowName);
+                var target = string.Equals(saved, LegacyNoKrea2LoraOption, StringComparison.Ordinal)
+                    ? NoKrea2LoraOption
+                    : saved is not null && Krea2LoraChoice.Options.Contains(saved)
+                        ? saved
+                        : NoKrea2LoraOption;
 
-                    SelectedKrea2Lora = target;
-                    // Explicit because an unchanged selection label does not raise OnChanged
-                    // when switching between two workflows with different saved state.
-                    Parameters.ComfyUiLora = target == NoKrea2LoraOption ? string.Empty : target;
-                    Parameters.ComfyUiLoraDisplay = Parameters.ComfyUiLora;
-                    _activeLoraWorkflow = workflowName;
-                    SupportsKrea2Lora = true;
-                    IsLoadingKrea2Loras = false;
-                    Krea2LoraStatusText = names.Count == 0
-                        ? "No LoRAs are installed on this ComfyUI host."
-                        : null;
-                }
-                finally { _suppressLoraPersist = false; }
+                Krea2LoraChoice.Show(target);
+                ApplyKrea2Lora(target);
+                _activeLoraWorkflow = workflowName;
+                SupportsKrea2Lora = true;
+                IsLoadingKrea2Loras = false;
+                Krea2LoraStatusText = names.Count == 0
+                    ? "No LoRAs are installed on this ComfyUI host."
+                    : null;
             });
         }
         catch (Exception ex)
@@ -716,19 +657,13 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
             DispatchToUi(() =>
             {
                 if (version != _loraRefreshVersion) return;
-                _suppressLoraPersist = true;
-                try
-                {
-                    SupportsKrea2Lora = true;
-                    IsLoadingKrea2Loras = false;
-                    Krea2LoraOptions = [NoKrea2LoraOption];
-                    SelectedKrea2Lora = NoKrea2LoraOption;
-                    Parameters.ComfyUiLora = string.Empty;
-                    Parameters.ComfyUiLoraDisplay = string.Empty;
-                    Krea2LoraStatusText =
-                        "Couldn't load LoRAs. Check the ComfyUI server and authorization settings.";
-                }
-                finally { _suppressLoraPersist = false; }
+                SupportsKrea2Lora = true;
+                IsLoadingKrea2Loras = false;
+                Krea2LoraChoice.SetOptions((string[])[NoKrea2LoraOption]);
+                Krea2LoraChoice.Show(NoKrea2LoraOption);
+                ApplyKrea2Lora(NoKrea2LoraOption);
+                Krea2LoraStatusText =
+                    "Couldn't load LoRAs. Check the ComfyUI server and authorization settings.";
             });
         }
     }
@@ -739,19 +674,14 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
     private void HideKrea2LoraPicker(int? expectedVersion = null) => DispatchToUi(() =>
     {
         if (expectedVersion is { } v && v != _loraRefreshVersion) return;
-        _suppressLoraPersist = true;
-        try
-        {
-            SupportsKrea2Lora = false;
-            IsLoadingKrea2Loras = false;
-            Krea2LoraOptions = [];
-            SelectedKrea2Lora = null;
-            Krea2LoraStatusText = null;
-            Parameters.ComfyUiLora = string.Empty;
-            Parameters.ComfyUiLoraDisplay = string.Empty;
-            Parameters.ComfyUiLoraStrength = 1.0;
-            _activeLoraWorkflow = null;
-        }
-        finally { _suppressLoraPersist = false; }
+        SupportsKrea2Lora = false;
+        IsLoadingKrea2Loras = false;
+        Krea2LoraChoice.SetOptions([]);
+        Krea2LoraChoice.Show(null);
+        Krea2LoraStatusText = null;
+        Parameters.ComfyUiLora = string.Empty;
+        Parameters.ComfyUiLoraDisplay = string.Empty;
+        Parameters.ComfyUiLoraStrength = 1.0;
+        _activeLoraWorkflow = null;
     });
 }

@@ -264,11 +264,11 @@
                             <!-- ComfyUI only: quality preset from the workflow's single CustomCombo
                                  node. Options come from the file itself (option1..option4); first
                                  entry is the baked-in choice = no patch. Binds the VM-level
-                                 SelectedQualityPreset, never Parameters directly. -->
+                                 QualityPresetChoice, never Parameters directly. -->
                             <VerticalStackLayout Spacing="4" IsVisible="{Binding ComfyUi.SupportsQualityPreset}">
                                 <Label Text="Preset" Style="{StaticResource FieldLabel}" />
-                                <Picker ItemsSource="{Binding ComfyUi.QualityPresetOptions}"
-                                        SelectedItem="{Binding ComfyUi.SelectedQualityPreset}"
+                                <Picker ItemsSource="{Binding ComfyUi.QualityPresetChoice.Options}"
+                                        SelectedItem="{Binding ComfyUi.QualityPresetChoice.Selected}"
                                         MaximumWidthRequest="320"
                                         HorizontalOptions="Start"
                                         AutomationId="QualityPresetPicker" />
@@ -280,8 +280,8 @@
                             <VerticalStackLayout Spacing="4" IsVisible="{Binding ComfyUi.SupportsKrea2Lora}">
                                 <Label Text="LoRA" Style="{StaticResource FieldLabel}" />
                                 <HorizontalStackLayout Spacing="8">
-                                    <Picker ItemsSource="{Binding ComfyUi.Krea2LoraOptions}"
-                                            SelectedItem="{Binding ComfyUi.SelectedKrea2Lora}"
+                                    <Picker ItemsSource="{Binding ComfyUi.Krea2LoraChoice.Options}"
+                                            SelectedItem="{Binding ComfyUi.Krea2LoraChoice.Selected}"
                                             IsEnabled="{Binding ComfyUi.IsLoadingKrea2Loras, Converter={StaticResource InverseBool}}"
                                             MaximumWidthRequest="320"
                                             HorizontalOptions="Start"
@@ -331,8 +331,8 @@
                                  then the factor can change nothing. -->
                             <VerticalStackLayout Spacing="4" IsVisible="{Binding ComfyUi.IsUpscaleFactorVisible}">
                                 <Label Text="Upscale factor" Style="{StaticResource FieldLabel}" />
-                                <Picker ItemsSource="{Binding ComfyUi.UpscaleFactorOptions}"
-                                        SelectedItem="{Binding ComfyUi.SelectedUpscaleFactor}"
+                                <Picker ItemsSource="{Binding ComfyUi.UpscaleFactorChoice.Options}"
+                                        SelectedItem="{Binding ComfyUi.UpscaleFactorChoice.Selected}"
                                         MaximumWidthRequest="140"
                                         HorizontalOptions="Start"
                                         AutomationId="UpscaleFactorPicker" />
