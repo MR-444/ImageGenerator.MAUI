@@ -42,8 +42,8 @@ public partial class GenerationJob : ObservableObject
     [ObservableProperty] private double _progress;
     [ObservableProperty] private bool _hasProgress;
 
-    // Marks the newest saved job so its queue card renders the large uncropped preview
-    // (replaces the old separate "Latest result" hero). Exactly one job is featured at a time.
+    // Marks the newest saved job so its queue card renders the large uncropped preview.
+    // Exactly one job is featured at a time.
     [ObservableProperty] private bool _isFeatured;
 
     // CivitAI posting is a post-save side effect with its own status line on the job card —

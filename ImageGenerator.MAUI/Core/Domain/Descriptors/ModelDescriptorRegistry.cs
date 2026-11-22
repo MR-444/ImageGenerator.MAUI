@@ -83,10 +83,7 @@ public sealed class ModelDescriptorRegistry : IModelDescriptorRegistry
     /// <summary>
     /// Constructs a registry pre-populated with the production descriptor set. Used by tests,
     /// and by <c>MauiProgram</c>, which registers exactly this list — the two sets are one list
-    /// on purpose. They used to be written out twice and drifted once (the typed Pollinations
-    /// descriptors were missing from <see cref="Default()"/>, so the tests ran a different
-    /// production set than the app shipped; see
-    /// ModelDescriptorRegistryTests.Default_RegistersPollinationsDescriptors).
+    /// on purpose, so the tests run the production set the app ships.
     /// </summary>
     public static ModelDescriptorRegistry Default()
     {

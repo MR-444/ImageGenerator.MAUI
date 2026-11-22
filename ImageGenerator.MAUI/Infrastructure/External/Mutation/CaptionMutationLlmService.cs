@@ -92,8 +92,7 @@ public sealed class CaptionMutationLlmService : ICaptionMutationLlmService
     /// <summary>Resolve the credential the target's provider needs, then run the shared validate-retry loop.</summary>
     private async Task<LlmVariantResult> RunAsync(string userContent, LlmTarget target, CancellationToken ct)
     {
-        // A target with no model is a state the caller must turn into a sentence, never a request: on
-        // Local it used to fall through to a hardcoded tag most servers do not have, failing as a 404.
+        // A target with no model is a state the caller must turn into a sentence, never a request.
         if (!target.HasModel)
             return LlmVariantResult.Fail(target.MissingModelError("on the Mutation Engine page."));
 

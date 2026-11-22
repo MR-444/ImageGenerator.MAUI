@@ -32,11 +32,8 @@ public class ImageGenerationParametersDefaultsTests
     }
 
     /// <summary>
-    /// The rest of what a fresh run looks like. This object used to be started twice: the entity
-    /// initialized these fields and GeneratorViewModel's constructor overwrote them with its own
-    /// copy — ten lines of restated default, one of them contradicting the entity (a 1024×1024 pair
-    /// under an aspect-ratio default of 16:9). This is the assertion that fails when someone puts the
-    /// second copy back.
+    /// The rest of what a fresh run looks like. The entity is the only place these defaults are set;
+    /// this fails if GeneratorViewModel's constructor restates (and contradicts) them.
     /// </summary>
     [Fact]
     public void FreshParameters_StartAtTheShapeTheAppWasBuiltAround()

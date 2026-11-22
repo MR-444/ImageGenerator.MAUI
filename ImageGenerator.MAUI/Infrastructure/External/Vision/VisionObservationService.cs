@@ -139,9 +139,8 @@ public sealed class VisionObservationService : IVisionObservationService
     }
 
     /// <summary>
-    /// The one thing the caller cannot supply: the secret. Which model and which address used to be
-    /// resolved here too, out of the settings store, which left the picker on screen and the model being
-    /// called as two separate memories.
+    /// The one thing the caller cannot supply: the secret. Model and address come from the caller's
+    /// target, so the model on screen is the model called.
     /// </summary>
     private async Task<(string BaseUrlOrApiKey, string? Error)> ResolveCredentialAsync(LlmTarget target)
     {

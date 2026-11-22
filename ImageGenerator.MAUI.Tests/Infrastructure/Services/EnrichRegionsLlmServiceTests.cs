@@ -251,8 +251,8 @@ public sealed class EnrichRegionsLlmServiceTests : IDisposable
     [Fact]
     public async Task EnrichAsync_ModelStraightensCurlyApostrophe_PreservesOriginalBytesExactly()
     {
-        // The reported bug: U+2019 in the headline and style; the model straightens both. Splicing
-        // keeps the user's original bytes, so the enrichment succeeds instead of failing the old gate.
+        // U+2019 in the headline and style; the model straightens both. Splicing keeps the user's
+        // original bytes, so the enrichment succeeds.
         var baseCaption = V4JsonPromptSerializer.Deserialize(CurlyBaseJson);
         var calls = 0;
         var sut = CreateSut(KeyStore("sk-ant"),

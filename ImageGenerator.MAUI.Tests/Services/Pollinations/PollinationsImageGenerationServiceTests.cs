@@ -351,9 +351,8 @@ public class PollinationsImageGenerationServiceTests
     }
 
     /// <summary>
-    /// The body used to be cut to 500 characters before it reached the translator, which can cut the error
-    /// envelope in half — and half an envelope is what makes a refusal look unexplained. Truncation belongs
-    /// to the job-row label, not to the parse.
+    /// The translator gets the whole body: cutting it can halve the error envelope, and half an envelope
+    /// makes a refusal look unexplained. Truncation belongs to the job-row label, not to the parse.
     /// </summary>
     [Fact]
     public async Task GenerateImageAsync_Http402WithALongBody_StillReadsTheCode()

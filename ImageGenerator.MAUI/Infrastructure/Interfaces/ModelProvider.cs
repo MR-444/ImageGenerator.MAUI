@@ -24,9 +24,7 @@ public enum ModelProvider
 /// <summary>
 /// WHICH feature is calling. It never reaches a service — a service is told everything it needs by the
 /// <see cref="LlmTarget"/> it is handed — it exists to name the persisted slots, so a role's pick can
-/// not land in another role's key. That cross-talk was the bug this whole change set exists to kill:
-/// four Pickers used to write one key, so choosing a caption-mutation model silently changed what the
-/// generate button rendered with.
+/// not land in another role's key.
 /// </summary>
 /// <remarks><see cref="Observe"/> is the odd one: it sends pixels, so its model list is filtered to
 /// models that accept them and it is offered fewer providers than the text roles. It is still a role
@@ -36,10 +34,8 @@ public enum ModelRole
 {
     /// <summary>
     /// Idea to Prompt: turn an idea (and optionally a reference image's description) into prose/JSON.
-    /// The one role that still reads the retired <c>ModelTier</c> preference — once, on the first read
-    /// after the split, taking both halves of what the tier meant: it named a provider AND a model in one
-    /// word, so an install that had picked "Sonnet" has to land on Anthropic with the Sonnet id, not on
-    /// this role's default of Opus. A fossil read with no write-back; see
+    /// The one role that reads the legacy tier preference, once, as both a provider and a model, so a
+    /// "Sonnet" tier lands on Anthropic with the Sonnet id rather than this role's default of Opus; see
     /// <c>UiStateStore.LoadLegacyPromptWriterTier</c>.
     /// </summary>
     PromptWrite,
@@ -52,9 +48,8 @@ public enum ModelRole
 
     /// <summary>
     /// Idea to Prompt: describe a reference image before the prose pass. The only role that sends an
-    /// image, and the only one whose model list is filtered to models that accept one — which is why it
-    /// is offered fewer providers than the text roles and used to spell its own provider choice in its
-    /// own words.
+    /// image, and the only one whose model list is filtered to models that accept one, which is why it
+    /// is offered fewer providers than the text roles.
     /// </summary>
     Observe
 }
@@ -111,7 +106,7 @@ public readonly record struct LlmTarget(ModelProvider Provider, string ModelId, 
     /// <summary>
     /// The "you haven't chosen a model yet" sentence for this target. It lives on the target because all
     /// three text roles need the same branch — a local miss is worth naming the server for, a hosted
-    /// miss is worth naming the provider for — and each one used to hand-write its own version.
+    /// miss is worth naming the provider for.
     /// </summary>
     /// <param name="localPageHint">Where to pick it, phrased for the local case: only Local can give that
     /// advice, since a hosted model list is the same list on every page.</param>

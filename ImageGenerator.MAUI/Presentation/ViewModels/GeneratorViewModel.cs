@@ -251,8 +251,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     // persistence across the swap so a binding artifact never overwrites the saved choice.
     private bool _suppressAspectRatioPersist;
 
-    // Last Resolution value that was a member of the then-current ResolutionOptions. Used to
-    // revert the WinUI ComboBox's DEFERRED null push: after an ItemsSource swap the platform
+    // Last Resolution value that was a member of the then-current ResolutionOptions. Reverts the WinUI ComboBox's DEFERRED null push: after an ItemsSource swap the platform
     // picker finishes rebuilding on a later dispatcher tick and pushes SelectedItem=null —
     // outside the suppression window, so flags can't catch it. (The model picker survives the
     // identical push because OnSelectedModelChanged ignores null; this is Resolution's
@@ -307,11 +306,10 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         // every consumer sees consistent state.
         // The options swap must sit INSIDE the persist-suppression window, exactly like the
         // resolution swap below: replacing the ItemsSource makes the two-way-bound AR Picker push
-        // a VALID first/default option into Parameters.AspectRatio synchronously when the old value
-        // isn't in the new list. Outside the window that push (where _suppressPreferredArUpdate is
-        // false) looked user-driven and clobbered the saved AR before LoadSavedUiState could
-        // restore it. Unlike resolution the push is a valid string, so the membership guard alone
-        // isn't enough — _suppressAspectRatioPersist gates it.
+        // a VALID first/default option into Parameters.AspectRatio synchronously when the current value
+        // isn't in the new list. Outside the window that push would look user-driven and overwrite the
+        // saved AR before LoadSavedUiState restores it. Unlike resolution the push is a valid
+        // string, so the membership guard alone isn't enough — _suppressAspectRatioPersist gates it.
         _suppressAspectRatioPersist = true;
         try
         {
@@ -322,9 +320,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             var current = Parameters.AspectRatio;
             // A descriptor that declares no aspect ratios has no first option to fall back to, and
             // inventing one would send a size this model never offered. Keeping the current value is
-            // the same choice the resolution block below makes with its Count guard; until now the
-            // rule lived only in the two descriptors that keep their list non-empty "because
-            // RefreshCapabilities reads AspectRatios[0]", and ModelCapabilities cannot say it.
+            // the same choice the resolution block below makes with its Count guard.
             var fallback = caps.AspectRatios.Count > 0 ? caps.AspectRatios[0] : current;
             var target =
                 (InputImages.PreferredAspectRatio is { } pref && caps.AspectRatios.Contains(pref)) ? pref :
@@ -339,12 +335,12 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
         // The options swap must sit INSIDE the persist-suppression window: replacing the
         // ItemsSource makes the two-way-bound Picker push SelectedItem=null into
-        // Parameters.Resolution synchronously whenever the old value isn't in the new list.
-        // Outside the window that push looked user-driven and persisted null — deleting the
-        // saved resolution before LoadSavedUiState could read it. (The model picker survives
+        // Parameters.Resolution synchronously whenever the current value isn't in the new list.
+        // Outside the window that push would look user-driven and persist null, deleting the
+        // saved resolution before LoadSavedUiState reads it. (The model picker survives
         // the same push only because OnSelectedModelChanged ignores null.) Exactly ONE Picker
-        // may bind Parameters.Resolution: two bound at once (2026-06-11, hidden Ideogram +
-        // shared) livelocked the UI thread in a synchronous null/value ping-pong here.
+        // may bind Parameters.Resolution: two bound at once livelock the UI thread in a
+        // synchronous null/value ping-pong here.
         _suppressResolutionPersist = true;
         try
         {
@@ -621,7 +617,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
         // Composed here, not resolved: the host keeps its 21 parameters (a DI constructor is
         // resolved, never called, so a hand-written one cannot be unit-tested) and the coordinator
-        // takes the three dependencies no generator member touches any more.
+        // takes the three dependencies no generator member touches.
         Settings = new AppSettingsCoordinator(
             uiStateStore, folderPicker, ollamaModelCatalog, openRouterModelCatalog,
             anthropicModelCatalog, anthropicTokenStore, SetStatus, logger);
@@ -638,11 +634,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             Seed = Random.Shared.NextInt64(0, ValidationConstants.SeedMaxValue)
         };
 
-        // Seeded from the model this instance actually starts on. Something hardcoded here used to
-        // name a different model than the one started on; the parameter hooks sync the picker
-        // selection later in this constructor, which refreshes capabilities either way, so the value
-        // only has to be sane for whatever is constructed in between — but "a different model's
-        // capabilities" is not sane, it is the bug waiting for that refresh to move earlier.
+        // Seeded from the model this instance starts on, so anything constructed before the parameter
+        // hooks refresh capabilities sees this model's capabilities, not another's.
         _capabilities = _registry.CapabilitiesFor(_parameters.Model).Capabilities;
         _aspectRatioOptions = [.. _capabilities.AspectRatios];
 
@@ -907,9 +900,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         var job = new GenerationJob(snapshot, AddAsInputAsync, path => MutateFromImageAsync(path));
         Jobs.Insert(0, job);
 
-        // Activation audit: a generate run used to be invisible in app.log until the service's
-        // first line, which made the 2026-06-10 "phantom second generation" unattributable.
-        // JobCount exposes unnoticed extra cards (e.g. a focused-button Space/Enter re-fire).
+        // Activation audit: logs every generate run before the service's first line, so an extra run
+        // can be attributed. JobCount exposes unnoticed extra cards (e.g. a focused-button Space/Enter re-fire).
         _logger.LogInformation(
             "Generate activated Model={Model} Seed={Seed} JobCount={Count}",
             snapshot.Model, snapshot.Seed, Jobs.Count);

@@ -236,8 +236,8 @@ public class PollinationsCatalogServiceTests
     [Fact]
     public async Task FetchAsync_DisplayName_NeverUsesDescription()
     {
-        // Regression: the API moved the model name into "title" and left "description" as a
-        // marketing sentence — the old description parser surfaced that sentence as the name.
+        // The model name is in "title"; "description" is a marketing sentence and must not
+        // surface as the name.
         _nextResponse = () => JsonResponse("""
             [
               {"name":"flux","title":"FLUX.1 Schnell","description":"Fast, high-quality images at a tiny cost","output_modalities":["image"]},

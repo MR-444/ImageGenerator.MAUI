@@ -2,7 +2,7 @@ namespace ImageGenerator.MAUI.Infrastructure.Interfaces;
 
 /// <summary>
 /// Lists the models an Anthropic key can actually be pointed at. Live, for the same reason
-/// OpenRouter's list is live: the set changes and the app used to hard-code two ids.
+/// OpenRouter's list is live: the set changes.
 /// </summary>
 public interface IAnthropicModelCatalog
 {

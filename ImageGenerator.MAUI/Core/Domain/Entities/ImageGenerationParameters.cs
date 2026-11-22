@@ -15,12 +15,10 @@ public partial class ImageGenerationParameters : ObservableObject
     [ObservableProperty]
     private string _apiToken = string.Empty;
 
-    // The starting model, named once. It used to be repeated here as a raw string and again in
-    // GeneratorViewModel's constructor, so a change here moved the default for nobody.
-    //
-    // It is also the model the rest of these starting values have to suit: ReplicateImageGenerationService
-    // refuses to send a value the selected model's descriptor does not declare, so a starting value
-    // outside the starting model's vocabulary is an app that refuses its own first call. Pinned by
+    // The starting model, named once. The rest of these starting values have to suit it:
+    // ReplicateImageGenerationService refuses to send a value the selected model's descriptor does
+    // not declare, so a starting value outside the starting model's vocabulary is an app that
+    // refuses its own first call. Pinned by
     // ImageGenerationParametersDefaultsTests and by the service's starting-parameters test.
     [ObservableProperty]
     private string _model = ModelConstants.OpenAI.GptImage26SunburstOnReplicate;
@@ -44,15 +42,14 @@ public partial class ImageGenerationParameters : ObservableObject
     public ObservableCollection<string> ImagePrompts { get; } = [];
 
     // Only meaningful for models with custom dimensions; preset models ignore them and render at
-    // whatever their selected aspect ratio means. They are the app's real starting values, which
-    // until now lived in GeneratorViewModel on top of these — two defaults for one field, disagreeing.
-    // Square so the pair means the ratio the app starts on: the first custom-dimension model opens at
+    // whatever their selected aspect ratio means. Square so the pair means the ratio the app starts
+    // on: the first custom-dimension model opens at
     // the shape the rest of the UI just said was chosen.
     //
     // 1024 and not 1080: these two are transmitted raw the moment the ratio is "custom", and the FLUX.2
     // and MAI families on Pollinations answer an off-step size with HTTP 400 "requires width and height to
     // be multiples of 16px". No descriptor can warn about that rule, so the pair the app hands out has to
-    // satisfy it — 1080 was not, and 1024 is also what Pollinations' own 1:1 preset sends.
+    // satisfy it. 1024 is also what Pollinations' own 1:1 preset sends.
     [ObservableProperty]
     private int _width = 1024;
 

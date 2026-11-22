@@ -289,9 +289,8 @@ public class GptImageOnReplicateDescriptorTests
             .Should().Be(ModelConstants.OpenAI.GptImage15OnReplicate);
         _registry.PayloadFor(ModelConstants.OpenAI.GptImage2OnReplicate).ModelId
             .Should().Be(ModelConstants.OpenAI.GptImage2OnReplicate);
-        // The regression this whole change is about: an id the catalog returns but nobody
-        // registered falls through to FallbackReplicateDescriptor, which sends this family the
-        // wrong field names and aspect ratios it rejects.
+        // An id the catalog returns but nobody registered would fall through to
+        // FallbackReplicateDescriptor, which cannot drive this family.
         _registry.PayloadFor(ModelConstants.OpenAI.GptImage26SunburstOnReplicate).ModelId
             .Should().Be(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
         _registry.CapabilitiesFor(ModelConstants.OpenAI.GptImage26SunburstOnReplicate).ModelId

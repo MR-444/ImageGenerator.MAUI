@@ -31,8 +31,7 @@ public sealed class ReplicateImageGenerationService : IImageGenerationService
 
     // A model this build ships no descriptor for is not a model this build can drive: its field set,
     // its vocabularies and its price are all unknown, and the only way to learn them is a billed
-    // prediction. So the call is refused here, before anything leaves the machine. (Until now this
-    // path sent a prompt and nothing else, which Replicate happily answered at its own defaults.)
+    // prediction. So the call is refused here, before anything leaves the machine.
     //
     // The check belongs at the one site that builds a Replicate request rather than inside the
     // registry: describing a model and calling it are different permissions, and the narrow
@@ -49,8 +48,6 @@ public sealed class ReplicateImageGenerationService : IImageGenerationService
                 return Refused(parameters.Model, "this build has no field list for it, so it is not supported");
 
             var caps = _registry.CapabilitiesFor(parameters.Model).Capabilities;
-            // A descriptor is a hand-written claim about a model that keeps changing underneath it,
-            // and this is the only thing standing between a stale claim and money spent on a 422.
             if (ValueOutsideTheModelVocabulary(parameters, caps) is { } offVocabulary)
                 return Refused(parameters.Model, $"it does not accept {offVocabulary}");
 
@@ -129,8 +126,9 @@ public sealed class ReplicateImageGenerationService : IImageGenerationService
     /// <summary>
     /// The name of the first request value the resolved descriptor does not declare, or null. The
     /// picker cannot produce an off-vocabulary value — <c>RefreshCapabilities</c> snaps every knob to
-    /// the selected model on change — but restored settings, a cloned run, or a descriptor that has
-    /// drifted from its model all can, and each of those currently costs a prediction to discover.
+    /// the selected model on change — but restored settings or a cloned run can. This checks the
+    /// parameters against this build's own descriptor only: a descriptor that has drifted from the
+    /// live model passes here and is rejected by Replicate.
     ///
     /// A field with no declared vocabulary is skipped rather than refused: it is a knob this build
     /// does not offer, and the descriptor does not send it either.

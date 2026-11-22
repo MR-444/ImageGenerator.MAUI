@@ -198,8 +198,8 @@ public class MutationEngineViewModelTests
     // ---- AI (LLM) mode -------------------------------------------------------------------
 
     // A page that calls a model has a host generator (whose settings own the model lists) and a store
-    // (which remembers the pick). Both used to be omittable here, which let tests run the AI path with no
-    // model available at all — a state the app cannot reach.
+    // (which remembers the pick). Both are required here, so no test runs the AI path with no model
+    // available at all — a state the app cannot reach.
     private static MutationEngineViewModel CreateSutWithAi(
         ICaptionMutationLlmService llm, IOllamaModelCatalog? ollamaCatalog = null) =>
         new(new StubLibraryService(),
@@ -315,9 +315,9 @@ public class MutationEngineViewModelTests
     }
 
     /// <summary>
-    /// A page with nothing to pick from refuses, and says so, rather than calling the model it used to
-    /// hard-code. This is the one case where refusing is worth a test: the alternative is a silent call to
-    /// a model the user never chose, billed to a key they may not even have.
+    /// A page with nothing to pick from refuses, and says so, rather than calling a hard-coded model.
+    /// The alternative is a silent call to a model the user never chose, billed to a key they may not
+    /// even have.
     /// </summary>
     [Fact]
     public async Task WithoutAChoiceToRead_ItRefusesInsteadOfCallingAGuessedModel()
@@ -661,8 +661,8 @@ public class MutationEngineViewModelTests
 
     // The unload is where the resolved endpoint actually leaves the process, so the two strings are
     // the contract worth pinning: the generator's Ollama URL — never its ComfyUI URL — and THIS
-    // page's own model, not the image model the generate button uses. Sibling pages used to derive
-    // both per page; one shared reader now owns the fallbacks, and these two tests keep it honest.
+    // page's own model, not the image model the generate button uses. One shared reader owns the
+    // fallbacks, and these two tests keep it honest.
     [Fact]
     public async Task MutateWithAi_LocalTier_UnloadsAtTheGeneratorsEndpointAndModel()
     {

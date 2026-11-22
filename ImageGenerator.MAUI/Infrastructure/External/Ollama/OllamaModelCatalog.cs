@@ -54,8 +54,7 @@ public sealed class OllamaModelCatalog : IOllamaModelCatalog
     /// <summary>
     /// Ollama answers <c>{"models":[{"name":…,"capabilities":[…]}]}</c>. Anything else — an HTML error
     /// page, an OpenAI-shaped <c>{"data":[…]}</c>, a bare <c>{}</c> — is some other server on that
-    /// port, and used to parse into an empty list the caller then reported as "no models installed":
-    /// advice that sends the user off to install models on a machine that isn't Ollama. An empty
+    /// port, and must not be reported as "no models installed" on a machine that isn't Ollama. An empty
     /// <c>models</c> array stays a legitimate answer; only a missing or foreign one is refused.
     /// </summary>
     private static List<OllamaModelInfo> ParseTags(string body, string endpoint, int statusCode)

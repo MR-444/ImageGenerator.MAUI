@@ -76,8 +76,7 @@ public static class MauiProgram
             logRequestBody: true);
 
         // 1a) Named HttpClients for the non-Refit outbound paths. Both reuse the project's
-        //     standard resilience pipeline (retry on 5xx/408/429, Polly-owned timeouts) so the
-        //     CDN download and Pollinations calls are no longer asymmetric with Refit.
+        //     standard resilience pipeline (retry on 5xx/408/429, Polly-owned timeouts), like Refit.
         //     "pollinations" is shared by gen + catalog (same host, same retry budget).
         builder.Services.AddHttpClient(ReplicateImageGenerationService.HttpClientName)
             .ConfigureStandardResilience(

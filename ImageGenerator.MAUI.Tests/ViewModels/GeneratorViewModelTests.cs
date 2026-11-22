@@ -677,7 +677,7 @@ public partial class GeneratorViewModelTests
 
         await _viewModel.RefreshModelsCommand.ExecuteAsync(null);
 
-        // Regression: FilteredModels must reflect freshly-applied AllModels, not be stuck on the
+        // FilteredModels must reflect freshly-applied AllModels, not be stuck on the
         // pre-refresh list.
         _viewModel.ProviderFilter.FilteredModels.Select(m => m.Value)
             .Should().Contain("black-forest-labs/flux-2-pro")
@@ -689,8 +689,8 @@ public partial class GeneratorViewModelTests
     [Fact]
     public async Task RefreshModels_EmptyToken_StillFetchesForPollinations()
     {
-        // Pollinations' /models endpoint is anonymous, so an empty Replicate token no longer
-        // gates a refresh: the coordinator is still called, Replicate yields nothing, and
+        // Pollinations' /models endpoint is anonymous, so an empty Replicate token does not
+        // gate a refresh: the coordinator is still called, Replicate yields nothing, and
         // any Pollinations result still hydrates the catalog.
         _viewModel.Parameters.ApiToken = "";
         var pollinationsOnly = new List<ModelOption>
@@ -930,7 +930,7 @@ public partial class GeneratorViewModelTests
 
         _viewModel.InputImages.SelectedImages.Should().ContainInOrder(a, c);
         _viewModel.InputImages.SelectedImages.Should().NotContain(b);
-        // Audit finding: Remove used to blank the status line, wiping active warnings.
+        // Remove must not blank the status line, which would wipe active warnings.
         _viewModel.StatusMessage.Should().Be("Removed b.png.");
         _viewModel.StatusKind.Should().Be(StatusKind.Info);
     }
@@ -993,7 +993,6 @@ public partial class GeneratorViewModelTests
     [Fact]
     public async Task GenerateImage_TwoConcurrentCalls_EachJobKeepsItsOwnPromptSnapshot()
     {
-        // Regression guard for the original bug: "image N ends up with image N+1's prompt".
         // Two generations must be isolated so that editing Parameters.Prompt between clicks
         // (or even mid-flight) never bleeds across jobs.
         _viewModel.Parameters.ApiToken = "valid-token";
@@ -1137,11 +1136,10 @@ public partial class GeneratorViewModelTests
     [Fact]
     public async Task LoadCachedCatalog_DoesNotPersistModelDuringHydrate()
     {
-        // Regression for the "always reverts to flux-2-max" bug: ApplyCatalog reassigning
-        // FilteredModels caused MAUI's Picker to reset SelectedItem to the first row, which
-        // round-tripped through SelectedModel → Parameters.Model → PersistModel and clobbered
-        // the user's saved value on every launch. The suppression flag must keep PersistModel
-        // silent for the entire hydrate.
+        // ApplyCatalog reassigning FilteredModels makes MAUI's Picker reset SelectedItem to the
+        // first row, which would round-trip through SelectedModel → Parameters.Model → PersistModel
+        // and overwrite the saved value. The suppression flag must keep PersistModel silent for
+        // the entire hydrate.
         var merged = new List<ModelOption>
         {
             new("flux-2-max", ModelConstants.Flux.Max2, "Replicate"),
@@ -1453,7 +1451,7 @@ public partial class GeneratorViewModelTests
         _viewModel.StatusMessage.Should().Contain("1 ok").And.Contain("2 canceled");
     }
 
-    // --- Structured-JSON validation chain (paste/clear/paste regression + state label) ------
+    // --- Structured-JSON validation chain (paste/clear/paste + state label) ------------------
 
     private void SelectIdeogramTurbo()
     {
@@ -1797,10 +1795,9 @@ public partial class GeneratorViewModelTests
     [Fact]
     public void Resolution_SurvivesIdeogramToIdeogramModelSwitch_DespitePickerNullPush()
     {
-        // Round 2 of the restart bug: the options swap synchronously nulls the value via the
-        // bound Pickers BEFORE the old code's membership check ran, so a still-valid choice
-        // was slammed to the first option on every model switch. The capture-before-swap fix
-        // must carry the user's pick across an Ideogram->Ideogram switch (same options list).
+        // The options swap synchronously nulls the value via the bound Pickers, so the pick is
+        // captured before the swap. It must carry across an Ideogram->Ideogram switch (same
+        // options list) instead of resetting to the first option.
         _viewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(GeneratorViewModel.ResolutionOptions))
@@ -1967,7 +1964,7 @@ public partial class GeneratorViewModelTests
     public void EditorApply_WritesJsonPromptAndResolution_DirectlyToGenerator()
     {
         // Direct hand-off, NOT a //MainPage?ideogramJson=… route: Shell re-applies string
-        // query parameters on every back navigation, which used to resurrect the stale JSON
+        // query parameters on every back navigation, which would resurrect the stale JSON
         // over a freshly typed prompt whenever the user backed out of the editor.
         SelectIdeogramTurbo();
         var editor = CreateEditor();
@@ -2472,8 +2469,8 @@ public partial class GeneratorViewModelTests
     // --- ComfyUI upscale factor -------------------------------------------------------------
     // The factor patches the UltimateSDUpscale of the selected workflow when it owns one, and
     // otherwise the chain target's ("Upscale-Sample"). It must only reach Parameters — and with
-    // it the "UpscaleBy" metadata line — when it will really be applied: an unapplied factor
-    // used to claim "UpscaleBy: 1.5" on renders that upscaled nothing.
+    // it the "UpscaleBy" metadata line — when it will really be applied, so no render claims
+    // "UpscaleBy: 1.5" without having upscaled.
 
     private const string UpscaleWorkflowName = "Upscale-Sample";
 

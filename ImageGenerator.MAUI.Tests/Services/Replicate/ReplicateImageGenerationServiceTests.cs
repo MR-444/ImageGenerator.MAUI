@@ -87,8 +87,7 @@ public class ReplicateImageGenerationServiceTests
         var result = await _service.GenerateImageAsync(parameters);
 
         // What this rule protects is money, so it is asserted on the API mock rather than on the
-        // message: no prediction call exists, therefore nothing was billed. The old behaviour was to
-        // send the prompt alone and let the model answer at its own defaults.
+        // message: no prediction call exists, therefore nothing was billed.
         _mockReplicateApi.Verify(x => x.CreatePredictionAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ReplicatePredictionRequest>(),
                 It.IsAny<CancellationToken>()),

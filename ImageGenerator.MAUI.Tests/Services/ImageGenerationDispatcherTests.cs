@@ -126,8 +126,8 @@ public class ImageGenerationDispatcherTests
     [Fact]
     public async Task GenerateImageAsync_PollinationsModel_DoesNotMutateCallerParametersSeed()
     {
-        // F1 regression: dispatcher must not clamp parameters.Seed in place. Pick a seed above
-        // int.MaxValue so the legacy `parameters.Seed &= int.MaxValue` path would have changed it.
+        // The dispatcher must not clamp parameters.Seed in place. A seed above int.MaxValue would
+        // change under `parameters.Seed &= int.MaxValue`.
         StubPollinationsOk();
 
         const long seedAboveInt32 = (long)int.MaxValue + 5;

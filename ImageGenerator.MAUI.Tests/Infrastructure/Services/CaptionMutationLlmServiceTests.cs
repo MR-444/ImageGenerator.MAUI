@@ -55,10 +55,8 @@ public sealed class CaptionMutationLlmServiceTests : IDisposable
 
     // ---- What the service is told to call ------------------------------------------------
     //
-    // Provider and model are the page's decision; the service's contract is "call exactly this". These
-    // tests exist so nobody re-derives a model inside the service again: that is where the old tier enum
-    // kept its two hardcoded Claude ids, and a model picked from a catalog would have been silently
-    // ignored by it.
+    // Provider and model are the page's decision; the service's contract is "call exactly this", so a
+    // model picked from a catalog is never replaced by one the service derives itself.
 
     [Theory]
     [InlineData("claude-sonnet-4-6")]

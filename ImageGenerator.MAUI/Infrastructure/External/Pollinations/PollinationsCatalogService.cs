@@ -113,8 +113,7 @@ public sealed class PollinationsCatalogService : IPollinationsCatalogService
     private static string ToModelName(PollinationsModelEntry entry)
     {
         // "title" is the human model name ("FLUX.1 Schnell"); "description" is a marketing
-        // sentence and must never be used here. (An older API shape packed both into
-        // description as "Title - blurb"; that field no longer carries the title at all.)
+        // sentence and must never be used here.
         if (!string.IsNullOrWhiteSpace(entry.Title)) return entry.Title.Trim();
 
         // Slug fallback — "flux-pro-ultra" → "Flux Pro Ultra". Owner-namespaced community slugs

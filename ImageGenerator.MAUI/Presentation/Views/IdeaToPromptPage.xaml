@@ -62,7 +62,7 @@
                         <VerticalStackLayout Spacing="12">
                             <Label Text="Idea source" Style="{StaticResource CardTitle}" />
 
-                            <!-- Segmented Text | Image toggle (replaces the old 2-item dropdown). -->
+                            <!-- Segmented Text | Image toggle. -->
                             <Border Padding="3"
                                     HorizontalOptions="Start"
                                     Stroke="{AppThemeBinding Light={StaticResource SurfaceBorderLight}, Dark={StaticResource SurfaceBorderDark}}"

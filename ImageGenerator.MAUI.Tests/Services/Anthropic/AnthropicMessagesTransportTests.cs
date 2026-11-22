@@ -60,8 +60,8 @@ public sealed class AnthropicMessagesTransportTests
     [Fact]
     public async Task AServiceReportsARefusalOnceAndDoesNotRetryIt()
     {
-        // Retrying a refusal meets the same classifier and bills the call twice; the old path read the
-        // partial text as broken JSON and asked again.
+        // Retrying a refusal meets the same classifier and bills the call twice, so the partial text
+        // must not be read as broken JSON and retried.
         var http = new CannedHandler(Refusal);
         var sut = new CaptionMutationLlmService(
             KeyStore<IAnthropicTokenStore>("sk-ant-test"),

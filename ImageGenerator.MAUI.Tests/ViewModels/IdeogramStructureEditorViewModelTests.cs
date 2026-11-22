@@ -376,7 +376,7 @@ public class IdeogramStructureEditorViewModelTests
         sut.SelectedElement = null;
         sut.Elements[1].HasBbox = false;
 
-        // Inside where the text strip used to be: nothing selectable there any more.
+        // Inside the former text-strip area: nothing selectable there.
         sut.CanvasPointerPressed(144, 24, 480, 480);
 
         sut.SelectedElement.Should().BeNull();
@@ -911,10 +911,8 @@ public class IdeogramStructureEditorViewModelTests
 
     // ---- The row's own decision ---------------------------------------------------
     //
-    // Enrichment used to answer with a tier: three words, two of which named a Claude model, no way to say
-    // "OpenRouter", and no memory - it opened on the paid model on every visit. What replaces it is a row
-    // with a provider, a model, a memory, and three different ways to have nobody to call: no settings, no
-    // model, and a settings store that has never been asked about this role.
+    // Enrichment is a row with a provider, a model, a memory, and three different ways to have nobody
+    // to call: no settings, no model, and a settings store that has never been asked about this role.
 
     [Fact]
     public void Enrichment_OnFirstLaunchOpensOnLocal_BecauseEnrichingNobodyAskedForShouldNotBillAnyone()

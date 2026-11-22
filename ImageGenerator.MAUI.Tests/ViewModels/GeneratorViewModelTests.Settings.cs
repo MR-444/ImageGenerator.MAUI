@@ -265,11 +265,10 @@ public partial class GeneratorViewModelTests
             .And.NotContain("/api/tags", "nothing answered, so no route can be blamed");
     }
 
-    // ---- Inline card status: the failure the user could not see -----------------------------
-    // Pointing the Ollama URL at a server that is merely *not* Ollama (an OpenAI-compatible host
-    // answers; /api/tags just 404s) used to produce a WARN in the log and nothing on screen:
+    // ---- Inline card status ------------------------------------------------------------------
     // StatusMessage is drawn only by MainPage.xaml, while every one of these buttons lives on
-    // Settings or a sibling page. So the reporting is asserted on the card property now.
+    // Settings or a sibling page, so a failure (e.g. a server that answers but is not Ollama) is
+    // asserted on the card property.
 
     [Fact]
     public async Task RefreshOllamaModels_WhenTheAnswerIsNotOllama_ReportsItOnTheCard()

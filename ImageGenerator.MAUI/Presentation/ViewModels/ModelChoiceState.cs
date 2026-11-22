@@ -111,8 +111,7 @@ public sealed partial class ModelChoiceState : ObservableObject
     /// returns, a currency amount beside any entry is a guess about somebody else's catalogue and metering,
     /// and a guess wearing a currency sign reads as measured. So a host says the two things that hold for
     /// every model on either side — free and on this machine, or billed to the key set in Settings — plus
-    /// how many calls the operation makes. Nothing here can be inferred from a tier any more: the tier is
-    /// deleted, which is what turned these sentences from decoration into the cost surface.
+    /// how many calls the operation makes.
     /// </para>
     /// </summary>
     public string? Helper => _helperFor?.Invoke(SelectedProvider);
@@ -174,10 +173,8 @@ public sealed partial class ModelChoiceState : ObservableObject
     /// Ask the provider that has just been chosen for its models, when it has none to show.
     ///
     /// <para>
-    /// A hosted list is empty until somebody asks, and asking used to be a button two centimetres from an
-    /// empty combo with nothing connecting the two. An untouched list and an empty answer look identical
-    /// from the user's side of the screen, which is how "the refresh does nothing" gets reported when
-    /// what happened was that nothing was ever asked.
+    /// A hosted list is empty until somebody asks, and an untouched list looks identical to an empty
+    /// answer, so a switch asks instead of waiting for Refresh.
     /// </para>
     /// <para>
     /// Only a switch counts, and only when there is nothing to list: a role opened on a provider is not
@@ -201,7 +198,7 @@ public sealed partial class ModelChoiceState : ObservableObject
         {
             // A source is contracted to report its own failures on its status, so this is only the
             // backstop for one that throws instead - and it says so on the row rather than leaving the
-            // exception on a task nobody is watching, which would vanish the way this bug did.
+            // exception unobserved on a fire-and-forget task.
             if (ReferenceEquals(source, _source))
                 Status = $"Couldn't ask for models: {ex.Message}";
         }

@@ -91,7 +91,7 @@ public class AppSettingsCoordinatorRolePickTests
     [Fact]
     public void TheFreeOnlySwitchLeavesTheObserversPickAlone()
     {
-        // A paid pick is made with the filter off; turning it on is what used to clear it.
+        // A paid pick is made with the filter off; turning the filter on must not clear it.
         _store.PersistOpenRouterFreeOnly(false);
         _store.PersistLlmModel(ModelRole.Observe, ModelProvider.OpenRouter, "paid/vision");
         var settings = Build();

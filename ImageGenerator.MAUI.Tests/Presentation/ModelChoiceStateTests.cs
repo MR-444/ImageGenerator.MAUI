@@ -6,13 +6,11 @@ using Moq;
 namespace ImageGenerator.MAUI.Tests.Presentation;
 
 /// <summary>
-/// The rules a model picker has always had and never stated.
+/// The rules a model picker follows, for example that a pick restored to a picker is not persisted as
+/// though the user had chosen it.
 ///
 /// <para>
-/// Every one of these used to live in a page's code-behind or a view model's unload handler, where the
-/// only way to check it was to read markup and hope. Four pages got some of them wrong in four different
-/// ways — most expensively, a pick restored to a picker on unload and then persisted as though the user
-/// had chosen it. <see cref="ModelChoiceState"/> touches no MAUI type, so all of it is testable here.
+/// <see cref="ModelChoiceState"/> touches no MAUI type, so all of it is testable here.
 /// </para>
 /// </summary>
 public class ModelChoiceStateTests

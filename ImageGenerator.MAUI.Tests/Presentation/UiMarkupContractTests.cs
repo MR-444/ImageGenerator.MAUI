@@ -98,19 +98,11 @@ public class UiMarkupContractTests
     /// model list, the refresh, the status and the memory of what was picked, so there is nothing left in
     /// the page to mis-wire.
     ///
-    ///
     /// <para>
-    /// The table that used to sit here policed the older shape — a row fed property by property from
-    /// the page's settings, with an IsVisible gate the page had to remember. No page uses it any
-    /// more, and the loop over hand-bound attributes below is what keeps it from coming back: a row
-    /// that takes a choice AND a hand-written model binding answers one question twice, which is the
-    /// original defect with two spellings rather than one.
-    /// </para>
-    /// <para>
-    /// What markup still has to be checked on is the opposite direction. A page that hands over a choice
-    /// and also binds the old per-property shape would answer one question twice — the picker would show
-    /// the choice's model and write the other one, which is the original defect with two spellings rather
-    /// than one. And the handles move out here deliberately: the row is shared, the ids are not, because
+    /// A page that hands over a choice and also binds the per-property shape would answer one question
+    /// twice — the picker would show the choice's model and write the other one. The loop over
+    /// hand-bound attributes below rejects that. The handles live here deliberately: the row is shared,
+    /// the ids are not, because
     /// an id is how a human points at a control — in a bug report, in a diff, in the next page's markup
     /// test. There is no consumer to keep compatible; there is only a name worth getting right.
     /// </para>
@@ -159,10 +151,8 @@ public class UiMarkupContractTests
     }
 
     /// <summary>
-    /// The writer card used to carry a label of its own under the picker, spelling out what a tier cost,
-    /// and UI tests read it by name. The row says the same kind of thing per provider, so the handle moves
-    /// onto the row's helper instead of dying — and the page must not keep a second sentence answering the
-    /// same question the row already answers.
+    /// UI tests read the writer card's cost sentence by name; it is the row's helper, and the page must
+    /// not keep a second sentence answering the same question the row already answers.
     /// </summary>
     [Fact]
     public void TheWritersHelperSitsOnTheRowThatReplacedThePageOwnLabel()

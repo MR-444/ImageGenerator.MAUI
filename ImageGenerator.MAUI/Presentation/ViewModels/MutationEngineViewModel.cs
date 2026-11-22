@@ -252,9 +252,8 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
     /// shared row renders and this page persists per role.
     ///
     /// <para>
-    /// It replaces the Sonnet/Opus/Local picker, which could only name two Anthropic models and Ollama, and
-    /// whose choice was thrown away on every navigation. Null only when the page has no settings to read
-    /// (no host generator), which the app never does and several unit tests used to. This is the only way
+    /// Null only when the page has no settings to read (no host generator), which the app never does.
+    /// This is the only way
     /// this page can name a model, so there is no second path whose behaviour the row's could drift from.
     /// </para>
     /// </summary>
@@ -283,8 +282,7 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         }
     }
 
-    /// <summary>What is worth warning about, per provider — the sentence the row writes under the pickers.
-    /// Replaces the tier legend, which explained tiers that no longer exist.</summary>
+    /// <summary>What is worth warning about, per provider — the sentence the row writes under the pickers.</summary>
     private static string? HelperFor(ModelProvider provider) => provider switch
     {
         ModelProvider.Local => "Free and local, one call at a time. Shares the GPU with ComfyUI, so it waits for any render in flight.",

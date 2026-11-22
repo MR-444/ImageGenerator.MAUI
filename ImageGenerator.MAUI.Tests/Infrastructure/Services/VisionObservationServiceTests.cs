@@ -215,10 +215,9 @@ public sealed class VisionObservationServiceTests : IDisposable
     [Fact]
     public async Task ObserveAsync_LocalWithNoModel_RefusesRatherThanBorrowingSomething()
     {
-        // The end of the old resolution chain was LoadOllamaModel(): the model the generate button renders
-        // WITH, which cannot answer a chat request about a picture. The settings store is gone from this
-        // service, so there is nothing left to borrow — this pins that the refusal still happens, in words,
-        // and names the server the user has to pick from.
+        // The service has no settings store to borrow a model from (the generation model could not
+        // answer a chat request about a picture anyway). This pins that it refuses in words and names
+        // the server the user has to pick from.
         var called = false;
         var sut = CreateSut((_, _, _, _, _, _) =>
         {
@@ -247,9 +246,8 @@ public sealed class VisionObservationServiceTests : IDisposable
         new(target, "data:image/png;base64,abcd", "ref.png");
 
     /// <param name="tokenStore">
-    /// Pass the same mock the test configured. There is deliberately no settings-store parameter: this
-    /// service used to take one and go and read the model and the server address out of it, which is how
-    /// the model on screen and the model called became two different answers.
+    /// Pass the same mock the test configured. There is deliberately no settings-store parameter: model
+    /// and server come from the request's target, so the model on screen is the model called.
     /// </param>
     private VisionObservationService CreateSut(
         VisionObservationService.ObservationCompletion completion,

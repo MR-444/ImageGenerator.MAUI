@@ -15,7 +15,7 @@ public class ModelDescriptorRegistryTests
     {
         var act = () => _registry.PayloadFor("stability-ai/some-new-model");
 
-        // There is no fallback payload any more: this build does not build requests for models it
+        // There is no fallback payload: this build does not build requests for models it
         // cannot describe. ReplicateImageGenerationService refuses them earlier so nothing is
         // billed; this is the same rule for a caller that forgot it.
         act.Should().Throw<ArgumentException>().WithMessage("*stability-ai/some-new-model*");
@@ -54,9 +54,8 @@ public class ModelDescriptorRegistryTests
     [Fact]
     public void MetadataFor_FluxProUltra_DoesNotIncludeUpsamplingLine()
     {
-        // Regression for the substring-match bug fixed in commit 009e5a1 — at the descriptor
-        // level we now have separate classes per id, so this is structurally impossible, but
-        // the test pins the property in case a future descriptor split goes wrong.
+        // A substring match on the id would attach Pro 1.1's lines to Ultra. Separate descriptor
+        // classes per id make that structurally impossible; the test pins it anyway.
         var lines = _registry.MetadataFor(ModelConstants.Flux.Pro11Ultra)!
             .Lines(new ImageGenerationParameters { Model = ModelConstants.Flux.Pro11Ultra, Prompt = "x", Raw = false })
             .ToList();

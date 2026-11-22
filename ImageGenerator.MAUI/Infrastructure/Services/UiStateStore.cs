@@ -90,8 +90,7 @@ public sealed class UiStateStore : IUiStateStore
     public string? LoadResolution(string? modelId)
     {
         var key = ResolutionKeyFor(modelId);
-        // ComfyUI reads fall back to the old family-wide key so a pre-existing pick carries
-        // over until the first per-workflow pick replaces it.
+        // ComfyUI falls back to the family-wide key until this workflow has a pick of its own.
         var v = SafeGet(key)
                 ?? (Shared.Constants.ModelConstants.ComfyUi.IsId(modelId) ? SafeGet(ComfyUiResolutionKey) : null);
         if (_logger.IsEnabled(LogLevel.Debug))
@@ -110,8 +109,7 @@ public sealed class UiStateStore : IUiStateStore
     // families — each gets its own key so model switches restore that family's last pick.
     // ComfyUI is additionally keyed PER WORKFLOW: models differ in how much resolution they
     // tolerate (Krea-2 turbo renders 4 MP, raw smears above 2 MP), so one workflow's pick
-    // must not leak into another. The legacy key stays the default family, keeping
-    // previously saved data valid.
+    // must not leak into another.
     private static string ResolutionKeyFor(string? modelId) =>
         Shared.Constants.ModelConstants.ComfyUi.IsId(modelId)
             ? $"{ComfyUiResolutionKey}.{Shared.Constants.ModelConstants.ComfyUi.WorkflowName(modelId!)}"
@@ -188,8 +186,8 @@ public sealed class UiStateStore : IUiStateStore
             _logger.LogDebug("UiStateStore.LoadWindowBounds -> {Value}", Quote(raw));
         if (raw is null) return null;
 
-        // "w;h;x;y" in invariant culture. Anything malformed (old format, manual edit,
-        // culture drift) degrades to "never persisted" rather than throwing at startup.
+        // "w;h;x;y" in invariant culture. Anything malformed degrades to "never persisted"
+        // rather than throwing at startup.
         var parts = raw.Split(';');
         if (parts.Length != 4) return null;
         var values = new double[4];
@@ -217,12 +215,7 @@ public sealed class UiStateStore : IUiStateStore
 
     public void PersistOllamaBaseUrl(string value) => PersistString(OllamaBaseUrlKey, value);
 
-    // imggen.ollama_model was the Settings page's Ollama model picker, since removed. Nothing writes it
-    // any more; it is read only as the one-time seed in LoadRoleModel, for installs that predate the
-    // per-role keys.
-
-    // One Ollama tag per LLM role. All three used to read OllamaModelKey, so choosing a cheap tag to
-    // verify a caption mutation also changed the model every other tool called.
+    // One Ollama tag per LLM role, so a pick on one page doesn't change the model the others call.
     public string? LoadPromptWriterModel() => LoadRoleModel(PromptWriterModelKey);
 
     public void PersistPromptWriterModel(string value) => PersistString(PromptWriterModelKey, value);
@@ -240,16 +233,13 @@ public sealed class UiStateStore : IUiStateStore
     // Which provider each text role calls, and the model it calls per provider. See
     // IUiStateStore.LoadLlmProvider / LoadLlmModel for why the model is keyed by provider too.
     //
-    // Every arm is written out, and an unlisted role throws. These keys are the difference between four
-    // pages remembering four choices and one page overwriting another's, so a fifth role quietly landing
-    // on the enrich keys is not a failure this file should be able to have.
+    // Every arm is written out and an unlisted role throws, so a new role can't silently share
+    // another role's keys.
     private static string ProviderKey(ModelRole role) => role switch
     {
         ModelRole.PromptWrite => "imggen.prompt_writer_provider",
         ModelRole.Mutate => "imggen.mutation_provider",
         ModelRole.Enrich => "imggen.enrich_provider",
-        // The observer used to have no provider key at all: its picker reset to Ollama on every
-        // navigation, however often it was used, because nothing was ever written.
         ModelRole.Observe => "imggen.observe_provider",
         _ => throw new ArgumentOutOfRangeException(nameof(role), role, "No provider key for this role.")
     };
@@ -259,9 +249,8 @@ public sealed class UiStateStore : IUiStateStore
         ModelRole.PromptWrite => "imggen.prompt_writer.anthropic_model",
         ModelRole.Mutate => "imggen.mutation.anthropic_model",
         ModelRole.Enrich => "imggen.enrich.anthropic_model",
-        // Unreachable by design, so it is a fault rather than a key: nothing in this build can send an
-        // image to Claude, so the observe role is never offered Anthropic. A role that gains a provider
-        // should fail here rather than invent a pref nobody wrote and nobody can clear.
+        // Observe is never offered Anthropic (no image input to Claude in this build), so reaching
+        // here is a fault, not a key.
         _ => throw new ArgumentOutOfRangeException(nameof(role), role, "This role has no Anthropic model.")
     };
 
@@ -270,8 +259,6 @@ public sealed class UiStateStore : IUiStateStore
         ModelRole.PromptWrite => "imggen.prompt_writer.openrouter_model",
         ModelRole.Mutate => "imggen.mutation.openrouter_model",
         ModelRole.Enrich => "imggen.enrich.openrouter_model",
-        // The observer keeps the key it has always used. A role that names the same decision as the old
-        // picker needs no migration, and none of the seeding that would have come with a new key.
         ModelRole.Observe => OpenRouterVisionModelKey,
         _ => throw new ArgumentOutOfRangeException(nameof(role), role, "No OpenRouter key for this role.")
     };
@@ -281,14 +268,12 @@ public sealed class UiStateStore : IUiStateStore
         var key = ProviderKey(role);
         if (RoleKeyIsStored(key))
         {
-            // An enum written as text outlives renames; degrade to the caller's fallback rather than
-            // throwing on startup, which is what the tier picker did with an unrecognised stored value.
+            // An unrecognised stored value degrades to the caller's fallback rather than throwing on startup.
             return Enum.TryParse<ModelProvider>(LoadString(key), out var parsed) ? parsed : fallback;
         }
 
-        // First run after the provider split: inherit what the prompt writer used to remember as a tier
-        // (the only role that ever did), so "I run this on Ollama" and "I run this on Sonnet" survive the
-        // upgrade; every other role starts on the fallback its host asked for.
+        // No provider stored yet: the prompt writer inherits its legacy tier if one is stored;
+        // every other role starts on the caller's fallback. Either way the result is written once.
         ModelProvider? inherited = null;
         if (role == ModelRole.PromptWrite && LoadLegacyPromptWriterTier() is { } legacyTier)
         {
@@ -305,20 +290,16 @@ public sealed class UiStateStore : IUiStateStore
 
     public string? LoadLlmModel(ModelRole role, ModelProvider provider) => provider switch
     {
-        // The Local slot is the role's own key, seeded once from the old shared Ollama model. That
-        // seeding is correct here and only here: the old value IS an Ollama tag.
+        // The Local slot is the role's own key, seeded once from the shared Ollama model (LoadRoleModel).
         ModelProvider.Local => role switch
         {
             ModelRole.PromptWrite => LoadPromptWriterModel(),
             ModelRole.Mutate => LoadMutationModel(),
             ModelRole.Enrich => LoadEnrichModel(),
-            // Same argument as the generation models: the observer's tag is an Ollama tag, and it is the
-            // one the old vision picker already remembered. Reusing it is why this role needs no seeding.
             ModelRole.Observe => LoadString(OllamaVisionModelKey),
             _ => throw new ArgumentOutOfRangeException(nameof(role), role, "No local model key for this role.")
         },
-        // A default Claude model is honest — the app has always named one. There is no default
-        // OpenRouter slug: the catalog is hundreds deep and any guess bills a credit to someone.
+        // Anthropic defaults to a Claude model; OpenRouter has none, since any guess could bill a paid model.
         ModelProvider.Anthropic => LoadString(AnthropicModelKey(role)) ?? AnthropicModels.DefaultFor(role),
         _ => LoadString(OpenRouterModelKey(role))
     };
@@ -349,21 +330,14 @@ public sealed class UiStateStore : IUiStateStore
             LoadLlmModel(role, provider) ?? string.Empty,
             provider == ModelProvider.Local ? ModelConstants.Ollama.ResolveBaseUrl(LoadOllamaBaseUrl()) : string.Empty);
     }
-    // --- The tier fossil ------------------------------------------------------------------
-    // Nothing in this app writes imggen.prompt_writer_tier since the tier pickers went: ModelTier is
-    // deleted, and each role now remembers a provider and a model separately. The key still exists on
-    // installs that ran a build before the role pickers, and it is read once, on that role's first read,
-    // so such an install resumes where it left off instead of on nothing. Stored as the old enum's int.
-    // When the owner decides those installs no longer matter, this whole block - key, reader, adopter and
-    // their tests - is one deletion.
 
     private const string PromptWriterTierKey = "imggen.prompt_writer_tier";
     private const int LegacyTierSonnet = 0;
     private const int LegacyTierOpus = 1;
     private const int LegacyTierLocal = 2;
 
-    /// <summary>The stored tier, or null when the key is absent, empty, holds the old "never picked" -1,
-    /// or holds something this app never wrote. Reading a fossil must not be able to break a startup.</summary>
+    /// <summary>The stored tier, or null when the key is absent, holds -1 ("never picked"), or holds an
+    /// unknown value. Never throws.</summary>
     private int? LoadLegacyPromptWriterTier()
     {
         try
@@ -379,11 +353,8 @@ public sealed class UiStateStore : IUiStateStore
     }
 
     /// <summary>
-    /// A tier named a provider and a model in one word, so inheriting only the provider would be half a
-    /// migration. "Sonnet" became "Anthropic", and the model then fell to this role's default — Opus —
-    /// which is a silent upgrade to the pricier model made by a reader, on the first launch after an
-    /// update. Write down the model the tier named, where no model has ever been written, and the upgrade
-    /// keeps the model it already had.
+    /// A tier named both a provider and a model. Writes the tier's model where no Anthropic model is
+    /// stored, so a "Sonnet" tier stays on Sonnet instead of falling to the role's default (Opus).
     /// </summary>
     private void AdoptLegacyTierModel(ModelRole role, int tier)
     {
@@ -395,16 +366,14 @@ public sealed class UiStateStore : IUiStateStore
     }
 
     /// <summary>
-    /// Read-through seeding, and the only reason a Load ever writes: a role with a value of its own
-    /// keeps it; a role whose key has never been written adopts the generation model ONCE and writes
-    /// it down, so this update changes nobody's behaviour on first launch. Written on the first read
-    /// is what makes it once — afterwards the role owns the value, and clearing it stays cleared.
+    /// Read-through seeding, the only Load that writes: a role whose key was never written adopts the
+    /// generation model and stores it, so this happens once; afterwards the role owns the value, and a
+    /// cleared value stays cleared.
     /// </summary>
     private string? LoadRoleModel(string key)
     {
-        // ContainsKey rather than "did something come back": this store collapses an empty value to
-        // null on read, and a role cleared because its model left the server must stay cleared rather
-        // than silently re-borrowing whatever the generate button renders with.
+        // ContainsKey, not a null check: an empty value reads as null, and a cleared role must not
+        // re-adopt the generation model.
         if (RoleKeyIsStored(key)) return LoadString(key);
 
         var seed = LoadString(OllamaModelKey);
@@ -518,9 +487,8 @@ public sealed class UiStateStore : IUiStateStore
     {
         try
         {
-            // Stored as the AppTheme enum int. Default Unspecified = "System" (follow OS), the app's
-            // original behavior. Validate the stored int: a corrupt/foreign value degrades to
-            // Unspecified rather than feeding an undefined enum into UserAppTheme at startup.
+            // Stored as the AppTheme enum int. Default Unspecified = "System" (follow OS). A corrupt
+            // value degrades to Unspecified rather than feeding an undefined enum into UserAppTheme.
             var stored = _preferences.Get(AppThemeKey, (int)AppTheme.Unspecified);
             var theme = stored switch
             {
@@ -555,9 +523,7 @@ public sealed class UiStateStore : IUiStateStore
         }
     }
 
-    // Truncated: the JSON prompt runs to several KB and used to be dumped verbatim into
-    // app.log on every load AND persist — the value's head plus its length is enough to
-    // identify it.
+    // Truncated: the JSON prompt runs to several KB; its head plus its length identify it in app.log.
     private static string Quote(string? v) =>
         v is null ? "<null>"
         : v.Length <= 100 ? $"\"{v}\""
@@ -607,9 +573,9 @@ public sealed class UiStateStore : IUiStateStore
 
     // Per-accessor Load/Persist for the plain single-key settings all share one shape: read
     // (or skip-identical write) through SafeGet/SafeSet, then a debug line naming the accessor.
-    // [CallerMemberName] supplies that name so the log reads "UiStateStore.LoadModel -> …" as
-    // before, without each method spelling it out. (Debounced Prompt, the per-family keyed
-    // settings, and the validated enum settings keep their own bodies — they don't fit this shape.)
+    // [CallerMemberName] supplies that name so the log reads "UiStateStore.LoadModel -> …"
+    // without each method spelling it out. (Debounced Prompt, the per-family keyed settings,
+    // and the validated enum settings keep their own bodies — they don't fit this shape.)
     private string? LoadString(string key, [CallerMemberName] string caller = "")
     {
         var v = SafeGet(key);

@@ -82,8 +82,7 @@ public sealed class EnrichRegionsLlmService : IEnrichRegionsLlmService
     {
         ArgumentNullException.ThrowIfNull(baseCaption);
 
-        // A target with no model is a state the caller must turn into a sentence, never a request: on
-        // Local it used to fall through to a hardcoded tag most servers do not have, failing as a 404.
+        // A target with no model is a state the caller must turn into a sentence, never a request.
         if (!target.HasModel)
             return LlmVariantResult.Fail(target.MissingModelError("in the structure editor."));
 

@@ -23,8 +23,7 @@ public class UiDispatcherTests
     [Fact]
     public void DispatchToUi_WhenAlreadyOnTheMainThread_RunsTheActionOnceAndRethrowsItsOwnException()
     {
-        // The branch production takes and no test host can enter on its own: IsMainThread true, which
-        // is where the action used to sit inside the try.
+        // The branch production takes and no test host can enter on its own: IsMainThread true.
         UiDispatcher.MainThreadProbe = () => true;
         try
         {
@@ -38,7 +37,7 @@ public class UiDispatcherTests
             });
 
             // Not wrapped, not replaced: the caller has to see the throw it actually made, with its
-            // own stack. Under the old catch the caller saw a second, later throw instead.
+            // own stack, not a second, later throw.
             act.Should().Throw<InvalidOperationException>().Which.Should().BeSameAs(expected);
             runs.Should().Be(1, "a UI throw is not a missing dispatcher; re-running Jobs.Insert or a " +
                                    "PropertyChanged += a second time is the bug this pins");

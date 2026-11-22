@@ -115,9 +115,8 @@ public sealed class OllamaModelCatalogTests
     }
 
     // ---- "answered, but is not Ollama" is a different fault than "unreachable" -------------
-    // The report: an OpenAI-compatible server on a real port answers, /api/tags 404s, and the single
-    // InvalidOperationException the catalog used to throw got phrased as "Couldn't reach Ollama" —
-    // sending the user after a dead server that was demonstrably alive.
+    // An OpenAI-compatible server on a real port answers and /api/tags 404s; that must not be
+    // phrased as "Couldn't reach Ollama", because the server is demonstrably alive.
 
     [Fact]
     public async Task ListModelInfosAsync_Http404_ThrowsEndpointExceptionNamingStatusAndEndpoint()

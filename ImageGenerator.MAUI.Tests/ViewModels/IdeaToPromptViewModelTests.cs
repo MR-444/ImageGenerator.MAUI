@@ -72,9 +72,8 @@ public class IdeaToPromptViewModelTests
     {
         var vm = NewWriterVm(new Mock<IUiStateStore>());
 
-        // The name of the fix. The two cards used to answer one question in two dialects — "Local" here,
-        // "Local (Ollama)" above it — because a tier named two providers and no more, and because an
-        // observer sends a picture that this build cannot send to Claude.
+        // The writer offers all three providers; the observer has fewer because this build cannot
+        // send a picture to Claude.
         vm.Writer!.Providers.Should().Equal(ModelProvider.Local, ModelProvider.Anthropic, ModelProvider.OpenRouter);
         vm.Vision!.Providers.Should().Equal(ModelProvider.Local, ModelProvider.OpenRouter);
     }
@@ -933,9 +932,8 @@ public class IdeaToPromptViewModelTests
     public async Task WithoutModelSettingsThePageRefusesRatherThanCallingAGuessedModel()
     {
         // No settings to read is not the app's normal state; it is a page built without a host generator.
-        // The old code did not notice either, and reached past the picker into the settings store for a
-        // model, which is exactly the guess this change set removes. Both rows are built from the same
-        // settings, so neither has a model to guess from, and the page says so instead of calling one.
+        // Both rows are built from the same settings, so neither has a model to guess from, and the page
+        // says so instead of calling one.
         var observer = new RecordingVisionObserver();
         var vm = new IdeaToPromptViewModel(
             new FakePromptBuilder(ProseOk(), JsonOk(MutationTestData.BaseCaption())),

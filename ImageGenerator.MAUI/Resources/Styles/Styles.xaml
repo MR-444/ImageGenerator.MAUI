@@ -60,8 +60,7 @@
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray300}}" />
     </Style>
 
-    <!-- Buttons: replacing the old LightGreen PressedButtonStyle.
-         Each includes a Disabled visual state so IsEnabled=false is visibly obvious. -->
+    <!-- Buttons. Each includes a Disabled visual state so IsEnabled=false is visibly obvious. -->
     <Style x:Key="PrimaryButton" TargetType="Button">
         <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
         <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PrimaryDarkText}}" />
@@ -158,8 +157,7 @@
         </Setter>
     </Style>
 
-    <!-- Status label — recolors itself from the bound StatusKind. The DataTriggers used to
-         be copy-pasted into every page's status Label; they live here once now. Any Label
+    <!-- Status label — recolors itself from the bound StatusKind. Any Label
          using this style just needs a StatusKind in its BindingContext; the default
          (Info-colored) TextColor applies when no trigger matches. -->
     <Style x:Key="StatusLabel" TargetType="Label">

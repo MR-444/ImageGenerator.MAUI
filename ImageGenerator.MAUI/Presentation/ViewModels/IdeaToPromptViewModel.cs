@@ -72,10 +72,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
         // re-defaulted per page visit — that silently undid the user's uncheck every time.
         BuildJson = _uiStateStore?.LoadIdeaBuildJson() ?? generator?.SupportsJsonPromptEditor ?? false;
 
-        // The observer's decision, remembered per role. It used to be two facts kept in two places: a
-        // provider the page held and never persisted (so every navigation answered in Ollama, however
-        // often OpenRouter was used), and a model the service re-read from the settings store itself, so
-        // the model on screen and the model called were separate memories.
+        // The observer's provider and model, remembered per role; the model on screen is the model called.
         if (uiStateStore is not null && generator?.Settings is { } settings)
         {
             Vision = new ModelChoiceState(
@@ -88,13 +85,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
                     OnPropertyChanged(nameof(IsOpenRouterVisionProvider));
             };
 
-            // The writer's decision, same shape. It used to be a tier: one word naming a provider and a
-            // model at once, which is why this card said "Local" two cards below "Local (Ollama)", why
-            // Sonnet and Opus were the only hosted names it could offer, and why OpenRouter could not be
-            // added to it at all. It opens on Local because that is the provider that cannot bill anyone;
-            // the old "pick a writer first" refusal existed to stop a silent Claude call, and a stored
-            // tier is still inherited as provider and model, so neither now needs a placeholder guarding
-            // the user's wallet.
+            // The writer's decision, same shape. It opens on Local because that provider cannot bill anyone.
             Writer = new ModelChoiceState(
                 ModelRole.PromptWrite, uiStateStore, settings.TextModelSources, ModelProvider.Local,
                 WriterHelperFor,
@@ -135,8 +126,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
     partial void OnBuildJsonChanged(bool value) => _uiStateStore?.PersistIdeaBuildJson(value);
 
     /// <summary>
-    /// Who observes the reference image, with which model, remembered per role — the one decision the
-    /// page used to make twice, once in a picker that was never saved and once inside the service.
+    /// Who observes the reference image, with which model, remembered per role.
     /// Null only when the page has no settings to read, which the app never does.
     /// </summary>
     public ModelChoiceState? Vision { get; }
@@ -411,10 +401,9 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
 
     private async Task<bool> SetReferenceImageAsync(string fileName, byte[] bytes, string? sourcePath)
     {
-        // Normalize off the UI thread BEFORE accepting: Ollama only decodes JPEG/PNG, so a browser
-        // WebP (often saved with a lying ".png"/".jfif" name) used to sail through here and die at
-        // generate time as an opaque HTTP 400. Decodable formats are transcoded to PNG; the rest
-        // are rejected right now with a message the user can act on. The vision budget also caps
+        // Normalize off the UI thread BEFORE accepting: Ollama only decodes JPEG/PNG, and a browser
+        // WebP is often saved with a ".png"/".jfif" name. Decodable formats are transcoded to PNG;
+        // the rest are rejected here with a message the user can act on. The vision budget also caps
         // the long edge at 1024px, because a tiled vision model bills the image in tokens.
         var (normalized, _, error) = await ImagePayloadNormalizer.PrepareAsync(bytes, ImagePayloadLimits.Vision);
         if (normalized is null)
@@ -631,7 +620,7 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
                 if (_ollamaCatalog is not null)
                 {
                     // Pass CancellationToken.None so a user cancel still unloads local models from VRAM —
-                    // and free the model this build called, not whatever the legacy shared key remembers.
+                    // and free the model that was called, not the shared Ollama key's model.
                     if (writerTarget.Provider == ModelProvider.Local)
                         await _ollamaCatalog.UnloadAsync(writerTarget.BaseUrl, writerTarget.ModelId, CancellationToken.None);
                     if (usesLocalVision)

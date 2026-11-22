@@ -88,7 +88,7 @@ public static class ModelConstants
         // "pick a model first" message when there isn't one — same contract as the OpenRouter tier.
 
         /// <summary>The one place "no URL typed means the default host" is decided. A blank setting is
-        /// not an endpoint, and three services plus the settings reader each used to re-derive it.</summary>
+        /// not an endpoint.</summary>
         public static string ResolveBaseUrl(string? baseUrl) =>
             string.IsNullOrWhiteSpace(baseUrl) ? DefaultBaseUrl : baseUrl;
     }

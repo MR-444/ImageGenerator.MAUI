@@ -13,15 +13,12 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 /// blank URL is a blank URL everywhere, and a blank URL means "use the default server" on every page or
 /// on none of them.
 ///
-/// It used to carry the model picks too, and then the <c>LlmTarget</c>s built from them. It does not any
-/// more: every model a companion page can call is picked in a <see cref="ModelChoiceState"/>, which
-/// resolves its own target and persists it per role. That is one fact shared by four pages, and a reader
-/// that answers "which model?" per page is exactly how the four roles came to share one value in the
-/// first place.
+/// It carries no model picks: every model a companion page can call is picked in a
+/// <see cref="ModelChoiceState"/>, which resolves its own target and persists it per role.
 ///
 /// Holding still during the owner's lifetime is fine: these VMs are transient (fresh per navigation) and
 /// the generator is a singleton. It takes the settings coordinator rather than the generator, so a
-/// companion page can no longer reach any generator member from here.
+/// companion page cannot reach any generator member from here.
 /// </summary>
 internal sealed class GeneratorSettingsReader(AppSettingsCoordinator? settings)
 {

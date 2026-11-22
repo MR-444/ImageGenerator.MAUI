@@ -161,11 +161,9 @@
                             <Label Text="Optional reference image(s). Max count and payload field vary by model."
                                    Style="{StaticResource HelperText}" />
 
-                            <!-- Thumbnails WRAP instead of scrolling sideways. This used to be a
-                                 CollectionView with ItemsLayout="HorizontalList" in a card about two
-                                 tiles wide: item 4 existed and was simply off-screen with no
-                                 scrollbar, no chevron and no wheel-scroll on Windows, so it read as
-                                 "the 4th image is not shown at all". The count is bounded by the
+                            <!-- Thumbnails WRAP instead of scrolling sideways: a horizontal list
+                                 in a card this narrow hides tiles off-screen with no scrollbar or
+                                 wheel-scroll on Windows. The count is bounded by the
                                  descriptor (MaxImageInputs, 14 at most), so nothing needs
                                  virtualising here — a wrapping FlexLayout shows every tile and grows
                                  a row when it has to. -->
@@ -663,7 +661,7 @@
             </ScrollView>
         </Grid>
 
-        <!-- ACTION BAR: always visible, replaces the old "Run" card. -->
+        <!-- ACTION BAR: always visible. -->
         <Border Grid.Row="1" Style="{StaticResource ActionBar}">
             <Grid RowDefinitions="Auto,Auto"
                   RowSpacing="4"

@@ -11,10 +11,8 @@ namespace ImageGenerator.MAUI.Tests.Presentation;
 /// The two model lists the text roles will pick from, and the words every provider picker uses.
 ///
 /// <para>
-/// These are the first tests to construct <see cref="AppSettingsCoordinator"/> directly. Until now its
-/// 471 lines were only ever reached through <see cref="GeneratorViewModel"/>, which meant a rule about
-/// the settings surface had to be asserted through a 21-parameter constructor — the reason three of its
-/// refresh paths could report to a status bar nobody was looking at.
+/// Constructs <see cref="AppSettingsCoordinator"/> directly, so a rule about the settings surface
+/// does not have to be asserted through <see cref="GeneratorViewModel"/>'s constructor.
 /// </para>
 /// </summary>
 public class AppSettingsCoordinatorModelListsTests

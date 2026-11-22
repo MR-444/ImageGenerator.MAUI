@@ -57,7 +57,7 @@ public class CaptionDiffTests
     {
         var v = Base();
         // art_style unchanged; the blend's fresh words live in aesthetics + lighting. The label must
-        // still surface them (two blends differing only here used to read identically).
+        // still surface them, or two blends differing only here read identically.
         v.StyleDescription!.Aesthetics = "moody";
         v.StyleDescription!.Lighting = "rim light";
         CaptionDiff.Describe(Base(), v, "BlendStyle").Should().Be("Style blended (+ moody rim light)");

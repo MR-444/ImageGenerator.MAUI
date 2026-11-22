@@ -98,8 +98,8 @@ public sealed class ModelCatalogCoordinator : IModelCatalogCoordinator
     /// stop agreeing. The two lists have to agree and nothing else notices: a catalog entry spelled
     /// differently than its descriptor is reported to the user as a model this build cannot drive, and a
     /// descriptor the catalog stopped offering is either unreachable code or a model that no longer exists.
-    /// Nothing here changes what the app does — it marks, refuses and generates exactly as before, because
-    /// auto-matching a rename is how the next rename would come to look fine.
+    /// It only logs and never changes what the app does, because auto-matching a rename is how the next
+    /// rename would come to look fine.
     ///
     /// Compared against <paramref name="live"/>, never the merged list: seeds are the descriptor ids
     /// themselves unioned back in, so matching against the merge would let every descriptor find its own

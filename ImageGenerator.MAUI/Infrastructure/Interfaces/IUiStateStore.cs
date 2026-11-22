@@ -12,10 +12,10 @@ public interface IUiStateStore
     string? LoadModel();
     /// <summary>
     /// Resolution is persisted per option-format FAMILY, derived from the model id: ComfyUI
-    /// models use megapixel presets ("2.0 MP"), everything else shares the legacy key
+    /// models use megapixel presets ("2.0 MP"), everything else shares one key
     /// (Ideogram "WxH" strings etc.). ComfyUI is additionally keyed PER WORKFLOW — models
     /// tolerate different resolutions, so one workflow's pick must not leak into another;
-    /// reads fall back to the old family-wide key until a per-workflow pick exists.
+    /// reads fall back to the family-wide key until a per-workflow pick exists.
     /// </summary>
     string? LoadResolution(string? modelId);
     /// <summary>
@@ -110,11 +110,10 @@ public interface IUiStateStore
 
     /// <summary>
     /// The Ollama tag one LLM role calls on its Local tier: the prompt writer, the caption mutator,
-    /// the region enricher. Three values because they are three decisions — all three used to read the
-    /// one Ollama model on the Settings page (<c>imggen.ollama_model</c>), so picking a cheap tag to test
-    /// a mutation also changed the prompt writer.
+    /// the region enricher. Three values, so picking a cheap tag to test a mutation doesn't change the
+    /// prompt writer.
     /// Null when never set and never seeded; the store seeds a role that has no value of its own from
-    /// that old key exactly once. There is no default model — callers must refuse
+    /// <c>imggen.ollama_model</c> exactly once. There is no default model — callers must refuse
     /// with "pick a model first" rather than guess one.
     /// </summary>
     string? LoadPromptWriterModel();
@@ -132,10 +131,8 @@ public interface IUiStateStore
     /// <summary>
     /// Which provider answers this role's calls. <paramref name="fallback"/> is what a first run, or a
     /// stored value that no longer parses, lands on — the caller supplies it because the right answer is
-    /// per role: the roles that used to run on Claude default to Anthropic, while enrichment starts on
-    /// the free local model rather than reopening on a paid call every navigation. An enum written as
-    /// text is allowed to outlive a rename, so an unparseable value degrades instead of throwing, which
-    /// is what the tier picker already did with an unknown selection.
+    /// per role: some roles default to Anthropic, while enrichment starts on the free local model rather
+    /// than reopening on a paid call every navigation. An unparseable value degrades instead of throwing.
     /// </summary>
     ModelProvider LoadLlmProvider(ModelRole role, ModelProvider fallback);
     /// <inheritdoc cref="LoadLlmProvider" />

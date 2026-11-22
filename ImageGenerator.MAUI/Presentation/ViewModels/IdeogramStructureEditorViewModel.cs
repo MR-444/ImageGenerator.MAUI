@@ -184,10 +184,8 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
     public ModelChoiceState? Enrichment { get; }
 
     /// <summary>
-    /// What the row says about the provider currently picked. The sentence used to be hard-coded under a
-    /// Local-only picker ("the Ollama server URL is shared with AI mutation"), which stopped being true
-    /// the moment the row could pick a hosted model: it is the key that gets billed, and which key, is a
-    /// fact about the provider, not about the page.
+    /// What the row says about the provider currently picked: whether a key gets billed, and which, is
+    /// a fact about the provider, not about the page.
     /// </summary>
     private static string? EnrichmentHelperFor(ModelProvider provider) => provider switch
     {

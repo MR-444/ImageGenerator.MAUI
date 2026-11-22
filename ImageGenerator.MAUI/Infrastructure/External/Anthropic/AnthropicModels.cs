@@ -3,10 +3,8 @@ using ImageGenerator.MAUI.Infrastructure.Interfaces;
 namespace ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 
 /// <summary>
-/// The Claude model IDs the app knows by name — the ONE place they are spelled. They used to be
-/// duplicated as private constants in the prompt builder, the caption mutator and the region enricher
-/// (three copies of <c>"claude-sonnet-4-6"</c> and their "what this role defaults to" switch), which
-/// meant a model bump was a three-file scavenger hunt with no test failing if one copy was missed.
+/// The Claude model IDs the app knows by name, and each role's default — the ONE place they are
+/// spelled, so a model bump is a one-line change.
 /// </summary>
 public static class AnthropicModels
 {

@@ -77,8 +77,7 @@ public sealed partial class ComfyUiWorkflowCoordinator : ObservableObject
     private ImageGenerationParameters Parameters => _parametersAccessor();
 
     /// <summary>
-    /// Re-hydrate every workflow-derived control for <paramref name="modelValue"/>. Replaces the
-    /// five separate fire-and-forget calls RefreshCapabilities used to make; kept as five
+    /// Re-hydrate every workflow-derived control for <paramref name="modelValue"/>. Five
     /// independent discards on purpose — see the version-token contract on the class.
     /// </summary>
     internal void RefreshForModel(string? modelValue)

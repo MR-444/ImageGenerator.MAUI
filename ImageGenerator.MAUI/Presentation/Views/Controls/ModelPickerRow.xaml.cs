@@ -176,7 +176,7 @@ public partial class ModelPickerRow
 
     // ── what the elements actually bind to ────────────────────────────────────────────
     //
-    // Reads of either the choice or the old per-property shape, so one set of elements serves both. They
+    // Reads of either the choice or the per-property shape, so one set of elements serves both. They
     // are pure functions of state — no copies, no mirroring, nothing that can drift out of sync — and the
     // ObservableCollection a choice hands over is the coordinator's own instance, which is what lets a
     // refresh arrive in the picker without this control noticing anything at all.

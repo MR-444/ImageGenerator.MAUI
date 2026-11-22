@@ -13,9 +13,7 @@ public interface IVisionObservationService
 
 /// <param name="Target">
 /// Who to call, with which model, at which address — resolved by the caller, the same contract every
-/// other LLM service in this app was given. The observer used to take a provider enum and go and read
-/// the model out of the settings store itself, which meant the picker on screen and the model actually
-/// called were two different memories, and a page could not observe with a model it had just listed.
+/// other LLM service in this app has, so the model on screen is the model called.
 /// </param>
 public sealed record VisionObservationRequest(
     LlmTarget Target,

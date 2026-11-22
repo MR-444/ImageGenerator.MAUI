@@ -96,7 +96,7 @@ public class CrashLoggerTests : IDisposable
     [Fact]
     public async Task Log_FromFourThreadsConcurrently_AllMessagesLand()
     {
-        // Regression: NLog's FileTarget with ConcurrentWrites=true + KeepFileOpen=false
+        // NLog's FileTarget with ConcurrentWrites=true + KeepFileOpen=false
         // serialises concurrent appends so bytes don't interleave and writes don't drop.
         var tasks = Enumerable.Range(0, 4)
             .Select(i => Task.Run(() => CrashLogger.Log($"Race{i}", new Exception($"msg-{i}"))))

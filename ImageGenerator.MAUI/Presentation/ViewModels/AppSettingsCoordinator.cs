@@ -55,8 +55,7 @@ public sealed partial class AppSettingsCoordinator(
 
     // Inline, per-card result of the two server-backed pickers. The host's StatusMessage bar is
     // rendered only by MainPage.xaml, and the sibling pages bind their OWN view model's status, so
-    // until now every one of the 7 Refresh/Folder buttons in the app reported its failure to a label
-    // that was not on the page pressed: the user saw nothing and the log got a WARN.
+    // a failure is shown on the card whose button was pressed.
     // Empty means "nothing to report" — the same null-hides-the-label contract as
     // GeneratorViewModel.CivitaiConnectionStatus, which is the in-app pattern this copies.
     [ObservableProperty]
@@ -165,10 +164,8 @@ public sealed partial class AppSettingsCoordinator(
     [ObservableProperty]
     private bool _openRouterFreeOnly = true;
 
-    // Clears the list, never a pick: a filter on a list is not a decision about the observer's model,
-    // and the row keeps listing its own saved pick whatever the list holds.
-    // One switch for every OpenRouter list. Changing it empties both, so the next row that needs one
-    // asks again under the new filter rather than showing an answer to the old question.
+    // One switch for every OpenRouter list. Changing it empties both lists, never a pick, so the next
+    // row that needs one asks again under the new filter; a row keeps listing its own saved pick.
     partial void OnOpenRouterFreeOnlyChanged(bool value)
     {
         _uiStateStore.PersistOpenRouterFreeOnly(value);
@@ -532,8 +529,7 @@ public sealed partial class AppSettingsCoordinator(
     private bool _savedSettingsLoaded;
 
     /// <summary>
-    /// Restores the settings-owned Preferences. Calls no generator helper, so it stays a verbatim
-    /// copy of what used to sit in the middle of LoadSavedUiState.
+    /// Restores the settings-owned Preferences. Calls no generator helper.
     /// </summary>
     public void LoadSavedSettings()
     {
@@ -566,7 +562,7 @@ public sealed partial class AppSettingsCoordinator(
 
         OpenRouterFreeOnly = _uiStateStore.LoadOpenRouterFreeOnly();
 
-        // Default-on; only flips the field when the user previously turned it off (OnChanged re-persist is
+        // Default-on; only flips the field when the user turned it off (OnChanged re-persist is
         // a harmless echo — nothing else writes this field).
         FreeVramAfterRendering = _uiStateStore.LoadFreeVramAfterRendering();
 

@@ -6,9 +6,8 @@ namespace ImageGenerator.MAUI.Infrastructure.External.Replicate;
 /// <summary>
 /// Turns Replicate's input-validation error body into one readable sentence.
 ///
-/// Why this exists: a rejected payload arrives as HTTP 422 with the field name sitting inside a
-/// JSON body, and <c>ReplicateImageGenerationService</c> used to surface that body verbatim in the
-/// status label — the information was present and unreadable at the same time. For a model the app
+/// Why this exists: a rejected payload arrives as HTTP 422 with the field name buried in a JSON
+/// body that is unreadable in the status label. For a model the app
 /// has no descriptor for, this message is the whole diagnosis, so it has to read like
 /// one.
 ///

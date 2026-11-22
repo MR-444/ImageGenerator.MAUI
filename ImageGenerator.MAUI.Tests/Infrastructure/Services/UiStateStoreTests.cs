@@ -76,7 +76,7 @@ public class UiStateStoreTests
 
     // Resolution is persisted per option-format family: ComfyUI models ("comfyui/*") get
     // their own keys — one PER WORKFLOW, since models tolerate different resolutions —
-    // and every other model shares the legacy key so old saved data stays valid.
+    // and every other model shares one key.
     private const string ResolutionKey = "imggen.last_resolution";
     private const string ComfyFamilyResolutionKey = "imggen.last_resolution.comfyui";
     private const string ComfyResolutionKey = "imggen.last_resolution.comfyui.Ideogram workflow_MR";
@@ -595,10 +595,8 @@ public class UiStateStoreTests
         act.Should().NotThrow();
     }
 
-    // The tier fossil: imggen.prompt_writer_tier. ModelTier is deleted and nothing in this app writes
-    // this key any more, so there is no round trip left to pin - there is one reader, and what it owes is
-    // an install that ran a build before the role pickers. It is read once, on that role's first read, and
-    // it must never be able to break a startup or overwrite a model someone picked.
+    // The legacy tier key, imggen.prompt_writer_tier: read-only, read once on the prompt writer's first
+    // read. It must never break a startup or overwrite a model someone picked.
     private const string PromptWriterTierKey = "imggen.prompt_writer_tier";
     private const int LegacySonnet = 0;
     private const int LegacyOpus = 1;
@@ -633,8 +631,7 @@ public class UiStateStoreTests
         _preferences.ContainsKey(PromptWriterTierKey).Should().BeFalse();
     }
 
-    // The stored value is the old enum's int, so the numbers are written out rather than named: the enum
-    // they came from is deleted, and pinning the number is the whole point of a fossil reader.
+    // The stored value is an int with no enum left to name it, so the numbers are written out.
     [Theory]
     [InlineData(LegacySonnet, ModelProvider.Anthropic)]
     [InlineData(LegacyOpus, ModelProvider.Anthropic)]
@@ -715,9 +712,8 @@ public class UiStateStoreTests
     [Fact]
     public void APickMadeAfterAMigrationOutweighsTheMigration()
     {
-        // The order the store alone cannot see: the fossil is adopted first, then the user says otherwise.
-        // A migration that reasserted itself on every read would undo that choice on the next navigation,
-        // which is a first-run convenience quietly becoming a policy nobody voted for.
+        // The legacy tier is adopted first, then the user picks otherwise. A migration that reasserted
+        // itself on every read would undo that choice on the next navigation.
         _preferences.Seed(PromptWriterTierKey, LegacyOpus);
         _sut.LoadLlmProvider(ModelRole.PromptWrite, ModelProvider.Local);
 
@@ -823,8 +819,7 @@ public class UiStateStoreTests
     }
 
     // ---- One Ollama model per LLM role -------------------------------------------------
-    // Every role used to read imggen.ollama_model. Splitting it must not cost anybody their
-    // existing pick, so a role that has never had one adopts the generation model exactly once.
+    // A role that has never had a pick adopts imggen.ollama_model (the generation model) exactly once.
 
     [Fact]
     public void LoadMutationModel_NeverStored_AdoptsTheGenerationModelOnce()
@@ -908,9 +903,8 @@ public class UiStateStoreTests
         _sut.LoadLlmModel(ModelRole.Enrich, ModelProvider.Local).Should().Be("enrich-model");
         _sut.LoadLlmModel(ModelRole.Observe, ModelProvider.Local).Should().Be("vision-model");
 
-        // The same four facts through the keys the pickers that came before these roles used. Reading
-        // them back that way is what proves the roles are views over the old storage rather than a
-        // second copy of it, which is why moving a page to a role needs no migration.
+        // The same four facts through the per-role accessors: the roles are views over the same keys,
+        // not a second copy of them.
         _sut.LoadPromptWriterModel().Should().Be("writer-model");
         _sut.LoadMutationModel().Should().Be("mutation-model");
         _sut.LoadEnrichModel().Should().Be("enrich-model");
@@ -944,9 +938,8 @@ public class UiStateStoreTests
     [Fact]
     public void TheObserverRemembersWhichProviderItWasPointedAt()
     {
-        // The old picker had no key at all, which is why it answered in Ollama on every navigation however
-        // often OpenRouter had been used. First run adopts the page's fallback and writes it down; every
-        // later launch reads back what the user last chose.
+        // First run adopts the page's fallback and writes it down; every later launch reads back what
+        // the user last chose.
         _sut.LoadLlmProvider(ModelRole.Observe, ModelProvider.Local).Should().Be(ModelProvider.Local);
 
         _sut.PersistLlmProvider(ModelRole.Observe, ModelProvider.OpenRouter);

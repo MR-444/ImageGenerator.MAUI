@@ -126,7 +126,7 @@ public class JobRunnerTests : IDisposable
     [Fact]
     public async Task RunAsync_SaveThrows_DeletesPartialFileAndReturnsFailed()
     {
-        // F7 regression: ImageSharp writes directly to the final path, so a mid-write failure
+        // ImageSharp writes directly to the final path, so a mid-write failure
         // can leave a partial image on disk. JobRunner must best-effort delete it.
         var parameters = SampleParameters();
         var partialPath = PathInTempDir("partial.png");

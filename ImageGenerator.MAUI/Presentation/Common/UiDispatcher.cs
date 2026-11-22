@@ -10,9 +10,7 @@ public static class UiDispatcher
     /// Replaces the <see cref="MainThread"/> probe. Null, always, outside tests: the branch this
     /// seam exists to reach is the one a unit-test host can never enter, because
     /// <see cref="MainThread.IsMainThread"/> throws there instead of answering false (see the
-    /// fallback below). Without it the doubling this method used to do — the action running a second
-    /// time from a catch that could not tell a missing dispatcher from a failing action — sat in the
-    /// one path none of the 1500+ tests could reach.
+    /// fallback below).
     /// </summary>
     internal static Func<bool>? MainThreadProbe { get; set; }
 
@@ -41,7 +39,7 @@ public static class UiDispatcher
         catch
         {
             // Scheduling failed before the action ever started, so running it here is still exactly
-            // one execution — which is the whole difference from the catch this method used to have.
+            // one execution.
             action();
         }
     }

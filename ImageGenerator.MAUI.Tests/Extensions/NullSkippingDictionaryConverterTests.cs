@@ -62,7 +62,7 @@ public class NullSkippingDictionaryConverterTests
     public void Serialize_PolymorphicThroughReplicatePredictionRequest_OmitsNullDictEntries()
     {
         // Replicate's wrapper types `Input` as `object`. STJ dispatches by runtime type,
-        // so this regression test catches any future mistyping of the payload dict.
+        // so this test catches any mistyping of the payload dict.
         var request = new ReplicatePredictionRequest
         {
             Input = new Dictionary<string, object?>

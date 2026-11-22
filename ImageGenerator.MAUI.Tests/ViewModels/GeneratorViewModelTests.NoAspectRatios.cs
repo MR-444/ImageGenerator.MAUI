@@ -10,10 +10,9 @@ namespace ImageGenerator.MAUI.Tests.ViewModels;
 /// <summary>
 /// What happens when a model offers no aspect ratios at all.
 ///
-/// Every shipped descriptor declares a non-empty list, and two of them carry a comment saying they
-/// must: "RefreshCapabilities reads AspectRatios[0]". That is a rule the type cannot state —
-/// <see cref="ModelCapabilities"/> is a record with no guard — so the obvious next descriptor, one
-/// for a model with no aspect-ratio field, used to throw on the UI thread the moment it was picked.
+/// Every shipped descriptor declares a non-empty list, but <see cref="ModelCapabilities"/> is a record
+/// with no guard, so a descriptor for a model with no aspect-ratio field must not throw on the UI
+/// thread when it is picked.
 /// Part of <see cref="GeneratorViewModelTests"/> to reuse its mocks.
 /// </summary>
 public partial class GeneratorViewModelTests
@@ -46,7 +45,7 @@ public partial class GeneratorViewModelTests
         selected.AspectRatioOptions.Should().BeEmpty();
     }
 
-    /// <summary>A model that has no aspect-ratio knob, which is the case the fallback used to crash on.</summary>
+    /// <summary>A model that has no aspect-ratio knob.</summary>
     private sealed class NoAspectRatioDescriptor(string modelId)
         : IPayloadBuilder, ICapabilityProvider, ICatalogSeedEntry
     {

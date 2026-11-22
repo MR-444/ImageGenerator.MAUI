@@ -4,10 +4,7 @@ namespace ImageGenerator.MAUI.Infrastructure.External;
 
 /// <summary>
 /// The one place an LLM service works out which key its target authenticates with — and, more
-/// importantly, the one place it decides what to say when that key is missing. Three services used to
-/// each carry their own "if the tier isn't Local, load the Anthropic key and complain if it's empty",
-/// which was fine while Anthropic was the only hosted provider and became a silent wrong answer the
-/// moment a second one appeared: an OpenRouter call would have demanded an Anthropic key.
+/// importantly, the one place it decides what to say when that key is missing, per provider.
 /// </summary>
 internal static class LlmCredentials
 {
