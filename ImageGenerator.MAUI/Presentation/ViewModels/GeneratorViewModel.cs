@@ -18,14 +18,11 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 
 public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInputImageTarget
 {
-    private readonly IJobRunner _jobRunner;
     private readonly ICivitaiPostingService _civitaiPostingService;
     private readonly IUiStateStore _uiStateStore;
     private readonly IModelCatalogCoordinator _catalogCoordinator;
     private readonly IModelDescriptorRegistry _registry;
     private readonly IGalleryService _galleryService;
-    private readonly IComfyUiVramService? _comfyVram;
-    private readonly IGpuGate? _gpuGate;
     private readonly ILogger<GeneratorViewModel> _logger;
 
     [ObservableProperty]
@@ -66,38 +63,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [NotifyPropertyChangedFor(nameof(WorkspaceSummary))]
     private bool _isGpuBusy;
 
-    private IDisposable? _batchGpuLease;
-    private string? _batchComfyModel;
-
-    // Images in the output folder; null until LoadTotalImagesGeneratedAsync has counted them.
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(TotalImagesGeneratedText))]
-    [NotifyPropertyChangedFor(nameof(WorkspaceSummary))]
-    private int? _totalImagesGenerated;
-
-    public string TotalImagesGeneratedText =>
-        TotalImagesGenerated is { } n ? $"{n} image{(n == 1 ? "" : "s")}" : "…";
-
-    public ObservableCollection<GenerationJob> Jobs { get; } = [];
-    public bool HasJobs => Jobs.Count > 0;
-
-    public bool HasFinishedJobs => Jobs.Any(j => j.IsFinished);
-
-    // "2 running · 1 queued · 5 done". A queued batch job is not running and still at StatusKind.Info.
-    public string JobStatusSummary
-    {
-        get
-        {
-            var running = Jobs.Count(j => j.IsRunning);
-            var queued = Jobs.Count(j => j is { IsRunning: false, StatusKind: StatusKind.Info });
-            var done = Jobs.Count(j => j.IsFinished);
-            var parts = new List<string>(3);
-            if (running > 0) parts.Add($"{running} running");
-            if (queued > 0) parts.Add($"{queued} queued");
-            if (done > 0) parts.Add($"{done} done");
-            return parts.Count > 0 ? string.Join(" · ", parts) : "No jobs yet";
-        }
-    }
+    // The job cards and their runs.
+    public JobQueueCoordinator Queue { get; }
 
     public ProviderFilterCoordinator ProviderFilter { get; }
     public BatchCoordinator Batch { get; }
@@ -132,7 +99,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     public bool CanAddInputImage => InputImages.CanAddImage;
 
     public string WorkspaceSummary =>
-        $"{JobStatusSummary} · {SelectedModelSummary} · {TotalImagesGeneratedText}"
+        $"{Queue.JobStatusSummary} · {SelectedModelSummary} · {Queue.TotalImagesGeneratedText}"
         + (IsGpuBusy ? " · GPU busy" : string.Empty);
 
     [ObservableProperty]
@@ -179,10 +146,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     // prompt desync shows up here too.
     [ObservableProperty]
     private string? _jsonPromptStateText;
-
-    // The newest saved job: the one featured card. Canceled and failed jobs never become it.
-    [ObservableProperty]
-    private GenerationJob? _latestCompletedJob;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SupportsCustomDimensions))]
@@ -413,46 +376,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             StatusKind.Warning);
     }
 
-    // Per-job PropertyChanged is attached here so a job turning finished re-evaluates the gates.
-    private void OnJobsCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
-        => DispatchToUi(() =>
-        {
-            if (e.OldItems is not null)
-                foreach (GenerationJob job in e.OldItems) job.PropertyChanged -= OnJobPropertyChanged;
-            if (e.NewItems is not null)
-                foreach (GenerationJob job in e.NewItems) job.PropertyChanged += OnJobPropertyChanged;
-
-            OnPropertyChanged(nameof(HasJobs));
-            RaiseFinishedJobsChanged();
-        });
-
-    private void OnJobPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(GenerationJob.IsFinished))
-            DispatchToUi(RaiseFinishedJobsChanged);
-    }
-
-    private void RaiseFinishedJobsChanged()
-    {
-        OnPropertyChanged(nameof(HasFinishedJobs));
-        OnPropertyChanged(nameof(JobStatusSummary));
-        OnPropertyChanged(nameof(WorkspaceSummary));
-        ClearFinishedJobsCommand.NotifyCanExecuteChanged();
-    }
-
-    // Drops finished cards; running and queued jobs stay. The featured card is always finished.
-    [RelayCommand(CanExecute = nameof(HasFinishedJobs))]
-    private void ClearFinishedJobs()
-    {
-        var finished = Jobs.Where(j => j.IsFinished).ToList();
-        foreach (var job in finished) Jobs.Remove(job);
-
-        if (LatestCompletedJob is not null && !Jobs.Contains(LatestCompletedJob))
-            LatestCompletedJob = null;
-
-        _ = FlashAsync($"Cleared {finished.Count} finished job{(finished.Count == 1 ? "" : "s")}.");
-    }
-
     public GeneratorViewModel(
         IJobRunner jobRunner,
         IApiTokenStore tokenStore,
@@ -490,14 +413,11 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         ArgumentNullException.ThrowIfNull(promptBatchParser);
         ArgumentNullException.ThrowIfNull(galleryService);
         ArgumentNullException.ThrowIfNull(logger);
-        _jobRunner = jobRunner;
         _civitaiPostingService = civitaiPostingService;
         _uiStateStore = uiStateStore;
         _catalogCoordinator = catalogCoordinator;
         _registry = registry;
         _galleryService = galleryService;
-        _comfyVram = comfyVram;
-        _gpuGate = gpuGate;
         _logger = logger;
 
         // Coordinators are composed here rather than resolved from DI, so the tests exercise
@@ -506,7 +426,21 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             uiStateStore, folderPicker, ollamaModelCatalog, openRouterModelCatalog,
             anthropicModelCatalog, anthropicTokenStore, SetStatus, logger);
 
-        Jobs.CollectionChanged += OnJobsCollectionChanged;
+        Queue = new JobQueueCoordinator(
+            jobRunner, civitaiPostingService, galleryService, comfyVram, gpuGate, Settings,
+            isBatchRunning: () => Batch is { IsBatchRunning: true },
+            setGpuBusy: busy => IsGpuBusy = busy,
+            flash: message => _ = FlashAsync(message),
+            logger: logger);
+
+        Queue.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(JobQueueCoordinator.JobStatusSummary)
+                or nameof(JobQueueCoordinator.TotalImagesGeneratedText))
+            {
+                OnPropertyChanged(nameof(WorkspaceSummary));
+            }
+        };
 
         // Defaults live on ImageGenerationParameters only. The starting seed is random per launch.
         _parameters = new ImageGenerationParameters
@@ -560,18 +494,16 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         Batch = new BatchCoordinator(
             promptBatchParser: promptBatchParser,
             parametersAccessor: () => Parameters,
-            enqueueJob: job => DispatchToUi(() => Jobs.Insert(0, job)),
-            runJob: RunBatchJobAsync,
+            enqueueJob: Queue.Enqueue,
+            runJob: Queue.RunBatchJobAsync,
             setStatus: SetStatus,
             addAsInputAsync: InputImages.AddAsInputAsync,
             mutateFromImageAsync: path => MutateFromImageAsync(path));
 
-        // Free the ComfyUI GPU once per batch (a per-job free reloads the checkpoint every time),
-        // before releasing the batch's GPU lease.
         Batch.PropertyChanged += (sender, e) =>
         {
             if (e.PropertyName == nameof(BatchCoordinator.IsBatchRunning) && !Batch.IsBatchRunning)
-                _ = CompleteBatchGpuAsync();
+                _ = Queue.CompleteBatchAsync();
         };
 
         AttachParameters(_parameters);
@@ -741,250 +673,16 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
         var snapshot = Parameters.Clone();
         var job = new GenerationJob(snapshot, AddAsInputAsync, path => MutateFromImageAsync(path));
-        Jobs.Insert(0, job);
+        Queue.Enqueue(job);
 
         // JobCount makes an unintended extra run visible in the log (e.g. a focused button re-fired by Space).
         _logger.LogInformation(
             "Generate activated Model={Model} Seed={Seed} JobCount={Count}",
-            snapshot.Model, snapshot.Seed, Jobs.Count);
+            snapshot.Model, snapshot.Seed, Queue.Jobs.Count);
 
         _ = FlashAsync("Generation started");
 
-        await RunJobAsync(job);
-    }
-
-    private Task RunBatchJobAsync(GenerationJob job) => RunJobAsync(job, isBatchJob: true);
-
-    private async Task RunJobAsync(GenerationJob job, bool isBatchJob = false)
-    {
-        // A ComfyUI render and local Ollama work share one GPU's VRAM. Hold the gate from before
-        // submit until after the VRAM free. Other providers and split-host setups skip it.
-        var isComfyJob = ModelConstants.ComfyUi.IsId(job.Parameters.Model);
-        var gpuGated = _gpuGate is not null
-            && isComfyJob
-            && GpuColocation.SameHost(Settings.ComfyUiBaseUrl, Settings.OllamaBaseUrl);
-
-        IDisposable? singleJobLease = null;
-        if (gpuGated)
-        {
-            try
-            {
-                if (isBatchJob)
-                {
-                    if (_batchGpuLease is null)
-                    {
-                        _batchGpuLease = await _gpuGate!.AcquireAsync(job.Cts.Token);
-                        DispatchToUi(() => IsGpuBusy = true);
-                    }
-                    _batchComfyModel = job.Parameters.Model;
-                }
-                else
-                {
-                    singleJobLease = await _gpuGate!.AcquireAsync(job.Cts.Token);
-                    DispatchToUi(() => IsGpuBusy = true);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // Canceled while queued behind another GPU workload; nothing rendered.
-                MarkCanceled(job);
-                DispatchToUi(() =>
-                {
-                    job.IsRunning = false;
-                    job.HasProgress = false;
-                });
-                job.Cts.Dispose();
-                return;
-            }
-        }
-        else if (isBatchJob && isComfyJob)
-        {
-            // Remember the batch's model so CompleteBatchGpuAsync frees VRAM even if the
-            // picker changes mid-batch.
-            _batchComfyModel = job.Parameters.Model;
-        }
-
-        try
-        {
-            _logger.LogInformation(
-                "Job started Model={Model} Seed={Seed}", job.Parameters.Model, job.Parameters.Seed);
-
-            // ComfyUI sampler progress. A report arriving after the outcome must not overwrite it.
-            var progress = new Progress<JobProgress>(p => DispatchToUi(() =>
-            {
-                if (!job.IsRunning) return;
-                job.StatusMessage = p.Message;
-                if (p.Percent is { } pct)
-                {
-                    job.Progress = pct;
-                    job.HasProgress = true;
-                }
-            }));
-
-            var outcome = await _jobRunner.RunAsync(job.Parameters, job.Cts.Token, progress);
-
-            _logger.LogInformation(
-                "Job finished Kind={Kind} Path={Path}", outcome.Kind, outcome.SavedPath);
-
-            // MAUI drops PropertyChanged raised off the UI thread.
-            DispatchToUi(() =>
-            {
-                job.ResultPath = outcome.SavedPath;
-                if (outcome.SavedPath is not null)
-                {
-                    // Exactly one card is featured: the newest saved one.
-                    if (LatestCompletedJob is not null) LatestCompletedJob.IsFeatured = false;
-                    job.IsFeatured = true;
-                    LatestCompletedJob = job;
-
-                    // Before the startup count finishes there is nothing to increment.
-                    if (TotalImagesGenerated is { } n) TotalImagesGenerated = n + 1;
-                }
-                job.StatusMessage = outcome.Message;
-                job.StatusKind = outcome.Kind switch
-                {
-                    JobOutcomeKind.Saved => StatusKind.Success,
-                    // The runner reports a cancel during polling as Failed with a "canceled" message.
-                    _ when outcome.Message.Contains("canceled", StringComparison.OrdinalIgnoreCase)
-                        => StatusKind.Canceled,
-                    _ => StatusKind.Error
-                };
-            });
-
-            // Fire-and-forget: a slow upload must not delay the next batch job, and its failure
-            // never changes the job outcome.
-            if (outcome is { Kind: JobOutcomeKind.Saved, SavedPath: not null }
-                && job.Parameters.PostToCivitai)
-            {
-                _ = PostJobToCivitaiAsync(job, outcome.SavedPath);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            MarkCanceled(job);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Job finished Kind=Threw Model={Model}", job.Parameters.Model);
-            var msg = $"Error: {ex.Message}";
-            DispatchToUi(() =>
-            {
-                job.StatusMessage = msg;
-                job.StatusKind = StatusKind.Error;
-            });
-        }
-        finally
-        {
-            DispatchToUi(() =>
-            {
-                job.IsRunning = false;
-                job.HasProgress = false;
-            });
-            job.Cts.Dispose();
-        }
-
-        // Batch jobs keep the lease until CompleteBatchGpuAsync runs at batch end.
-        if (isBatchJob) return;
-
-        // Free VRAM before releasing the gate, so queued GPU work gets a freed card.
-        try
-        {
-            await MaybeFreeComfyUiVramAsync(job.Parameters.Model);
-        }
-        finally
-        {
-            if (gpuGated) DispatchToUi(() => IsGpuBusy = false);
-            singleJobLease?.Dispose();
-        }
-    }
-
-    private void MarkCanceled(GenerationJob job)
-    {
-        _logger.LogInformation("Job finished Kind=Canceled Path=(null)");
-        DispatchToUi(() =>
-        {
-            job.StatusMessage = "Canceled.";
-            job.StatusKind = StatusKind.Canceled;
-        });
-    }
-
-    private async Task CompleteBatchGpuAsync()
-    {
-        var lease = _batchGpuLease;
-        var model = _batchComfyModel;
-        _batchGpuLease = null;
-        _batchComfyModel = null;
-
-        if (lease is null && model is null) return;
-
-        try
-        {
-            if (model is not null)
-                await MaybeFreeComfyUiVramAsync(model);
-        }
-        finally
-        {
-            if (lease is not null)
-            {
-                DispatchToUi(() => IsGpuBusy = false);
-                lease.Dispose();
-            }
-        }
-    }
-
-    /// <summary>
-    /// Frees ComfyUI's GPU memory if "Free GPU memory after rendering" is on. No-op for other
-    /// models, during a batch, or without a VRAM service. The service swallows failures.
-    /// </summary>
-    internal async Task MaybeFreeComfyUiVramAsync(string model)
-    {
-        if (!Settings.FreeVramAfterRendering
-            || _comfyVram is null
-            || Batch.IsBatchRunning
-            || !ModelConstants.ComfyUi.IsId(model))
-        {
-            return;
-        }
-
-        await _comfyVram.TryFreeAsync();
-    }
-
-    internal async Task PostJobToCivitaiAsync(GenerationJob job, string savedPath)
-    {
-        DispatchToUi(() => job.CivitaiStatusMessage = "Posting to CivitAI…");
-        try
-        {
-            var meta = job.Parameters.CivitaiIncludeMeta
-                ? CivitaiMetaBuilder.Build(job.Parameters)
-                : null;
-            var modelVersionId = CivitaiModelReference.ParseVersionId(job.Parameters.CivitaiModelRef);
-            // Text that parses to nothing is a typo, not a "no model" choice; say so.
-            var refNotRecognized =
-                !string.IsNullOrWhiteSpace(job.Parameters.CivitaiModelRef) && modelVersionId is null;
-
-            var result = await _civitaiPostingService.PostImageAsync(
-                savedPath, CivitaiTitleBuilder.Build(job.Prompt), meta, modelVersionId);
-
-            _logger.LogInformation(
-                "CivitAI post finished Success={Success} PostId={PostId} ModelVersionId={ModelVersionId}",
-                result.Success, result.PostId, modelVersionId);
-            DispatchToUi(() =>
-            {
-                job.CivitaiPostUrl = result.PostUrl;
-                job.CivitaiStatusMessage = result.Success
-                    ? refNotRecognized
-                        ? $"{result.Message} Model reference not recognized — posted without model link."
-                        : result.Message
-                    : $"CivitAI post failed: {result.Message}";
-            });
-        }
-        catch (Exception ex)
-        {
-            // The service returns failures as results; anything that still throws must not
-            // escape a fire-and-forget continuation. The job stays Saved.
-            _logger.LogWarning(ex, "CivitAI posting threw Path={Path}", savedPath);
-            DispatchToUi(() => job.CivitaiStatusMessage = $"CivitAI post failed: {ex.Message}");
-        }
+        await Queue.RunAsync(job);
     }
 
     [ObservableProperty]
@@ -1310,21 +1008,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Model catalog hydrate failed");
-        }
-    }
-
-    // Called fire-and-forget from OnAppearing, so a large output folder never delays startup.
-    public async Task LoadTotalImagesGeneratedAsync(CancellationToken ct = default)
-    {
-        try
-        {
-            var count = 0;
-            await foreach (var _ in _galleryService.EnumerateAsync(ct)) count++;
-            DispatchToUi(() => TotalImagesGenerated = count);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Total-images count failed");
         }
     }
 

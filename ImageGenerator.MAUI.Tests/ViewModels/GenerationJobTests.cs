@@ -147,7 +147,7 @@ public class GenerationJobTests
     [Fact]
     public void Cancel_AfterCtsDisposed_DoesNotThrow()
     {
-        // The ViewModel disposes Cts in RunJobAsync's finally; binding-update lag could
+        // JobQueueCoordinator disposes Cts when the run ends; binding-update lag could
         // briefly allow the Cancel button to remain clickable post-completion.
         var job = new GenerationJob(MakeParameters());
         job.Cts.Dispose();

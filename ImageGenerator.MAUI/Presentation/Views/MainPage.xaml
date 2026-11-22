@@ -513,7 +513,7 @@
 
             <!-- QUEUE / RESULTS PANE -->
             <ScrollView x:Name="MainResultsPane" Grid.Column="1">
-                <VerticalStackLayout IsVisible="{Binding HasJobs}" Spacing="12" Padding="0,0,12,16">
+                <VerticalStackLayout IsVisible="{Binding Queue.HasJobs}" Spacing="12" Padding="0,0,12,16">
 
                     <!-- Queue header -->
                     <Grid ColumnDefinitions="*,Auto"
@@ -525,10 +525,10 @@
                         <Button Grid.Column="1"
                                 Text="Clear finished"
                                 Style="{StaticResource SecondaryButton}"
-                                Command="{Binding ClearFinishedJobsCommand}"
+                                Command="{Binding Queue.ClearFinishedJobsCommand}"
                                 AutomationId="ClearFinishedJobsButton" />
                     </Grid>
-                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Jobs}" Spacing="12">
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Queue.Jobs}" Spacing="12">
                         <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="vm:GenerationJob">
                                 <Border Style="{StaticResource Card}">

@@ -112,7 +112,7 @@ public class JobRunnerTests : IDisposable
     [Fact]
     public async Task RunAsync_ServiceThrowsOperationCanceled_Propagates()
     {
-        // The VM's RunJobAsync distinguishes OperationCanceledException from other failures, so
+        // JobQueueCoordinator distinguishes OperationCanceledException from other failures, so
         // JobRunner must not catch it — let it bubble.
         var parameters = SampleParameters();
         _imageService.Setup(s => s.GenerateImageAsync(parameters, It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))

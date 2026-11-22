@@ -120,7 +120,7 @@ public sealed partial class BatchCoordinator : ObservableObject
     /// <summary>
     /// Runs the supplied prompts as a sequential batch using the currently-selected model
     /// and parameters. Each prompt becomes its own <see cref="GenerationJob"/> queued at the
-    /// top of the host's Jobs collection in original file order. Failures don't abort the batch.
+    /// top of the job queue in original file order. Failures don't abort the batch.
     /// </summary>
     public async Task RunBatchAsync(IReadOnlyList<string> prompts, IReadOnlyList<string>? labels = null)
     {

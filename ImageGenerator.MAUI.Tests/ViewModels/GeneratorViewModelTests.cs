@@ -99,9 +99,9 @@ public partial class GeneratorViewModelTests
         _viewModel.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
 
         var job = Job(isRunning: true, StatusKind.Info);
-        _viewModel.Jobs.Add(job);
+        _viewModel.Queue.Jobs.Add(job);
         job.IsRunning = false;
-        _viewModel.TotalImagesGenerated = 12;
+        _viewModel.Queue.TotalImagesGenerated = 12;
         _viewModel.IsGpuBusy = true;
         var otherModel = _viewModel.ProviderFilter.AllModels
             .First(model => model.Value != _viewModel.ProviderFilter.SelectedModel?.Value);
@@ -151,14 +151,14 @@ public partial class GeneratorViewModelTests
         var vm = BuildViewModelWithVram(vram);
         vm.Settings.FreeVramAfterRendering = true;
 
-        await vm.MaybeFreeComfyUiVramAsync("comfyui/anything");
+        await vm.Queue.MaybeFreeComfyUiVramAsync("comfyui/anything");
         vram.Calls.Should().Be(1, "enabled + ComfyUI model + no batch running");
 
-        await vm.MaybeFreeComfyUiVramAsync(ModelConstants.Flux.Pro11);
+        await vm.Queue.MaybeFreeComfyUiVramAsync(ModelConstants.Flux.Pro11);
         vram.Calls.Should().Be(1, "non-ComfyUI models hold no local VRAM");
 
         vm.Settings.FreeVramAfterRendering = false;
-        await vm.MaybeFreeComfyUiVramAsync("comfyui/anything");
+        await vm.Queue.MaybeFreeComfyUiVramAsync("comfyui/anything");
         vram.Calls.Should().Be(1, "the toggle gates it off");
     }
 
@@ -166,7 +166,7 @@ public partial class GeneratorViewModelTests
     public async Task MaybeFreeComfyUiVram_NoServiceWired_DoesNotThrow()
     {
         // The default _viewModel is built without a vram service (optional ctor arg).
-        var act = async () => await _viewModel.MaybeFreeComfyUiVramAsync("comfyui/anything");
+        var act = async () => await _viewModel.Queue.MaybeFreeComfyUiVramAsync("comfyui/anything");
         await act.Should().NotThrowAsync();
     }
 
@@ -306,11 +306,11 @@ public partial class GeneratorViewModelTests
 
         await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
-        _viewModel.Jobs.Should().HaveCount(1);
-        _viewModel.Jobs[0].StatusMessage.Should().StartWith("Saved to ");
-        _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Success);
-        _viewModel.Jobs[0].ResultPath.Should().NotBeNull();
-        _viewModel.Jobs[0].IsRunning.Should().BeFalse();
+        _viewModel.Queue.Jobs.Should().HaveCount(1);
+        _viewModel.Queue.Jobs[0].StatusMessage.Should().StartWith("Saved to ");
+        _viewModel.Queue.Jobs[0].StatusKind.Should().Be(StatusKind.Success);
+        _viewModel.Queue.Jobs[0].ResultPath.Should().NotBeNull();
+        _viewModel.Queue.Jobs[0].IsRunning.Should().BeFalse();
     }
 
     [Fact]
@@ -325,7 +325,7 @@ public partial class GeneratorViewModelTests
         await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
         // Drives the featured (large uncropped) queue card on the main page.
-        _viewModel.LatestCompletedJob.Should().BeSameAs(_viewModel.Jobs[0]);
+        _viewModel.Queue.LatestCompletedJob.Should().BeSameAs(_viewModel.Queue.Jobs[0]);
     }
 
     [Fact]
@@ -339,7 +339,7 @@ public partial class GeneratorViewModelTests
 
         await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
-        _viewModel.Jobs[0].IsFeatured.Should().BeTrue();
+        _viewModel.Queue.Jobs[0].IsFeatured.Should().BeTrue();
     }
 
     [Fact]
@@ -356,8 +356,8 @@ public partial class GeneratorViewModelTests
 
         // Newest is Jobs[0]; the previous newest (now Jobs[1]) must lose the crown so exactly
         // one card renders the large preview.
-        _viewModel.Jobs[0].IsFeatured.Should().BeTrue();
-        _viewModel.Jobs[1].IsFeatured.Should().BeFalse();
+        _viewModel.Queue.Jobs[0].IsFeatured.Should().BeTrue();
+        _viewModel.Queue.Jobs[1].IsFeatured.Should().BeFalse();
     }
 
     [Fact]
@@ -372,7 +372,7 @@ public partial class GeneratorViewModelTests
         await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
         // A failed/canceled job must never become the featured image.
-        _viewModel.LatestCompletedJob.Should().BeNull();
+        _viewModel.Queue.LatestCompletedJob.Should().BeNull();
     }
 
     [Fact]
@@ -386,7 +386,7 @@ public partial class GeneratorViewModelTests
         _viewModel.StatusMessage.Should().Contain("API Token");
         _viewModel.StatusMessage.Should().Contain("Prompt");
         _viewModel.StatusKind.Should().Be(StatusKind.Error);
-        _viewModel.Jobs.Should().BeEmpty();
+        _viewModel.Queue.Jobs.Should().BeEmpty();
     }
 
     [Fact]
@@ -471,11 +471,11 @@ public partial class GeneratorViewModelTests
 
         await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
-        _viewModel.Jobs.Should().HaveCount(1);
-        _viewModel.Jobs[0].StatusMessage.Should().Be("Error: Test error");
-        _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Error);
-        _viewModel.Jobs[0].ResultPath.Should().BeNull();
-        _viewModel.Jobs[0].IsRunning.Should().BeFalse();
+        _viewModel.Queue.Jobs.Should().HaveCount(1);
+        _viewModel.Queue.Jobs[0].StatusMessage.Should().Be("Error: Test error");
+        _viewModel.Queue.Jobs[0].StatusKind.Should().Be(StatusKind.Error);
+        _viewModel.Queue.Jobs[0].ResultPath.Should().BeNull();
+        _viewModel.Queue.Jobs[0].IsRunning.Should().BeFalse();
     }
 
     [Theory]
@@ -734,9 +734,9 @@ public partial class GeneratorViewModelTests
 
         await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
-        _viewModel.Jobs.Should().HaveCount(1);
-        _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Canceled);
-        _viewModel.Jobs[0].ResultPath.Should().BeNull();
+        _viewModel.Queue.Jobs.Should().HaveCount(1);
+        _viewModel.Queue.Jobs[0].StatusKind.Should().Be(StatusKind.Canceled);
+        _viewModel.Queue.Jobs[0].ResultPath.Should().BeNull();
     }
 
     [Fact]
@@ -1012,11 +1012,11 @@ public partial class GeneratorViewModelTests
 
         // Both jobs must already be in the collection with frozen prompt snapshots,
         // before either runner call has completed.
-        _viewModel.Jobs.Should().HaveCount(2);
-        _viewModel.Jobs[0].Prompt.Should().Be("PROMPT_B"); // newest first (Insert at 0)
-        _viewModel.Jobs[1].Prompt.Should().Be("PROMPT_A");
-        _viewModel.Jobs[0].Parameters.Prompt.Should().Be("PROMPT_B");
-        _viewModel.Jobs[1].Parameters.Prompt.Should().Be("PROMPT_A");
+        _viewModel.Queue.Jobs.Should().HaveCount(2);
+        _viewModel.Queue.Jobs[0].Prompt.Should().Be("PROMPT_B"); // newest first (Insert at 0)
+        _viewModel.Queue.Jobs[1].Prompt.Should().Be("PROMPT_A");
+        _viewModel.Queue.Jobs[0].Parameters.Prompt.Should().Be("PROMPT_B");
+        _viewModel.Queue.Jobs[1].Parameters.Prompt.Should().Be("PROMPT_A");
 
         // Release both tasks with a canceled-style outcome so RunJobAsync exits cleanly.
         gate1.SetResult(new JobOutcome(JobOutcomeKind.Failed, null, "canceled"));
@@ -1335,11 +1335,11 @@ public partial class GeneratorViewModelTests
 
         await _viewModel.Batch.RunBatchAsync(["P1", "P2", "P3"]);
 
-        _viewModel.Jobs.Should().HaveCount(3);
-        _viewModel.Jobs[0].Prompt.Should().Be("P1");
-        _viewModel.Jobs[1].Prompt.Should().Be("P2");
-        _viewModel.Jobs[2].Prompt.Should().Be("P3");
-        _viewModel.Jobs.Should().AllSatisfy(j =>
+        _viewModel.Queue.Jobs.Should().HaveCount(3);
+        _viewModel.Queue.Jobs[0].Prompt.Should().Be("P1");
+        _viewModel.Queue.Jobs[1].Prompt.Should().Be("P2");
+        _viewModel.Queue.Jobs[2].Prompt.Should().Be("P3");
+        _viewModel.Queue.Jobs.Should().AllSatisfy(j =>
         {
             j.StatusKind.Should().Be(StatusKind.Success);
             j.IsRunning.Should().BeFalse();
@@ -1366,10 +1366,10 @@ public partial class GeneratorViewModelTests
 
         await _viewModel.Batch.RunBatchAsync(["A", "B", "C"]);
 
-        _viewModel.Jobs.Should().HaveCount(3);
-        _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Success); // A
-        _viewModel.Jobs[1].StatusKind.Should().Be(StatusKind.Error);   // B
-        _viewModel.Jobs[2].StatusKind.Should().Be(StatusKind.Success); // C
+        _viewModel.Queue.Jobs.Should().HaveCount(3);
+        _viewModel.Queue.Jobs[0].StatusKind.Should().Be(StatusKind.Success); // A
+        _viewModel.Queue.Jobs[1].StatusKind.Should().Be(StatusKind.Error);   // B
+        _viewModel.Queue.Jobs[2].StatusKind.Should().Be(StatusKind.Success); // C
         _viewModel.StatusMessage.Should().Contain("2 ok").And.Contain("1 failed");
         _viewModel.StatusKind.Should().Be(StatusKind.Warning);
     }
@@ -1405,7 +1405,7 @@ public partial class GeneratorViewModelTests
 
         await _viewModel.Batch.RunBatchAsync([]);
 
-        _viewModel.Jobs.Should().BeEmpty();
+        _viewModel.Queue.Jobs.Should().BeEmpty();
         _viewModel.Batch.IsBatchRunning.Should().BeFalse();
     }
 
@@ -1443,10 +1443,10 @@ public partial class GeneratorViewModelTests
         firstJobGate.SetResult(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}"));
         await batchTask;
 
-        _viewModel.Jobs.Should().HaveCount(3);
-        _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Success, "the in-flight job should finish, not be canceled");
-        _viewModel.Jobs[1].StatusKind.Should().Be(StatusKind.Canceled);
-        _viewModel.Jobs[2].StatusKind.Should().Be(StatusKind.Canceled);
+        _viewModel.Queue.Jobs.Should().HaveCount(3);
+        _viewModel.Queue.Jobs[0].StatusKind.Should().Be(StatusKind.Success, "the in-flight job should finish, not be canceled");
+        _viewModel.Queue.Jobs[1].StatusKind.Should().Be(StatusKind.Canceled);
+        _viewModel.Queue.Jobs[2].StatusKind.Should().Be(StatusKind.Canceled);
         runAsyncCalls.Should().Be(1, "queued jobs after the cancel must not be submitted to the runner");
         _viewModel.StatusMessage.Should().Contain("1 ok").And.Contain("2 canceled");
     }
@@ -1619,8 +1619,8 @@ public partial class GeneratorViewModelTests
 
         await _viewModel.GenerateImageCommand.ExecuteAsync(null);
 
-        _viewModel.Jobs.Should().HaveCount(1, "the missing-token gate must exempt comfyui/* models");
-        _viewModel.Jobs[0].StatusKind.Should().Be(StatusKind.Success);
+        _viewModel.Queue.Jobs.Should().HaveCount(1, "the missing-token gate must exempt comfyui/* models");
+        _viewModel.Queue.Jobs[0].StatusKind.Should().Be(StatusKind.Success);
     }
 
     [Fact]
@@ -2130,7 +2130,7 @@ public partial class GeneratorViewModelTests
 
         var run = _viewModel.GenerateImageCommand.ExecuteAsync(null);
         await started.Task;
-        var job = _viewModel.Jobs[0];
+        var job = _viewModel.Queue.Jobs[0];
 
         sink.Should().NotBeNull("the VM must hand the runner a progress sink");
         sink!.Report(new JobProgress("Rendering… 5/20", 0.25));
@@ -2165,7 +2165,7 @@ public partial class GeneratorViewModelTests
             });
 
         await _viewModel.GenerateImageCommand.ExecuteAsync(null);
-        var job = _viewModel.Jobs[0];
+        var job = _viewModel.Queue.Jobs[0];
         job.IsRunning.Should().BeFalse();
 
         // A straggler ws frame delivered after the outcome landed must not overwrite it.
@@ -2633,7 +2633,7 @@ public partial class GeneratorViewModelTests
         // The posting hook is fire-and-forget by design; wait for the service call to land.
         await posted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        _viewModel.Jobs[0].Parameters.PostToCivitai.Should().BeTrue("the checkbox must survive the Clone() snapshot");
+        _viewModel.Queue.Jobs[0].Parameters.PostToCivitai.Should().BeTrue("the checkbox must survive the Clone() snapshot");
         _mockCivitaiPostingService.Verify(
             s => s.PostImageAsync(FakeSavePath, It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()),
             Times.Once);
@@ -2663,7 +2663,7 @@ public partial class GeneratorViewModelTests
             .Setup(s => s.PostImageAsync(FakeSavePath, It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CivitaiPostResult(true, 42, "https://civitai.com/posts/42", "Posted to CivitAI (draft)."));
 
-        await _viewModel.PostJobToCivitaiAsync(job, FakeSavePath);
+        await _viewModel.Queue.PostJobToCivitaiAsync(job, FakeSavePath);
 
         job.CivitaiStatusMessage.Should().Be("Posted to CivitAI (draft).");
         job.CivitaiPostUrl.Should().Be("https://civitai.com/posts/42");
@@ -2681,7 +2681,7 @@ public partial class GeneratorViewModelTests
             .Setup(s => s.PostImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CivitaiPostResult(true, 1, "u", "ok"));
 
-        await _viewModel.PostJobToCivitaiAsync(job, FakeSavePath);
+        await _viewModel.Queue.PostJobToCivitaiAsync(job, FakeSavePath);
 
         _mockCivitaiPostingService.Verify(
             s => s.PostImageAsync(FakeSavePath, It.IsAny<string>(), null, It.IsAny<int?>(), It.IsAny<CancellationToken>()),
@@ -2700,7 +2700,7 @@ public partial class GeneratorViewModelTests
             .Setup(s => s.PostImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CivitaiPostResult(false, null, null, "HTTP 500"));
 
-        await _viewModel.PostJobToCivitaiAsync(job, FakeSavePath);
+        await _viewModel.Queue.PostJobToCivitaiAsync(job, FakeSavePath);
 
         job.CivitaiStatusMessage.Should().Be("CivitAI post failed: HTTP 500");
         job.CivitaiPostUrl.Should().BeNull();
@@ -2716,7 +2716,7 @@ public partial class GeneratorViewModelTests
             .Setup(s => s.PostImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("boom"));
 
-        var act = () => _viewModel.PostJobToCivitaiAsync(job, FakeSavePath);
+        var act = () => _viewModel.Queue.PostJobToCivitaiAsync(job, FakeSavePath);
 
         await act.Should().NotThrowAsync("a fire-and-forget continuation must never take the app down");
         job.CivitaiStatusMessage.Should().Contain("boom");
@@ -2734,7 +2734,7 @@ public partial class GeneratorViewModelTests
             .Setup(s => s.PostImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CivitaiPostResult(true, 1, "u", "Posted to CivitAI (draft)."));
 
-        await _viewModel.PostJobToCivitaiAsync(job, FakeSavePath);
+        await _viewModel.Queue.PostJobToCivitaiAsync(job, FakeSavePath);
 
         _mockCivitaiPostingService.Verify(
             s => s.PostImageAsync(FakeSavePath, It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), 3005491, It.IsAny<CancellationToken>()),
@@ -2750,7 +2750,7 @@ public partial class GeneratorViewModelTests
             .Setup(s => s.PostImageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CivitaiPostResult(true, 1, "u", "Posted to CivitAI (draft)."));
 
-        await _viewModel.PostJobToCivitaiAsync(job, FakeSavePath);
+        await _viewModel.Queue.PostJobToCivitaiAsync(job, FakeSavePath);
 
         _mockCivitaiPostingService.Verify(
             s => s.PostImageAsync(FakeSavePath, It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, object>?>(), null, It.IsAny<CancellationToken>()),
@@ -2936,13 +2936,13 @@ public partial class GeneratorViewModelTests
         var saved = Job(isRunning: false, StatusKind.Success, resultPath: "x.png");
         var failed = Job(isRunning: false, StatusKind.Error);
         var canceled = Job(isRunning: false, StatusKind.Canceled);
-        foreach (var j in new[] { running, queued, saved, failed, canceled }) _viewModel.Jobs.Add(j);
+        foreach (var j in new[] { running, queued, saved, failed, canceled }) _viewModel.Queue.Jobs.Add(j);
 
-        _viewModel.ClearFinishedJobsCommand.Execute(null);
+        _viewModel.Queue.ClearFinishedJobsCommand.Execute(null);
 
-        _viewModel.Jobs.Should().HaveCount(2);
-        _viewModel.Jobs.Should().Contain(running).And.Contain(queued);
-        _viewModel.Jobs.Should().NotContain(saved).And.NotContain(failed).And.NotContain(canceled);
+        _viewModel.Queue.Jobs.Should().HaveCount(2);
+        _viewModel.Queue.Jobs.Should().Contain(running).And.Contain(queued);
+        _viewModel.Queue.Jobs.Should().NotContain(saved).And.NotContain(failed).And.NotContain(canceled);
     }
 
     [Fact]
@@ -2954,27 +2954,27 @@ public partial class GeneratorViewModelTests
             .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
             .ReturnsAsync(new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, "ok"));
         await _viewModel.GenerateImageCommand.ExecuteAsync(null);
-        _viewModel.LatestCompletedJob.Should().NotBeNull();
+        _viewModel.Queue.LatestCompletedJob.Should().NotBeNull();
 
-        _viewModel.ClearFinishedJobsCommand.Execute(null);
+        _viewModel.Queue.ClearFinishedJobsCommand.Execute(null);
 
-        _viewModel.Jobs.Should().BeEmpty();
-        _viewModel.LatestCompletedJob.Should().BeNull("clearing finished jobs removes the featured card");
-        _viewModel.HasJobs.Should().BeFalse();
+        _viewModel.Queue.Jobs.Should().BeEmpty();
+        _viewModel.Queue.LatestCompletedJob.Should().BeNull("clearing finished jobs removes the featured card");
+        _viewModel.Queue.HasJobs.Should().BeFalse();
     }
 
     [Fact]
     public void HasFinishedJobs_GatesTheClearCommand()
     {
-        _viewModel.ClearFinishedJobsCommand.CanExecute(null).Should().BeFalse("empty queue");
+        _viewModel.Queue.ClearFinishedJobsCommand.CanExecute(null).Should().BeFalse("empty queue");
 
-        _viewModel.Jobs.Add(Job(isRunning: true, StatusKind.Info));
-        _viewModel.Jobs.Add(Job(isRunning: false, StatusKind.Info));   // queued
-        _viewModel.HasFinishedJobs.Should().BeFalse();
-        _viewModel.ClearFinishedJobsCommand.CanExecute(null).Should().BeFalse();
+        _viewModel.Queue.Jobs.Add(Job(isRunning: true, StatusKind.Info));
+        _viewModel.Queue.Jobs.Add(Job(isRunning: false, StatusKind.Info));   // queued
+        _viewModel.Queue.HasFinishedJobs.Should().BeFalse();
+        _viewModel.Queue.ClearFinishedJobsCommand.CanExecute(null).Should().BeFalse();
 
-        _viewModel.Jobs.Add(Job(isRunning: false, StatusKind.Success, resultPath: "x.png"));
-        _viewModel.HasFinishedJobs.Should().BeTrue();
-        _viewModel.ClearFinishedJobsCommand.CanExecute(null).Should().BeTrue();
+        _viewModel.Queue.Jobs.Add(Job(isRunning: false, StatusKind.Success, resultPath: "x.png"));
+        _viewModel.Queue.HasFinishedJobs.Should().BeTrue();
+        _viewModel.Queue.ClearFinishedJobsCommand.CanExecute(null).Should().BeTrue();
     }
 }

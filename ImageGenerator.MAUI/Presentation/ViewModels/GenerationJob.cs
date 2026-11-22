@@ -83,7 +83,7 @@ public partial class GenerationJob : ObservableObject
     [RelayCommand]
     private void Cancel()
     {
-        // The owning ViewModel disposes Cts in RunJobAsync's finally; if the user clicks Cancel
+        // JobQueueCoordinator disposes Cts when the run ends; if the user clicks Cancel
         // after completion (binding-update lag could allow it briefly), Cancel() throws ODE.
         try { Cts.Cancel(); }
         catch (ObjectDisposedException) { }

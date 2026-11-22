@@ -142,7 +142,7 @@ public partial class MainPage
 
     private void ApplyNarrowWorkspace()
     {
-        // Row 1 is Auto (0px when HasJobs is false, capped at 360px when jobs exist) so
+        // Row 1 is Auto (0px when Queue.HasJobs is false, capped at 360px when jobs exist) so
         // Settings never gets squeezed into 50% height above an empty black void.
         SetWorkspaceGrid(
             columns: [GridLength.Star],
@@ -263,7 +263,7 @@ public partial class MainPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        _ = _viewModel.LoadTotalImagesGeneratedAsync();
+        _ = _viewModel.Queue.LoadTotalImagesGeneratedAsync();
         try
         {
             await _viewModel.LoadAllTokensAsync();
