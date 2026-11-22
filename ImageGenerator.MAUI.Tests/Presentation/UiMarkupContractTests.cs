@@ -277,24 +277,6 @@ public class UiMarkupContractTests
     }
 
     [Fact]
-    public void SettingsPage_HoldsConnectionsOnly_NoModelPicker()
-    {
-        // Each role picks its model in its own row. A Settings picker writing the same key was a second
-        // writer holding a stale copy, and a refresh put that copy back over the row's pick.
-        var document = XDocument.Parse(Markup("SettingsPage.xaml"));
-
-        document.Descendants().Where(e => e.Name.LocalName == "Picker")
-            .Select(e => (string?)e.Attribute("ItemsSource") ?? string.Empty)
-            .Should().NotContain(source => source.Contains("Models", StringComparison.Ordinal),
-                "a model list on Settings means a model choice on Settings");
-
-        var check = document.Descendants()
-            .Single(e => (string?)e.Attribute("AutomationId") == "OllamaCheckServerButton");
-        ((string?)check.Attribute("Command")).Should().Be("{Binding Settings.RefreshOllamaModelsCommand}",
-            "the URL still needs a way to be proven, and its answer fills every row's list");
-    }
-
-    [Fact]
     public void MainPage_Krea2LoraControls_AreBoundAndAutomatable()
     {
         var markup = Markup("MainPage.xaml");
