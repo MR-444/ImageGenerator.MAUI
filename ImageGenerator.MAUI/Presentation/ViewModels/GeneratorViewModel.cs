@@ -592,7 +592,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
         // Free the ComfyUI GPU once per batch (a per-job free reloads the checkpoint every time),
         // before releasing the batch's GPU lease.
-        Batch.PropertyChanged += (_, e) =>
+        Batch.PropertyChanged += (sender, e) =>
         {
             if (e.PropertyName == nameof(BatchCoordinator.IsBatchRunning) && !Batch.IsBatchRunning)
                 _ = CompleteBatchGpuAsync();
