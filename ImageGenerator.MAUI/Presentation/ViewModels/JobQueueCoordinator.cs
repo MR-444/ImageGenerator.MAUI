@@ -27,7 +27,6 @@ public sealed partial class JobQueueCoordinator : ObservableObject
     private readonly IGpuGate? _gpuGate;
     private readonly AppSettingsCoordinator _settings;
     private readonly Func<bool> _isBatchRunning;
-    private readonly Action<bool> _setGpuBusy;
     private readonly Action<string> _flash;
     private readonly ILogger _logger;
 
@@ -43,7 +42,6 @@ public sealed partial class JobQueueCoordinator : ObservableObject
         IGpuGate? gpuGate,
         AppSettingsCoordinator settings,
         Func<bool> isBatchRunning,
-        Action<bool> setGpuBusy,
         Action<string> flash,
         ILogger logger)
     {
@@ -52,7 +50,6 @@ public sealed partial class JobQueueCoordinator : ObservableObject
         ArgumentNullException.ThrowIfNull(galleryService);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(isBatchRunning);
-        ArgumentNullException.ThrowIfNull(setGpuBusy);
         ArgumentNullException.ThrowIfNull(flash);
         ArgumentNullException.ThrowIfNull(logger);
         _jobRunner = jobRunner;
@@ -62,7 +59,6 @@ public sealed partial class JobQueueCoordinator : ObservableObject
         _gpuGate = gpuGate;
         _settings = settings;
         _isBatchRunning = isBatchRunning;
-        _setGpuBusy = setGpuBusy;
         _flash = flash;
         _logger = logger;
 
@@ -163,17 +159,12 @@ public sealed partial class JobQueueCoordinator : ObservableObject
             {
                 if (isBatchJob)
                 {
-                    if (_batchGpuLease is null)
-                    {
-                        _batchGpuLease = await _gpuGate!.AcquireAsync(job.Cts.Token);
-                        DispatchToUi(() => _setGpuBusy(true));
-                    }
+                    _batchGpuLease ??= await _gpuGate!.AcquireAsync(job.Cts.Token);
                     _batchComfyModel = job.Parameters.Model;
                 }
                 else
                 {
                     singleJobLease = await _gpuGate!.AcquireAsync(job.Cts.Token);
-                    DispatchToUi(() => _setGpuBusy(true));
                 }
             }
             catch (OperationCanceledException)
@@ -285,7 +276,6 @@ public sealed partial class JobQueueCoordinator : ObservableObject
         }
         finally
         {
-            if (gpuGated) DispatchToUi(() => _setGpuBusy(false));
             singleJobLease?.Dispose();
         }
     }
@@ -320,11 +310,7 @@ public sealed partial class JobQueueCoordinator : ObservableObject
         }
         finally
         {
-            if (lease is not null)
-            {
-                DispatchToUi(() => _setGpuBusy(false));
-                lease.Dispose();
-            }
+            lease?.Dispose();
         }
     }
 

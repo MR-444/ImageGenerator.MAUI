@@ -14,4 +14,14 @@ public interface IGpuGate
     /// so a queued caller can be cancelled before it ever runs.
     /// </summary>
     Task<IDisposable> AcquireAsync(CancellationToken ct = default);
+
+    /// <summary>True while a holder has the GPU. The UI's "GPU busy" readout comes from here.</summary>
+    bool IsBusy { get; }
+
+    /// <summary>
+    /// Raised on acquire and on release, on whatever thread did it. Handlers read <see cref="IsBusy"/>
+    /// rather than assume a direction: under contention a release and the next acquire can arrive
+    /// in quick succession.
+    /// </summary>
+    event EventHandler? BusyChanged;
 }

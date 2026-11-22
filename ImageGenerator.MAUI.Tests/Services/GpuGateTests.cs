@@ -42,6 +42,39 @@ public class GpuGateTests
     }
 
     [Fact]
+    public async Task IsBusy_IsSetWhileHeld_AndEachChangeIsAnnounced()
+    {
+        var gate = NewGate();
+        var changes = 0;
+        gate.BusyChanged += (_, _) => changes++;
+
+        gate.IsBusy.Should().BeFalse();
+        var lease = await gate.AcquireAsync();
+        gate.IsBusy.Should().BeTrue();
+
+        lease.Dispose();
+        lease.Dispose(); // the second dispose releases nothing and announces nothing
+        gate.IsBusy.Should().BeFalse();
+        changes.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Release_AnnouncesFreeBeforeTheNextHolderAnnouncesBusy()
+    {
+        var gate = NewGate();
+        var first = await gate.AcquireAsync();
+        var seen = new List<bool>();
+        gate.BusyChanged += (_, _) => { lock (seen) seen.Add(gate.IsBusy); };
+
+        var second = gate.AcquireAsync();
+        first.Dispose();
+        (await second).Dispose();
+
+        seen.Should().Equal([false, true, false],
+            "a stale \"free\" after the next holder's \"busy\" would show the GPU idle while it renders");
+    }
+
+    [Fact]
     public async Task Release_IsIdempotent_DoubleDisposeDoesNotLeakAPermit()
     {
         var gate = NewGate();

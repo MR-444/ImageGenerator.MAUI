@@ -10,6 +10,7 @@ using ImageGenerator.MAUI.Presentation.ViewModels;
 using ImageGenerator.MAUI.Shared.Constants;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using ImageGenerator.MAUI.Tests.TestSupport;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
 
@@ -93,26 +94,72 @@ public partial class GeneratorViewModelTests
     }
 
     [Fact]
-    public void WorkspaceSummary_TracksJobsModelImageCountAndGpuState()
+    public async Task WorkspaceSummary_TracksJobsModelImageCountAndGpuState()
     {
+        var gate = new FakeGpuGate();
+        var vm = BuildGatedViewModel(gate);
         var notifications = new List<string?>();
-        _viewModel.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+        vm.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
 
         var job = Job(isRunning: true, StatusKind.Info);
-        _viewModel.Queue.Jobs.Add(job);
+        vm.Queue.Jobs.Add(job);
         job.IsRunning = false;
-        _viewModel.Queue.TotalImagesGenerated = 12;
-        _viewModel.IsGpuBusy = true;
-        var otherModel = _viewModel.ProviderFilter.AllModels
-            .First(model => model.Value != _viewModel.ProviderFilter.SelectedModel?.Value);
-        _viewModel.ProviderFilter.SelectedModel = otherModel;
+        vm.Queue.TotalImagesGenerated = 12;
+        using var lease = await gate.AcquireAsync();
+        var otherModel = vm.ProviderFilter.AllModels
+            .First(model => model.Value != vm.ProviderFilter.SelectedModel?.Value);
+        vm.ProviderFilter.SelectedModel = otherModel;
 
-        _viewModel.WorkspaceSummary.Should().Contain("1 queued");
-        _viewModel.WorkspaceSummary.Should().Contain(otherModel.Display);
-        _viewModel.WorkspaceSummary.Should().Contain("12 images");
-        _viewModel.WorkspaceSummary.Should().EndWith("GPU busy");
+        vm.WorkspaceSummary.Should().Contain("1 queued");
+        vm.WorkspaceSummary.Should().Contain(otherModel.Display);
+        vm.WorkspaceSummary.Should().Contain("12 images");
+        vm.WorkspaceSummary.Should().EndWith("GPU busy");
         notifications.Count(name => name == nameof(GeneratorViewModel.WorkspaceSummary))
             .Should().BeGreaterThanOrEqualTo(5);
+    }
+
+    [Fact]
+    public async Task IsGpuBusy_FollowsTheGate_WhicheverHolderReleasesLast()
+    {
+        // Two sibling pages hold the gate one after the other. The first one's release must not
+        // clear "GPU busy" while the second holds it.
+        var gate = new FakeGpuGate();
+        var vm = BuildGatedViewModel(gate);
+
+        var first = await gate.AcquireAsync();
+        vm.IsGpuBusy.Should().BeTrue();
+
+        var second = await gate.AcquireAsync();
+        first.Dispose();
+        vm.IsGpuBusy.Should().BeTrue("the second holder still has the GPU");
+
+        second.Dispose();
+        vm.IsGpuBusy.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task IsGpuBusy_ComfyUiRender_IsOnDuringTheRunAndOffAfterwards()
+    {
+        var gate = new FakeGpuGate();
+        var vm = BuildGatedViewModel(gate);
+        vm.Settings.ComfyUiBaseUrl = "http://fireengine:8188";
+        vm.Settings.OllamaBaseUrl = "http://fireengine:11434";
+        vm.Parameters.Model = "comfyui/test";
+        vm.Parameters.Prompt = "a cat";
+
+        bool? busyDuringRun = null;
+        _mockJobRunner
+            .Setup(x => x.RunAsync(It.IsAny<ImageGenerationParameters>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<JobProgress>?>()))
+            .ReturnsAsync(() =>
+            {
+                busyDuringRun = vm.IsGpuBusy;
+                return new JobOutcome(JobOutcomeKind.Saved, FakeSavePath, $"Saved to {FakeSavePath}");
+            });
+
+        await vm.GenerateImageCommand.ExecuteAsync(null);
+
+        busyDuringRun.Should().BeTrue();
+        vm.IsGpuBusy.Should().BeFalse();
     }
 
     [Fact]
@@ -274,24 +321,6 @@ public partial class GeneratorViewModelTests
         await vm.GenerateImageCommand.ExecuteAsync(null);
 
         gate.Acquired.Should().Be(0, "cloud providers don't contend for the local GPU");
-    }
-
-    private sealed class FakeGpuGate : IGpuGate
-    {
-        public int Acquired { get; private set; }
-        public int Released { get; private set; }
-
-        public Task<IDisposable> AcquireAsync(CancellationToken ct = default)
-        {
-            Acquired++;
-            return Task.FromResult<IDisposable>(new Lease(() => Released++));
-        }
-
-        private sealed class Lease(Action onRelease) : IDisposable
-        {
-            private Action? _onRelease = onRelease;
-            public void Dispose() => Interlocked.Exchange(ref _onRelease, null)?.Invoke();
-        }
     }
 
     [Fact]

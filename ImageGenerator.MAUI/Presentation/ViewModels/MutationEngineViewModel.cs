@@ -657,7 +657,6 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
             {
                 SetStatus("Waiting for the current render to finish…", StatusKind.Info);
                 gpuLease = await _gpuGate!.AcquireAsync();
-                if (_generator is not null) DispatchToUi(() => _generator.IsGpuBusy = true);
             }
 
             LlmVariantResult[] results;
@@ -680,7 +679,6 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
             finally
             {
                 gpuLease?.Dispose();
-                if (gpuGated && _generator is not null) DispatchToUi(() => _generator.IsGpuBusy = false);
             }
 
             await DispatchAiResultsAsync(results);

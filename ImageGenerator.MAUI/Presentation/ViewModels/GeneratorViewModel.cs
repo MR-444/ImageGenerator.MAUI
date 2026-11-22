@@ -58,10 +58,18 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     private string? _aiMutationStatus;
 
-    // True while any holder of the shared GPU gate (a ComfyUI render, local Ollama work) runs.
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(WorkspaceSummary))]
     private bool _isGpuBusy;
+
+    // True while any holder of the shared GPU gate (a ComfyUI render, local Ollama work) runs.
+    // Fed by the gate only, so no caller can leave it stale.
+    public bool IsGpuBusy
+    {
+        get => _isGpuBusy;
+        private set
+        {
+            if (SetProperty(ref _isGpuBusy, value)) OnPropertyChanged(nameof(WorkspaceSummary));
+        }
+    }
 
     // The job cards and their runs.
     public JobQueueCoordinator Queue { get; }
@@ -429,9 +437,16 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         Queue = new JobQueueCoordinator(
             jobRunner, civitaiPostingService, galleryService, comfyVram, gpuGate, Settings,
             isBatchRunning: () => Batch is { IsBatchRunning: true },
-            setGpuBusy: busy => IsGpuBusy = busy,
             flash: message => _ = FlashAsync(message),
             logger: logger);
+
+        // Read the gate when the update runs, not when the event fired: a release and the next
+        // acquire can be dispatched in either order.
+        if (gpuGate is not null)
+        {
+            gpuGate.BusyChanged += (_, _) => DispatchToUi(() => IsGpuBusy = gpuGate.IsBusy);
+            _isGpuBusy = gpuGate.IsBusy;
+        }
 
         Queue.PropertyChanged += (_, e) =>
         {

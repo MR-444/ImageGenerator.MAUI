@@ -510,7 +510,6 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
             {
                 SetStatus("Waiting for the current render to finish…", StatusKind.Info);
                 gpuLease = await _gpuGate!.AcquireAsync(token);
-                if (_generator is not null) _generator.IsGpuBusy = true;
             }
 
             var ideaForPrompt = Idea.Trim();
@@ -634,7 +633,6 @@ public partial class IdeaToPromptViewModel : ObservableObject, IStatusOwner
             finally
             {
                 gpuLease?.Dispose();
-                if (gpuGated && _generator is not null) _generator.IsGpuBusy = false;
 
                 IsBusy = false;
                 _cts = null;

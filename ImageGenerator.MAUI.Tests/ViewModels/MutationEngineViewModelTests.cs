@@ -791,24 +791,6 @@ public class MutationEngineViewModelTests
             Task.FromResult(LlmVariantResult.Fail("test: no variant"));
     }
 
-    private sealed class FakeGpuGate : IGpuGate
-    {
-        public int Acquired { get; private set; }
-        public int Released { get; private set; }
-
-        public Task<IDisposable> AcquireAsync(CancellationToken ct = default)
-        {
-            Acquired++;
-            return Task.FromResult<IDisposable>(new Lease(() => Released++));
-        }
-
-        private sealed class Lease(Action onRelease) : IDisposable
-        {
-            private Action? _onRelease = onRelease;
-            public void Dispose() => Interlocked.Exchange(ref _onRelease, null)?.Invoke();
-        }
-    }
-
     private sealed class StubOllamaCatalog : IOllamaModelCatalog
     {
         /// <summary>Every unload with the endpoint/model it was given — the calls-only count below is
