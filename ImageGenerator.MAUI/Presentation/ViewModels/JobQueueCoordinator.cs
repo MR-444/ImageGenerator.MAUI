@@ -27,6 +27,7 @@ public sealed partial class JobQueueCoordinator : ObservableObject
     private readonly IGpuGate? _gpuGate;
     private readonly AppSettingsCoordinator _settings;
     private readonly Func<bool> _isBatchRunning;
+    private readonly Func<string, bool> _modelHasAspectRatio;
     private readonly Action<string> _flash;
     private readonly ILogger _logger;
 
@@ -42,6 +43,7 @@ public sealed partial class JobQueueCoordinator : ObservableObject
         IGpuGate? gpuGate,
         AppSettingsCoordinator settings,
         Func<bool> isBatchRunning,
+        Func<string, bool> modelHasAspectRatio,
         Action<string> flash,
         ILogger logger)
     {
@@ -50,6 +52,7 @@ public sealed partial class JobQueueCoordinator : ObservableObject
         ArgumentNullException.ThrowIfNull(galleryService);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(isBatchRunning);
+        ArgumentNullException.ThrowIfNull(modelHasAspectRatio);
         ArgumentNullException.ThrowIfNull(flash);
         ArgumentNullException.ThrowIfNull(logger);
         _jobRunner = jobRunner;
@@ -59,6 +62,7 @@ public sealed partial class JobQueueCoordinator : ObservableObject
         _gpuGate = gpuGate;
         _settings = settings;
         _isBatchRunning = isBatchRunning;
+        _modelHasAspectRatio = modelHasAspectRatio;
         _flash = flash;
         _logger = logger;
 
@@ -337,7 +341,7 @@ public sealed partial class JobQueueCoordinator : ObservableObject
         try
         {
             var meta = job.Parameters.CivitaiIncludeMeta
-                ? CivitaiMetaBuilder.Build(job.Parameters)
+                ? CivitaiMetaBuilder.Build(job.Parameters, _modelHasAspectRatio(job.Parameters.Model))
                 : null;
             var modelVersionId = CivitaiModelReference.ParseVersionId(job.Parameters.CivitaiModelRef);
             // Text that parses to nothing is a typo, not a "no model" choice; say so.

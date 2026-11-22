@@ -78,14 +78,14 @@ public partial class GeneratorViewModelTests
              new ModelOption("Unknown model", "stability-ai/some-new-model", ProviderConstants.Replicate)]);
         _viewModel.ProviderFilter.SelectedModel =
             _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
-        _viewModel.AspectRatioChoice.Selected = "21:9";
+        _viewModel.Pickers.AspectRatio.Selected = "21:9";
         _mockUiStateStore.Invocations.Clear();
 
         _viewModel.ProviderFilter.SelectedModel =
             _viewModel.ProviderFilter.AllModels.First(m => m.Value == "stability-ai/some-new-model");
-        _viewModel.AspectRatioChoice.Options.Should().BeEmpty();
+        _viewModel.Pickers.AspectRatio.Options.Should().BeEmpty();
         // The swap to an empty list makes the Picker push null.
-        _viewModel.AspectRatioChoice.Selected = null;
+        _viewModel.Pickers.AspectRatio.Selected = null;
 
         _viewModel.Parameters.AspectRatio.Should().Be("21:9");
         _viewModel.ProviderFilter.SelectedModel =

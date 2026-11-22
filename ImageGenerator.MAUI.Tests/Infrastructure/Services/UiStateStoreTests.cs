@@ -181,6 +181,19 @@ public class UiStateStoreTests
     private const string ComfyAspectRatioKey = "imggen.last_aspect_ratio.comfyui";
 
     [Fact]
+    public void AspectRatio_IsKeptPerModel_AndANeverPickedModelFallsBackToItsFamily()
+    {
+        _sut.PersistAspectRatio("3:2", "openai/gpt-image-2.6-sunburst");
+        _sut.PersistAspectRatio("1:1", "ideogram-ai/ideogram-v4-turbo");
+
+        _sut.LoadAspectRatio("openai/gpt-image-2.6-sunburst").Should().Be("3:2",
+            "a later pick on another model must not overwrite this one");
+        _sut.LoadAspectRatio("ideogram-ai/ideogram-v4-turbo").Should().Be("1:1");
+        _sut.LoadAspectRatio("black-forest-labs/flux-1.1-pro").Should().Be("1:1",
+            "a model never picked on gets its family's latest pick");
+    }
+
+    [Fact]
     public void GptOption_IsKeptPerFieldAndPerModel()
     {
         _sut.PersistGptOption("moderation", "auto", "openai/gpt-image-2.6-sunburst");

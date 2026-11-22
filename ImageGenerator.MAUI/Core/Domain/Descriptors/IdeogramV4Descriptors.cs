@@ -41,16 +41,15 @@ public abstract class IdeogramV4Descriptor : IPayloadBuilder, ICapabilityProvide
     // single source of truth for the V4 list lives here.
     public static IReadOnlyList<string> AllResolutions => IdeogramResolutions;
 
-    // AspectRatio is hidden, but RefreshCapabilities indexes AspectRatios[0], so keep it non-empty.
-    private static readonly string[] AspectRatios = ["1:1"];
-
     public abstract string ModelId { get; }
     public abstract ModelOption Seed { get; }
 
     public ModelCapabilities Capabilities => new(
         SafetyTolerance: false, PromptUpsampling: false, OutputQuality: false,
         AspectRatio: false, CustomDimensions: false, Seed: false, ImagePrompt: false,
-        AspectRatioLabel: "Aspect ratio", AspectRatios: AspectRatios,
+        // No ratios: the shape is the resolution ("21:9 (3072x1280)"), so the generator keeps
+        // the ratio another model uses instead of overwriting it with a placeholder.
+        AspectRatioLabel: "Aspect ratio", AspectRatios: [],
         Resolutions: IdeogramResolutions,
         MaxImageInputs: 0,
         OutputFormatSelectable: false,

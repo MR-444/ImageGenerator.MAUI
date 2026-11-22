@@ -73,7 +73,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         IsAspectRatioMode = generator is not null
                             && Shared.Constants.ModelConstants.ComfyUi.IsId(generator.Parameters.Model);
         ResolutionOptions = IsAspectRatioMode
-            ? (string[])[.. generator!.AspectRatioChoice.Options]
+            ? (string[])[.. generator!.Pickers.AspectRatio.Options]
             : IdeogramV4Descriptor.AllResolutions;
         if (IsAspectRatioMode && ResolutionOptions.Count > 0)
         {
@@ -259,9 +259,9 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         // offer. In AR mode the pick is an aspect-ratio combo string, never a resolution.
         if (_suppressGeneratorSync || _generator is null) return;
         if (IsAspectRatioMode)
-            _generator.AspectRatioChoice.Selected = value;
+            _generator.Pickers.AspectRatio.Selected = value;
         else
-            _generator.ResolutionChoice.Selected = value;
+            _generator.Pickers.Resolution.Selected = value;
     }
 
     public void SetCanvasFitBox(double fitBox)
@@ -688,7 +688,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         if (_generator is null) return;
         _generator.Parameters.Prompt = compactJson;
         _generator.Parameters.UseJsonPrompt = true;
-        _generator.ResolutionChoice.Selected = SelectedResolution;
+        _generator.Pickers.Resolution.Selected = SelectedResolution;
     }
 
     /// <summary>

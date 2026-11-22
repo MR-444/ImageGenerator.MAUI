@@ -17,7 +17,7 @@ public class CivitaiMetaBuilderTests
             AspectRatio = "3:2",
         };
 
-        var meta = CivitaiMetaBuilder.Build(parameters);
+        var meta = CivitaiMetaBuilder.Build(parameters, modelHasAspectRatio: true);
 
         meta["prompt"].Should().Be("a red fox");
         // seed must stay numeric — CivitAI's imageMetaSchema coerces, but a number renders
@@ -34,7 +34,7 @@ public class CivitaiMetaBuilderTests
     {
         var parameters = new ImageGenerationParameters { Prompt = "p", Model = "zimage", Seed = 1 };
 
-        var meta = CivitaiMetaBuilder.Build(parameters);
+        var meta = CivitaiMetaBuilder.Build(parameters, modelHasAspectRatio: true);
 
         meta["sampler"].Should().Be("zimage");
         meta["Model"].Should().Be("zimage");
@@ -45,7 +45,19 @@ public class CivitaiMetaBuilderTests
     {
         var parameters = new ImageGenerationParameters { Prompt = "p", Model = "m", AspectRatio = "" };
 
-        var meta = CivitaiMetaBuilder.Build(parameters);
+        var meta = CivitaiMetaBuilder.Build(parameters, modelHasAspectRatio: true);
+
+        meta.Should().NotContainKey("Aspect ratio");
+    }
+
+    [Fact]
+    public void Build_ModelWithoutAnAspectRatio_OmitsTheLeftoverValue()
+    {
+        // Ideogram's shape is its resolution; the ratio left in Parameters belongs to the
+        // previous model and says nothing about this image.
+        var parameters = new ImageGenerationParameters { Prompt = "p", Model = "m", AspectRatio = "3:2" };
+
+        var meta = CivitaiMetaBuilder.Build(parameters, modelHasAspectRatio: false);
 
         meta.Should().NotContainKey("Aspect ratio");
     }

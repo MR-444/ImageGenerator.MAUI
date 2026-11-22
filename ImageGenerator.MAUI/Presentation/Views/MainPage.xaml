@@ -226,8 +226,8 @@
 
                             <VerticalStackLayout Spacing="4" IsVisible="{Binding Capabilities.AspectRatio}">
                                 <Label Text="{Binding Capabilities.AspectRatioLabel}" Style="{StaticResource FieldLabel}" />
-                                <Picker ItemsSource="{Binding AspectRatioChoice.Options}"
-                                        SelectedItem="{Binding AspectRatioChoice.Selected}"
+                                <Picker ItemsSource="{Binding Pickers.AspectRatio.Options}"
+                                        SelectedItem="{Binding Pickers.AspectRatio.Selected}"
                                         MaximumWidthRequest="220"
                                         HorizontalOptions="Start"
                                         AutomationId="AspectRatioPicker" />
@@ -240,8 +240,8 @@
                                  ("Auto", "1K", "4.0 MP") through unchanged. -->
                             <VerticalStackLayout Spacing="4" IsVisible="{Binding SupportsResolution}">
                                 <Label Text="Resolution" Style="{StaticResource FieldLabel}" />
-                                <Picker ItemsSource="{Binding ResolutionChoice.Options}"
-                                        SelectedItem="{Binding ResolutionChoice.Selected}"
+                                <Picker ItemsSource="{Binding Pickers.Resolution.Options}"
+                                        SelectedItem="{Binding Pickers.Resolution.Selected}"
                                         ItemDisplayBinding="{Binding Path=., Converter={StaticResource ResolutionAspectRatio}, x:DataType='x:String'}"
                                         MaximumWidthRequest="190"
                                         HorizontalOptions="Start"
@@ -472,34 +472,34 @@
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
                                 <VerticalStackLayout Grid.Row="0" Grid.Column="0" Spacing="4">
                                     <Label Text="Quality" Style="{StaticResource FieldLabel}" />
-                                    <Picker ItemsSource="{Binding GptQualityChoice.Options}"
-                                            SelectedItem="{Binding GptQualityChoice.Selected}"
+                                    <Picker ItemsSource="{Binding Pickers.GptQuality.Options}"
+                                            SelectedItem="{Binding Pickers.GptQuality.Selected}"
                                             AutomationId="GptQualityPicker" />
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Grid.Row="0" Grid.Column="1" Spacing="4">
                                     <Label Text="Background" Style="{StaticResource FieldLabel}" />
-                                    <Picker ItemsSource="{Binding GptBackgroundChoice.Options}"
-                                            SelectedItem="{Binding GptBackgroundChoice.Selected}"
+                                    <Picker ItemsSource="{Binding Pickers.GptBackground.Options}"
+                                            SelectedItem="{Binding Pickers.GptBackground.Selected}"
                                             AutomationId="GptBackgroundPicker" />
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Grid.Row="1" Grid.Column="0" Spacing="4">
                                     <Label Text="Moderation" Style="{StaticResource FieldLabel}" />
-                                    <Picker ItemsSource="{Binding GptModerationChoice.Options}"
-                                            SelectedItem="{Binding GptModerationChoice.Selected}"
+                                    <Picker ItemsSource="{Binding Pickers.GptModeration.Options}"
+                                            SelectedItem="{Binding Pickers.GptModeration.Selected}"
                                             AutomationId="GptModerationPicker" />
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Grid.Row="1" Grid.Column="1" Spacing="4"
                                                      IsVisible="{Binding SupportsGptInputFidelity}">
                                     <Label Text="Input fidelity" Style="{StaticResource FieldLabel}" />
-                                    <Picker ItemsSource="{Binding GptInputFidelityChoice.Options}"
-                                            SelectedItem="{Binding GptInputFidelityChoice.Selected}"
+                                    <Picker ItemsSource="{Binding Pickers.GptInputFidelity.Options}"
+                                            SelectedItem="{Binding Pickers.GptInputFidelity.Selected}"
                                             AutomationId="GptInputFidelityPicker" />
                                 </VerticalStackLayout>
                                 <VerticalStackLayout Grid.Row="2" Grid.Column="0" Spacing="4"
                                                      IsVisible="{Binding SupportsGptComplexity}">
                                     <Label Text="Complexity" Style="{StaticResource FieldLabel}" />
-                                    <Picker ItemsSource="{Binding GptComplexityChoice.Options}"
-                                            SelectedItem="{Binding GptComplexityChoice.Selected}"
+                                    <Picker ItemsSource="{Binding Pickers.GptComplexity.Options}"
+                                            SelectedItem="{Binding Pickers.GptComplexity.Selected}"
                                             AutomationId="GptComplexityPicker" />
                                 </VerticalStackLayout>
                             </Grid>

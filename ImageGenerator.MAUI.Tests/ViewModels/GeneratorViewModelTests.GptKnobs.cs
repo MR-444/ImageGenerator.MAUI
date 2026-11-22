@@ -31,11 +31,11 @@ public partial class GeneratorViewModelTests
         _viewModel.SupportsGptQuality.Should().BeTrue();
         _viewModel.SupportsGptComplexity.Should().BeTrue();
         _viewModel.SupportsGptInputFidelity.Should().BeFalse();
-        _viewModel.GptComplexityChoice.Options.Should().BeEquivalentTo("low", "medium", "high");
+        _viewModel.Pickers.GptComplexity.Options.Should().BeEquivalentTo("low", "medium", "high");
         // Empty list, hidden row — not a labelled Picker with nothing in it.
-        _viewModel.GptInputFidelityChoice.Options.Should().BeEmpty();
-        _viewModel.GptQualityChoice.Options.Should().Contain("xhigh").And.Contain("max");
-        _viewModel.AspectRatioChoice.Options.Should().HaveCount(18).And.Contain("1024x1024").And.Contain("auto");
+        _viewModel.Pickers.GptInputFidelity.Options.Should().BeEmpty();
+        _viewModel.Pickers.GptQuality.Options.Should().Contain("xhigh").And.Contain("max");
+        _viewModel.Pickers.AspectRatio.Options.Should().HaveCount(18).And.Contain("1024x1024").And.Contain("auto");
     }
 
     [Fact]
@@ -45,8 +45,8 @@ public partial class GeneratorViewModelTests
 
         _viewModel.SupportsGptInputFidelity.Should().BeTrue();
         _viewModel.SupportsGptComplexity.Should().BeFalse();
-        _viewModel.GptComplexityChoice.Options.Should().BeEmpty();
-        _viewModel.AspectRatioChoice.Options.Should().BeEquivalentTo("1:1", "3:2", "2:3");
+        _viewModel.Pickers.GptComplexity.Options.Should().BeEmpty();
+        _viewModel.Pickers.AspectRatio.Options.Should().BeEquivalentTo("1:1", "3:2", "2:3");
     }
 
     [Fact]
@@ -93,10 +93,10 @@ public partial class GeneratorViewModelTests
     public void SwitchingToSunburst_KeepsEveryKnobTheModelAlsoOffers()
     {
         SelectModel(ModelConstants.OpenAI.GptImage15OnReplicate);
-        _viewModel.GptQualityChoice.Selected = "high";
-        _viewModel.GptBackgroundChoice.Selected = "transparent";
-        _viewModel.GptModerationChoice.Selected = "low";
-        _viewModel.AspectRatioChoice.Selected = "3:2";
+        _viewModel.Pickers.GptQuality.Selected = "high";
+        _viewModel.Pickers.GptBackground.Selected = "transparent";
+        _viewModel.Pickers.GptModeration.Selected = "low";
+        _viewModel.Pickers.AspectRatio.Selected = "3:2";
 
         SelectModel(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
 
@@ -140,11 +140,42 @@ public partial class GeneratorViewModelTests
     }
 
     [Fact]
+    public void AfterARestartOnIdeogram_SwitchingToAGptModel_RestoresThatModelsOwnRatio()
+    {
+        // Ideogram's shape is its resolution, so a session restored on it has no ratio to
+        // restore; the GPT model's own pick must come back when the user switches.
+        _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ModelConstants.Ideogram.V4Turbo);
+        _mockUiStateStore
+            .Setup(s => s.LoadAspectRatio(ModelConstants.OpenAI.GptImage26SunburstOnReplicate))
+            .Returns("3:2");
+        _viewModel.LoadSavedUiState();
+
+        SelectModel(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
+
+        _viewModel.Parameters.AspectRatio.Should().Be("3:2");
+        _mockUiStateStore.Verify(s => s.PersistAspectRatio(It.IsAny<string>(), It.IsAny<string?>()), Times.Never,
+            "restoring a model's ratio is not a pick");
+    }
+
+    [Fact]
+    public void SwitchingThroughIdeogram_LeavesTheRatioOfTheModelBefore()
+    {
+        SelectModel(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
+        _viewModel.Pickers.AspectRatio.Selected = "16:9";
+
+        SelectModel(ModelConstants.Ideogram.V4Turbo);
+
+        _viewModel.Parameters.AspectRatio.Should().Be("16:9", "Ideogram has no ratio to impose");
+        SelectModel(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
+        _viewModel.Parameters.AspectRatio.Should().Be("16:9");
+    }
+
+    [Fact]
     public void GptOptionPick_IsSavedForThatModel()
     {
         SelectModel(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
 
-        _viewModel.GptModerationChoice.Selected = "auto";
+        _viewModel.Pickers.GptModeration.Selected = "auto";
 
         _viewModel.Parameters.GptModeration.Should().Be("auto");
         _mockUiStateStore.Verify(s => s.PersistGptOption(
@@ -164,7 +195,7 @@ public partial class GeneratorViewModelTests
         SelectModel(ModelConstants.OpenAI.GptImage26SunburstOnReplicate);
 
         _viewModel.Parameters.GptModeration.Should().Be("auto");
-        _viewModel.GptModerationChoice.Selected.Should().Be("auto");
+        _viewModel.Pickers.GptModeration.Selected.Should().Be("auto");
     }
 
     [Fact]

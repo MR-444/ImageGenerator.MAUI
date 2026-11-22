@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using Microsoft.Extensions.Logging;
 
 namespace ImageGenerator.MAUI.Presentation.ViewModels;
 
@@ -19,12 +20,19 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 public sealed class PickerChoice : ObservableObject
 {
     private readonly Action<string> _onPicked;
+    private readonly ILogger? _logger;
+    private readonly string _name;
     private List<string> _options = [];
     private string? _selected;
     private bool _swapping;
 
-    public PickerChoice(Action<string> onPicked) =>
+    /// <param name="name">Names this Picker in the Debug log, which records every ignored push.</param>
+    public PickerChoice(Action<string> onPicked, ILogger? logger = null, string name = "Picker")
+    {
         _onPicked = onPicked ?? throw new ArgumentNullException(nameof(onPicked));
+        _logger = logger;
+        _name = name;
+    }
 
     // A List, not an interface: Picker.ItemsSource is an IList and the bindings are compiled.
     public List<string> Options
@@ -43,18 +51,24 @@ public sealed class PickerChoice : ObservableObject
             {
                 // Not a pick. If the Picker now shows something else, give it the value back,
                 // but only one it can display, so this cannot start a loop.
-                if (!_swapping && value != _selected && _selected is not null && _options.Contains(_selected))
-                    OnPropertyChanged();
+                var reannounce = !_swapping && value != _selected && _selected is not null && _options.Contains(_selected);
+                _logger?.LogDebug(
+                    "{Picker}: ignored push \"{Value}\" (swapping={Swapping}, current=\"{Current}\", reannounce={Reannounce})",
+                    _name, value, _swapping, _selected, reannounce);
+                if (reannounce) OnPropertyChanged();
                 return;
             }
 
-            if (SetProperty(ref _selected, value)) _onPicked(value);
+            if (!SetProperty(ref _selected, value)) return;
+            _logger?.LogDebug("{Picker}: picked \"{Value}\"", _name, value);
+            _onPicked(value);
         }
     }
 
     /// <summary>
-    /// Replaces the list. Whatever the Picker pushes during the swap is ignored, and the current
-    /// value is announced again afterwards, because the swap reset the Picker's selection.
+    /// Replaces the list. Whatever the Picker pushes during the swap is ignored. The current value
+    /// is announced again afterwards, because the swap reset the Picker's selection; that happens
+    /// outside the swap, so a push the Picker makes in reply is treated like any other.
     /// </summary>
     public void SetOptions(IEnumerable<string>? options)
     {
@@ -62,12 +76,13 @@ public sealed class PickerChoice : ObservableObject
         try
         {
             Options = options is null ? [] : [.. options];
-            OnPropertyChanged(nameof(Selected));
         }
         finally
         {
             _swapping = false;
         }
+
+        OnPropertyChanged(nameof(Selected));
     }
 
     /// <summary>Shows a value set elsewhere (a fallback, a restore). Never calls <c>onPicked</c>.</summary>

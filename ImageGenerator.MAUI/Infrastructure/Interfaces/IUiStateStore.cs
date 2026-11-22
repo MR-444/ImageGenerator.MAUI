@@ -19,9 +19,9 @@ public interface IUiStateStore
     /// </summary>
     string? LoadResolution(string? modelId);
     /// <summary>
-    /// Last aspect-ratio pick, persisted per model family (ComfyUI vs the rest) like resolution.
-    /// Null when never persisted — callers keep the model's default first option. "custom" is
-    /// never persisted (its width/height aren't), so this never returns it.
+    /// Last aspect-ratio pick for this model; for a model never picked on, the last pick in its
+    /// family (ComfyUI vs the rest). Null when never persisted. Callers adopt it only if the model
+    /// offers it. "custom" is never persisted (its width/height aren't), so this never returns it.
     /// </summary>
     string? LoadAspectRatio(string? modelId);
     /// <summary>

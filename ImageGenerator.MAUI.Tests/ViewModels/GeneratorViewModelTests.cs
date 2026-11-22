@@ -457,7 +457,7 @@ public partial class GeneratorViewModelTests
     public void AddImage_OnFlux2Model_AutoSelectsMatchInputImage()
     {
         _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
-        _viewModel.AspectRatioChoice.Options.Should().Contain("match_input_image");
+        _viewModel.Pickers.AspectRatio.Options.Should().Contain("match_input_image");
 
         _viewModel.InputImages.SelectedImages.Add(FakeImage("a"));
 
@@ -485,8 +485,8 @@ public partial class GeneratorViewModelTests
         // Switching from Flux 1.1 Pro (has "custom") to Klein 4B (no "custom") must narrow the list.
         _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Klein4b);
 
-        _viewModel.AspectRatioChoice.Options.Should().NotContain("custom");
-        _viewModel.AspectRatioChoice.Options.Should().Contain("1:1");
+        _viewModel.Pickers.AspectRatio.Options.Should().NotContain("custom");
+        _viewModel.Pickers.AspectRatio.Options.Should().Contain("1:1");
     }
 
     [Fact]
@@ -538,7 +538,7 @@ public partial class GeneratorViewModelTests
         _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Google.NanoBanana2);
 
         _viewModel.SupportsResolution.Should().BeTrue();
-        _viewModel.ResolutionChoice.Options.Should().BeEquivalentTo("1K", "2K", "4K");
+        _viewModel.Pickers.Resolution.Options.Should().BeEquivalentTo("1K", "2K", "4K");
     }
 
     [Fact]
@@ -550,10 +550,10 @@ public partial class GeneratorViewModelTests
         _viewModel.Capabilities.GptBackgroundOptions.Should().NotBeNull();
         _viewModel.Capabilities.GptModerationOptions.Should().NotBeNull();
         _viewModel.Capabilities.GptInputFidelityOptions.Should().NotBeNull();
-        _viewModel.GptQualityChoice.Options.Should().BeEquivalentTo("auto", "low", "medium", "high");
-        _viewModel.GptBackgroundChoice.Options.Should().BeEquivalentTo("auto", "transparent", "opaque");
-        _viewModel.GptModerationChoice.Options.Should().BeEquivalentTo("auto", "low");
-        _viewModel.GptInputFidelityChoice.Options.Should().BeEquivalentTo("low", "high");
+        _viewModel.Pickers.GptQuality.Options.Should().BeEquivalentTo("auto", "low", "medium", "high");
+        _viewModel.Pickers.GptBackground.Options.Should().BeEquivalentTo("auto", "transparent", "opaque");
+        _viewModel.Pickers.GptModeration.Options.Should().BeEquivalentTo("auto", "low");
+        _viewModel.Pickers.GptInputFidelity.Options.Should().BeEquivalentTo("low", "high");
     }
 
     [Fact]
@@ -1057,7 +1057,7 @@ public partial class GeneratorViewModelTests
     public void AspectRatio_SwitchingToCompatibleModel_StaysPut()
     {
         _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11Ultra);
-        _viewModel.AspectRatioChoice.Selected = "21:9";
+        _viewModel.Pickers.AspectRatio.Selected = "21:9";
 
         _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
 
@@ -1068,7 +1068,7 @@ public partial class GeneratorViewModelTests
     public void AspectRatio_SwitchingToIncompatibleModelThenBack_RestoresPreferred()
     {
         _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Flux.Pro11);
-        _viewModel.AspectRatioChoice.Selected = "21:9";
+        _viewModel.Pickers.AspectRatio.Selected = "21:9";
 
         // GPT 1.5's AR list is just ["1:1", "3:2", "2:3"] — 21:9 is rejected, AR falls back.
         _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.OpenAI.GptImage15OnReplicate);
@@ -1097,7 +1097,7 @@ public partial class GeneratorViewModelTests
     {
         // Start on NanoBanana2 which supports both "16:9" and "match_input_image".
         _viewModel.ProviderFilter.SelectedModel = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Google.NanoBanana2);
-        _viewModel.AspectRatioChoice.Selected = "16:9";
+        _viewModel.Pickers.AspectRatio.Selected = "16:9";
 
         _viewModel.InputImages.SelectedImages.Add(FakeImage("a"));
         _viewModel.Parameters.AspectRatio.Should().Be("match_input_image", "auto-select on 0→1 with a model that supports it");
@@ -1657,7 +1657,7 @@ public partial class GeneratorViewModelTests
     {
         SelectIdeogramTurbo(); // RefreshCapabilities defaults Resolution to "Auto" (suppressed)
 
-        _viewModel.ResolutionChoice.Selected = "1440x2880";
+        _viewModel.Pickers.Resolution.Selected = "1440x2880";
 
         _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880", It.IsAny<string?>()), Times.Once);
     }
@@ -1737,14 +1737,14 @@ public partial class GeneratorViewModelTests
     [Fact]
     public void Resolution_PickerNullPushDuringOptionsSwap_DoesNotPersist_AndFallbackRecovers()
     {
-        PushDuringSwap(_viewModel.ResolutionChoice, _ => null);
+        PushDuringSwap(_viewModel.Pickers.Resolution, _ => null);
 
         SelectIdeogramTurbo();
 
         _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>(), It.IsAny<string?>()), Times.Never,
             "a binding artifact must never overwrite the saved resolution");
         _viewModel.Parameters.Resolution.Should().Be("Auto");
-        _viewModel.ResolutionChoice.Selected.Should().Be("Auto");
+        _viewModel.Pickers.Resolution.Selected.Should().Be("Auto");
     }
 
     [Fact]
@@ -1752,7 +1752,7 @@ public partial class GeneratorViewModelTests
     {
         // A Picker that resets to the first row pushes a value that IS in the new list; only the
         // swap itself tells it from a user pick.
-        PushDuringSwap(_viewModel.ResolutionChoice, c => c.Options.Count > 0 ? c.Options[0] : null);
+        PushDuringSwap(_viewModel.Pickers.Resolution, c => c.Options.Count > 0 ? c.Options[0] : null);
 
         SelectIdeogramTurbo();
 
@@ -1766,8 +1766,8 @@ public partial class GeneratorViewModelTests
         var before = _viewModel.Parameters.Resolution;
 
         // A null on binding attach (page recreation), or a value the current model doesn't offer.
-        _viewModel.ResolutionChoice.Selected = null;
-        _viewModel.ResolutionChoice.Selected = "999x999";
+        _viewModel.Pickers.Resolution.Selected = null;
+        _viewModel.Pickers.Resolution.Selected = "999x999";
 
         _viewModel.Parameters.Resolution.Should().Be(before);
         _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>(), It.IsAny<string?>()), Times.Never);
@@ -1780,7 +1780,7 @@ public partial class GeneratorViewModelTests
 
         _viewModel.Parameters.Resolution = "1440x2880"; // a restore, Remix, or the editor's Apply
 
-        _viewModel.ResolutionChoice.Selected.Should().Be("1440x2880");
+        _viewModel.Pickers.Resolution.Selected.Should().Be("1440x2880");
         _mockUiStateStore.Verify(s => s.PersistResolution(It.IsAny<string>(), It.IsAny<string?>()), Times.Never);
     }
 
@@ -1791,7 +1791,7 @@ public partial class GeneratorViewModelTests
         // and the saved value must still both survive in storage and win in Parameters.
         _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ModelConstants.Ideogram.V4Turbo);
         _mockUiStateStore.Setup(s => s.LoadResolution(It.IsAny<string?>())).Returns("1440x2880");
-        PushDuringSwap(_viewModel.ResolutionChoice, _ => null);
+        PushDuringSwap(_viewModel.Pickers.Resolution, _ => null);
 
         _viewModel.LoadSavedUiState();
 
@@ -1807,7 +1807,7 @@ public partial class GeneratorViewModelTests
         SelectIdeogramTurbo(); // move away so the restore below actually switches back and swaps the AR options
         _mockUiStateStore.Setup(s => s.LoadModel()).Returns(ComfyModelId);
         _mockUiStateStore.Setup(s => s.LoadAspectRatio(It.IsAny<string?>())).Returns("2:3 (Portrait Photo)");
-        PushDuringSwap(_viewModel.AspectRatioChoice, c => c.Options.Count > 0 ? c.Options[0] : null);
+        PushDuringSwap(_viewModel.Pickers.AspectRatio, c => c.Options.Count > 0 ? c.Options[0] : null);
 
         _viewModel.LoadSavedUiState();
 
@@ -1820,9 +1820,9 @@ public partial class GeneratorViewModelTests
     [Fact]
     public void Resolution_SurvivesIdeogramToIdeogramModelSwitch_DespitePickerNullPush()
     {
-        PushDuringSwap(_viewModel.ResolutionChoice, _ => null);
+        PushDuringSwap(_viewModel.Pickers.Resolution, _ => null);
         SelectIdeogramTurbo();
-        _viewModel.ResolutionChoice.Selected = "1440x2880"; // user pick, persists once
+        _viewModel.Pickers.Resolution.Selected = "1440x2880"; // user pick, persists once
 
         var quality = _viewModel.ProviderFilter.AllModels.First(m => m.Value == ModelConstants.Ideogram.V4Quality);
         _viewModel.ProviderFilter.SelectedModel = quality;
@@ -1855,7 +1855,7 @@ public partial class GeneratorViewModelTests
     {
         SelectComfyWorkflow();
 
-        _viewModel.ResolutionChoice.Selected = "2.0 MP";
+        _viewModel.Pickers.Resolution.Selected = "2.0 MP";
 
         _mockUiStateStore.Verify(s => s.PersistResolution("2.0 MP", ComfyModelId), Times.Once);
     }
@@ -1913,17 +1913,17 @@ public partial class GeneratorViewModelTests
         // In-app, the WinUI ComboBox finishes its ItemsSource rebuild on a LATER dispatcher tick
         // than the options swap and pushes SelectedItem=null then, outside the swap.
         SelectIdeogramTurbo();
-        _viewModel.ResolutionChoice.Selected = "1440x2880"; // user pick
+        _viewModel.Pickers.Resolution.Selected = "1440x2880"; // user pick
         var reannounced = 0;
-        _viewModel.ResolutionChoice.PropertyChanged += (_, e) =>
+        _viewModel.Pickers.Resolution.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(PickerChoice.Selected)) reannounced++;
         };
 
-        _viewModel.ResolutionChoice.Selected = null; // the deferred platform push
+        _viewModel.Pickers.Resolution.Selected = null; // the deferred platform push
 
         _viewModel.Parameters.Resolution.Should().Be("1440x2880", "a null push is never a user pick");
-        _viewModel.ResolutionChoice.Selected.Should().Be("1440x2880");
+        _viewModel.Pickers.Resolution.Selected.Should().Be("1440x2880");
         reannounced.Should().Be(1, "the Picker must be told to show the value again");
         _mockUiStateStore.Verify(s => s.PersistResolution("1440x2880", It.IsAny<string?>()), Times.Once,
             "only the pick persists");
@@ -1934,9 +1934,9 @@ public partial class GeneratorViewModelTests
     {
         // The same, for the ComfyUI megapixel family, where the 2026-06-11 livelock froze the app.
         SelectComfyWorkflow();
-        _viewModel.ResolutionChoice.Selected = "4.0 MP"; // user pick
+        _viewModel.Pickers.Resolution.Selected = "4.0 MP"; // user pick
 
-        _viewModel.ResolutionChoice.Selected = null; // the deferred platform push
+        _viewModel.Pickers.Resolution.Selected = null; // the deferred platform push
 
         _viewModel.Parameters.Resolution.Should().Be("4.0 MP", "a null push is never a user pick");
         _mockUiStateStore.Verify(s => s.PersistResolution("4.0 MP", It.IsAny<string?>()), Times.Once,
@@ -1964,7 +1964,7 @@ public partial class GeneratorViewModelTests
         // Seeding reflects the generator's state; its Auto fallback for unknown values must
         // not clobber the generator's choice just because the editor opened.
         SelectIdeogramTurbo();
-        _viewModel.ResolutionChoice.Selected = "1440x2880";
+        _viewModel.Pickers.Resolution.Selected = "1440x2880";
         var editor = new IdeogramStructureEditorViewModel(
             Mock.Of<IJsonPromptFileService>(),
             Mock.Of<IFileLauncher>(),
@@ -2034,7 +2034,7 @@ public partial class GeneratorViewModelTests
 
         editor.IsAspectRatioMode.Should().BeTrue();
         editor.ResolutionPickerTitle.Should().Be("Aspect ratio");
-        editor.ResolutionOptions.Should().BeEquivalentTo(_viewModel.AspectRatioChoice.Options);
+        editor.ResolutionOptions.Should().BeEquivalentTo(_viewModel.Pickers.AspectRatio.Options);
     }
 
     [Fact]
@@ -2070,7 +2070,7 @@ public partial class GeneratorViewModelTests
 
         editor.SetIncomingResolution("1440x2880"); // an Ideogram resolution is foreign here
 
-        editor.SelectedResolution.Should().Be(_viewModel.AspectRatioChoice.Options[0]);
+        editor.SelectedResolution.Should().Be(_viewModel.Pickers.AspectRatio.Options[0]);
     }
 
     [Fact]

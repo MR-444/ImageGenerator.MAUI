@@ -117,24 +117,28 @@ public sealed class UiStateStore : IUiStateStore
 
     public string? LoadAspectRatio(string? modelId)
     {
-        var key = AspectRatioKeyFor(modelId);
-        var v = SafeGet(key);
+        var modelKey = AspectRatioModelKeyFor(modelId);
+        // A model without a pick of its own falls back to its family's last pick.
+        var v = SafeGet(modelKey) ?? SafeGet(AspectRatioFamilyKeyFor(modelId));
         if (_logger.IsEnabled(LogLevel.Debug))
-            _logger.LogDebug("UiStateStore.LoadAspectRatio[{Key}] -> {Value}", key, Quote(v));
+            _logger.LogDebug("UiStateStore.LoadAspectRatio[{Key}] -> {Value}", modelKey, Quote(v));
         return v;
     }
 
     public void PersistAspectRatio(string value, string? modelId)
     {
-        var key = AspectRatioKeyFor(modelId);
+        var key = AspectRatioModelKeyFor(modelId);
         if (SafeSet(key, value) && _logger.IsEnabled(LogLevel.Debug))
             _logger.LogDebug("UiStateStore.PersistAspectRatio[{Key}]({Value})", key, Quote(value));
+        SafeSet(AspectRatioFamilyKeyFor(modelId), value);
     }
 
-    // Aspect-ratio option sets differ by model family (a ComfyUI workflow defines its own), so key
-    // per family like resolution — a portrait pick on ComfyUI won't override a landscape pick on
-    // the Replicate models, and a switch back restores that family's last choice.
-    private static string AspectRatioKeyFor(string? modelId) =>
+    // Each model keeps its own pick: their ratio lists differ (GPT image 1.5 offers three, Ideogram
+    // one), so a shared value is overwritten by whichever model was used last. The family key
+    // (ComfyUI vs the rest) holds the latest pick as the fallback for models never picked on.
+    private static string AspectRatioModelKeyFor(string? modelId) => $"{AspectRatioKey}.model.{modelId}";
+
+    private static string AspectRatioFamilyKeyFor(string? modelId) =>
         Shared.Constants.ModelConstants.ComfyUi.IsId(modelId) ? ComfyUiAspectRatioKey : AspectRatioKey;
 
     public string? LoadGptOption(string field, string? modelId) =>

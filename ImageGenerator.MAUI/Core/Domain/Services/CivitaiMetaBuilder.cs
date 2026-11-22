@@ -11,7 +11,11 @@ namespace ImageGenerator.MAUI.Core.Domain.Services;
 /// </summary>
 public static class CivitaiMetaBuilder
 {
-    public static IReadOnlyDictionary<string, object> Build(ImageGenerationParameters parameters)
+    /// <param name="modelHasAspectRatio">Whether the model's request carries an aspect ratio
+    /// (<c>ModelCapabilities.AspectRatio</c>). Without one, Parameters.AspectRatio is whatever the
+    /// previous model used and says nothing about this image.</param>
+    public static IReadOnlyDictionary<string, object> Build(
+        ImageGenerationParameters parameters, bool modelHasAspectRatio)
     {
         var modelShort = parameters.Model.Contains('/')
             ? parameters.Model[(parameters.Model.LastIndexOf('/') + 1)..]
@@ -25,7 +29,7 @@ public static class CivitaiMetaBuilder
             ["Model"] = parameters.Model,
         };
 
-        if (!string.IsNullOrWhiteSpace(parameters.AspectRatio))
+        if (modelHasAspectRatio && !string.IsNullOrWhiteSpace(parameters.AspectRatio))
             meta["Aspect ratio"] = parameters.AspectRatio;
 
         return meta;

@@ -108,16 +108,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         $"{Queue.JobStatusSummary} · {SelectedModelSummary} · {Queue.TotalImagesGeneratedText}"
         + (IsGpuBusy ? " · GPU busy" : string.Empty);
 
-    // The Pickers bind these, not Parameters: a pick reaches Parameters (and storage) through
-    // onPicked, and every other change to Parameters is mirrored back with Show.
-    public PickerChoice AspectRatioChoice { get; }
-    public PickerChoice ResolutionChoice { get; }
-    public PickerChoice GptQualityChoice { get; }
-    public PickerChoice GptBackgroundChoice { get; }
-    public PickerChoice GptModerationChoice { get; }
-    public PickerChoice GptInputFidelityChoice { get; }
-    // gpt-image-2.6-sunburst only; the list is empty (picker hidden) on every other model.
-    public PickerChoice GptComplexityChoice { get; }
+    // Aspect ratio, resolution and the GPT image options: what the model offers and what is picked.
+    public ModelPickersCoordinator Pickers { get; }
 
     [ObservableProperty]
     private List<string> _outputFormats = [nameof(ImageOutputFormat.Png).ToLowerInvariant(), nameof(ImageOutputFormat.Jpg).ToLowerInvariant(), nameof(ImageOutputFormat.Webp).ToLowerInvariant()];
@@ -184,7 +176,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         // A replacement instance has empty token slots, and the token rows push only on change,
         // so re-seed from the rows before revalidating.
         Tokens.PushAll();
-        ShowParametersInPickers();
+        Pickers.ShowAll();
         UpdateCustomAspectRatio(value.AspectRatio);
         ValidateParameters();
         ProviderFilter.SyncSelectionFromParameters(value.Model);
@@ -196,35 +188,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
         // The option lists change before Capabilities, so the binding cascade from the
         // Capabilities setter sees consistent state.
-        AspectRatioChoice.SetOptions(caps.AspectRatios);
-        // Sticky AR: the user's last pick if this model offers it, else the current value, else
-        // the model's first ratio. With no ratios at all, keep the current value rather than
-        // invent a size the model never offered.
-        var current = Parameters.AspectRatio;
-        var fallback = caps.AspectRatios.Count > 0 ? caps.AspectRatios[0] : current;
-        var target =
-            (InputImages.PreferredAspectRatio is { } pref && caps.AspectRatios.Contains(pref)) ? pref :
-            caps.AspectRatios.Contains(current) ? current :
-            fallback;
-        SetAspectRatioProgrammatically(target);
-
-        ResolutionChoice.SetOptions(caps.Resolutions);
-        var resolutions = ResolutionChoice.Options;
-        if (resolutions.Count > 0)
-        {
-            // Sticky resolution: the current value if offered, else the saved choice for this
-            // model, else the first option.
-            var previousResolution = Parameters.Resolution;
-            var savedResolution = _uiStateStore.LoadResolution(modelValue);
-            var targetResolution =
-                resolutions.Contains(previousResolution) ? previousResolution :
-                savedResolution is not null && resolutions.Contains(savedResolution) ? savedResolution :
-                resolutions[0];
-            _logger.LogDebug(
-                "RefreshCapabilities({Model}): resolution prev=\"{Prev}\" saved=\"{Saved}\" -> \"{Target}\" ({Count} options)",
-                modelValue, previousResolution, savedResolution, targetResolution, resolutions.Count);
-            Parameters.Resolution = targetResolution;
-        }
+        Pickers.ApplyCapabilities(caps, modelValue);
 
         // Models without an output-format picker (Ideogram, unknown Replicate models) pin PNG.
         if (!caps.OutputFormatSelectable) Parameters.OutputFormat = ImageOutputFormat.Png;
@@ -236,36 +200,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             try { Parameters.UseJsonPrompt = false; }
             finally { _suppressJsonPromptPersist = false; }
         }
-
-        // The GPT knob enums differ per model and host (2.6-sunburst adds quality xhigh/max and a
-        // complexity field), and a value the new model does not offer comes back as a 422. Take
-        // the user's saved pick for this model, else keep the current value, else the app's
-        // default, else the first option. The first option is no default: quality and moderation
-        // lists open with "auto", the priced end.
-        void Knob(PickerChoice choice, IReadOnlyList<string>? offered, string field,
-            string? current, string appDefault, Action<string> select)
-        {
-            choice.SetOptions(offered);
-            var options = choice.Options;
-            if (options.Count == 0) return;
-            var saved = _uiStateStore.LoadGptOption(field, modelValue);
-            select(
-                saved is not null && options.Contains(saved) ? saved :
-                current is not null && options.Contains(current) ? current :
-                options.Contains(appDefault, StringComparer.Ordinal) ? appDefault :
-                options[0]);
-        }
-
-        Knob(GptQualityChoice, caps.GptQualityOptions, GptFields.Quality, Parameters.GptQuality,
-            ImageGenerationParameters.DefaultGptQuality, v => Parameters.GptQuality = v);
-        Knob(GptBackgroundChoice, caps.GptBackgroundOptions, GptFields.Background, Parameters.GptBackground,
-            ImageGenerationParameters.DefaultGptBackground, v => Parameters.GptBackground = v);
-        Knob(GptModerationChoice, caps.GptModerationOptions, GptFields.Moderation, Parameters.GptModeration,
-            ImageGenerationParameters.DefaultGptModeration, v => Parameters.GptModeration = v);
-        Knob(GptInputFidelityChoice, caps.GptInputFidelityOptions, GptFields.InputFidelity, Parameters.GptInputFidelity,
-            ImageGenerationParameters.DefaultGptInputFidelity, v => Parameters.GptInputFidelity = v);
-        Knob(GptComplexityChoice, caps.GptComplexityOptions, GptFields.Complexity, Parameters.GptComplexity,
-            ImageGenerationParameters.DefaultGptComplexity, v => Parameters.GptComplexity = v);
 
         // Drop attached images beyond the new model's cap now rather than at generation time.
         // ComfyUI waits for the workflow probe below: its cap depends on the workflow, and the
@@ -283,50 +217,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     }
 
     // A fallback or restore: not persisted and not the preferred ratio. User picks arrive
-    // through AspectRatioChoice instead.
+    // through Pickers.AspectRatio instead.
     private void SetAspectRatioProgrammatically(string aspectRatio) => Parameters.AspectRatio = aspectRatio;
-
-    private void ShowParametersInPickers()
-    {
-        AspectRatioChoice.Show(Parameters.AspectRatio);
-        ResolutionChoice.Show(Parameters.Resolution);
-        GptQualityChoice.Show(Parameters.GptQuality);
-        GptBackgroundChoice.Show(Parameters.GptBackground);
-        GptModerationChoice.Show(Parameters.GptModeration);
-        GptInputFidelityChoice.Show(Parameters.GptInputFidelity);
-        GptComplexityChoice.Show(Parameters.GptComplexity);
-    }
-
-    private void OnAspectRatioPicked(string aspectRatio)
-    {
-        Parameters.AspectRatio = aspectRatio;
-        InputImages.RecordExplicitAspectRatioPick(aspectRatio);
-        // "custom" is not persisted: its width and height aren't either.
-        if (aspectRatio != "custom") _uiStateStore.PersistAspectRatio(aspectRatio, Parameters.Model);
-    }
-
-    // The store's field names for the GPT options; saved per model (see IUiStateStore.LoadGptOption).
-    private static class GptFields
-    {
-        public const string Quality = "quality";
-        public const string Background = "background";
-        public const string Moderation = "moderation";
-        public const string InputFidelity = "input_fidelity";
-        public const string Complexity = "complexity";
-    }
-
-    private PickerChoice GptChoice(string field, Action<string> write) => new(value =>
-    {
-        write(value);
-        _uiStateStore.PersistGptOption(field, value, Parameters.Model);
-    });
-
-    private void OnResolutionPicked(string resolution)
-    {
-        Parameters.Resolution = resolution;
-        _logger.LogDebug("Resolution picked -> \"{Value}\"", resolution);
-        _uiStateStore.PersistResolution(resolution, Parameters.Model);
-    }
 
     private void MirrorImagePromptsToParameters()
     {
@@ -440,6 +332,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         Queue = new JobQueueCoordinator(
             jobRunner, civitaiPostingService, galleryService, comfyVram, gpuGate, Settings,
             isBatchRunning: () => Batch is { IsBatchRunning: true },
+            modelHasAspectRatio: model => _registry.CapabilitiesFor(model).Capabilities.AspectRatio,
             flash: message => _ = FlashAsync(message),
             logger: logger);
 
@@ -469,16 +362,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         // Seeded from the starting model, so the coordinators built below see its capabilities.
         _capabilities = _registry.CapabilitiesFor(_parameters.Model).Capabilities;
 
-        AspectRatioChoice = new PickerChoice(OnAspectRatioPicked);
-        ResolutionChoice = new PickerChoice(OnResolutionPicked);
-        GptQualityChoice = GptChoice(GptFields.Quality, v => Parameters.GptQuality = v);
-        GptBackgroundChoice = GptChoice(GptFields.Background, v => Parameters.GptBackground = v);
-        GptModerationChoice = GptChoice(GptFields.Moderation, v => Parameters.GptModeration = v);
-        GptInputFidelityChoice = GptChoice(GptFields.InputFidelity, v => Parameters.GptInputFidelity = v);
-        GptComplexityChoice = GptChoice(GptFields.Complexity, v => Parameters.GptComplexity = v);
-        AspectRatioChoice.SetOptions(_capabilities.AspectRatios);
-        ShowParametersInPickers();
-
         // The starting ratio is the first preferred ratio, so early model swaps keep it.
         InputImages = new InputImagesCoordinator(
             capsAccessor: () => Capabilities,
@@ -487,6 +370,15 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             setStatus: SetStatus,
             logger: logger,
             initialPreferredAspectRatio: _parameters.AspectRatio);
+
+        Pickers = new ModelPickersCoordinator(
+            parametersAccessor: () => Parameters,
+            uiStateStore: uiStateStore,
+            preferredAspectRatio: () => InputImages.PreferredAspectRatio,
+            recordAspectRatioPick: InputImages.RecordExplicitAspectRatioPick,
+            logger: logger);
+        Pickers.AspectRatio.SetOptions(_capabilities.AspectRatios);
+        Pickers.ShowAll();
 
         // Built before ProviderFilter, whose selection callback reaches ComfyUi through
         // RefreshCapabilities. Coordinators read Parameters through delegates because the
@@ -540,29 +432,12 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
     private void OnParametersPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        Pickers.ShowFromParameters(e.PropertyName);
+
         switch (e.PropertyName)
         {
             case nameof(ImageGenerationParameters.AspectRatio):
-                AspectRatioChoice.Show(Parameters.AspectRatio);
                 UpdateCustomAspectRatio(Parameters.AspectRatio);
-                break;
-            case nameof(ImageGenerationParameters.Resolution):
-                ResolutionChoice.Show(Parameters.Resolution);
-                break;
-            case nameof(ImageGenerationParameters.GptQuality):
-                GptQualityChoice.Show(Parameters.GptQuality);
-                break;
-            case nameof(ImageGenerationParameters.GptBackground):
-                GptBackgroundChoice.Show(Parameters.GptBackground);
-                break;
-            case nameof(ImageGenerationParameters.GptModeration):
-                GptModerationChoice.Show(Parameters.GptModeration);
-                break;
-            case nameof(ImageGenerationParameters.GptInputFidelity):
-                GptInputFidelityChoice.Show(Parameters.GptInputFidelity);
-                break;
-            case nameof(ImageGenerationParameters.GptComplexity):
-                GptComplexityChoice.Show(Parameters.GptComplexity);
                 break;
             case nameof(ImageGenerationParameters.ApiToken):
             case nameof(ImageGenerationParameters.PollinationsApiToken):
@@ -788,7 +663,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
         // After the model, which settled the option lists. Restores are not persisted.
         var savedResolution = _uiStateStore.LoadResolution(Parameters.Model);
-        var adoptResolution = !string.IsNullOrEmpty(savedResolution) && ResolutionChoice.Options.Contains(savedResolution);
+        var adoptResolution = !string.IsNullOrEmpty(savedResolution) && Pickers.Resolution.Options.Contains(savedResolution);
         _logger.LogDebug(
             "LoadSavedUiState: resolution saved=\"{Saved}\" current=\"{Current}\" adopting={Adopting}",
             savedResolution, Parameters.Resolution, adoptResolution);
@@ -798,7 +673,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         var savedAspectRatio = _uiStateStore.LoadAspectRatio(Parameters.Model);
         if (!string.IsNullOrEmpty(savedAspectRatio)
             && savedAspectRatio != "custom"
-            && AspectRatioChoice.Options.Contains(savedAspectRatio))
+            && Pickers.AspectRatio.Options.Contains(savedAspectRatio))
         {
             SetAspectRatioProgrammatically(savedAspectRatio);
             InputImages.RecordExplicitAspectRatioPick(savedAspectRatio);

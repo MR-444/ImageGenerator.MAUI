@@ -154,7 +154,8 @@ public class IdeogramV4DescriptorTests
         caps.Resolutions.Should().NotBeNull();
         caps.Resolutions![0].Should().Be(IdeogramV4Descriptor.AutoResolution);
         caps.Resolutions.Should().Contain("2048x2048");
-        // RefreshCapabilities indexes AspectRatios[0] unconditionally even when AspectRatio is off.
-        caps.AspectRatios.Should().NotBeEmpty();
+        // The shape is the resolution. A placeholder ratio here would overwrite the ratio the
+        // previous model uses on every switch to Ideogram.
+        caps.AspectRatios.Should().BeEmpty();
     }
 }
