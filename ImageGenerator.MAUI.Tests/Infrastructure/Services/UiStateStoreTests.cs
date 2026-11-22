@@ -914,14 +914,14 @@ public class UiStateStoreTests
         _sut.LoadPromptWriterModel().Should().Be("writer-model");
         _sut.LoadMutationModel().Should().Be("mutation-model");
         _sut.LoadEnrichModel().Should().Be("enrich-model");
-        _sut.LoadOllamaVisionModel().Should().Be("vision-model");
+        _preferences.Get(OllamaVisionModelKey, string.Empty).Should().Be("vision-model");
     }
 
     [Fact]
     public void TheObserverSharesTheKeysTheVisionPickerAlwaysUsed()
     {
-        _sut.PersistOllamaVisionModel("gemma3:27b");
-        _sut.PersistOpenRouterVisionModel("google/gemini-3.1-flash-image");
+        _preferences.Set(OllamaVisionModelKey, "gemma3:27b");
+        _preferences.Set(OpenRouterVisionModelKey, "google/gemini-3.1-flash-image");
 
         _sut.LoadLlmModel(ModelRole.Observe, ModelProvider.Local).Should().Be("gemma3:27b");
         _sut.LoadLlmModel(ModelRole.Observe, ModelProvider.OpenRouter)

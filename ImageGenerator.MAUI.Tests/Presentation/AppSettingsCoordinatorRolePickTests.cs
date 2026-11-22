@@ -30,9 +30,11 @@ public class AppSettingsCoordinatorRolePickTests
             ]);
     }
 
+    private readonly Mock<IOpenRouterModelCatalog> _openRouter = new();
+
     private AppSettingsCoordinator Build() => new(
         _store, new Mock<IFolderPicker>().Object, _ollama.Object,
-        openRouterModelCatalog: null, anthropicModelCatalog: null, anthropicTokenStore: null,
+        _openRouter.Object, anthropicModelCatalog: null, anthropicTokenStore: null,
         setStatus: (_, _) => { }, logger: NullLogger.Instance);
 
     [Theory]
@@ -50,6 +52,69 @@ public class AppSettingsCoordinatorRolePickTests
         await settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
 
         _store.LoadLlmModel(role, ModelProvider.Local).Should().Be("qwen");
+    }
+
+    // ---- The observer: the same overwrite, through the Settings page's vision pickers -------------
+    // Observe's row writes the very keys the Settings vision pickers wrote through the coordinator's
+    // copies, so a refresh (or the free-only switch) put the stale copy back over the row's pick.
+
+    [Fact]
+    public async Task AnObserverLocalPickSurvivesAnOllamaRefresh()
+    {
+        _store.PersistLlmModel(ModelRole.Observe, ModelProvider.Local, "llava");
+        var settings = Build();
+        settings.LoadSavedSettings();
+        var row = new ModelChoiceState(ModelRole.Observe, _store, settings.VisionModelSources, ModelProvider.Local);
+
+        row.SelectedModel = "moondream";
+        await settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
+
+        _store.LoadLlmModel(ModelRole.Observe, ModelProvider.Local).Should().Be("moondream");
+    }
+
+    [Fact]
+    public async Task AnObserverOpenRouterPickSurvivesAnOpenRouterRefresh()
+    {
+        _openRouter.Setup(c => c.ListVisionModelsAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new OpenRouterModelInfo("a/one:free", "One", true), new OpenRouterModelInfo("b/two:free", "Two", true)]);
+        _store.PersistLlmModel(ModelRole.Observe, ModelProvider.OpenRouter, "a/one:free");
+        var settings = Build();
+        settings.LoadSavedSettings();
+        var row = new ModelChoiceState(ModelRole.Observe, _store, settings.VisionModelSources, ModelProvider.OpenRouter);
+
+        row.SelectedModel = "b/two:free";
+        await settings.RefreshOpenRouterVisionModelsCommand.ExecuteAsync(null);
+
+        _store.LoadLlmModel(ModelRole.Observe, ModelProvider.OpenRouter).Should().Be("b/two:free");
+    }
+
+    [Fact]
+    public void TheFreeOnlySwitchLeavesTheObserversPickAlone()
+    {
+        // A paid pick is made with the filter off; turning it on is what used to clear it.
+        _store.PersistOpenRouterVisionFreeOnly(false);
+        _store.PersistLlmModel(ModelRole.Observe, ModelProvider.OpenRouter, "paid/vision");
+        var settings = Build();
+        settings.LoadSavedSettings();
+
+        settings.OpenRouterVisionFreeOnly = true;
+
+        _store.LoadLlmModel(ModelRole.Observe, ModelProvider.OpenRouter).Should().Be("paid/vision",
+            "a filter on a list is not a decision about the role's model");
+    }
+
+    [Fact]
+    public async Task ARefreshDropsAnObserverModelThatLostVision()
+    {
+        // llama3 is still installed, but not as a vision model: it can no longer serve an observation.
+        _store.PersistLlmModel(ModelRole.Observe, ModelProvider.Local, "llama3");
+        var settings = Build();
+        settings.LoadSavedSettings();
+
+        await settings.RefreshOllamaModelsCommand.ExecuteAsync(null);
+
+        _store.LoadLlmModel(ModelRole.Observe, ModelProvider.Local).Should().BeNullOrEmpty();
+        settings.OllamaServerStatus.Should().Contain("llama3");
     }
 
     [Fact]

@@ -1,6 +1,6 @@
 namespace ImageGenerator.MAUI.Infrastructure.Interfaces;
 
-/// <summary>Lists the models installed on a local Ollama server, for model pickers in Settings and tools.</summary>
+/// <summary>Lists the models installed on a local Ollama server, for the model rows on each tool's page.</summary>
 public interface IOllamaModelCatalog
 {
     /// <summary>

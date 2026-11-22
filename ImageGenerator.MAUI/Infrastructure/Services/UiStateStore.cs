@@ -217,13 +217,9 @@ public sealed class UiStateStore : IUiStateStore
 
     public void PersistOllamaBaseUrl(string value) => PersistString(OllamaBaseUrlKey, value);
 
-    public string? LoadOllamaModel() => LoadString(OllamaModelKey);
-
-    public void PersistOllamaModel(string value) => PersistString(OllamaModelKey, value);
-
-    public string? LoadOllamaVisionModel() => LoadString(OllamaVisionModelKey);
-
-    public void PersistOllamaVisionModel(string value) => PersistString(OllamaVisionModelKey, value);
+    // imggen.ollama_model was the Settings page's Ollama picker, removed in Phase C. Nothing writes it
+    // any more; it is read only as the one-time seed in LoadRoleModel, for installs that predate the
+    // per-role keys.
 
     // One Ollama tag per LLM role. Until documents/plan-model-picker-rows.md all three read
     // OllamaModelKey, so choosing a cheap tag to verify a caption mutation also changed the model
@@ -319,7 +315,7 @@ public sealed class UiStateStore : IUiStateStore
             ModelRole.Enrich => LoadEnrichModel(),
             // Same argument as the generation models: the observer's tag is an Ollama tag, and it is the
             // one the old vision picker already remembered. Reusing it is why this role needs no seeding.
-            ModelRole.Observe => LoadOllamaVisionModel(),
+            ModelRole.Observe => LoadString(OllamaVisionModelKey),
             _ => throw new ArgumentOutOfRangeException(nameof(role), role, "No local model key for this role.")
         },
         // A default Claude model is honest — the app has always named one. There is no default
@@ -468,10 +464,6 @@ public sealed class UiStateStore : IUiStateStore
 
     private void PersistModelCache(string key, string baseUrl, IReadOnlyList<string> models) =>
         PersistString(key, string.Join('\n', models.Prepend(baseUrl)));
-
-    public string? LoadOpenRouterVisionModel() => LoadString(OpenRouterVisionModelKey);
-
-    public void PersistOpenRouterVisionModel(string value) => PersistString(OpenRouterVisionModelKey, value);
 
     // Default TRUE — show only free OpenRouter vision models unless the user opts in to paid ones.
     public bool LoadOpenRouterVisionFreeOnly() => LoadBool(OpenRouterVisionFreeOnlyKey, true);

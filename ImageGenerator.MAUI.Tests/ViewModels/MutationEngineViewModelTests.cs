@@ -668,7 +668,6 @@ public class MutationEngineViewModelTests
     {
         var catalog = new StubOllamaCatalog();
         var generator = BuildGenerator("http://comfy.example:8188", "http://ollama.example:11434");
-        generator.Settings.OllamaModel = "flux-schnell";
         var sut = CreateSutWithAiAndGate(
             new FailingMutationLlm(), catalog, new FakeGpuGate(), generator);
         sut.SetBaseForTest(MutationTestData.BaseCaption());

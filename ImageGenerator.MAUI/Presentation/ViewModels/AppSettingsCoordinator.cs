@@ -156,61 +156,21 @@ public sealed partial class AppSettingsCoordinator(
         _uiStateStore.PersistOllamaBaseUrl(value);
     }
 
-    // No compile-time default model: which models exist is per-server, so the old hardcoded
-    // "qwen2.5" was wrong on most hosts and failed as an opaque Ollama 404. Empty means
-    // "never picked" and the pickers show their "Refresh, then pick a model…" title.
-    //
-    // The persist hooks are gated by a suppression window because a MAUI Picker whose
-    // SelectedItem is two-way bound here pushes NULL back the moment its ItemsSource is
-    // cleared — which every refresh does. Unsuppressed, that null persisted an empty string
-    // and silently destroyed the saved pick on the next launch.
-    [ObservableProperty]
-    private string _ollamaModel = string.Empty;
-
-    partial void OnOllamaModelChanged(string value)
-    {
-        if (_suppressOllamaModelPersist) return;
-        _uiStateStore.PersistOllamaModel(value);
-    }
-
-    [ObservableProperty]
-    private string _ollamaVisionModel = string.Empty;
-
-    partial void OnOllamaVisionModelChanged(string value)
-    {
-        if (_suppressOllamaModelPersist) return;
-        _uiStateStore.PersistOllamaVisionModel(value);
-    }
-
-    // One flag covers both pickers: they are always rebuilt together by the same refresh.
-    private bool _suppressOllamaModelPersist;
-
-    // The text roles' Local picks are NOT held here. Each role's ModelChoiceState reads and writes them
-    // through the store; a second copy here went stale the moment a row changed its pick, and the next
-    // refresh persisted the stale copy over it. The refresh reconciles against the store instead.
+    // No role's model pick is held here. Each role's ModelChoiceState reads and writes its pick
+    // through the store; a second copy here (the Settings page's three pickers, then the text roles'
+    // values) went stale the moment a row changed its pick, and the next refresh persisted the stale
+    // copy over it. The Ollama refresh reconciles against the store instead.
     private static readonly ModelRole[] LocalTextRoles = [ModelRole.PromptWrite, ModelRole.Mutate, ModelRole.Enrich];
-
-    [ObservableProperty]
-    private string _openRouterVisionModel = string.Empty;
-
-    partial void OnOpenRouterVisionModelChanged(string value)
-    {
-        if (_suppressOpenRouterVisionModelPersist) return;
-        _uiStateStore.PersistOpenRouterVisionModel(value);
-    }
-
-    // Same Picker-clears-its-selection hazard as _suppressOllamaModelPersist above.
-    private bool _suppressOpenRouterVisionModelPersist;
 
     [ObservableProperty]
     private bool _openRouterVisionFreeOnly = true;
 
+    // Clears the list, never a pick: a filter on a list is not a decision about the observer's model,
+    // and the row keeps listing its own saved pick whatever the list holds.
     partial void OnOpenRouterVisionFreeOnlyChanged(bool value)
     {
-        if (_suppressOpenRouterVisionModelPersist) return;
         _uiStateStore.PersistOpenRouterVisionFreeOnly(value);
         OpenRouterVisionModels.Clear();
-        OpenRouterVisionModel = string.Empty;
     }
 
     public ObservableCollection<string> OpenRouterVisionModels { get; } = [];
@@ -223,26 +183,12 @@ public sealed partial class AppSettingsCoordinator(
         try
         {
             var models = await openRouterModelCatalog.ListVisionModelsAsync(OpenRouterVisionFreeOnly);
-            var current = OpenRouterVisionModel;
 
-            _suppressOpenRouterVisionModelPersist = true;
-            try
-            {
-                OpenRouterVisionModels.Clear();
-                foreach (var model in models)
-                    OpenRouterVisionModels.Add(model.Id);
-
-                // Re-assert through empty so the picker re-selects even when clearing the
-                // ItemsSource did not push a null back through the binding.
-                var resolved = OpenRouterVisionModels.Contains(current) ? current : string.Empty;
-                OpenRouterVisionModel = string.Empty;
-                OpenRouterVisionModel = resolved;
-            }
-            finally { _suppressOpenRouterVisionModelPersist = false; }
-
-            // Deliberate write, outside the window: persists a restored pick and a genuine drop
-            // alike. SafeSet skips identical rewrites, so the common case costs nothing.
-            _uiStateStore.PersistOpenRouterVisionModel(OpenRouterVisionModel);
+            // No pick is reconciled: this list is filtered by price, so a model missing from it is not
+            // a model that is gone, and the observer's pick is the row's state, not this list's.
+            OpenRouterVisionModels.Clear();
+            foreach (var model in models)
+                OpenRouterVisionModels.Add(model.Id);
 
             ReportOpenRouter(models.Count > 0
                 ? $"Found {models.Count} OpenRouter vision model(s){(OpenRouterVisionFreeOnly ? " with free pricing." : ".")}"
@@ -462,54 +408,29 @@ public sealed partial class AppSettingsCoordinator(
                 return;
             }
 
-            var current = OllamaModel;
-            var currentVision = OllamaVisionModel;
-
-            _suppressOllamaModelPersist = true;
-            try
-            {
-                OllamaModels.Clear();
-                foreach (var m in models) OllamaModels.Add(m);
-                OllamaVisionModels.Clear();
-                foreach (var m in visionModels) OllamaVisionModels.Add(m);
-
-                // A model the server no longer lists is dropped rather than kept as a ghost entry
-                // that fails later as a 404. Re-assert through empty so the picker re-selects even
-                // when clearing the ItemsSource did not push a null back through the binding.
-                OllamaModel = string.Empty;
-                OllamaModel = OllamaModels.Contains(current) ? current : string.Empty;
-                OllamaVisionModel = string.Empty;
-                OllamaVisionModel = OllamaVisionModels.Contains(currentVision) ? currentVision : string.Empty;
-            }
-            finally { _suppressOllamaModelPersist = false; }
-
-            // Deliberate writes, outside the window: persist a restored pick and a genuine drop alike.
-            _uiStateStore.PersistOllamaModel(OllamaModel);
-            _uiStateStore.PersistOllamaVisionModel(OllamaVisionModel);
+            OllamaModels.Clear();
+            foreach (var m in models) OllamaModels.Add(m);
+            OllamaVisionModels.Clear();
+            foreach (var m in visionModels) OllamaVisionModels.Add(m);
             _uiStateStore.PersistOllamaModels(OllamaBaseUrl, models, visionModels);
 
             // A role naming a tag this server no longer has fails at call time, as a 404 nobody would
             // trace back to this card — so drop it. Read from the store, which every row writes through,
-            // so only a genuinely gone tag is touched and a pick made this session is left alone.
-            var droppedRoles = new List<string>();
-            foreach (var role in LocalTextRoles)
+            // so only a genuinely gone tag is touched and a pick made this session is left alone. Each
+            // role is checked against its own list: a model still installed but no longer advertising
+            // vision can still write prose, but cannot observe an image.
+            var roleLists = LocalTextRoles.Select(r => (Role: r, List: models))
+                .Append((Role: ModelRole.Observe, List: visionModels));
+            var cleared = new List<string>();
+            foreach (var (role, list) in roleLists)
             {
                 var saved = _uiStateStore.LoadLlmModel(role, ModelProvider.Local);
-                if (string.IsNullOrWhiteSpace(saved) || models.Contains(saved, StringComparer.Ordinal)) continue;
+                if (string.IsNullOrWhiteSpace(saved) || list.Contains(saved, StringComparer.Ordinal)) continue;
                 _uiStateStore.PersistLlmModel(role, ModelProvider.Local, string.Empty);
-                droppedRoles.Add(saved);
+                cleared.Add(saved);
             }
 
-            // Report exactly what the reconciliation above cleared, by comparing each pick against
-            // its own list — a model that is still installed but stopped advertising vision is
-            // dropped from the vision picker only, and must still be named here.
-            var dropped = new[]
-                {
-                    OllamaModel.Length == 0 ? current : null,
-                    OllamaVisionModel.Length == 0 ? currentVision : null,
-                }
-                .Concat(droppedRoles)
-                .Where(m => !string.IsNullOrWhiteSpace(m))
+            var dropped = cleared
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
 
@@ -637,50 +558,17 @@ public sealed partial class AppSettingsCoordinator(
             OllamaBaseUrl = savedOllamaUrl;
         }
 
-        var savedOllamaModel = _uiStateStore.LoadOllamaModel();
-        var savedOllamaVisionModel = _uiStateStore.LoadOllamaVisionModel();
-        // Seed the pickers from the last-known server list BEFORE assigning the selected
-        // model so any attached Picker already sees the item in ItemsSource. The saved pick is
-        // appended when the cache predates it; startup has verified nothing against the server yet,
-        // so nothing is dropped here — the first successful refresh is what reconciles.
+        // Seed the lists from the last-known server list; startup has verified nothing against the
+        // server yet, so nothing is dropped here — the first successful refresh is what reconciles.
+        // No pick is seeded: each ModelChoiceState lists its own saved pick even when the cache
+        // predates it (ModelChoiceState.RebuildModels).
         // Seed defensively: this runs on the startup path, where an unhandled exception is a native
         // WinUI fail-fast rather than a catchable error, so a store handing back null degrades to
         // "no cache" instead of taking the app down.
-        _suppressOllamaModelPersist = true;
-        try
-        {
-            SeedPicker(OllamaModels, _uiStateStore.LoadOllamaModels(OllamaBaseUrl));
-            SeedPicker(OllamaVisionModels, _uiStateStore.LoadOllamaVisionModels(OllamaBaseUrl));
-            if (!string.IsNullOrWhiteSpace(savedOllamaModel))
-            {
-                if (!OllamaModels.Contains(savedOllamaModel))
-                    OllamaModels.Add(savedOllamaModel);
-                OllamaModel = savedOllamaModel;
-            }
-            if (!string.IsNullOrWhiteSpace(savedOllamaVisionModel))
-            {
-                if (!OllamaVisionModels.Contains(savedOllamaVisionModel))
-                    OllamaVisionModels.Add(savedOllamaVisionModel);
-                OllamaVisionModel = savedOllamaVisionModel;
-            }
-            // The role picks need no seeding here: each ModelChoiceState lists its own saved pick
-            // even when the cache predates it (ModelChoiceState.RebuildModels).
-        }
-        finally { _suppressOllamaModelPersist = false; }
+        SeedPicker(OllamaModels, _uiStateStore.LoadOllamaModels(OllamaBaseUrl));
+        SeedPicker(OllamaVisionModels, _uiStateStore.LoadOllamaVisionModels(OllamaBaseUrl));
 
-        _suppressOpenRouterVisionModelPersist = true;
-        try
-        {
-            OpenRouterVisionFreeOnly = _uiStateStore.LoadOpenRouterVisionFreeOnly();
-            var savedOpenRouterVisionModel = _uiStateStore.LoadOpenRouterVisionModel();
-            if (savedOpenRouterVisionModel is { Length: > 0 } savedOpenRouterModel
-                && (!OpenRouterVisionFreeOnly || savedOpenRouterModel.EndsWith(":free", StringComparison.OrdinalIgnoreCase)))
-            {
-                OpenRouterVisionModels.Add(savedOpenRouterModel);
-                OpenRouterVisionModel = savedOpenRouterModel;
-            }
-        }
-        finally { _suppressOpenRouterVisionModelPersist = false; }
+        OpenRouterVisionFreeOnly = _uiStateStore.LoadOpenRouterVisionFreeOnly();
 
         // Default-on; only flips the field when the user previously turned it off (OnChanged re-persist is
         // a harmless echo — nothing else writes this field).

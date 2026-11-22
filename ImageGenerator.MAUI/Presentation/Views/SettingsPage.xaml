@@ -148,43 +148,21 @@
                     VerticalOptions="Start">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="Local LLM (Ollama)" Style="{StaticResource CardTitle}" />
-                    <!-- The free "Local" LLM tier: prompt builder, AI mutation, and enrichment can use it
-                         without paying Anthropic. No token needed; output quality depends on the model. -->
-                    <Label Text="Local Ollama server for the prompt builder and AI tools' Local tier — a free path with no token. Output quality depends on the installed model."
+                    <!-- Connection only: which model each tool calls is picked on that tool's own page. -->
+                    <Label Text="Local Ollama server for the prompt builder, mutation, enrichment and image observation — free, no token. Each tool picks its own model on its page."
                            Style="{StaticResource HelperText}" />
                     <Entry Text="{Binding Settings.OllamaBaseUrl, Mode=TwoWay}"
                            Placeholder="http://fireengine:11434"
                            Keyboard="Url"
                            SemanticProperties.Description="Base URL of the local Ollama server"
                            AutomationId="OllamaBaseUrlEntry" />
-                    <Label Text="Model" Style="{StaticResource FieldLabel}" />
-                    <!-- Refresh pulls the installed models from the server; pick one. -->
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                        <Picker Grid.Column="0"
-                                ItemsSource="{Binding Settings.OllamaModels}"
-                                SelectedItem="{Binding Settings.OllamaModel, Mode=TwoWay}"
-                                Title="Refresh, then pick a model…"
-                                MaximumWidthRequest="360"
-                                HorizontalOptions="Start"
-                                SemanticProperties.Description="Pick an installed Ollama model"
-                                AutomationId="OllamaModelPicker" />
-                        <Button Grid.Column="1"
-                                Text="Refresh"
-                                Command="{Binding Settings.RefreshOllamaModelsCommand}"
-                                Style="{StaticResource SecondaryButton}"
-                                SemanticProperties.Description="List models from the Ollama server"
-                                AutomationId="OllamaModelRefreshButton" />
-                    </Grid>
-                    <Label Text="Vision model" Style="{StaticResource FieldLabel}" />
-                    <Picker ItemsSource="{Binding Settings.OllamaVisionModels}"
-                            SelectedItem="{Binding Settings.OllamaVisionModel, Mode=TwoWay}"
-                            Title="Refresh, then pick a vision model…"
-                            MaximumWidthRequest="360"
+                    <!-- Asks the server which models it has: proves the URL, and fills every page's lists. -->
+                    <Button Text="Check server"
+                            Command="{Binding Settings.RefreshOllamaModelsCommand}"
+                            Style="{StaticResource SecondaryButton}"
                             HorizontalOptions="Start"
-                            SemanticProperties.Description="Pick an installed Ollama vision model"
-                            AutomationId="OllamaVisionModelPicker" />
-                    <Label Text="A large model cold-loads into VRAM on the first call — expect the first local response to take a few minutes."
-                           Style="{StaticResource HelperText}" />
+                            SemanticProperties.Description="Check the Ollama server and list its models"
+                            AutomationId="OllamaCheckServerButton" />
                     <!-- Reports this card's server call inline: the page has no status bar of its
                          own and the generator's bar is drawn only on MainPage, so a wrong server URL
                          would otherwise leave nothing but a WARN in the log file. -->
@@ -200,28 +178,12 @@
                     VerticalOptions="Start">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="OpenRouter vision" Style="{StaticResource CardTitle}" />
-                    <Label Text="Optional remote image observer for Describe an idea. Set the API key under API Tokens above, then enter any OpenRouter model id that accepts image input and returns text."
+                    <Label Text="Optional remote image observer for Describe an idea. Set the API key under API Tokens above; the model is picked on the Describe an idea page."
                            Style="{StaticResource HelperText}" />
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                        <Picker Grid.Column="0"
-                                ItemsSource="{Binding Settings.OpenRouterVisionModels}"
-                                SelectedItem="{Binding Settings.OpenRouterVisionModel, Mode=TwoWay}"
-                                Title="Refresh, then pick a model…"
-                                MaximumWidthRequest="360"
-                                HorizontalOptions="Start"
-                                SemanticProperties.Description="OpenRouter vision model id"
-                                AutomationId="OpenRouterVisionModelPicker" />
-                        <Button Grid.Column="1"
-                                Text="Refresh"
-                                Command="{Binding Settings.RefreshOpenRouterVisionModelsCommand}"
-                                Style="{StaticResource SecondaryButton}"
-                                SemanticProperties.Description="List OpenRouter vision models"
-                                AutomationId="OpenRouterVisionModelRefreshButton" />
-                    </Grid>
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                         <VerticalStackLayout Grid.Column="0" Spacing="2">
                             <Label Text="Free models only" Style="{StaticResource FieldLabel}" />
-                            <Label Text="Filters the OpenRouter picker to models with zero prompt and completion pricing."
+                            <Label Text="Limits the observer's OpenRouter model list to models with zero prompt and completion pricing."
                                    Style="{StaticResource HelperText}" />
                         </VerticalStackLayout>
                         <Switch Grid.Column="1"
@@ -230,13 +192,6 @@
                                 SemanticProperties.Description="Show free OpenRouter vision models only"
                                 AutomationId="OpenRouterVisionFreeOnlySwitch" />
                     </Grid>
-                    <!-- Reports this card's server call inline: the page has no status bar of its
-                         own and the generator's bar is drawn only on MainPage, so a wrong server URL
-                         would otherwise leave nothing but a WARN in the log file. -->
-                    <Label Text="{Binding Settings.OpenRouterVisionStatus}"
-                           Style="{StaticResource HelperText}"
-                           IsVisible="{Binding Settings.OpenRouterVisionStatus, Converter={StaticResource NonEmptyStringToBool}}"
-                           AutomationId="OpenRouterVisionStatusLabel" />
                 </VerticalStackLayout>
             </Border>
 

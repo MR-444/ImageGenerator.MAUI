@@ -815,8 +815,6 @@ public class IdeaToPromptViewModelTests
         var store = new Mock<IUiStateStore>();
         store.Setup(s => s.LoadLlmModel(ModelRole.Observe, ModelProvider.Local)).Returns("row-model");
         var generator = BuildGenerator();
-        // The legacy shared key the service used to go and read for itself.
-        generator.Settings.OllamaVisionModel = "stored-model";
         var observer = new RecordingVisionObserver();
         var vm = NewVisionVm(store, observer, generator: generator);
         PickWriter(vm, ModelProvider.Anthropic, AnthropicModels.Opus);
@@ -876,7 +874,6 @@ public class IdeaToPromptViewModelTests
         var store = new Mock<IUiStateStore>();
         store.Setup(s => s.LoadLlmModel(ModelRole.Observe, ModelProvider.Local)).Returns("row-model");
         var generator = BuildGenerator();
-        generator.Settings.OllamaVisionModel = "stored-model";
         var catalog = new Mock<IOllamaModelCatalog>();
         var vm = NewVisionVm(store, new RecordingVisionObserver(), generator: generator, catalog: catalog.Object);
         PickWriter(vm, ModelProvider.Anthropic, AnthropicModels.Opus);

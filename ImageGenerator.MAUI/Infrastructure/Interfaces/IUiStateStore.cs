@@ -49,19 +49,6 @@ public interface IUiStateStore
     /// </summary>
     string? LoadOllamaBaseUrl();
     /// <summary>
-    /// The Ollama model name (tag) the prompt builder and AI tools' "Local" tier requests. Null when
-    /// never set — there is deliberately no default model (which models exist is per-server), so
-    /// callers must fail with a "pick a model first" message rather than guessing one.
-    /// </summary>
-    string? LoadOllamaModel();
-    /// <summary>
-    /// The Ollama vision-capable model used by image-to-prompt observation. Null when never set — the
-    /// observer then refuses with "pick a vision model first". It deliberately does NOT fall back to
-    /// <see cref="LoadOllamaModel"/>: that value is the image generation model, and an Ollama image
-    /// model cannot answer a chat request about a picture.
-    /// </summary>
-    string? LoadOllamaVisionModel();
-    /// <summary>
     /// Last-known model list from the Ollama server, so the pickers show real options at launch
     /// instead of a lone seeded entry — and keep showing them while the server is down. The server
     /// URL is stored WITH the list and checked on load, so a cache belonging to a different Ollama
@@ -72,11 +59,6 @@ public interface IUiStateStore
     IReadOnlyList<string> LoadOllamaVisionModels(string baseUrl);
     /// <inheritdoc cref="LoadOllamaModels"/>
     void PersistOllamaModels(string baseUrl, IReadOnlyList<string> models, IReadOnlyList<string> visionModels);
-    /// <summary>
-    /// The OpenRouter model id used by image-to-prompt observation. Null when never set; callers must
-    /// ask the user to pick a model before sending a remote vision request.
-    /// </summary>
-    string? LoadOpenRouterVisionModel();
     /// <summary>Whether the OpenRouter vision model picker should show free models only. Default true.</summary>
     bool LoadOpenRouterVisionFreeOnly();
     /// <summary>
@@ -125,18 +107,14 @@ public interface IUiStateStore
     void PersistComfyUiBaseUrl(string value);
     /// <inheritdoc cref="LoadOllamaBaseUrl"/>
     void PersistOllamaBaseUrl(string value);
-    /// <inheritdoc cref="LoadOllamaModel"/>
-    void PersistOllamaModel(string value);
-    /// <inheritdoc cref="LoadOllamaVisionModel"/>
-    void PersistOllamaVisionModel(string value);
 
     /// <summary>
     /// The Ollama tag one LLM role calls on its Local tier: the prompt writer, the caption mutator,
     /// the region enricher. Three values because they are three decisions — before
-    /// <c>documents/plan-model-picker-rows.md</c> all three read <see cref="LoadOllamaModel"/>, which
+    /// <c>documents/plan-model-picker-rows.md</c> all three read the Settings page's Ollama model (<c>imggen.ollama_model</c>), which
     /// also named the image model the generate button renders with.
     /// Null when never set and never seeded; the store seeds a role that has no value of its own from
-    /// <see cref="LoadOllamaModel"/> exactly once. There is no default model — callers must refuse
+    /// that old key exactly once. There is no default model — callers must refuse
     /// with "pick a model first" rather than guess one.
     /// </summary>
     string? LoadPromptWriterModel();
@@ -183,8 +161,6 @@ public interface IUiStateStore
     /// agree on what a first run means.
     /// </summary>
     LlmTarget LoadLlmTarget(ModelRole role, ModelProvider fallback);
-    /// <inheritdoc cref="LoadOpenRouterVisionModel"/>
-    void PersistOpenRouterVisionModel(string value);
     /// <inheritdoc cref="LoadOpenRouterVisionFreeOnly"/>
     void PersistOpenRouterVisionFreeOnly(bool value);
     /// <inheritdoc cref="LoadIdeaBuildJson"/>
