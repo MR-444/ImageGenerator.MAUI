@@ -26,6 +26,11 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
 {
     internal const string HttpClientName = "comfyui";
 
+    // No retry policy on this one: the reachability probe must give up fast.
+    internal const string ProbeHttpClientName = "comfyui-probe";
+
+    internal static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(3);
+
     // A real PNG out of a sampler is always tens of KB; anything smaller is an error body.
     private const int MinValidImageBytes = 1000;
 
@@ -116,12 +121,22 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
             // without a restart. Empty = LAN setup, no header (Apply no-ops).
             var authHeader = await _authStore.LoadAsync();
 
+            // Runs right before the first real request (the upload, or else the queue), so a
+            // workflow the patcher rejects is still reported without touching the server.
+            // Against a host that is down, the generation client's retry policy would spend
+            // minutes on connect timeouts.
+            async Task<GeneratedImage?> FailIfUnreachableAsync() =>
+                await ProbeServerAsync(baseUri, authHeader, cancellationToken) is { } reason
+                    ? Fail($"ComfyUI at {baseUrl} is not reachable ({reason}). Is the server running?")
+                    : null;
+
             using var httpClient = _httpClientFactory.CreateClient(HttpClientName);
             ComfyUiAuthHeader.Apply(httpClient, authHeader);
 
             string? inputImageName = null;
             if (needsInputImage)
             {
+                if (await FailIfUnreachableAsync() is { } unreachable) return unreachable;
                 var upload = await UploadInputImageAsync(
                     httpClient, baseUri, request.InputImageBase64!, cancellationToken);
                 if (upload.Error is not null) return Fail(upload.Error);
@@ -149,6 +164,9 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
                 "ComfyUI patched Workflow={Workflow} Target={Target} SeedNodes={SeedNodes} SageNodes={SageNodes}",
                 request.WorkflowName, patched.PromptTargetDescription, string.Join(",", patched.SeedNodeIds),
                 string.Join(",", patched.SageAttentionNodeIds));
+
+            if (!needsInputImage && await FailIfUnreachableAsync() is { } unreachableBeforeQueue)
+                return unreachableBeforeQueue;
 
             // The ws connection must exist with the SAME clientId BEFORE the prompt is queued,
             // or the server's early events (execution_start, first progress) are lost.
@@ -355,6 +373,36 @@ public sealed class ComfyUiImageGenerationService : IImageGenerationService
             return (null, $"ComfyUI accepted the request but returned no prompt id: {Truncate(responseBody)}");
         }
         return (parsed.PromptId, null);
+    }
+
+    /// <summary>
+    /// One GET /system_stats within <see cref="ProbeTimeout"/>, no retries. Null when the server
+    /// answered at all: any status counts, since the real request reports auth or proxy errors
+    /// better. Otherwise a short reason. A cancel by the user still throws.
+    /// </summary>
+    private async Task<string?> ProbeServerAsync(Uri baseUri, string? authHeader, CancellationToken ct)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(ProbeTimeout);
+        try
+        {
+            using var client = _httpClientFactory.CreateClient(ProbeHttpClientName);
+            ComfyUiAuthHeader.Apply(client, authHeader);
+            using var response = await client.GetAsync(
+                new Uri(baseUri, "system_stats"), HttpCompletionOption.ResponseHeadersRead, cts.Token);
+            return null;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogWarning("ComfyUI probe timed out after {Seconds} s BaseUrl={BaseUrl}",
+                ProbeTimeout.TotalSeconds, baseUri);
+            return $"no answer within {ProbeTimeout.TotalSeconds:0} s";
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning(ex, "ComfyUI probe failed BaseUrl={BaseUrl}", baseUri);
+            return ex.InnerException?.Message ?? ex.Message;
+        }
     }
 
     /// <summary>

@@ -99,6 +99,10 @@ public static class MauiProgram
                 perAttemptTimeout: TimeSpan.FromSeconds(60),
                 totalTimeout: TimeSpan.FromMinutes(3));
 
+        // The pre-job reachability probe: no retry policy, so a host that is down fails in the
+        // probe's own 3 s instead of the generation client's minutes of connect retries.
+        builder.Services.AddHttpClient(ComfyUiImageGenerationService.ProbeHttpClientName);
+
         // The Krea-2 LoRA picker is an interactive catalog read, so an offline LAN host must
         // return control quickly rather than inheriting generation's multi-minute retry budget.
         builder.Services.AddHttpClient(ComfyUiLoraService.HttpClientName, client =>

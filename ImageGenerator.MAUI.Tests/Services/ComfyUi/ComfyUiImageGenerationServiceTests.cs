@@ -45,6 +45,9 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
     private Func<HttpResponseMessage> _viewResponse = ViewOk;
     private Func<HttpResponseMessage> _queueResponse = QueueEmpty;
     private Func<HttpResponseMessage> _queueDeleteResponse = () => Json("{}");
+    // Thrown for GET /system_stats when set: the reachability probe's view of a host that is down.
+    private Exception? _probeException;
+    private Func<HttpResponseMessage> _probeResponse = () => Json("{}");
     private Func<HttpResponseMessage> _uploadResponse = () =>
         Json("""{ "name": "emberforge_x.png", "subfolder": "", "type": "input" }""");
 
@@ -165,6 +168,7 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
     private HttpResponseMessage Route(HttpRequestMessage req)
     {
         var path = req.RequestUri!.AbsolutePath;
+        if (path == "/system_stats") return _probeException is null ? _probeResponse() : throw _probeException;
         if (path == "/upload/image") return _uploadResponse();
         if (path == "/prompt") return _promptResponse();
         if (path.StartsWith("/history/")) return _historyResponses.Count > 0 ? _historyResponses.Dequeue()() : HistoryDone();
@@ -542,6 +546,43 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UnreachableServer_FailsFast_WithoutQueueing()
+    {
+        _probeException = new HttpRequestException("No such host is known.");
+
+        var result = await _service.GenerateImageAsync(Parameters());
+
+        result.ImageData.Should().BeNull();
+        result.Message.Should().Contain("http://test-host:8188").And.Contain("not reachable")
+            .And.Contain("No such host is known.");
+        _requests.Should().ContainSingle("nothing after the failed probe")
+            .Which.RequestUri!.AbsolutePath.Should().Be("/system_stats");
+    }
+
+    [Fact]
+    public async Task ServerThatDoesNotAnswerInTime_FailsFast_WithTheTimeout()
+    {
+        // What HttpClient throws when the probe's own deadline fires.
+        _probeException = new TaskCanceledException("timed out");
+
+        var result = await _service.GenerateImageAsync(Parameters());
+
+        result.Message.Should().Contain("not reachable").And.Contain("no answer within 3 s");
+        _requests.Should().NotContain(r => r.RequestUri!.AbsolutePath == "/prompt");
+    }
+
+    [Fact]
+    public async Task ProbeAnsweredWithAnError_CountsAsReachable()
+    {
+        // E.g. a proxy that wants auth: the real request reports that better than the probe.
+        _probeResponse = () => new HttpResponseMessage(HttpStatusCode.Unauthorized);
+
+        await _service.GenerateImageAsync(Parameters());
+
+        _requests.Should().Contain(r => r.RequestUri!.AbsolutePath == "/prompt");
+    }
+
+    [Fact]
     public async Task PatcherRejection_BecomesTheJobMessage_WithoutHttpTraffic()
     {
         File.WriteAllText(Path.Combine(_workflowDir, "ui-format.json"),
@@ -718,9 +759,10 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
         var result = await _service.GenerateImageAsync(UpscaleParameters());
 
         result.ImageData.Should().NotBeNull();
-        _requests[0].RequestUri!.AbsolutePath.Should().Be("/upload/image",
+        _requests[0].RequestUri!.AbsolutePath.Should().Be("/system_stats", "the reachability probe goes first");
+        _requests[1].RequestUri!.AbsolutePath.Should().Be("/upload/image",
             "the image must exist server-side before the graph referencing it is queued");
-        _requests[0].Content.Should().BeOfType<MultipartFormDataContent>();
+        _requests[1].Content.Should().BeOfType<MultipartFormDataContent>();
 
         var promptIndex = _requests.FindIndex(r => r.RequestUri!.AbsolutePath == "/prompt");
         promptIndex.Should().BePositive();
@@ -748,6 +790,7 @@ public sealed class ComfyUiImageGenerationServiceTests : IDisposable
 
         result.ImageData.Should().BeNull();
         result.Message.Should().Contain("500").And.Contain("input image");
-        _requests.Should().OnlyContain(r => r.RequestUri!.AbsolutePath == "/upload/image");
+        _requests.Select(r => r.RequestUri!.AbsolutePath).Should().Equal(
+            ["/system_stats", "/upload/image"], "nothing is queued after the failed upload");
     }
 }
