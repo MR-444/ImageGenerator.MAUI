@@ -5,9 +5,8 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 
 /// <summary>
 /// One row in the API-tokens picker. Owns load / debounced-persist / forget for a single
-/// provider, and forwards every value change to the host VM's parameters via the supplied
-/// callback. Adding a third / fourth provider is a single new instance in the host's
-/// TokenProviders collection — no XAML edits needed.
+/// provider, and forwards every value change through the supplied callback. Adding a provider
+/// is one new row in <see cref="TokenCoordinator.Providers"/>; no XAML edits needed.
 /// </summary>
 public sealed partial class TokenProviderViewModel : ObservableObject
 {

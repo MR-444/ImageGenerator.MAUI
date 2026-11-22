@@ -771,7 +771,7 @@ public partial class GeneratorViewModelTests
     [Fact]
     public void TokenProvider_ValueChange_PersistsAndForwardsToParameters()
     {
-        var replicate = _viewModel.TokenProviders.Single(p => p.Key == "replicate");
+        var replicate = _viewModel.Tokens.Providers.Single(p => p.Key == "replicate");
 
         replicate.Value = "fresh-token";
 
@@ -788,8 +788,8 @@ public partial class GeneratorViewModelTests
     [Fact]
     public void Parameters_WhenInstanceIsReplaced_SeedsBothTokenSlotsFromTheRows()
     {
-        _viewModel.TokenProviders.Single(p => p.Key == "replicate").Value = "fresh-token";
-        _viewModel.TokenProviders.Single(p => p.Key == "pollinations").Value = "poll-token";
+        _viewModel.Tokens.Providers.Single(p => p.Key == "replicate").Value = "fresh-token";
+        _viewModel.Tokens.Providers.Single(p => p.Key == "pollinations").Value = "poll-token";
 
         _viewModel.Parameters = new ImageGenerationParameters { Model = ModelConstants.Flux.Pro11 };
 
@@ -804,7 +804,7 @@ public partial class GeneratorViewModelTests
     public async Task RemixFromImage_KeepsThePastedApiToken()
     {
         const string path = @"C:\fake\flux-remix-token.png";
-        _viewModel.TokenProviders.Single(p => p.Key == "replicate").Value = "keep-me";
+        _viewModel.Tokens.Providers.Single(p => p.Key == "replicate").Value = "keep-me";
         StubRecipe(path,
             ("Prompt", "a remix prompt"),
             ("ModelName", ModelConstants.Flux.Pro11),
@@ -820,7 +820,7 @@ public partial class GeneratorViewModelTests
     [Fact]
     public void TokenProvider_PollinationsValueChange_PersistsToPollinationsStore()
     {
-        var pollinations = _viewModel.TokenProviders.Single(p => p.Key == "pollinations");
+        var pollinations = _viewModel.Tokens.Providers.Single(p => p.Key == "pollinations");
 
         pollinations.Value = "poll-token";
 
@@ -835,10 +835,10 @@ public partial class GeneratorViewModelTests
     {
         // Default selected provider is "replicate" — set both tokens, forget Replicate,
         // and assert the Pollinations slot is untouched.
-        _viewModel.TokenProviders.Single(p => p.Key == "replicate").Value = "some-token";
-        _viewModel.TokenProviders.Single(p => p.Key == "pollinations").Value = "poll-token";
+        _viewModel.Tokens.Providers.Single(p => p.Key == "replicate").Value = "some-token";
+        _viewModel.Tokens.Providers.Single(p => p.Key == "pollinations").Value = "poll-token";
 
-        _viewModel.ForgetSelectedTokenCommand.Execute(null);
+        _viewModel.Tokens.ForgetSelectedCommand.Execute(null);
 
         _viewModel.Parameters.ApiToken.Should().BeEmpty();
         _viewModel.Parameters.PollinationsApiToken.Should().Be("poll-token");
@@ -852,12 +852,12 @@ public partial class GeneratorViewModelTests
         _mockTokenStore.Setup(x => x.LoadAsync()).ReturnsAsync("saved-replicate");
         _mockPollinationsTokenStore.Setup(x => x.LoadAsync()).ReturnsAsync("saved-pollinations");
 
-        await _viewModel.LoadAllTokensAsync();
+        await _viewModel.Tokens.LoadAllAsync();
 
         _viewModel.Parameters.ApiToken.Should().Be("saved-replicate");
         _viewModel.Parameters.PollinationsApiToken.Should().Be("saved-pollinations");
-        _viewModel.TokenProviders.Single(p => p.Key == "replicate").Value.Should().Be("saved-replicate");
-        _viewModel.TokenProviders.Single(p => p.Key == "pollinations").Value.Should().Be("saved-pollinations");
+        _viewModel.Tokens.Providers.Single(p => p.Key == "replicate").Value.Should().Be("saved-replicate");
+        _viewModel.Tokens.Providers.Single(p => p.Key == "pollinations").Value.Should().Be("saved-pollinations");
     }
 
     [Fact]
@@ -866,8 +866,8 @@ public partial class GeneratorViewModelTests
         _mockTokenStore.Setup(x => x.LoadAsync()).ReturnsAsync("saved-replicate");
         _mockPollinationsTokenStore.Setup(x => x.LoadAsync()).ReturnsAsync("saved-pollinations");
 
-        await _viewModel.LoadAllTokensAsync();
-        await _viewModel.LoadAllTokensAsync();
+        await _viewModel.Tokens.LoadAllAsync();
+        await _viewModel.Tokens.LoadAllAsync();
 
         _mockTokenStore.Verify(x => x.LoadAsync(), Times.Once);
         _mockPollinationsTokenStore.Verify(x => x.LoadAsync(), Times.Once);
@@ -880,8 +880,8 @@ public partial class GeneratorViewModelTests
         // land in ImageGenerationParameters (ComfyUI stays tokenless for validation).
         _mockComfyUiAuthStore.Setup(x => x.LoadAsync()).ReturnsAsync("Bearer saved");
 
-        await _viewModel.LoadAllTokensAsync();
-        var comfyui = _viewModel.TokenProviders.Single(p => p.Key == "comfyui");
+        await _viewModel.Tokens.LoadAllAsync();
+        var comfyui = _viewModel.Tokens.Providers.Single(p => p.Key == "comfyui");
 
         comfyui.Value.Should().Be("Bearer saved");
         comfyui.Value = "Bearer fresh";
@@ -2812,9 +2812,9 @@ public partial class GeneratorViewModelTests
             .Setup(s => s.TestConnectionAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new CivitaiConnectionResult(true, "Connected as Silmas."));
 
-        await _viewModel.TestCivitaiConnectionCommand.ExecuteAsync(null);
+        await _viewModel.Tokens.TestCivitaiConnectionCommand.ExecuteAsync(null);
 
-        _viewModel.CivitaiConnectionStatus.Should().Be("Connected as Silmas.");
+        _viewModel.Tokens.CivitaiConnectionStatus.Should().Be("Connected as Silmas.");
     }
 
     // ---- Remix from an image ----------------------------------------------------------------

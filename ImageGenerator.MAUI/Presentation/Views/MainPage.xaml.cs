@@ -266,7 +266,7 @@ public partial class MainPage
         _ = _viewModel.Queue.LoadTotalImagesGeneratedAsync();
         try
         {
-            await _viewModel.LoadAllTokensAsync();
+            await _viewModel.Tokens.LoadAllAsync();
             await _viewModel.LoadCachedCatalogAsync();
             _viewModel.LoadSavedUiState();
         }

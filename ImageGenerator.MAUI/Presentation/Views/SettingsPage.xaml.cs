@@ -47,12 +47,12 @@ public partial class SettingsPage
     private void OnIntegrationsCategoryClicked(object? sender, EventArgs e) => ShowCategory(SettingsCategory.Integrations);
 
     // The view->VM half of the token Entry's split binding (see the XAML comment). Provider
-    // switches are safe: the Picker swaps SelectedTokenProvider BEFORE the binding rewrites
+    // switches are safe: the Picker swaps Tokens.SelectedProvider BEFORE the binding rewrites
     // the Entry text, so this echoes the new provider's own value (the [ObservableProperty]
     // equality check stops it).
     private void OnTokenTextChanged(object? sender, TextChangedEventArgs e)
     {
-        if (_viewModel.SelectedTokenProvider is { } provider)
+        if (_viewModel.Tokens.SelectedProvider is { } provider)
             provider.Value = e.NewTextValue ?? string.Empty;
     }
 }

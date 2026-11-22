@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -18,7 +17,6 @@ namespace ImageGenerator.MAUI.Presentation.ViewModels;
 
 public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInputImageTarget
 {
-    private readonly ICivitaiPostingService _civitaiPostingService;
     private readonly IUiStateStore _uiStateStore;
     private readonly IModelCatalogCoordinator _catalogCoordinator;
     private readonly IModelDescriptorRegistry _registry;
@@ -135,11 +133,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [ObservableProperty]
     private List<string> _outputFormats = [nameof(ImageOutputFormat.Png).ToLowerInvariant(), nameof(ImageOutputFormat.Jpg).ToLowerInvariant(), nameof(ImageOutputFormat.Webp).ToLowerInvariant()];
 
-    // One token Entry per item; adding a provider needs no XAML change.
-    public ObservableCollection<TokenProviderViewModel> TokenProviders { get; } = [];
-
-    [ObservableProperty]
-    private TokenProviderViewModel? _selectedTokenProvider;
+    // The API keys on SettingsPage.
+    public TokenCoordinator Tokens { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SupportsCustomDimensions))]
@@ -166,7 +161,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
     [NotifyPropertyChangedFor(nameof(SupportsInputImage))]
     private ModelCapabilities _capabilities;  // hydrated from registry in ctor
     private bool _cachedCatalogLoaded;
-    private bool _tokensLoaded;
     private bool _uiStateLoaded;
 
     // Programmatic aspect-ratio writes (model fallback, auto-AR from an input image) must not
@@ -215,7 +209,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         AttachParameters(value);
         // A replacement instance has empty token slots, and the token rows push only on change,
         // so re-seed from the rows before revalidating.
-        foreach (var provider in TokenProviders) provider.PushToParameters();
+        Tokens.PushAll();
         UpdateCustomAspectRatio(value.AspectRatio);
         ValidateParameters();
         ProviderFilter.SyncSelectionFromParameters(value.Model);
@@ -421,7 +415,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         ArgumentNullException.ThrowIfNull(promptBatchParser);
         ArgumentNullException.ThrowIfNull(galleryService);
         ArgumentNullException.ThrowIfNull(logger);
-        _civitaiPostingService = civitaiPostingService;
         _uiStateStore = uiStateStore;
         _catalogCoordinator = catalogCoordinator;
         _registry = registry;
@@ -433,6 +426,15 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         Settings = new AppSettingsCoordinator(
             uiStateStore, folderPicker, ollamaModelCatalog, openRouterModelCatalog,
             anthropicModelCatalog, anthropicTokenStore, SetStatus, logger);
+
+        // Writes go through the Parameters property, never the field, so a replaced instance
+        // receives them.
+        Tokens = new TokenCoordinator(
+            tokenStore, pollinationsTokenStore, comfyUiAuthStore, civitaiTokenStore,
+            anthropicTokenStore, openRouterTokenStore, civitaiPostingService);
+        Tokens.ReplicateTokenChanged += token => Parameters.ApiToken = token;
+        Tokens.PollinationsTokenChanged += token => Parameters.PollinationsApiToken = token;
+        Tokens.StatusRaised += SetStatus;
 
         Queue = new JobQueueCoordinator(
             jobRunner, civitaiPostingService, galleryService, comfyVram, gpuGate, Settings,
@@ -524,59 +526,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         AttachParameters(_parameters);
 
         ValidateParameters();
-
-        // Display order of the token Picker. Only Replicate and Pollinations have a parameters
-        // slot; the other services read their store per request. Callbacks write through the
-        // Parameters property, never the field, so a replaced instance gets the value.
-        TokenProviders.Add(new TokenProviderViewModel(
-            key: "replicate",
-            displayName: "Replicate",
-            placeholder: "Paste your Replicate API token…",
-            helperText: "Required for Replicate-hosted models (Flux, GPT, Nano Banana). Stored in OS secure storage.",
-            store: tokenStore,
-            syncToParameters: v => Parameters.ApiToken = v));
-        TokenProviders.Add(new TokenProviderViewModel(
-            key: "pollinations",
-            displayName: "Pollinations",
-            placeholder: "Paste your Pollinations token (optional)…",
-            helperText: "Optional. Anonymous mode is rate-limited (1 req / 15 s). Register at auth.pollinations.ai for higher limits.",
-            store: pollinationsTokenStore,
-            syncToParameters: v => Parameters.PollinationsApiToken = v));
-        TokenProviders.Add(new TokenProviderViewModel(
-            key: "comfyui",
-            displayName: "ComfyUI",
-            placeholder: "Authorization header value (e.g. Bearer abc123)…",
-            helperText: "Optional. Sent verbatim as the Authorization header on every ComfyUI request "
-                        + "(HTTP + progress WebSocket) — for reverse-proxied servers. Leave empty on a LAN.",
-            store: comfyUiAuthStore,
-            syncToParameters: static _ => { }));
-        TokenProviders.Add(new TokenProviderViewModel(
-            key: "civitai",
-            displayName: "CivitAI",
-            placeholder: "Paste your CivitAI API key…",
-            helperText: "Optional. Needed only for \"Post to CivitAI\". Create a Full API key at "
-                        + "civitai.com/user/account (a free account works). Stored in OS secure storage.",
-            store: civitaiTokenStore,
-            syncToParameters: static _ => { }));
-        TokenProviders.Add(new TokenProviderViewModel(
-            key: "anthropic",
-            displayName: "Anthropic",
-            placeholder: "Paste your Anthropic API key…",
-            helperText: "Required when \"Describe an idea…\" or AI tools use a Claude tier. Create a key at "
-                        + "console.anthropic.com. Stored in OS secure storage.",
-            store: anthropicTokenStore,
-            syncToParameters: static _ => { }));
-        if (openRouterTokenStore is not null)
-        {
-            TokenProviders.Add(new TokenProviderViewModel(
-                key: "openrouter",
-                displayName: "OpenRouter",
-                placeholder: "Paste your OpenRouter API key…",
-                helperText: "Required when image observation uses OpenRouter. The model id is configured below.",
-                store: openRouterTokenStore,
-                syncToParameters: static _ => { }));
-        }
-        _selectedTokenProvider = TokenProviders[0];
     }
 
     private void OnParametersPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -698,17 +647,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         _ = FlashAsync("Generation started");
 
         await Queue.RunAsync(job);
-    }
-
-    [ObservableProperty]
-    private string? _civitaiConnectionStatus;
-
-    [RelayCommand]
-    private async Task TestCivitaiConnectionAsync()
-    {
-        CivitaiConnectionStatus = "Testing…";
-        var result = await _civitaiPostingService.TestConnectionAsync();
-        CivitaiConnectionStatus = result.Message;
     }
 
     private async Task FlashAsync(string message, int durationMs = 2500)
@@ -838,18 +776,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             ? $"Loaded {merged.Count} models ({merged.Count - unsupported} this build can drive; the other {unsupported} are marked and will not run)."
             : $"Loaded {merged.Count} models.",
             StatusKind.Success);
-    }
-
-    /// <summary>Loads every provider token from secure storage, once.</summary>
-    public async Task LoadAllTokensAsync()
-    {
-        if (_tokensLoaded) return;
-        _tokensLoaded = true;
-
-        foreach (var provider in TokenProviders)
-        {
-            await provider.LoadAsync();
-        }
     }
 
     // Restores the last session's choices. Call after the catalog has loaded. The model is
@@ -1024,15 +950,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         {
             _logger.LogWarning(ex, "Model catalog hydrate failed");
         }
-    }
-
-    [RelayCommand]
-    private void ForgetSelectedToken()
-    {
-        if (SelectedTokenProvider is null) return;
-        var name = SelectedTokenProvider.DisplayName;
-        SelectedTokenProvider.Forget();
-        SetStatus($"{name} token cleared from secure storage.", StatusKind.Info);
     }
 
     private Task AddAsInputAsync(string filePath) => InputImages.AddAsInputAsync(filePath);

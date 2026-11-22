@@ -57,7 +57,7 @@ public sealed partial class AppSettingsCoordinator(
     // rendered only by MainPage.xaml, and the sibling pages bind their OWN view model's status, so
     // a failure is shown on the card whose button was pressed.
     // Empty means "nothing to report" — the same null-hides-the-label contract as
-    // GeneratorViewModel.CivitaiConnectionStatus, which is the in-app pattern this copies.
+    // TokenCoordinator.CivitaiConnectionStatus, which is the in-app pattern this copies.
     [ObservableProperty]
     private string? _ollamaServerStatus;
 
