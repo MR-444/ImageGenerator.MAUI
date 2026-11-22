@@ -323,8 +323,8 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         // Breed hand-off takes priority and is consumed first, so a later ordinary visit always
         // resets breed state (no stale winners). Breeding is an AI-only path; we seed the base from
         // the first winner so HasBase (the run gate) and the target-frame derivation still work.
-        var breed = _generator?.PendingBreedSet;
-        _generator?.PendingBreedSet = null;
+        var breed = _generator?.Navigation.PendingBreedSet;
+        _generator?.Navigation.PendingBreedSet = null;
         _breedSet = breed is { Count: > 0 } ? breed : null;
         IsBreedMode = _breedSet is not null;
         // Breeding is an AI-only path and forces the LLM engine on; an ordinary visit restores the user's
@@ -335,8 +335,8 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
         if (IsBreedMode)
             BreedSummary = $"Breeding from {_breedSet!.Count} winner(s) — set a steer + model, then run.";
 
-        var pending = _breedSet?[0] ?? _generator?.PendingMutationBase;
-        _generator?.PendingMutationBase = null;
+        var pending = _breedSet?[0] ?? _generator?.Navigation.PendingMutationBase;
+        _generator?.Navigation.PendingMutationBase = null;
 
         var promptJson = _generator?.Parameters.Prompt ?? string.Empty;
         var resolution = _generator?.Parameters.Resolution ?? string.Empty;

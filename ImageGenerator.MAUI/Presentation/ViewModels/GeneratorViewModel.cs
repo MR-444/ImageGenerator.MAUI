@@ -4,7 +4,6 @@ using CommunityToolkit.Mvvm.Input;
 using ImageGenerator.MAUI.Core.Application.Interfaces;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Core.Domain.Enums;
-using ImageGenerator.MAUI.Core.Domain.Ideogram;
 using ImageGenerator.MAUI.Core.Domain.Services;
 using ImageGenerator.MAUI.Core.Domain.ValueObjects;
 using ImageGenerator.MAUI.Infrastructure.Interfaces;
@@ -116,6 +115,9 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
 
     // The API keys on SettingsPage.
     public TokenCoordinator Tokens { get; }
+
+    // Routes to the companion pages and the hand-off slots they read.
+    public NavigationCoordinator Navigation { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SupportsCustomDimensions))]
@@ -329,6 +331,8 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         Tokens.PollinationsTokenChanged += token => Parameters.PollinationsApiToken = token;
         Tokens.StatusRaised += SetStatus;
 
+        Navigation = new NavigationCoordinator(() => Parameters, galleryService, SetStatus, logger);
+
         Queue = new JobQueueCoordinator(
             jobRunner, civitaiPostingService, galleryService, comfyVram, gpuGate, Settings,
             isBatchRunning: () => Batch is { IsBatchRunning: true },
@@ -417,7 +421,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             runJob: Queue.RunBatchJobAsync,
             setStatus: SetStatus,
             addAsInputAsync: InputImages.AddAsInputAsync,
-            mutateFromImageAsync: path => MutateFromImageAsync(path));
+            mutateFromImageAsync: path => Navigation.MutateFromImageAsync(path));
 
         Batch.PropertyChanged += (sender, e) =>
         {
@@ -491,7 +495,7 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
             Parameters.Seed = Random.Shared.NextInt64(0, ValidationConstants.SeedMaxValue);
 
         var snapshot = Parameters.Clone();
-        var job = new GenerationJob(snapshot, AddAsInputAsync, path => MutateFromImageAsync(path));
+        var job = new GenerationJob(snapshot, AddAsInputAsync, path => Navigation.MutateFromImageAsync(path));
         Queue.Enqueue(job);
 
         // JobCount makes an unintended extra run visible in the log (e.g. a focused button re-fired by Space).
@@ -513,100 +517,6 @@ public partial class GeneratorViewModel : ObservableObject, IStatusOwner, IInput
         {
             if (_flashVersion == version) FlashMessage = null;
         });
-    }
-
-    /// <summary>
-    /// Navigates and reports a failure on the status line. Shell.Current is null in unit tests.
-    /// <paramref name="target"/> is the noun in "Couldn't open …".
-    /// </summary>
-    private async Task NavigateAsync(string route, string target)
-    {
-        try
-        {
-            await Shell.Current.GoToAsync(route);
-        }
-        catch (Exception ex)
-        {
-            SetStatus($"Couldn't open {target}: {ex.Message}", StatusKind.Error);
-        }
-    }
-
-    /// <summary>
-    /// Hand-off to the mutation page, read once on its appearance. A typed model, because a
-    /// string round-trip would strip explicit <c>Element.SlotTag</c> values.
-    /// </summary>
-    public V4JsonPrompt? PendingMutationBase { get; set; }
-
-    /// <summary>Hand-off from the Gallery's breed action to the mutation page, read once.</summary>
-    public IReadOnlyList<V4JsonPrompt>? PendingBreedSet { get; set; }
-
-    /// <summary>
-    /// Seeds the mutation page from the prompt box. A non-structured prompt leaves
-    /// <see cref="PendingMutationBase"/> null and the mutation page reports it.
-    /// </summary>
-    [RelayCommand]
-    private async Task OpenMutationEngineAsync()
-    {
-        try
-        {
-            PendingMutationBase = V4JsonPromptSerializer.Deserialize(Parameters.Prompt);
-        }
-        catch (V4JsonPromptParseException)
-        {
-            PendingMutationBase = null;
-        }
-
-        await NavigateAsync("mutation-engine", "the mutation engine");
-    }
-
-    /// <summary>
-    /// "Mutate from this" on a saved image: adopts only its caption as the mutation base and
-    /// keeps the current model and settings, so there is no surprise model or resolution switch.
-    /// A non-structured caption leaves <see cref="PendingMutationBase"/> null.
-    /// </summary>
-    public async Task MutateFromImageAsync(string? filePath, CancellationToken ct = default)
-    {
-        if (string.IsNullOrEmpty(filePath)) return;
-
-        try
-        {
-            var meta = await _galleryService.ReadMetadataAsync(filePath, ct);
-            if (meta is null || !meta.TryGetValue("Prompt", out var prompt) || string.IsNullOrWhiteSpace(prompt))
-            {
-                SetStatus("No caption found in this image.", StatusKind.Warning);
-                return;
-            }
-
-            Parameters.Prompt = prompt;
-            try { PendingMutationBase = V4JsonPromptSerializer.Deserialize(prompt); }
-            catch (V4JsonPromptParseException) { PendingMutationBase = null; }
-
-            await NavigateAsync("mutation-engine", "the mutation engine");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Mutate from image failed for {Path}", filePath);
-            SetStatus("Couldn't load this image's caption. See app.log for details.", StatusKind.Error);
-        }
-    }
-
-    [RelayCommand]
-    private Task OpenIdeaToPromptAsync() => NavigateAsync("idea-to-prompt", "the prompt builder");
-
-    [RelayCommand]
-    private Task OpenIdeogramEditorAsync() => NavigateAsync(BuildEditorRoute(), "the structure editor");
-
-    /// <summary>
-    /// The editor route, carrying the prompt and the output shape. On ComfyUI the shape lives in
-    /// Parameters.AspectRatio (a ResolutionSelector combo string), elsewhere in Resolution.
-    /// </summary>
-    internal string BuildEditorRoute()
-    {
-        var json = Uri.EscapeDataString(Parameters.Prompt);
-        var shape = ModelConstants.ComfyUi.IsId(Parameters.Model)
-            ? Parameters.AspectRatio
-            : Parameters.Resolution;
-        return $"ideogram-editor?json={json}&resolution={Uri.EscapeDataString(shape)}";
     }
 
     [RelayCommand]

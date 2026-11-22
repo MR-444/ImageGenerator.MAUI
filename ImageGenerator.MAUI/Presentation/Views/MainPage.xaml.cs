@@ -61,7 +61,7 @@ public partial class MainPage
         set
         {
             if (string.IsNullOrEmpty(value)) return;
-            _ = _viewModel.MutateFromImageAsync(value);
+            _ = _viewModel.Navigation.MutateFromImageAsync(value);
         }
     }
 

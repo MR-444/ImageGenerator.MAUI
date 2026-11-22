@@ -345,7 +345,7 @@ public partial class GalleryViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            _generator.PendingBreedSet = winners;
+            _generator.Navigation.PendingBreedSet = winners;
             await Shell.Current.GoToAsync("mutation-engine");
         }
         catch (OperationCanceledException)

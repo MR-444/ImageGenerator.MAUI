@@ -320,8 +320,8 @@ public class GalleryViewModelTests
         // first) is the observable effect we assert.
         await sut.BreedSelectedCommand.ExecuteAsync(null);
 
-        _generator.PendingBreedSet.Should().NotBeNull();
-        _generator.PendingBreedSet!.Should().HaveCount(2);
+        _generator.Navigation.PendingBreedSet.Should().NotBeNull();
+        _generator.Navigation.PendingBreedSet!.Should().HaveCount(2);
     }
 
     [Fact]
@@ -336,7 +336,7 @@ public class GalleryViewModelTests
 
         await sut.BreedSelectedCommand.ExecuteAsync(null);
 
-        _generator.PendingBreedSet.Should().BeNull();
+        _generator.Navigation.PendingBreedSet.Should().BeNull();
         sut.BreedStatusMessage.Should().Contain("structured");
     }
 

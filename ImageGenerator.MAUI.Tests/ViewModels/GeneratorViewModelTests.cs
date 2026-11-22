@@ -2115,7 +2115,7 @@ public partial class GeneratorViewModelTests
         SelectComfyWorkflow();
         _viewModel.Parameters.AspectRatio = "3:4 (Portrait Standard)";
 
-        _viewModel.BuildEditorRoute().Should().Contain(
+        _viewModel.Navigation.BuildEditorRoute().Should().Contain(
             $"resolution={Uri.EscapeDataString("3:4 (Portrait Standard)")}");
     }
 
@@ -2125,7 +2125,7 @@ public partial class GeneratorViewModelTests
         SelectIdeogramTurbo();
         _viewModel.Parameters.Resolution = "1440x2880";
 
-        _viewModel.BuildEditorRoute().Should().Contain("resolution=1440x2880");
+        _viewModel.Navigation.BuildEditorRoute().Should().Contain("resolution=1440x2880");
     }
 
     // --- Live job progress (ComfyUI ws → job card) ------------------------------------------

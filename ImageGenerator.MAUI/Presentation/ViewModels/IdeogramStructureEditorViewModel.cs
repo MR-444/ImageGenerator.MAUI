@@ -705,7 +705,7 @@ public partial class IdeogramStructureEditorViewModel : ObservableObject, IStatu
         var model = BuildModel();
         if (!ReportValidation(model)) return;
 
-        _generator.PendingMutationBase = model;
+        _generator.Navigation.PendingMutationBase = model;
         await NavigateAsync("mutation-engine", "Mutate", "Couldn't open the mutation engine");
     }
 

@@ -103,20 +103,20 @@
                             <FlexLayout Wrap="Wrap" AlignItems="Center" Margin="0,0,0,2"
                                         AutomationId="PromptToolsBar">
                                 <Button Text="Describe an idea…"
-                                        Command="{Binding OpenIdeaToPromptCommand}"
+                                        Command="{Binding Navigation.OpenIdeaToPromptCommand}"
                                         Style="{StaticResource SecondaryButton}"
                                         Margin="0,0,8,6"
                                         SemanticProperties.Description="Turn a freeform idea or reference image into a polished prompt"
                                         AutomationId="DescribeIdeaButton" />
                                 <Button Text="Edit structure…"
-                                        Command="{Binding OpenIdeogramEditorCommand}"
+                                        Command="{Binding Navigation.OpenIdeogramEditorCommand}"
                                         Style="{StaticResource SecondaryButton}"
                                         Margin="0,0,8,6"
                                         IsVisible="{Binding SupportsJsonPromptEditor}"
                                         SemanticProperties.Description="Open the visual builder for Ideogram's structured JSON prompt"
                                         AutomationId="EditStructureButton" />
                                 <Button Text="Mutate current prompt…"
-                                        Command="{Binding OpenMutationEngineCommand}"
+                                        Command="{Binding Navigation.OpenMutationEngineCommand}"
                                         Style="{StaticResource SecondaryButton}"
                                         Margin="0,0,0,6"
                                         IsVisible="{Binding SupportsJsonPromptEditor}"
