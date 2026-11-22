@@ -60,7 +60,7 @@ public interface IUiStateStore
     /// <inheritdoc cref="LoadOllamaModels"/>
     void PersistOllamaModels(string baseUrl, IReadOnlyList<string> models, IReadOnlyList<string> visionModels);
     /// <summary>Whether the OpenRouter vision model picker should show free models only. Default true.</summary>
-    bool LoadOpenRouterVisionFreeOnly();
+    bool LoadOpenRouterFreeOnly();
     /// <summary>
     /// The "Describe an idea" page's BuildJson checkbox. Null when never toggled — the page then
     /// defaults it from the active model's JSON-prompt support. Once stored, the user's choice wins
@@ -161,8 +161,8 @@ public interface IUiStateStore
     /// agree on what a first run means.
     /// </summary>
     LlmTarget LoadLlmTarget(ModelRole role, ModelProvider fallback);
-    /// <inheritdoc cref="LoadOpenRouterVisionFreeOnly"/>
-    void PersistOpenRouterVisionFreeOnly(bool value);
+    /// <inheritdoc cref="LoadOpenRouterFreeOnly"/>
+    void PersistOpenRouterFreeOnly(bool value);
     /// <inheritdoc cref="LoadIdeaBuildJson"/>
     void PersistIdeaBuildJson(bool value);
     /// <inheritdoc cref="LoadOutputFolder"/>

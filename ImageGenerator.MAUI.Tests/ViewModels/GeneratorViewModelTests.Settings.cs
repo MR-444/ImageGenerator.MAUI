@@ -17,7 +17,7 @@ public partial class GeneratorViewModelTests
     [Fact]
     public async Task RefreshOpenRouterVisionModels_FreeOnly_ListsFreeModelsAndTouchesNoPick()
     {
-        _viewModel.Settings.OpenRouterVisionFreeOnly = true;
+        _viewModel.Settings.OpenRouterFreeOnly = true;
         _mockOpenRouterModelCatalog
             .Setup(c => c.ListVisionModelsAsync(true, It.IsAny<CancellationToken>()))
             .ReturnsAsync([new OpenRouterModelInfo("free/vision:free", "Free Vision", true)]);
@@ -32,11 +32,11 @@ public partial class GeneratorViewModelTests
     [Fact]
     public void LoadSavedUiState_RestoresTheFreeOnlySwitch()
     {
-        _mockUiStateStore.Setup(s => s.LoadOpenRouterVisionFreeOnly()).Returns(false);
+        _mockUiStateStore.Setup(s => s.LoadOpenRouterFreeOnly()).Returns(false);
 
         _viewModel.LoadSavedUiState();
 
-        _viewModel.Settings.OpenRouterVisionFreeOnly.Should().BeFalse();
+        _viewModel.Settings.OpenRouterFreeOnly.Should().BeFalse();
     }
 
     [Fact]

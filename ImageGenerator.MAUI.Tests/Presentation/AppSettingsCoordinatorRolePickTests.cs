@@ -92,12 +92,12 @@ public class AppSettingsCoordinatorRolePickTests
     public void TheFreeOnlySwitchLeavesTheObserversPickAlone()
     {
         // A paid pick is made with the filter off; turning it on is what used to clear it.
-        _store.PersistOpenRouterVisionFreeOnly(false);
+        _store.PersistOpenRouterFreeOnly(false);
         _store.PersistLlmModel(ModelRole.Observe, ModelProvider.OpenRouter, "paid/vision");
         var settings = Build();
         settings.LoadSavedSettings();
 
-        settings.OpenRouterVisionFreeOnly = true;
+        settings.OpenRouterFreeOnly = true;
 
         _store.LoadLlmModel(ModelRole.Observe, ModelProvider.OpenRouter).Should().Be("paid/vision",
             "a filter on a list is not a decision about the role's model");
@@ -115,6 +115,30 @@ public class AppSettingsCoordinatorRolePickTests
 
         _store.LoadLlmModel(ModelRole.Observe, ModelProvider.Local).Should().BeNullOrEmpty();
         settings.OllamaServerStatus.Should().Contain("llama3");
+    }
+
+    // ---- A long list reaches a row as one change -------------------------------------------------
+    // OpenRouter lists hundreds of models. Filling the shared list one Add at a time made every attached
+    // row rebuild its whole copy per Add - hundreds squared picker updates on the UI thread, which froze
+    // the idea page the moment the writer was switched to OpenRouter.
+
+    [Fact]
+    public async Task AHundredsLongRefreshReachesARowAsASingleChange()
+    {
+        var many = Enumerable.Range(0, 300)
+            .Select(i => new OpenRouterModelInfo($"lab/model-{i}:free", $"Model {i}", true)).ToArray();
+        _openRouter.Setup(c => c.ListChatModelsAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(many);
+        var settings = Build();
+        settings.LoadSavedSettings();
+        var row = new ModelChoiceState(ModelRole.PromptWrite, _store, settings.TextModelSources, ModelProvider.OpenRouter);
+        var changes = 0;
+        row.Models.CollectionChanged += (_, _) => changes++;
+
+        await settings.RefreshOpenRouterTextModelsCommand.ExecuteAsync(null);
+
+        row.Models.Should().HaveCount(300);
+        changes.Should().BeLessThanOrEqualTo(2, "a picker redraws on every change it is told about");
     }
 
     [Fact]

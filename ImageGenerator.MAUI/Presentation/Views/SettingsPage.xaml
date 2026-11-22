@@ -173,23 +173,23 @@
                 </VerticalStackLayout>
             </Border>
 
-            <!-- CARD: OpenRouter vision -->
+            <!-- CARD: OpenRouter -->
             <Border x:Name="OpenRouterCard" Style="{StaticResource Card}"
                     VerticalOptions="Start">
                 <VerticalStackLayout Spacing="8">
-                    <Label Text="OpenRouter vision" Style="{StaticResource CardTitle}" />
-                    <Label Text="Optional remote image observer for Describe an idea. Set the API key under API Tokens above; the model is picked on the Describe an idea page."
+                    <Label Text="OpenRouter" Style="{StaticResource CardTitle}" />
+                    <Label Text="Optional hosted models for the prompt writer, mutation, enrichment and image observation. Set the API key under API Tokens above; each tool picks its model on its own page."
                            Style="{StaticResource HelperText}" />
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                         <VerticalStackLayout Grid.Column="0" Spacing="2">
                             <Label Text="Free models only" Style="{StaticResource FieldLabel}" />
-                            <Label Text="Limits the observer's OpenRouter model list to models with zero prompt and completion pricing."
+                            <Label Text="Limits every OpenRouter model list to models with zero prompt and completion pricing."
                                    Style="{StaticResource HelperText}" />
                         </VerticalStackLayout>
                         <Switch Grid.Column="1"
-                                IsToggled="{Binding Settings.OpenRouterVisionFreeOnly, Mode=TwoWay}"
+                                IsToggled="{Binding Settings.OpenRouterFreeOnly, Mode=TwoWay}"
                                 VerticalOptions="Center"
-                                SemanticProperties.Description="Show free OpenRouter vision models only"
+                                SemanticProperties.Description="Show free OpenRouter models only"
                                 AutomationId="OpenRouterVisionFreeOnlySwitch" />
                     </Grid>
                 </VerticalStackLayout>

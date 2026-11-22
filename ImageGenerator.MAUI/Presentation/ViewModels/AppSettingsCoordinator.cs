@@ -163,17 +163,20 @@ public sealed partial class AppSettingsCoordinator(
     private static readonly ModelRole[] LocalTextRoles = [ModelRole.PromptWrite, ModelRole.Mutate, ModelRole.Enrich];
 
     [ObservableProperty]
-    private bool _openRouterVisionFreeOnly = true;
+    private bool _openRouterFreeOnly = true;
 
     // Clears the list, never a pick: a filter on a list is not a decision about the observer's model,
     // and the row keeps listing its own saved pick whatever the list holds.
-    partial void OnOpenRouterVisionFreeOnlyChanged(bool value)
+    // One switch for every OpenRouter list. Changing it empties both, so the next row that needs one
+    // asks again under the new filter rather than showing an answer to the old question.
+    partial void OnOpenRouterFreeOnlyChanged(bool value)
     {
-        _uiStateStore.PersistOpenRouterVisionFreeOnly(value);
-        OpenRouterVisionModels.Clear();
+        _uiStateStore.PersistOpenRouterFreeOnly(value);
+        OpenRouterVisionModels.ReplaceAll([]);
+        OpenRouterTextModels.ReplaceAll([]);
     }
 
-    public ObservableCollection<string> OpenRouterVisionModels { get; } = [];
+    public BulkObservableCollection<string> OpenRouterVisionModels { get; } = [];
 
     [RelayCommand]
     private async Task RefreshOpenRouterVisionModelsAsync()
@@ -182,16 +185,14 @@ public sealed partial class AppSettingsCoordinator(
         OpenRouterVisionStatus = "Checking OpenRouter…";
         try
         {
-            var models = await openRouterModelCatalog.ListVisionModelsAsync(OpenRouterVisionFreeOnly);
+            var models = await openRouterModelCatalog.ListVisionModelsAsync(OpenRouterFreeOnly);
 
             // No pick is reconciled: this list is filtered by price, so a model missing from it is not
             // a model that is gone, and the observer's pick is the row's state, not this list's.
-            OpenRouterVisionModels.Clear();
-            foreach (var model in models)
-                OpenRouterVisionModels.Add(model.Id);
+            OpenRouterVisionModels.ReplaceAll(models.Select(m => m.Id));
 
             ReportOpenRouter(models.Count > 0
-                ? $"Found {models.Count} OpenRouter vision model(s){(OpenRouterVisionFreeOnly ? " with free pricing." : ".")}"
+                ? $"Found {models.Count} OpenRouter vision model(s){(OpenRouterFreeOnly ? " with free pricing." : ".")}"
                 : "No OpenRouter vision models matched the current filter.",
                 models.Count > 0 ? StatusKind.Success : StatusKind.Warning);
         }
@@ -216,11 +217,11 @@ public sealed partial class AppSettingsCoordinator(
 
     /// <summary>
     /// OpenRouter models that answer in text, for the roles that only ever send text.
-    /// Deliberately not filtered by free pricing the way the observer's list is: the free-only switch
-    /// lives on the observer's card, and honouring it here would hide paid models behind a control that
-    /// is not on the page. A long list is an honest cost; a quietly short one is not.
+    /// Filtered by <see cref="OpenRouterFreeOnly"/>, the one free-only switch for every OpenRouter list:
+    /// it lives on Settings, so a page without a copy of it still says so when the filter hides
+    /// everything (see the refresh's status line).
     /// </summary>
-    public ObservableCollection<string> OpenRouterTextModels { get; } = [];
+    public BulkObservableCollection<string> OpenRouterTextModels { get; } = [];
 
     [ObservableProperty] private string? _openRouterTextStatus;
 
@@ -230,7 +231,7 @@ public sealed partial class AppSettingsCoordinator(
     /// the refresh line below rather than a suffix that would be stored as part of a model id. Retired
     /// models never reach here at all — see <c>AnthropicModelCatalog</c>.
     /// </remarks>
-    public ObservableCollection<string> AnthropicTextModels { get; } = [];
+    public BulkObservableCollection<string> AnthropicTextModels { get; } = [];
 
     [ObservableProperty] private string? _anthropicStatus;
 
@@ -253,14 +254,14 @@ public sealed partial class AppSettingsCoordinator(
         OpenRouterTextStatus = "Checking OpenRouter…";
         try
         {
-            var models = await openRouterModelCatalog.ListChatModelsAsync(freeOnly: false);
-            OpenRouterTextModels.Clear();
-            foreach (var model in models)
-                OpenRouterTextModels.Add(model.Id);
+            var models = await openRouterModelCatalog.ListChatModelsAsync(OpenRouterFreeOnly);
+            OpenRouterTextModels.ReplaceAll(models.Select(m => m.Id));
 
             ReportOpenRouterText(models.Count > 0
-                ? $"Found {models.Count} OpenRouter model(s) that answer in text."
-                : "No OpenRouter model answered in text.",
+                ? $"Found {models.Count} OpenRouter model(s) that answer in text{(OpenRouterFreeOnly ? ", free only." : ".")}"
+                : OpenRouterFreeOnly
+                    ? "No free OpenRouter model answered in text. Turn off free-only in Settings to see paid ones."
+                    : "No OpenRouter model answered in text.",
                 models.Count > 0 ? StatusKind.Success : StatusKind.Warning);
         }
         catch (Exception ex)
@@ -291,9 +292,7 @@ public sealed partial class AppSettingsCoordinator(
             var models = await anthropicModelCatalog.ListTextModelsAsync(apiKey ?? string.Empty);
             var deprecated = models.Count(m => m.IsDeprecated);
 
-            AnthropicTextModels.Clear();
-            foreach (var model in models)
-                AnthropicTextModels.Add(model.Id);
+            AnthropicTextModels.ReplaceAll(models.Select(m => m.Id));
 
             ReportAnthropic(models.Count > 0
                 ? $"Found {models.Count} Anthropic model(s)"
@@ -352,10 +351,10 @@ public sealed partial class AppSettingsCoordinator(
     private IReadOnlyDictionary<ModelProvider, IModelSource>? _visionModelSources;
 
     /// <summary>Installed Ollama models for the Settings picker; filled by <see cref="RefreshOllamaModelsCommand"/>.</summary>
-    public ObservableCollection<string> OllamaModels { get; } = [];
+    public BulkObservableCollection<string> OllamaModels { get; } = [];
 
     /// <summary>Installed Ollama models that advertise both vision and completion capabilities.</summary>
-    public ObservableCollection<string> OllamaVisionModels { get; } = [];
+    public BulkObservableCollection<string> OllamaVisionModels { get; } = [];
 
     /// <summary>Pull the model list from the configured Ollama server into the picker.</summary>
     [RelayCommand]
@@ -379,10 +378,10 @@ public sealed partial class AppSettingsCoordinator(
     }
 
     // Null-tolerant by design — see the call site in LoadSavedUiState.
-    private static void SeedPicker(ObservableCollection<string> picker, IReadOnlyList<string>? cached)
+    private static void SeedPicker(BulkObservableCollection<string> picker, IReadOnlyList<string>? cached)
     {
         if (cached is null) return;
-        foreach (var m in cached) picker.Add(m);
+        picker.ReplaceAll(cached);
     }
 
     private async Task LoadOllamaModelsAsync(bool announce)
@@ -407,10 +406,8 @@ public sealed partial class AppSettingsCoordinator(
                 return;
             }
 
-            OllamaModels.Clear();
-            foreach (var m in models) OllamaModels.Add(m);
-            OllamaVisionModels.Clear();
-            foreach (var m in visionModels) OllamaVisionModels.Add(m);
+            OllamaModels.ReplaceAll(models);
+            OllamaVisionModels.ReplaceAll(visionModels);
             _uiStateStore.PersistOllamaModels(OllamaBaseUrl, models, visionModels);
 
             // A role naming a tag this server no longer has fails at call time, as a 404 nobody would
@@ -567,7 +564,7 @@ public sealed partial class AppSettingsCoordinator(
         SeedPicker(OllamaModels, _uiStateStore.LoadOllamaModels(OllamaBaseUrl));
         SeedPicker(OllamaVisionModels, _uiStateStore.LoadOllamaVisionModels(OllamaBaseUrl));
 
-        OpenRouterVisionFreeOnly = _uiStateStore.LoadOpenRouterVisionFreeOnly();
+        OpenRouterFreeOnly = _uiStateStore.LoadOpenRouterFreeOnly();
 
         // Default-on; only flips the field when the user previously turned it off (OnChanged re-persist is
         // a harmless echo — nothing else writes this field).

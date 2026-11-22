@@ -88,13 +88,13 @@ public class AppSettingsCoordinatorModelListsTests
     [Fact]
     public async Task TextList_AsksWithTheChatFilterAndNeverTheVisionOne()
     {
-        _openRouter.Setup(c => c.ListChatModelsAsync(false, It.IsAny<CancellationToken>()))
+        _openRouter.Setup(c => c.ListChatModelsAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([new OpenRouterModelInfo("acme/writer", "Writer", false)]);
         var sut = Build();
 
         await sut.RefreshOpenRouterTextModelsCommand.ExecuteAsync(null);
 
-        _openRouter.Verify(c => c.ListChatModelsAsync(false, It.IsAny<CancellationToken>()), Times.Once);
+        _openRouter.Verify(c => c.ListChatModelsAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Once);
         _openRouter.Verify(c => c.ListVisionModelsAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Never, "an embedding or image-only model is a fine writer and the vision filter hides it");
     }
@@ -102,7 +102,7 @@ public class AppSettingsCoordinatorModelListsTests
     [Fact]
     public async Task TextList_FillsThePickerAndReportsWhatItFound()
     {
-        _openRouter.Setup(c => c.ListChatModelsAsync(false, It.IsAny<CancellationToken>()))
+        _openRouter.Setup(c => c.ListChatModelsAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([
                 new OpenRouterModelInfo("acme/writer", "Writer", false),
                 new OpenRouterModelInfo("acme/other", "Other", true)
@@ -112,29 +112,57 @@ public class AppSettingsCoordinatorModelListsTests
         await sut.RefreshOpenRouterTextModelsCommand.ExecuteAsync(null);
 
         sut.OpenRouterTextModels.Should().Equal("acme/writer", "acme/other");
-        sut.OpenRouterTextStatus.Should().Be("Found 2 OpenRouter model(s) that answer in text.");
+        sut.OpenRouterTextStatus.Should().Be("Found 2 OpenRouter model(s) that answer in text, free only.", "free-only is on by default");
         _reported.Should().ContainSingle(r => r.Kind == StatusKind.Success);
     }
 
-    [Fact]
-    public async Task TextList_AppliesNoFreeOnlyFilterBecauseTheSwitchIsOnAnotherCard()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TextList_HonoursTheOneFreeOnlySwitch(bool freeOnly)
     {
-        _openRouter.Setup(c => c.ListChatModelsAsync(true, It.IsAny<CancellationToken>()))
+        _openRouter.Setup(c => c.ListChatModelsAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([new OpenRouterModelInfo("acme/free", "Free", true)]);
         var sut = Build();
-        sut.OpenRouterVisionFreeOnly = true; // the observer's switch, persisted, defaults the vision card
+        sut.OpenRouterFreeOnly = freeOnly;
 
         await sut.RefreshOpenRouterTextModelsCommand.ExecuteAsync(null);
 
-        sut.OpenRouterTextModels.Should().BeEmpty(
-            "honouring a switch that is not on this page would hide paid models silently");
-        _openRouter.Verify(c => c.ListChatModelsAsync(false, It.IsAny<CancellationToken>()), Times.Once);
+        _openRouter.Verify(c => c.ListChatModelsAsync(freeOnly, It.IsAny<CancellationToken>()), Times.Once,
+            "one switch governs every OpenRouter list, the writer's as much as the observer's");
+    }
+
+    [Fact]
+    public async Task TextList_WhenTheFilterHidesEverything_SaysWhereTheSwitchIs()
+    {
+        _openRouter.Setup(c => c.ListChatModelsAsync(true, It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        var sut = Build();
+        sut.OpenRouterFreeOnly = true;
+
+        await sut.RefreshOpenRouterTextModelsCommand.ExecuteAsync(null);
+
+        sut.OpenRouterTextStatus.Should().Contain("free-only in Settings",
+            "mutation and the structure editor have no copy of the switch on their page");
+    }
+
+    [Fact]
+    public async Task FlippingTheSwitchEmptiesBothOpenRouterLists()
+    {
+        var sut = Build();
+        sut.OpenRouterFreeOnly = false;
+        sut.OpenRouterTextModels.ReplaceAll(["acme/paid"]);
+        sut.OpenRouterVisionModels.ReplaceAll(["acme/paid-vision"]);
+
+        sut.OpenRouterFreeOnly = true;
+
+        sut.OpenRouterTextModels.Should().BeEmpty("an answer to the old filter is not an answer to the new one");
+        sut.OpenRouterVisionModels.Should().BeEmpty();
     }
 
     [Fact]
     public async Task TextList_SaysSoWhenTheServerRefuses()
     {
-        _openRouter.Setup(c => c.ListChatModelsAsync(false, It.IsAny<CancellationToken>()))
+        _openRouter.Setup(c => c.ListChatModelsAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpRequestException("unreachable"));
         var sut = Build();
 
@@ -159,7 +187,7 @@ public class AppSettingsCoordinatorModelListsTests
     [Fact]
     public async Task TextList_LeavesTheVisionCardsStatusAlone()
     {
-        _openRouter.Setup(c => c.ListChatModelsAsync(false, It.IsAny<CancellationToken>()))
+        _openRouter.Setup(c => c.ListChatModelsAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("boom"));
         var sut = Build();
 
@@ -326,7 +354,7 @@ public class AppSettingsCoordinatorModelListsTests
     [Fact]
     public async Task RefreshingThroughATextSourceFillsThatSourceAndNotItsNeighbour()
     {
-        _openRouter.Setup(c => c.ListChatModelsAsync(false, It.IsAny<CancellationToken>()))
+        _openRouter.Setup(c => c.ListChatModelsAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([new OpenRouterModelInfo("acme/writer", "Writer", false)]);
         _anthropicKey.Setup(s => s.LoadAsync()).ReturnsAsync("sk-ant-test");
         _anthropic.Setup(c => c.ListTextModelsAsync("sk-ant-test", It.IsAny<CancellationToken>()))

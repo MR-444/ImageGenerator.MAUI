@@ -197,7 +197,7 @@
                                            Style="{StaticResource HelperText}" />
                                 </VerticalStackLayout>
                                 <Switch Grid.Column="1"
-                                        IsToggled="{Binding Generator.Settings.OpenRouterVisionFreeOnly, Mode=TwoWay}"
+                                        IsToggled="{Binding Generator.Settings.OpenRouterFreeOnly, Mode=TwoWay}"
                                         IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
                                         VerticalOptions="Center"
                                         AutomationId="IdeaPromptOpenRouterVisionFreeOnlySwitch" />

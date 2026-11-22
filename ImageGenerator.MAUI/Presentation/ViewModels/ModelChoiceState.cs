@@ -96,7 +96,7 @@ public sealed partial class ModelChoiceState : ObservableObject
     /// <summary>What can be picked right now. Never empty merely because nothing has been refreshed: a
     /// saved pick is listed before the first <see cref="RefreshCommand"/> so the row can say what would
     /// actually be used.</summary>
-    public ObservableCollection<string> Models { get; } = [];
+    public BulkObservableCollection<string> Models { get; } = [];
 
     /// <summary>What the selected provider last said. Mirrors the source, per provider: an Anthropic
     /// failure must not be readable as the answer to an Ollama button.</summary>
@@ -233,12 +233,11 @@ public sealed partial class ModelChoiceState : ObservableObject
     {
         var keep = SelectedModel;
 
-        Models.Clear();
-        foreach (var model in _source.Models)
-            Models.Add(model);
-
-        if (!string.IsNullOrWhiteSpace(keep) && !Models.Contains(keep!))
-            Models.Add(keep!);
+        // One notification, not one per entry: a picker redraws on each change it is told about.
+        var models = _source.Models.ToList();
+        if (!string.IsNullOrWhiteSpace(keep) && !models.Contains(keep!))
+            models.Add(keep!);
+        Models.ReplaceAll(models);
     }
 
     private void Attach(IModelSource source)

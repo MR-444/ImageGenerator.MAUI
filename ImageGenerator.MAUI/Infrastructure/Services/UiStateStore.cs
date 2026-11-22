@@ -29,7 +29,7 @@ public sealed class UiStateStore : IUiStateStore
     private const string MutationModelKey = "imggen.mutation_model";
     private const string EnrichModelKey = "imggen.enrich_model";
     private const string OpenRouterVisionModelKey = "imggen.openrouter_vision_model";
-    private const string OpenRouterVisionFreeOnlyKey = "imggen.openrouter_vision_free_only";
+    private const string OpenRouterFreeOnlyKey = "imggen.openrouter_vision_free_only";
     private const string IdeaBuildJsonKey = "imggen.idea_build_json";
     private const string CivitaiModelRefKey = "imggen.civitai_model_ref";
     private const string OutputFolderKey = "imggen.output_folder";
@@ -465,10 +465,10 @@ public sealed class UiStateStore : IUiStateStore
         PersistString(key, string.Join('\n', models.Prepend(baseUrl)));
 
     // Default TRUE — show only free OpenRouter vision models unless the user opts in to paid ones.
-    public bool LoadOpenRouterVisionFreeOnly() => LoadBool(OpenRouterVisionFreeOnlyKey, true);
+    public bool LoadOpenRouterFreeOnly() => LoadBool(OpenRouterFreeOnlyKey, true);
 
-    public void PersistOpenRouterVisionFreeOnly(bool value) =>
-        PersistBool(OpenRouterVisionFreeOnlyKey, value, true);
+    public void PersistOpenRouterFreeOnly(bool value) =>
+        PersistBool(OpenRouterFreeOnlyKey, value, true);
 
     public bool? LoadIdeaBuildJson()
     {
