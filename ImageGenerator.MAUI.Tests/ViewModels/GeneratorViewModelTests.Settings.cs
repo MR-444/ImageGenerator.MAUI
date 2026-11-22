@@ -9,11 +9,9 @@ using Moq;
 
 namespace ImageGenerator.MAUI.Tests.ViewModels;
 
-// Settings-state tests, lifted verbatim out of GeneratorViewModelTests.cs. Same fixture on
-// purpose - it is one partial class, so [Collection("OutputPathsState")] and the ctor still
-// govern these tests, which still build a GeneratorViewModel because the settings state has
-// no owner of its own yet. Splitting here keeps Phase 2 to a file move instead of a
-// reach-through a 3,200-line fixture.
+// Settings-state tests, split out of GeneratorViewModelTests.cs. Same fixture on purpose - it is
+// one partial class, so [Collection("OutputPathsState")] and the ctor govern these tests too. They
+// reach AppSettingsCoordinator through a GeneratorViewModel because that is how the app composes it.
 public partial class GeneratorViewModelTests
 {
     [Fact]

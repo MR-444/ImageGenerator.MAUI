@@ -27,7 +27,7 @@ public sealed record MutationRunConfig
 
     /// <summary>
     /// Geometry-mutation magnitude for the SCENE bbox / placement operators. Defaults to Moderate. The
-    /// Phase 3 engine threads this onto the <see cref="MutationContext"/> it builds.
+    /// engine threads this onto the <see cref="MutationContext"/> it builds.
     /// </summary>
     public MutationStrength Strength { get; init; } = MutationStrength.Moderate;
 

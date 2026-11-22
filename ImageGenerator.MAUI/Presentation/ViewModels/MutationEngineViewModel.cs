@@ -254,9 +254,8 @@ public partial class MutationEngineViewModel : ObservableObject, IStatusOwner
     /// <para>
     /// It replaces the Sonnet/Opus/Local picker, which could only name two Anthropic models and Ollama, and
     /// whose choice was thrown away on every navigation. Null only when the page has no settings to read
-    /// (no host generator), which the app never does and several unit tests used to. As of B2.3a-6 this is
-    /// the only way this page can name a model: the tier enum, and the settings-reader bridge that turned
-    /// one into a target, are deleted - so there is no second path whose behaviour the row's could drift from.
+    /// (no host generator), which the app never does and several unit tests used to. This is the only way
+    /// this page can name a model, so there is no second path whose behaviour the row's could drift from.
     /// </para>
     /// </summary>
     public ModelChoiceState? Model { get; }

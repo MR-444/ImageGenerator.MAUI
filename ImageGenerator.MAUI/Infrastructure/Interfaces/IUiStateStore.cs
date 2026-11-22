@@ -110,9 +110,9 @@ public interface IUiStateStore
 
     /// <summary>
     /// The Ollama tag one LLM role calls on its Local tier: the prompt writer, the caption mutator,
-    /// the region enricher. Three values because they are three decisions — before
-    /// <c>documents/plan-model-picker-rows.md</c> all three read the Settings page's Ollama model (<c>imggen.ollama_model</c>), which
-    /// also named the image model the generate button renders with.
+    /// the region enricher. Three values because they are three decisions — all three used to read the
+    /// one Ollama model on the Settings page (<c>imggen.ollama_model</c>), so picking a cheap tag to test
+    /// a mutation also changed the prompt writer.
     /// Null when never set and never seeded; the store seeds a role that has no value of its own from
     /// that old key exactly once. There is no default model — callers must refuse
     /// with "pick a model first" rather than guess one.

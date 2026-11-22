@@ -11,7 +11,7 @@ namespace ImageGenerator.MAUI.Tests.Services.Replicate;
 public class ReplicateValidationErrorsTests
 {
     /// <summary>Captured from the app log for openai/gpt-image-2.6-sunburst on 2026-11-17 — the
-    /// rejected request this whole Phase 3 thread started from.</summary>
+    /// rejected request that made the app handle models it has no descriptor for.</summary>
     private const string SunburstBody =
         """
         {"detail":"- input.aspect_ratio: aspect_ratio must be one of the following: \"1:1\", \"3:2\", \"2:3\", \"16:9\", \"9:16\", \"auto\", \"1024x1024\"\n","status":422,"title":"Input validation failed","invalid_fields":[{"type":"enum","field":"input.aspect_ratio","description":"aspect_ratio must be one of the following: \"1:1\", \"3:2\", \"2:3\", \"16:9\", \"9:16\", \"auto\", \"1024x1024\""}]}

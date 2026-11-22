@@ -211,8 +211,8 @@ public sealed partial class AppSettingsCoordinator(
     // No price is attached to anything here, and none can be. These are the providers' own lists, so a
     // figure per entry would have to be invented for models this app has never heard of, on metering it
     // does not implement (thinking tokens, cache reads, image inputs), in a currency the user may not be
-    // billed in. What the rows say instead, from B2.3a-6, is free or billed and how many calls an
-    // operation makes - see ModelChoiceState.Helper, where that sentence is written.
+    // billed in. What the rows say instead is free or billed and how many calls an operation makes -
+    // see ModelChoiceState.Helper, where that sentence is written.
 
     /// <summary>
     /// OpenRouter models that answer in text, for the roles that only ever send text.
@@ -312,8 +312,7 @@ public sealed partial class AppSettingsCoordinator(
     /// The lists, status lines and refresh commands a text role needs, keyed by provider — the dictionary
     /// a <see cref="ModelChoiceState"/> is built from. Assembled here because this class already owns all
     /// three per provider, and pages assembling them by hand is how six copies of one picker ended up
-    /// disagreeing about what Refresh did. As of B2.3a-6 every text role reads the lists through a row -
-    /// the structure editor's enrichment was the last one still translating a tier into a model.
+    /// disagreeing about what Refresh did. Every text role reads the lists through a row.
     /// </summary>
     public IReadOnlyDictionary<ModelProvider, IModelSource> TextModelSources =>
         _textModelSources ??= new Dictionary<ModelProvider, IModelSource>

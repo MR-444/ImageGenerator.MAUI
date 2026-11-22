@@ -217,13 +217,12 @@ public sealed class UiStateStore : IUiStateStore
 
     public void PersistOllamaBaseUrl(string value) => PersistString(OllamaBaseUrlKey, value);
 
-    // imggen.ollama_model was the Settings page's Ollama picker, removed in Phase C. Nothing writes it
+    // imggen.ollama_model was the Settings page's Ollama model picker, since removed. Nothing writes it
     // any more; it is read only as the one-time seed in LoadRoleModel, for installs that predate the
     // per-role keys.
 
-    // One Ollama tag per LLM role. Until documents/plan-model-picker-rows.md all three read
-    // OllamaModelKey, so choosing a cheap tag to verify a caption mutation also changed the model
-    // behind the generate button.
+    // One Ollama tag per LLM role. All three used to read OllamaModelKey, so choosing a cheap tag to
+    // verify a caption mutation also changed the model every other tool called.
     public string? LoadPromptWriterModel() => LoadRoleModel(PromptWriterModelKey);
 
     public void PersistPromptWriterModel(string value) => PersistString(PromptWriterModelKey, value);
@@ -306,8 +305,8 @@ public sealed class UiStateStore : IUiStateStore
 
     public string? LoadLlmModel(ModelRole role, ModelProvider provider) => provider switch
     {
-        // The Local slot is the per-role key from Phase A, seeded once from the generation model. That
-        // seeding is correct here and only here: the generation model IS an Ollama tag.
+        // The Local slot is the role's own key, seeded once from the old shared Ollama model. That
+        // seeding is correct here and only here: the old value IS an Ollama tag.
         ModelProvider.Local => role switch
         {
             ModelRole.PromptWrite => LoadPromptWriterModel(),

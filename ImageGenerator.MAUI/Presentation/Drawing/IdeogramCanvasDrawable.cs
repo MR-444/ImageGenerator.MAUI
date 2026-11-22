@@ -4,8 +4,8 @@ namespace ImageGenerator.MAUI.Presentation.Drawing;
 public sealed record CanvasBox(int[] Bbox, string Label, bool IsText, bool IsSelected);
 
 /// <summary>
-/// Render-only spatial view of the structured prompt (Phase 1 — no drag/resize; bbox editing
-/// happens via the numeric fields, taps select). Pulls boxes lazily through
+/// Render-only spatial view of the structured prompt: it draws, and nothing else. Taps, drag-move
+/// and corner-resize are handled by the structure editor's view model. Pulls boxes lazily through
 /// <see cref="BoxesProvider"/> on every draw, so callers only need GraphicsView.Invalidate().
 /// Fixed colors instead of theme resources: the canvas mimics a paper artboard, which reads
 /// fine in both light and dark app themes.
