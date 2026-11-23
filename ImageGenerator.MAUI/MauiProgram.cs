@@ -3,6 +3,7 @@ using ImageGenerator.MAUI.Core.Application.Services;
 using ImageGenerator.MAUI.Core.Domain.Descriptors;
 using ImageGenerator.MAUI.Extensions;
 using ImageGenerator.MAUI.Infrastructure.Diagnostics;
+using ImageGenerator.MAUI.Infrastructure.External;
 using ImageGenerator.MAUI.Infrastructure.External.Anthropic;
 using ImageGenerator.MAUI.Infrastructure.External.Civitai;
 using ImageGenerator.MAUI.Infrastructure.External.ComfyUi;
@@ -74,6 +75,12 @@ public static class MauiProgram
         builder.Services.AddRefitClient<IReplicateApi>(
             "https://api.replicate.com",
             logRequestBody: true);
+
+        // Every named client connects by racing the host's addresses: LAN hosts like the ComfyUI
+        // and Ollama boxes can resolve to an unreachable link-local IPv6 address first, which the
+        // default connect spends ~21 s on before trying IPv4. The Refit client sets its own handler.
+        builder.Services.ConfigureHttpClientDefaults(http =>
+            http.ConfigurePrimaryHttpMessageHandler(() => HappyEyeballsConnector.CreateHandler()));
 
         // 1a) Named HttpClients for the non-Refit outbound paths. Both reuse the project's
         //     standard resilience pipeline (retry on 5xx/408/429, Polly-owned timeouts), like Refit.

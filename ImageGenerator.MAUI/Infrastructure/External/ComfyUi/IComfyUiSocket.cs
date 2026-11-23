@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using System.Text;
+using ImageGenerator.MAUI.Infrastructure.External;
 
 namespace ImageGenerator.MAUI.Infrastructure.External.ComfyUi;
 
@@ -25,6 +26,9 @@ public interface IComfyUiSocket : IAsyncDisposable
 /// <summary>Production adapter over <see cref="ClientWebSocket"/>.</summary>
 public sealed class ClientWebSocketComfyUiSocket : IComfyUiSocket
 {
+    // Shared so the WebSocket's TCP connect races the host's addresses like the HTTP clients.
+    private static readonly HttpMessageInvoker Invoker = new(HappyEyeballsConnector.CreateHandler());
+
     private readonly ClientWebSocket _socket = new();
 
     public Task ConnectAsync(Uri uri, string? authorizationHeader, CancellationToken ct)
@@ -37,7 +41,7 @@ public sealed class ClientWebSocketComfyUiSocket : IComfyUiSocket
         {
             _socket.Options.SetRequestHeader(ComfyUiAuthHeader.HeaderName, authorizationHeader.Trim());
         }
-        return _socket.ConnectAsync(uri, ct);
+        return _socket.ConnectAsync(uri, Invoker, ct);
     }
 
     public async Task<string?> ReceiveTextAsync(CancellationToken ct)
